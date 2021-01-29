@@ -1,0 +1,1474 @@
+	TITLE	SOSFAS - Find and Search commands
+; 	-----------------------------
+; 
+; This file contains the processing for Find and Substitute:
+; 1. The find (F) command
+; 2. The substitute (S) command
+; 3. Common routines for searching files
+; 
+ 
+	SEARCH	SOSTCS
+	$INIT
+ 
+	SUBTTL	THE FIND (F) COMMAND
+ 
+SEARCH::TLZ	FL,ASSMF	; Clear all flags
+	SETZM	SRCNT		; Start with zero
+	SETZM	CSW##		; Clear alter command string switch
+	SETZM	ZSW0		; CLEAR SWITCHES
+	MOVE	T1,[ZSW0,,ZSW0+1];Setup for blt
+	BLT	T1,ZSW1		;And zero them
+	MOVE	T1,[2,,[ASCIZ/F*/]]
+	MOVEM	T1,FNDPMT	; Save find prompt
+	TLO	FL2,L2.NAB	; Allow rubout of first altmode
+	MOVE	T1,[POINT 9,SRBUF]; Set up byte pointer
+	MOVEI	T3,SRPNT	; And pointer to byte pointer table
+	PUSHJ	P,SSTRNG	; Get a search string
+	JRST	[SKIPN SRPNT	; Was string set?
+		NERROR	NSG	; No, tell him
+		CAIN	C,12
+		JRST	ASSMD1	; Special continue mode
+		JRST	.+1]	; Yes, use old one
+	TLZ	FL,NUMSRF!ALTSRF!EXCTSR; Clear flags
+	SKIPE	EXACTF		; All searches to be exact?
+	TLO	FL,EXCTSR	; Yes, set the exact bit
+	PUSHJ	P,SCAN##	; Check for what comes after
+	TRNN	FL,TERMF	; If terminator
+	CAIN	C,","		; Or ,
+	JRST	ASSMDT		; Set up limits specially
+	CAIE	C,"!"
+	CAIN	C,":"
+	JRST	ASSMDT		; Let him specify 2nd half of range
+	PUSHJ	P,GET2##	; Else call usual limit routine
+SRC4:	MOVE	T1,HILN 	; Save end of range
+	MOVEM	T1,SRHILN
+	MOVE	T1,HIPG
+	MOVEM	T1,SRHIPG
+;Here to scan for switches in any order
+SRCS1:	CAIE	C,","		;Something there
+	  JRST	SRC1		;No
+	PUSHJ	P,SCAN		;Yes--See what it is
+	TRNN	FL,NUMF		;A NUMBER?
+	  JRST	SRCS4		;No
+	MOVEM	T2,SRCNT	;Yes--Save count
+	JRST	SRCS3		;And continue
+SRCS4:	TRNN	FL,IDF		;An indent?
+	  JRST	SRCS2		;No
+	MOVS	T1,ACCUM	;Yes--Get ident
+	MOVE	T2,[-LNFSWT,,FSWT];Point to switches
+	PUSHJ	P,DOSW		;Handle them
+	  NERROR ILC		;No match
+	JRST	SRCS3		;And continue
+SRCS2:	SKIPN	NEWCMD		;See if in /compatibile mode
+	 CAIE	C,"-"		;Yes--See if find not
+	  JRST	SRCS2A		;No
+	SETOM	FNSW		;Yes--Flag find not
+	JRST	SRCS3		;And continue
+SRCS2A:	CAIE	C,"*"		;Special check for infin repeate
+	  NERROR ILC		;No--You lose
+	HRLOI	T1,377777	;Yes--Set for lots
+	MOVEM	T1,SRCNT	;Save
+SRCS3:	PUSHJ	P,SCAN		;Read next token
+	JRST	SRCS1		;And process
+;End of switch scanning
+SRC1:	TLNN	FL,ALTSRF	;Alter this linn
+	 SKIPGE DSW		;Or delete?
+	  TRNN FL,READOF	;Yes--See if readonly
+	   CAIA			;No
+	    NERROR IRO		;Yes--Illegal
+	SKIPGE	MSW		;See if mark
+	 TRNN	FL,READOF	;Yes--See if readonly
+	  CAIA			;No
+	   NERROR IRO		;Yes--Illegal
+	SKIPGE	MSW		;See if mark
+	 SKIPL	DSW		;And delete
+	  CAIA			;No
+	   NERROR ILC		;Yes--Illegal
+	PUSHJ	P,CKTRMF##	; Make sure it terminates correctly
+	SKIPE	CSW##		; Command alter mode?
+	  PUSHJ	P,ACSTR##	; Yes--Get alter command string
+SRCH1A: MOVEI	T1,SRPNT	; Get pointer to strings
+	PUSHJ	P,CODSR 	; And generate code
+	MOVE	T1,LOPG 	; Get set to hunt it
+	MOVEM	T1,SRPG 	; Flag to say if we should print page
+	TLO	FL2,NORENT	; Play it safe - no arbitrary reentering
+	PUSHJ	P,FINDL1##	; Find first line of range
+	TRZ	FL,LINSN	; No lines yet
+	SETZM	FNDFLG		; No matches either
+ONSRC:: PUSHJ	P,ONMOV##	; Check range
+	  JRST	ENDSRC		; Done
+	TLZE	FL,ASSMF	; First time and want .+1?
+	JRST	[CAME T1,LOLN	; Is there exact match?
+		JRST	.+1	; No, this is .+1
+		AOS	SVCNT	; Pretend we didnt see it
+		JRST	SRNXT]	; And take next
+	TRO	FL,LINSN	; We saw one
+	CAMN	T1,PGMK 	; Pages are special
+	JRST	SRNXT		; Proceed
+	MOVEI	T2,SRPNT	; Pointer to strings
+	PUSHJ	P,COMTST	; Go search this line
+	  JRST	SRNXT		; Loser
+	SKIPE	FNSW		;See if find not
+	  MOVEI	T3,0		;Yes--Clear alter count
+	AOS	FNDFLG		; Found!
+	MOVEM	T3,SVCCNT	; Save away the character count
+	MOVE	T2,CPG		; Get current page
+	CAME	T2,SRPG 	; And see if we should print it
+	 SKIPE	SLSW		;But first see if silence
+	  CAIA
+	   PUSHJ P,PGPRN##	; Yes
+	MOVE	T2,CPG		; Now set it as current
+	MOVEM	T2,CPGL
+	MOVEM	T2,SRPG 	; Also reset flag
+	MOVE	T2,(PNTR)	; Also set line
+	MOVEM	T2,CLN
+	TLNE	FL,ALTSRF	; Are we going to edit?
+	JRST	SRCALT		; Yes, go set things up
+	SKIPE	SLSW		;Silence?
+	  JRST	SRNXTC		;Yes--No print
+	TLNE	FL,NUMSRF	; Do we want only line numbers?
+	JRST	SRCNUM		; Yes
+	PUSHJ	P,OUTLIN##
+SRNXTC:	SKIPE	DSW		;See if delete
+	  JRST	SRCDEL		;Yes--Go delete
+	SKIPE	MSW		;See if mark
+	  JRST	SRCMAR		;Yes--Go mark
+	SOSG	SRCNT		; Have we found enough
+	JRST	SRFND		; Yes, give up (we have seen at least one)
+SRNXT:	PUSHJ	P,FINDN##	; Get next line to look a
+	JRST	ONSRC
+ 
+SRCNUM: MOVE	T1,(PNTR)	; Print sequence number
+	MOVEM	T1,PRNTO1
+	OUTSTR	PRNTO1
+	JRST	SRNXTC		; And go
+ 
+ENDSRC: TRZN	FL,LINSN	; Did we see one?
+	NERROR	NLN		; Null range
+SRFND:	SKIPE	T2,FNDFLG	; Find any?
+	  JRST	SRFND1		;Yes!
+	RERROR	SRF		; No: tell him
+	JRST	COMND##		;And return
+SRFND1:	SKIPE	DSW		;See if delete
+	 SKIPN	INFFLG##	;Yes--See if /noinform
+	  CAIA			;No
+	   CAIA			;Yes--Dummy totals
+	    SKIPE TSW		;See if totals wanted
+	     CAIA		;Yes
+	      JRST COMND##	;No--Just return
+	PUSHJ	P,DPRNT##	;Print number
+	OUTSTR	[ASCIZ/ line/]	;Give it
+	SOSE	FNDFLG		;Just 1?
+	  OUTCHR ["s"]		;No--Fix it up
+	MOVEI	T1,[ASCIZ/ found/];Assume just find
+	SKIPE	DSW		;See if delete
+	  MOVEI	T1,[ASCIZ/ deleted/];Yes
+	SKIPE	MSW		;See if mark
+	  MOVEI	T1,[ASCIZ/ marked/];Yes
+	TLNE	FL,ALTSRF	;See if alter
+	  MOVEI	T1,[ASCIZ/ altered/];Yes
+	OUTSTR	(T1)		;Type
+	OUTSTR	[BYTE (7) 15,12];Finish off
+	JRST	COMND##		;And return
+ 
+ 
+SRCDEL:	MOVE	T1,(PNTR)	;Get current line
+	PUSHJ	P,DODEL##	;Delete it
+	PUSHJ	P,FINDN1##	;Find next line
+	JRST	FNDEND		;And continue onward
+
+SRCMAR:	PUSHJ	P,MARK1##	;Mark the page
+	PUSHJ	P,FINDN##	;Find next line
+	JRST	FNDEND		;And continue
+
+SRCALT:	MOVEI	T5,[SKIPLE T2,SVCCNT 	; Get count 
+		    PJRST ALTSP##
+		    POPJ P,]		; Space over correctly
+	PUSHJ	P,ALTLIN##
+	JRST	LEVINS##	; He said altmode
+	PUSHJ	P,INSED##	; Insert it
+	PUSHJ	P,FINDN
+FNDEND:	SOS	SAVEN		; Decrement save counter
+	SOSG	SRCNT
+	JRST	SRFND		; DONE
+	JRST	ONSRC		; Go on
+
+ASSMD1: TROA	FL,CNTF 	; Mark as keep end of range
+ASSMDT: TRZ	FL,CNTF 	; Just in case
+	TLO	FL,ASSMF	; We assume .+1
+	MOVE	T1,CLN		; Set things up for . to infinity
+	MOVEM	T1,LOLN
+	MOVEM	T1,HILN 	; As good as anything with the page we will
+	MOVE	T1,CPGL 	; Use
+	MOVEM	T1,LOPG
+	TRZE	FL,CNTF 	; Keep end?
+	JRST	NOSPC		; Yes
+	CAIE	C,":"		; If a : or !
+	CAIN	C,"!"
+	JRST	HALFSP		; Get the second half (.+1 to given)
+	MOVSI	T1,377777	; Get a large page
+	MOVEM	T1,HIPG
+	JRST	SRC4		; Back into things
+
+HALFSP: MOVEM	T1,HIPG 	; Set top as /.
+	PUSHJ	P,GET2HF##	; Get the second half
+	JRST	SRC4		; And go
+
+NOSPC:	MOVE	T1,SRHIPG
+	MOVEM	T1,HIPG 	; Put back end
+	MOVE	T1,SRHILN
+	MOVEM	T1,HILN
+	JRST	SRCH1A
+
+;Call: t1=sixbit
+;	T2=-LEN,,TABLE
+
+DOSW:	HLRZ	T3,(T2)		;Get sixbit
+	CAIE	T1,(T3)		;Match?
+	  AOBJN	T2,DOSW		;No--Loop
+	JUMPG	T2,CPOPJ##	;Error if not found
+	HRRZ	T3,(T2)		;Get routine
+	XCT	(T3)		;Do it
+	JRST	CPOPJ1		;And return
+
+FSWT:	'A  ',,[TLO FL,ALTSRF]	;Alter this line
+	'C  ',,[PUSHJ P,DOCSW]	;Alter this line with command string
+	'D  ',,[SETOM DSW]	;Delete this line
+	'E  ',,[TLO FL,EXCTSR]	;Exact case match
+	'L  ',,[TLO FL,NUMSRF]	;Print line number only
+	'M  ',,[SETOM MSW]	;Insert page mark before this line
+	'N  ',,[PUSHJ P,DOFN]	;Find not
+	'S  ',,[SETOM SLSW]	;Print nothing
+	'T  ',,[SETOM TSW]	;Print totals
+	'U  ',,[TRO FL2,SUPN]	;Print line w/o line number
+LNFSWT==.-FSWT
+
+DOCSW:	SETOM	CSW
+	TLO	FL,ALTSRF
+	POPJ	P,
+
+DOFN:	SKIPN	NEWCMD		;Compatible mode?
+	 TLOA	FL,NUMSRF	;Yes--Like "l"
+	  SETOM	FNSW		;No--Set find not
+	POPJ	P,		;And return
+	SUBTTL	THE SUBSTITUTE (S) COMMAND
+ 
+; Substitute a string
+ 
+SUBST:: TLZ	FL,ASSMF	; Do not assume anything yet
+	SETZM	PARCNT		; Zero count for sequential partials
+	MOVE	T1,[2,,[ASCIZ/S*/]]
+	MOVEM	T1,FNDPMT	; Save for multiple string prompt
+	TLO	FL2,L2.NAB	; Allow rubout of first altmode
+	HRLOI	T1,377777	; Set for lots
+	MOVEM	T1,RPCNT
+	MOVE	T1,[POINT 9,R1BUF]
+	MOVEI	T3,R1PNT
+	PUSHJ	P,SSTRNG	; This code is just like search
+	JRST	[SKIPE R2PNT	; Both strings must have been given
+		SKIPN	R1PNT
+		NERROR	NSG	; Else there has been an error
+		CAIN	C,12	; Check for just a crret
+		JRST	ASBMD1	; And do a continue
+		JRST	NOSTR]	; There is no string
+	MOVE	T1,[POINT 9,R2BUF]; Get string to replace by
+	MOVEI	T3,R2PNT
+	PUSHJ	P,SSTRNG
+	JRST	[CAIN C,12
+		JRST	[PUSH P,[.]	; Set up return
+			JRST	RETSTR]	; And read more (first null)
+		MOVEM	T1,R2PNT	; Null string means delete
+		MOVEI	T2,0	; So set a real null string
+		IDPB	T2,T1
+		JRST	.+1]
+	SUBI	T3,R2PNT	; Generate number of replacement strings
+	MOVEM	T3,RSTRCT	; And save for later
+NOSTR:	TLZ	FL,NOPRN!DECID!EXCTS1; Clear flags
+	SETZM	TSW		;Clear total switch
+	SETZM	LSW		;And print line # only switch
+	SKIPE	EXACTF		; All searches exact?
+	TLO	FL,EXCTS1	; Yes, set the exact mode bit
+	PUSHJ	P,SCAN		; And start looking for more junk
+	TRNN	FL,TERMF	; Nothing
+	CAIN	C,","		; Or just a comma
+	JRST	ASBMDT		; Then search from here to eternity
+	CAIE	C,"!"		; He only wants to give a stopping point
+	CAIN	C,":"
+	JRST	ASBMDT
+	PUSHJ	P,GET2		; Go get a range
+REP4:	MOVE	T1,HILN 	; Save for possible continue
+	MOVEM	T1,RPHILN
+	MOVE	T1,HIPG
+	MOVEM	T1,RPHIPG
+;Here to scan for switches in any order
+REPS1:	CAIE	C,","		;Something there
+	  JRST	REP1		;No
+	PUSHJ	P,SCAN		;Yes--See what it is
+	TRNN	FL,NUMF		;A NUMBER?
+	  JRST	REPS4		;No
+	MOVEM	T2,RPCNT	;Yes--Save count
+	JRST	REPS3		;And continue
+REPS4:	TRNN	FL,IDF		;An indent?
+	  NERROR ILC		;No--Lose
+	MOVS	T1,ACCUM	;Yes--Get ident
+	MOVE	T2,[-LNSWT,,SLSWT];Point to switches
+	PUSHJ	P,DOSW		;Handle them
+	  NERROR ILC		;No match
+REPS3:	PUSHJ	P,SCAN		;Read next token
+	JRST	REPS1		;And process
+;End of switch scanning
+REP1:	PUSHJ	P,CKTRMF	; Make sure it terminates correctly
+REP1A:	TLO	FL2,NORENT	; Don't allow arbitrary reenter from here on
+	MOVEI	T1,R1PNT	; Get the search code
+	PUSHJ	P,CODSR
+	MOVE	T1,LOPG
+	MOVEM	T1,RPPG 	; For print outs
+	PUSHJ	P,FINDLO##	; Get first line of range
+	TRZ	FL,LINSN	; Nothing yet
+	SETZM	FNDFLG		; No how
+	TLNE	FL2,PDECID
+	TLO	FL,DECID	; Set if perm mode on
+ONREP:	PUSHJ	P,ONMOV 	; Check for still in range
+	JRST	ENDREP		; Finally
+	TLZE	FL,ASSMF	; Should we start with .+1
+	JRST	[CAME T1,LOLN	; Is it the one we asked for
+		JRST	.+1	; No, use it
+		AOS	SVCNT	; Just in case a ! type of range
+		JRST	RPNXT]
+	TRO	FL,LINSN	; This line is good enough
+	CAMN	T1,PGMK
+	JRST	RPNXT		; Go take care of page marks
+	MOVEI	T2,R1PNT	; Do the search
+	PUSHJ	P,COMSRC
+	JRST	RPNXT
+	AOS	FNDFLG		; Found
+	SKIPGE	T3		; Protect agains special killing tab
+	IBP	ALTP
+	PUSH	P,T3		; Save count of how far into line
+	MOVE	T3,(PNTR)	; Set up current line
+	MOVEM	T3,CLN
+	MOVE	T3,CPG
+	MOVEM	T3,CPGL
+	MOVE	T2,[XWD LIBUF,LIBUF+1]; Clear it out
+	SETZM	LIBUF
+	BLT	T2,LIBUF+MXWPL+1; We will do replace here
+	MOVE	T2,PNTR 	; Get the pointer to the line
+	MOVE	T3,(T2) 	; Pick up the first word
+	MOVEI	T4,LIBUF	; The place to put it
+	JRST	SBALT3		; Transfer
+SBALT2: SKIPE	T3,(T2)
+	TRNE	T3,1		; Is it the end of the line
+	JRST	SBALT1
+SBALT3: MOVEM	T3,(T4) 	; Put it away
+	ADDI	T4,1
+	AOJA	T2,SBALT2
+
+SBALT1: SUBI	T4,LIBUF	; Get size line used to be
+	MOVEM	T4,OCNT
+	POP	P,CCNT		; Get the number of chrs into line
+	SKIPGE	CCNT		; Must be .ge. 0
+	SETZM	CCNT
+	SUBI	ALTP,(PNTR)	; Convert pointer to libuf
+	ADD	ALTP,[XWD 70000,LIBUF]; And back up one
+NXTRPL: SETZM	PARCNT		; Zero for next rep
+	LDB	T1,[POINT 4,-1(T1),12]; Get string number
+	CAMLE	T1,RSTRCT	; Is it larger
+	MOVE	T1,RSTRCT	; Then use last
+	MOVE	T1,R2PNT(T1)
+	MOVSI	T4,70000	; Decrement pointer
+	ADDM	T4,SRCALP
+REPSTR: ILDB	C,T1		; Get the next chr
+	JUMPE	C,ENDRP 	; The end of the replace string
+	TRZE	C,PT.PAT	;See if special
+	 JRST	[TRZE C,PT.NUM	;Number coming?
+		  JRST	REPNUM	;Yes--Go handle
+		 CAILE	C,PATLEN;In range?
+		  JRST	ERRIRS	;No--Error
+		 JRST	@PATOUT(C)];And dispatch
+PUTSTR: IDPB	C,ALTP		; Put in the replacement
+	AOS	C,CCNT		; Advance count
+	CAIL	C,MXWPL*5	; Check against max
+	NERROR	LTL		; And lose
+	JRST	REPSTR
+ENDRP:	MOVE	T3,CCNT 	; Get count so search can go on
+	PUSH	P,ALTP		; Save replace pointer
+	PUSH	P,SRCALP	; And the end of input pointer
+	MOVE	ALTP,SRCALP	; Continue from here
+	ILDB	T1,SRCALP	; See what char we stopped on
+	CAIE	T1,12		; Have we gone too far?
+	PUSHJ	P,COMSRT	; This will continue
+	JRST	FINLIN		; All done with matches, finish up
+	CAIL	T3,MXWPL*5	; Are there too many?
+	NERROR	LTL
+	POP	P,T2
+DOMOV:	ILDB	C,T2		; Move the chrs that did not match
+	CAMN	T2,ALTP 	; Have we gotten to the next match
+	JRST	DONMOV		; Yes
+	IDPB	C,(P)		; The byte pointer is still in the stack
+	JRST	DOMOV
+DONMOV: MOVEM	T3,CCNT 	; Put the count back in core
+	POP	P,ALTP		; This is now the deposit pointer
+	JRST	NXTRPL		; Go do a replace
+
+SLSWT:	'Q  ',,[TLO FL,DECID]	;Decide mode
+	'E  ',,[TLO FL,EXCTS1]	;Exact case match
+	'L  ',,[SETOM LSW]	;Print only line numbers
+	'S  ',,[TLO FL,NOPRN]	;Print nothing
+	'T  ',,[SETOM TSW]	;Give totals at the end
+	'U  ',,[TRO FL2,SUPN]	;Print w/o line number
+	'N  ',,[PUSHJ P,DOSN]	;In compatible mode, like s
+	'D  ',,[PUSHJ P,DODS]	;In compatible mode, like q
+LNSWT==.-SLSWT
+
+DOSN:	SKIPE	NEWCMD##	;Compatible?
+	  NERROR ILC		;No--Error
+	TLO	FL,NOPRN	;Yes--Like s
+	POPJ	P,		;And return
+
+DODS:	SKIPE	NEWCMD##	;Compatible?
+	  NERROR ILC		;No--Error
+	TLO	FL,DECID	;Yes--Like q
+	POPJ	P,		;And return
+
+REPNUM:	CAILE	C,PATLEN	;In range?
+	 JRST	ERRIRS		;No--Error
+	ILDB	CS,T1		;Get count
+	JRST	@PATNUM(C)	;And dispatch
+FINLIN: POP	P,SRCALP	; Get set to move to end
+	POP	P,ALTP
+	ILDB	C,2(P)		; We just happen to know its still there
+	CAIE	C,12		; If so we have eaten a return
+	JRST	ENDFIN		; All is ok
+FINL2:	MOVEI	C,15
+	SKIPA			; So put it in
+ENDFIN: ILDB	C,SRCALP
+	IDPB	C,ALTP
+	AOS	CS,CCNT
+	CAIL	CS,MXWPL*5
+	NERROR	LTL
+	CAIE	C,12
+	JRST	ENDFIN		; Done when we see the line feed
+	MOVEI	T1,0		; Zero out rest of this line
+DOZER:	TLNN	ALTP,760000	; Pointer at end of line?
+	JRST	ZEROD
+	IDPB	T1,ALTP
+	JRST	DOZER
+ZEROD:	SUBI	ALTP,LIBUF	; Movei ac,1-libuf(ac)
+	MOVEI	ALTP,1(ALTP)	; Get count
+	MOVEM	ALTP,NCNT
+	TLNE	FL,NOPRN	; Did he want printing supressed
+	JRST	NOPLIN
+	MOVE	T2,CPG		; Get this page
+	CAMN	T2,RPPG 	; Is it one we started on
+	JRST	NOPPRN		; Yes, do not print 'page #'
+	MOVEM	T2,RPPG 	; Save for next time
+	PUSHJ	P,PGPRN
+NOPPRN: SKIPL	LSW		;Print just line numbers?
+	  JRST	NOPP2		;No
+	MOVE	T1,LIBUF		;Get line number
+	MOVEM	T1,PRNTO1	;Save for printer
+	OUTSTR	PRNTO1		;Type it
+	JRST	NOPP1		;And continue
+NOPP2:	MOVEI	T2,LIBUF	; Print the line
+	HRRZ	T1,NCNT		; Length of the line
+	PUSHJ	P,OUTLN1##
+NOPP1:	TLNN	FL,DECID	; Does he want the option of saying no
+	JRST	NOPLIN		; No, insert it
+NOVCMD: PUSHJ	P,GETONE##
+	CAIN	T1,177		; Did he say rubout(do not insert)?
+	JRST	REJECT		; Yes, just ignore this line
+	CAIN	T1,15		; Did he say <CR>?
+	INCHRW	T1		; Yes, flush out the line feed
+	CAIE	T1,12
+	CAIN	T1," "		; Space means use it
+	JRST	ACCEPT
+	ANDI	T1,137		; Force upper case
+	OCRLF			; Need carriage return line feed now
+	CAIN	T1,"N"		;See if no
+	 JRST	REJECT		;Yes--Reject
+	CAIN	T1,"Y"		;See if yes
+	 JRST	ACCEPT		;Yes--Accept
+	CAIN	T1,"H"		;See if help
+	 JRST	HELP		;Yes
+	CAIE	T1,"Q"
+	CAIN	T1,"E"		; Does he want out
+	JRST	ENDREP		; Yes: quit
+	CAIN	T1,"A"
+	JRST	RPALT
+	CAIN	T1,"G"		; Get out of decide mode
+	JRST	[TLZ FL,DECID	; Leave decide mode
+		 JRST NOPLIN]
+	OUTSTR	[BYTE (7) "?"," ",7,0,0]
+	CLRBFI			; Clear him out
+	JRST	NOVCMD		; Try again
+HELP:	OUTSTR	[ASCIZ/
+Type one of the following without carriage return
+
+<space>	  Accept the change
+<CR>	  Accept the change
+<delete>  Restore original line and continue search
+E	  Restore original line and end search
+G	  Accept this change and all the rest without asking
+N	  Restore original line and continue search
+Q	  Restore original line and end search
+Y	  Accept the change and continue
+/]
+	CLRBFI			;Flush buffer
+	JRST	NOVCMD		;And try again
+ 
+REJECT: 
+IFN XSARSW,<
+	SKIPN	EXPFLG		; Print correct reject message
+>
+	OUTSTR	[ASCIZ '[Rejected]
+']
+	JRST	RPNXT1		; Get next line
+ 
+ACCEPT: 
+IFN XSARSW,<
+	SKIPN	EXPFLG		; Print correct accept message
+>
+	OUTSTR	[ASCIZ '[Accepted]
+']
+ 
+NOPLIN: PUSHJ	P,INSED 	; Insert the new line
+	PUSHJ	P,FINDN 	; Get next
+	SOSG	RPCNT		; See if out of count
+	JRST	COMND
+	MOVE	T1,(PNTR)	; Get pointer back
+	JRST	ONREP
+
+RPALT:	MOVE	T1,OCNT 	; Save count
+	PUSHJ	P,RPSALT##
+	PUSHJ	P,ALTLN1## 	; Do alter
+	JRST	[OCRLF		; Quit
+	      JRST ENDREP]
+	JRST	NOPLINE 	; Use it now
+ASBMD1: TROA	FL,CNTF 	; Mark as keep end of range
+ASBMDT: TRZ	FL,CNTF 	; Just in case
+	TLO	FL,ASSMF	; We assume .+1
+	MOVE	T1,CLN
+	MOVEM	T1,LOLN 	; Set for here to eternity
+	MOVEM	T1,HILN
+	MOVE	T1,CPGL
+	MOVEM	T1,LOPG
+	MOVEI	T1,1		; Set for only one
+	MOVEM	T1,RPCNT
+	TRZE	FL,CNTF 	; Keep end?
+	JRST	NOSPSB
+	CAIE	C,":"		; If a : or a !
+	CAIN	C,"!"
+	JRST	HALFSB		; Get the second half (.+1 to given)
+	MOVSI	T1,377777	; Get a large page
+	MOVEM	T1,HIPG
+	JRST	REP4		; Onward
+ 
+HALFSB: MOVEM	T1,HIPG 	; Set to as /.
+	PUSHJ	P,GET2HF	; Get the second half
+	JRST	REP4		; And go
+
+NOSPSB: MOVE	T1,RPHIPG
+	MOVEM	T1,HIPG
+	MOVE	T1,RPHILN
+	MOVEM	T1,HILN
+	JRST	REP1A
+QUOOUT:	ILDB	C,T1		; Get next chr
+	JUMPN	C,PUTSTR	; Must not be 0
+	JRST	ERRIRS		;This string is illegal
+
+QUONUM:	ILDB	C,T1		;Get next char
+	PUSH	P,T1		;Save byte pointer
+QUONU1:	IDPB	C,ALTP		;Store char
+	AOS	T1,CCNT		;Advance count
+	CAIL	T1,MXWPL*5	;Check against max
+	NERROR	LTL		;And lose
+	SOJG	CS,QUONU1	;Loop for repeat count
+	POP	P,T1		;Restore byte pointer
+	JRST	REPSTR		;And continue
+
+NXSOUT: AOS	CS,PARCNT	; Get next partial
+DLMNUM: CAILE	CS,0
+	 CAMLE	CS,ARBCNT	; Is it in range
+	  JRST	ERRIRS		;No such partial string
+	MOVE	T4,ARBPTR-1(CS)	;Get correct string pointer
+FNDRST: ILDB	C,T4		; Now insert that string
+	JUMPE	C,REPSTR	; Go finish the replacement string
+	IDPB	C,ALTP
+	AOS	C,CCNT
+	CAIL	C,MXWPL*5
+	NERROR	LTL
+	JRST	FNDRST
+
+UCLOUT:	AOS	CS,PARCNT	;Get next partial
+	MOVE	C,[TRZ C," "]	;Upper case function
+	JRST	XXXOUT
+LCLOUT:	AOS	CS,PARCNT	;Get next partial
+	MOVE	C,[TRO C," "]	;Lower case function
+	JRST	XXXOUT
+VCLOUT:	AOS	CS,PARCNT	;Get next partail
+	MOVE	C,[TRC C," "]	;Invert case function
+	JRST	XXXOUT
+
+UCLNUM:	MOVE	C,[TRZ C," "]	;Upper case function
+	JRST	XXXOUT
+LCLNUM:	MOVE	C,[TRO C," "]	;Lower case function
+	JRST	XXXOUT
+VCLNUM:	MOVE	C,[TRC C," "]	;Invert case function
+
+XXXOUT:	CAILE	CS,0		;Check range
+	 CAMLE	CS,ARBCNT	;..
+	  JRST	ERRIRS		;Error
+	MOVEM	C,INOCHR##	;"AS GOOD A PLACE AS ANY"
+	MOVE	T4,ARBPTR-1(CS)	;Get correct string pointer
+XXXRST:	ILDB	C,T4		;Get a char
+	JUMPE	C,REPSTR	;Jump if the end
+	MOVE	CS,CTBL(C)	;Get bits
+	TLNE	CS,LETF_16	;This a letter?
+	 XCT	INOCHR##	;Yes--Do conversion
+	IDPB	C,ALTP		;Store char
+	AOS	C,CCNT		;Count chars
+	CAIL	C,MXWPL*5	;See if too long
+	 NERROR	LTL		;Yes--Die
+	JRST	XXXRST		;No--Loop
+RPNXT1: SOSG	RPCNT
+	JRST	RPFND
+RPNXT:	PUSHJ	P,FINDN
+	JRST	ONREP		; Continue looking at lines
+
+ENDREP: TRZN	FL,LINSN	; Were there any?
+	NERROR	NLN
+RPFND:	SKIPE	T2,FNDFLG	; Find any?
+	  JRST	RPFND1		;Yes!
+	RERROR	SRF		; Nope
+	JRST	COMND		; Go on
+RPFND1:	SKIPN	TSW		;Total wanted?
+	  JRST	COMND		;No
+	PUSHJ	P,DPRNT##	;Print number
+	OUTSTR	[ASCIZ/ line/]	;Give it
+	SOSE	FNDFLG		;Just 1?
+	  OUTCHR ["s"]		;No--Fix it up
+	OUTSTR	[ASCIZ/ substituted
+/]
+	JRST	COMND		;And return
+	SUBTTL	COMMON ROUTINES FOR SEARCHING FILES
+ 
+; This routine generates code for finding a match
+; for the first character of a search string. The pointer
+; to a set of byte pointers for search strings is in T1
+
+CODSR::	MOVE	T2,[POINT 7,ARBBUF]	;Setup for first string
+	MOVEM	T2,ARBPTR		;Store
+	MOVEI	T2,CODEBF	; Set up pointer to place to put code
+	MOVEI	ALTP,0		; The number of the current string
+	HRLI	T1,-SRNUM	; The number of strings
+CODS5:	TLZ	FL,NEGF!DEMCHR	; Turn off the ^E seen flag
+	MOVE	T3,(T1)		; Get a pointer
+	JUMPE	T3,ENDCOD	; A ZERO BYTE POINTER IS END OF CODE
+READCD:	PUSHJ	P,CODCHR	;Get a char handling specials
+READC1:	JUMPN	T5,(T5)		;Dispatch if special
+COMLET:	MOVE	CS,CTBL(C)	; Get the majic bits
+	TLNN	FL,EXCTS1!EXCTSR	; Is this an exact search?
+	TLNN	CS,LETF_16	; Or not a letter
+	JRST	NORMCR		; Yes just the test
+	HRLI	C,(<CAIE C,>)	; Do a caie
+	MOVEM	C,(T2)
+	XOR	C,[XWD 4000,40]	; Cain .xor. caie = 4000,,0
+	MOVEM	C,1(T2)
+	TLNE	FL,NEGF		; ^E THAT CHR
+	JRST	GENSKP		; Generate a skipa
+COMXCT:	MOVE	C,[XCT JSPR]	; The call to search further
+	DPB	ALTP,[POINT 4,C,12]	; Ac field gives string number
+	MOVEM	C,2(T2)
+	ADDI	T2,3		; Advance output pointer
+ENDSTR:	ADDI	ALTP,1		; Next string
+	AOBJN	T1,CODS5	; If any
+ENDCOD:	MOVE	C,[JRST COMSRT]	; A RETURN
+	MOVEM	C,(T2)
+	POPJ	P,
+
+CODCHR:	ILDB	C,T3		;Get next char
+	JUMPE	C,ERRISS	;Error if nul
+	MOVEI	T5,0		;Setup dispatch
+	TRZN	C,PT.PAT	;Special pattern match char?
+	 POPJ	P,		;No--Return
+	TRZE	C,PT.NUM	;See if number following
+	 IBP	T3		;Yes--Eat past it
+	CAILE	C,PATLEN	;Yes--See if in range
+	 JRST	ERRISS		;No--Illegal string
+	MOVE	T5,PATCOD(C)	;Get dispatch
+	POPJ	P,		;And return
+SEPCOD:	MOVE	C,[SKIPG CS,CTBL(C)]	; Get bits
+	MOVEM	C,(T2)
+	MOVE	C,[TRNE CS,NSEPF]	; Check for %,$,or .
+	TRNE	FL2,QSEPF		; Separators?
+	MOVSI	C,(<SKIPA>)	; Yes; 
+TSTNNS:				; Here to generate 'negative non-skip' code
+	MOVEM	C,1(T2)
+	TLNE	FL,NEGF		; Skipa in normal case
+	JRST	COMXCT
+GENSKP:	MOVSI	C,(<SKIPA>)
+	MOVEM	C,2(T2)
+	AOJA	T2,COMXCT	; So XCT will go in right place
+
+QUOCOD:	ILDB	C,T3		; Get next chr
+	JUMPE	C,ERRISS	;Error if end
+	JRST	NORMCR		;And require exact case match regardless
+
+BOLCOD:	HRRI	C,215		; GET SPECAIL BOL CHAR
+	JRST	NORMCR		; AND CONTINUE
+EOLCOD:	SKIPA	C,[CAIE C,15]	; Get <CR> char in rh of c & skip (lh irrelevant)
+ANYCOD:	SKIPA	C,[CAIE C,15]	; Get special instr for <EOL> & skip
+NORMCR:	HRLI	C,(<CAIN C,>)	; Exact or not letter
+GENIVT:				; Here to invert txne/txnn or caie/cain
+	TLNE	FL,NEGF
+	TLC	C,4000		; Cain .xor. caie = 4000,,0
+NORMC1:	MOVEM	C,(T2)
+	SOJA	T2,COMXCT	; Make the XCT go in right pl@ce
+
+
+INFCOD:	PUSHJ	P,CODCHR	;Get next char
+	JUMPE	T5,READCD	;Nothing special
+	CAIN	C,.PTNOT		; Just check validity
+	 JRST	INFCOD
+	CAIE	C,.PTINF	; Test for 'any number of'
+	 CAIN	C,.PTMR1	; Test for '1 or more'
+	  JRST	ERRISS		;Yes--Illegal format
+	CAIN	C,.PTQUO
+	 ILDB	C,T3
+	JUMPE	C,ERRISS	;End of string error
+	JRST	READCD		; Look for first other chr
+
+JSPR:	JSP	T1,SRCRET	; Call continue search
+
+
+SPCCOD:	MOVE	C,[CAIE C,11]	; The 'tab' test
+	MOVEM	C,(T2)
+	MOVE	C,[CAIN C,40]	; The 'space' test
+	MOVEM	C,1(T2)
+TSTNSK:	TLNE	FL,NEGF		; Test for negative
+	JRST	GENSKP		; Yes, generate a skip
+	JRST	COMXCT		; No, next instruction if successful
+
+DGTCOD:	MOVE	C,[CAIL C,"0"]	; Lower-bound test
+	MOVEM	C,(T2)
+	MOVE	C,[CAILE C,"9"]	; Upper-bound test
+	JRST	TSTNNS		; Fail gets no skip
+
+LCLCOD:	MOVE	C,[CAIL C,"A"+40] ; Lower-bound test
+	MOVEM	C,(T2)
+	MOVE	C,[CAILE C,"Z"+40] ; Upper-bound test
+	JRST	TSTNNS		; Fail gets no skip
+
+UCLCOD:	MOVE	C,[CAIL C,"A"] ; Lower-bound test
+	MOVEM	C,(T2)
+	MOVE	C,[CAILE C,"Z"] ; Upper-bound test
+	JRST	TSTNNS		; Fail gets no skip
+
+LTRCOD:	MOVE	C,[MOVE CS,CTBL(C)] ; Get char status bits
+	MOVEM	C,(T2)
+	MOVE	C,[TLNE CS,LETF_16] ; Test for letter
+	AOJA	T2,GENIVT	; Incr pc & jump to check - sign
+
+ALMCOD:	MOVE	C,[MOVE CS,CTBL(C)] ; Get char status bits
+	MOVEM	C,(T2)
+	MOVE	C,[TLNE CS,<LETF!SNUMF>_16] ; Test for letter/number
+	AOJA	T2,GENIVT	; Incr pc & jump to check - sign
+
+MR1COD:	PUSHJ	P,CODCHR	;Get next char
+	JUMPE	T5,READC1	;Ok
+	CAIE	C,.PTINF	; Test for 'any # of'
+	 CAIN	C,.PTMR1	; Test for '1 or more'
+	  JRST	ERRISS		;Yes--Illegal
+	JRST	READC1		;And look for it
+
+NOTCOD:	TLC	FL,NEGF		; Invert the '-' sign
+	JRST	READCD		; & CONTINUE READING
+
+LSTCOD:	ILDB	T5,T3		;Get char count
+LSTC.1:	ILDB	C,T3		;Get a char to match
+	TLO	C,(CAIN C,)	;Generate instr to compare
+	MOVEM	C,(T2)		;Store
+	SOJLE	T5,[SOJA T2,TSTNSK]	;Return if end
+	MOVEI	T4,1(T5)	;Copy
+	LSH	T4,1		;Double
+	ADDI	T4,-1(T2)	;Form address
+	TLO	T4,(JRST)	;Make jrst
+	MOVEM	T4,1(T2)	;Stode
+	ADDI	T2,2		;Advance code
+	JRST	LSTC.1		;And loop
+; Read in the strings to search for
+; T3 has place to put pointers, T1 a byte pointer for strings
+
+ 
+SSTRNG::MOVEI	T2,SRBLG	; The permissible length
+	HRLI	T3,-SRNUM	; T3 has pointer to place byte pointers
+SSTR0:	MOVEM	T1,SVPT 	; Save the pointer for end of string
+SSTR1:	PUSHJ	P,GNCH##	; Get a chr
+	PUSHJ	P,ECHR		;Process if ^e special char
+	 JRST	SSTR1		;It was--Get next char
+	CAIN	C,200		; Altmode terminates
+	 JRST	SSTEND
+	CAIN	C,15		; Ignore returns
+	 JRST	SSTR1
+	CAIN	C,12		; Line feed is end of one string
+	 JRST	SSTR2
+	PUSHJ	P,SSCHR		;Store the char
+	JRST	SSTR1		;And loop
+
+SSTR2:	CAMN	T1,SVPT		; Null string?
+	JRST	[HLRZ C,T3	; First one?
+		CAIE	C,-SRNUM	; Well?
+		JRST	.+1	; No
+		MOVEI	C,12	; Return a line feed
+		POPJ	P,]
+RETSTR:	MOVEI	C,0		; Terminate string with 0
+	PUSHJ	P,SSCHR		;Store the null
+	MOVE	C,SVPT		; Set up pointer
+	MOVEM	C,(T3)
+	AOBJP	T3,[RERROR TMS
+		    JRST SSERR]
+	PUSH	P,T1
+	MOVE	T1,FNDPMT	; x*, x={F,S,L}
+	SKIPN	COMFLF		; Don't prompt if in command file
+	PUSHJ	P,PROMPT##	; Prompt for next string
+	POP	P,T1
+	JRST	SSTR0
+
+SSTEND: CAIN	T2,SRBLG	; Did we see any?
+	POPJ	P,		; No, return
+	MOVEI	C,0		; Yes, terminate last
+	IDPB	C,T1
+	MOVE	T1,SVPT
+	MOVEM	T1,(T3)		; Set pointer
+SSTR5:	AOBJP	T3,CPOPJ1	; Zero out other pointers
+	SETZM	(T3)
+	JRST	SSTR5
+
+;Here to store C in the search string (pointed by T1) and give error
+;if the string is too long
+
+SSCHR:	IDPB	C,T1		;Store the char
+	SOJG	T2,CPOPJ##	;Return if ok
+	RERROR	STL		;String is too long
+				;Fall into sserr
+
+;Here to clean up after a scanning error (STL or TMS)
+
+SSERR:	HRLZ	T1,T3		; Zero out first pointer
+	MOVNS	T1
+	ADDI	T1,-SRNUM(T3)	; Find start
+	SETZM	(T1)		;And clear
+	JRST	COMND
+	SUBTTL	PSEUDO ^E CHARACTER HANDLING
+
+ECHR:	CAIE	C,.PTPAT	;Special match char?
+	 JRST	CPOPJ1		;No--Return
+	SETZM	ENUM		;Clear number
+	PUSH	P,T1		;Save some acs
+	PUSHJ	P,GCHR		;Get upper case char
+	PUSHJ	P,GETNUM	;Get number if there
+	MOVEM	T1,ENUM		;Save number
+	CAIN	C,"V"		;Flag for next letter coming?
+	  JRST	VCHR		;Yes
+	CAIN	C,"<"		;Open angle bracket?
+	  JRST	ACHR		;Yes
+	CAIN	C,"M"		;Flag for n'th match
+	 SKIPE	ENUM		;And no number?
+	  CAIA			;No
+	   JRST	MCHR		;Yes--Go handle
+	CAIN	C,"Q"		;Quote the char?
+	 JRST	QCHR		;Yes
+	CAIN	C,"["		;Bracket list?
+	 JRST	LCHR		;Yes
+	MOVSI	T1,-ELEN	;Get etable length
+	CAIE	C,@ETAB(T1)	;Match?
+	AOBJN	T1,.-1		;No--Loop
+	JUMPG	T1,ERRISS	;Error if not found
+	MOVE	C,ETAB(T1)	;Get char bits
+EPATP:	POP	P,T1		;Restore byte pointer
+				;Fall into epat
+;Epat - add pattern char and number into string
+;Call: t1=byte pointer, c=char bits
+EPAT:	TLNE	C,(ET.NMI)	;See if number illegal
+	 SKIPN	ENUM		;Yes--See if number given
+	  CAIA			;Ok
+	   JRST	ERRISS		;Yes--Error
+	TLNE	C,(ET.NMR)	;See if number required
+	 SKIPE	ENUM		;Yes--See if number given
+	  CAIA			;Ok
+	   JRST	ERRISS		;No--Error
+;;	LDB	C,[POINTR (C,ET.COD)];Get pattern code
+	LDB	C,[POINT 9,C,8]	;Get pattern code
+	TRO	C,PT.PAT	;Flag special
+	SKIPE	ENUM		;See if number
+	 TRO	C,PT.NUM	;Yes--Flag its following
+	PUSHJ	P,SSCHR		;Store the pattern char
+	SKIPE	C,ENUM		;Get the number
+	 PUSHJ	P,SSCHR		;Store if given
+	POPJ	P,		;And return
+
+MCHR:	PUSHJ	P,GCHR			;Get next char
+	PUSHJ	P,GETNUM		;Get number
+	MOVEM	T1,ENUM			;Save number
+	JUMPE	T1,ERRISS		;Error if zero
+	CAIE	C,.PTPAT		;^E NEXT?
+	 JRST	ERRISS			;No--Error
+	PUSHJ	P,GCHR			;Get next char
+	CAIE	C,"M"			;End of string?
+	 JRST	ERRISS			;No--Error
+	MOVE	C,TABDLM		;Get .ptdlm bits
+	JRST	EPATP			;And store
+
+VCHR:	PUSHJ	P,GCHR		;Get a char
+	CAIN	C,"V"
+	 MOVE	C,TABVCL		;Get .ptvcl bits
+	CAIN	C,"L"
+	 MOVE	C,TABLCL		;Get .ptlcl bits
+	CAIN	C,"U"
+	 MOVE	C,TABUCL		;Get .ptucl bits
+	CAIG	C,177
+	 JRST	ERRISS
+	JRST	EPATP
+
+QCHR:	MOVE	C,TABQUO		;Get .ptquo bits
+	POP	P,T1			;Get byte pointer back
+	PUSHJ	P,EPAT			;Store pattern char
+	PUSHJ	P,GNCH		;Get a char
+	CAIN	C,200		;See if <esc>
+	 MOVEI	C,33		;Yes--Convert
+	PJRST	SSCHR		;And go store
+
+LCHR:	POP	P,T1			;Get byte pointer back
+	MOVE	C,TABLST		;Get .ptlst bits
+	PUSHJ	P,EPAT			;Store
+	MOVSI	T4,-^D100		;Get max
+LCHR1:	PUSHJ	P,GNCH			;Get a char
+	MOVEM	C,CHRBLK(T4)		;No--Save it
+	PUSHJ	P,GNCH			;Get a char
+	AOBJP	T4,ERRISS		;Error if too many
+	CAIN	C,"]"			;End?
+	 JRST	LCHR2			;Yes
+	CAIN	C,","			;Terminate?
+	 JRST	LCHR1			;Yes
+	JRST	ERRISS			;No--Error
+LCHR2:	MOVEI	C,(T4)			;Get count
+	MOVN	T4,C			;Get -count
+	HRLZI	T4,(T4)			;Get -count,,0
+	PUSHJ	P,SSCHR			;Store the count
+LCHR3:	MOVE	C,CHRBLK(T4)		;Get a char
+	PUSHJ	P,SSCHR			;Store
+	AOBJN	T4,LCHR3		;Loop
+	POPJ	P,			;And return
+ACHR:	MOVEI	T1,0			;Clear number
+ACHR1:	PUSHJ	P,GCHR			;Get next char
+	CAIL	C,"0"			;See if digit
+	 CAILE	C,"7"			;..
+	  JRST	ACHR2			;No
+	LSH	T1,3			;Shift digits over
+	ADDI	T1,-"0"(C)		;Combine
+	JRST	ACHR1			;And loop
+ACHR2:	CAIG	T1,177			;Too big?
+	 CAIE	C,">"			;Close angle bracket?
+	 JRST	ERRISS
+	EXCH	T1,(P)			;Get byte pointer,save number
+	MOVE	C,TABQUO		;Get .ptquo bits
+	PUSHJ	P,EPAT			;Handle pattern char
+	POP	P,C			;Restore number
+	PJRST	SSCHR			;Store and return
+GETNUM:	MOVEI	T1,0			;Clear number
+GETNM1:	CAIL	C,"0"			;Digit?
+	 CAILE	C,"9"			;..
+	  POPJ	P,			;No--Return
+	IMULI	T1,^D10			;Accumulate digits
+	ADDI	T1,-"0"(C)		;,,
+	PUSHJ	P,GCHR			;Get next char
+	JRST	GETNM1			;And loop
+
+GCHR:	PUSHJ	P,GNCH##	;Get next char
+	TRZ	C,200		;Clear special chars
+	MOVE	CS,CTBL(C)	;Get bits
+	TLNE	CS,LETF_16	;Letter?
+	 TRZ	C,40		;Yes--Make upper case
+	POPJ	P,		;And return
+
+;Pattern match table
+;Define code,char,number illegal,number required
+;
+DEFINE XX(CODE,CHAR,NUMI,NUMR),<
+	EXP	CODE*ET.COD+<"CHAR">*ET.CHR+NUMI*ET.NMI+NUMR*ET.NMR
+>
+
+ET.COD==1B8
+ET.NMI==1B9
+ET.NMR==1B10
+ET.CHR==1
+
+ETAB::	XX .PTLTR,<L>,0,0
+	XX .PTNXS,<X>,0,0
+	XX .PTNOT,<N>,1,0
+	XX .PTINF,<*>,1,0
+TABDLM:	XX .PTDLM,<M>,0,1
+	XX .PTDGT,<D>,0,0
+	XX .PTANY,<C>,0,0
+	XX .PTMR1,<+>,1,0
+	XX .PTALM,<A>,0,0
+	XX .PTSPC,< >,0,0
+	XX .PTEOL,<Z>,1,0
+	XX .PTBOL,<B>,1,0
+	XX .PTSEP,<S>,0,0
+TABLCL:	XX .PTLCL,<\>,0,0
+TABUCL:	XX .PTUCL,<^>,0,0
+TABVCL:	XX .PTVCL,<V>,0,0
+TABQUO:	XX .PTQUO,<Q>,0,0
+TABLST:	XX .PTLST,<[>,0,0
+ELEN==:.-ETAB
+COMTST:	PUSHJ	P,COMSRC	;Do the search
+	 TDZA	T1,T1		;Failure--Set to 0
+	  MOVEI	T1,1		;Success--Set to 1
+	SKIPE	FNSW		;See if find not
+	  XORI	T1,1		;Yes--Invert answer
+	ADDM	T1,(P)		;Modify return of success
+	POPJ	P,		;And return
+
+; The search itself
+
+COMSRC::MOVEM	T2,BUFSAV	; Save the pointer to strings
+	CAML	PNTR,BUFBLL	; Is this line known to be in core?
+	PUSHJ	P,GETLTH##	; No, make sure line is in core
+	MOVNI	T3,1		; The count of how far into line we are
+	MOVEI	ALTP,1(PNTR)	; Set byte pointer
+	HRLI	ALTP,(<POINT 7,0,6>)
+	MOVEI	C,215		; Start with a line delimiter
+	JRST	CODEBF		; Go scan
+COMSRT:	ILDB	C,ALTP		; We return here if no match for this one
+	CAIE	C,12		; Done?
+	AOJA	T3,CODEBF	; No, go on
+	POPJ	P,		; Yes, non-match retunr
+
+SRCRET:	PUSH	P,T1		; Save the return address
+	PUSH	P,ALTP		; And the string pointer
+	PUSH	P,C		; And the character
+	LDB	T1,[POINT 4,-1(T1),12]	; Get string number
+	ADD	T1,BUFSAV	; Point to byte pointer
+	SKIPN	T1,(T1)		; Get it
+	ERROR	ICN		; There should be one there
+	MOVE	T2,[POINT 7,ARBBUF]	; Set up arbit match
+	MOVEI	T4,MXWPL*^D10	; Pointer and count
+	SETZM	ARBCNT		; The number of arbitrary matches seen
+	TLZ	FL,ARBITG	; Off at start
+	PUSHJ	P,LINMAT	; Go check for match
+	JRST	LOSE		; We lose, continue scan
+	MOVEM	ALTP,SRCALP	; Pointer to end of string
+	POP	P,C		; Restore
+	POP	P,ALTP
+T1PPJ1::	POP	P,T1
+CPOPJ1::	AOS	(P)	; Skip return
+	POPJ	P,
+LOSE:	POP	P,C		; Restore
+	JRST	APOPJ##
+NXTCHR:	CAIN	C,12		; Was that last of line?
+	 POPJ	P,		; Yes, lose 
+	ILDB	C,ALTP		; No, try next
+LINMAT:	PUSHJ	P,CHRMAT	; Check for match
+	 POPJ	P,		; None, return
+	JUMPN	CS,NXTCHR	;Jump if more
+	AOS	(P)		; SAVE A JRST CPOPJ1
+	POPJ	P,		;Skip return
+
+
+CHRMAT:	TLZ	FL,NEGF!DEMCHR	; No ^E seen and chr can be 0
+READCH:	ILDB	CS,T1		; Get next
+	JUMPE	CS,MATCH	;Jump if end of string
+	TRZE	CS,PT.PAT	;See if special
+	 JRST	[TRZE CS,PT.NUM	;Number coming?
+		  JRST	NUMCON	;Yes
+		 CAILE	CS,PATLEN;No--See if in range
+		  JRST	ERRISS	;No--Error
+		 JRST	@PATCON(CS)]	;And process
+TSTCHR:	CAIN	C,(CS)		;Are they the same?
+	 JRST	ISTRU1		; Yes, check negf
+	MOVE	T5,CTBL(CS)	; Get bits
+	TLNN	FL,EXCTS1!EXCTSR	; Exact?
+	TLNN	T5,LETF_16	; Or not let
+	JRST	ISFALS		; No match
+	XORI	CS,40		; Check other case
+EXACHR:	CAIN	C,(CS)
+	 JRST	ISTRU1
+	JRST	ISFALS		; Lose
+
+MATCH:	TLNE	FL,DEMCHR	; Did we need a character there?
+	 JRST	ERRISS		;Yes, illegal string
+	JRST	CPOPJ1	; Ok return
+; Pattern match special character branch table
+
+.PTPAT=="E"-100		;^E = SPECIAL PATTERN FLAG IE NEXT CHAR IS .PT???
+PT.NUM==200	;Number byte following 
+PT.PAT==400	;Special pattern in last 7 bits
+
+	DEFINE	PATS,<
+	XLIST
+PATC <NUL,LTR,NXS,NOT,UCL,INF,DLM,DGT,ANY,MR1,LCL,ALM,BOL,SPC,EOL,VCL,QUO,SEP,LST>
+	LIST
+>
+
+DEFINE	PATC(LIST),<
+	IRP LIST,<
+	IF1,<BLOCK 1>
+	IF2,<
+		IFDEF LIST'COD,<EXP LIST'COD>
+		IFNDEF LIST'COD,<EXP ERRISS>
+	>
+>
+>
+
+PATCOD:	PATS
+
+DEFINE	PATC(LIST),<
+	IRP LIST,<
+	IF1,<BLOCK 1>
+	IF2,<
+		IFDEF LIST'CON,<EXP LIST'CON>
+		IFNDEF LIST'CON,<EXP ERRISS>
+	>
+	>
+>
+
+PATCON:	PATS
+
+DEFINE	PATC(LIST),<
+	IRP LIST,<
+	IF1,<BLOCK 1>
+	IF2,<
+		IFDEF LIST'OUT,<EXP LIST'OUT>
+		IFNDEF LIST'OUT,<EXP ERRIRS>
+	>
+	>
+>
+
+PATOUT:	PATS
+
+DEFINE	PATC(LIST),<
+	IRP LIST,<
+	IF1,<BLOCK 1>
+	IF2,<
+		IFDEF LIST'NUM,<EXP LIST'NUM>
+		IFNDEF LIST'NUM,<EXP ERRIRS>
+	>
+	>
+>
+
+PATNUM:	PATS
+
+DEFINE	PATC(LIST),<
+	IRP LIST,<
+	IF1,<BLOCK 1>
+	IF2,<
+		IFDEF LIST'CUM,<EXP LIST'CUM>
+		IFNDEF LIST'CUM,<EXP ERRISS>
+	>
+	>
+>
+
+PATCUM:	PATS
+	PATLEN==-1		;So +1 starts with zero
+DEFINE	PATC(LIST),<IRP LIST,<.PT'LIST==<PATLEN==PATLEN+1>>>
+
+	PATS
+
+ERRISS:	NERROR	ISS
+ERRIRS:	NERROR	IRS
+	SUBTTL	F/S CONTINUATION CHECKING ROUTINES
+
+LTRCON:	MOVE	T5,CTBL(C)	; Get char bits
+	TLNE	T5,LETF_16	; Test for a letter
+	JRST	ISTRU		; Yes, jump
+	JRST	ISFALS		; No, jump
+
+NOTCON:	TLC	FL,NEGF		; Invert the negative flag
+	TLO	FL,DEMCHR	; Require a next char
+	JRST	READCH		; & READ ON
+
+UCLCON:	TDZA	T5,T5		; Set zero for upper case
+LCLCON:	MOVEI	T5,40		; Set 40 for lower case
+	CAIL	C,"A"(T5)	; Test for letter
+	CAILE	C,"Z"(T5)	; Test for letter
+	JRST	ISFALS		; No, jump
+	JRST	ISTRU		; Yes, jump
+
+DGTCON:	CAIL	C,"0"		; Test for a decimal digit
+	CAILE	C,"9"		; Test for a decimal digit
+	JRST	ISFALS		; No, jump
+	JRST	ISTRU		; Yes, jump
+
+ALMCON:	MOVE	T5,CTBL(C)	; Get char bits
+	TLNE	T5,<LETF!SNUMF>_16 ; Test for letter/number
+	JRST	ISTRU		; Yes, jump
+	JRST	ISFALS		; No, jump
+
+SPCCON:	CAIE	C,40		; Test for space
+	CAIN	C,11		; Test for tab
+	JRST	ISTRU		; Yes, jump
+	JRST	ISFALS		; No, jump
+
+EOLCON:	CAIE	C,15		; Test for end of line
+	JRST	ISFALS		; No, jump
+	JRST	ISTRU		; Yes, jump
+
+BOLCON:	CAIE	C,215		; TEST FOR BOL
+	JRST	ISFAL1		; NO, JUMP
+	JRST	ISTRU1		; YES, JUMP
+
+QUOCON:	ILDB	CS,T1		;Get next char
+	JUMPE	CS,ERRISS	;Error if zero
+	JRST	EXACHR		;And go test
+
+ANYCON:	CAIE	C,15			;Eol
+	 CAIN	C,215			;Bol
+	  JRST	ISFALS			;Yes--Lose
+	JRST	ISTRU			;No--Win
+
+SEPCON:	MOVE	T5,CTBL(C)		; Get table ent
+	JUMPG	T5,ISFALS		; Not a sep
+	TRNN	FL2,QSEPF		; Check . % $
+	TRNN	T5,NSEPF		; Checking - do we have one?
+	JRST	ISTRU		; No: sep
+	JRST	ISFALS		; Yes: not a sep
+
+LSTCON:	ILDB	T5,T1		;Get repeat count
+LSTN.1:	ILDB	CS,T1		;Get a char
+	CAIN	CS,(C)		;Match?
+	 JRST	LSTN.2		;Yes--Win
+	SOJG	T5,LSTN.1	;No--Loop
+	JRST	ISFALS		;And lose
+LSTN.2:	SUBI	T5,1		;Fix up count
+	ADJBP	T5,T1		;Advance pointer
+	MOVE	T1,T5		;Position back in t1
+	JRST	ISTRU		;And win
+	SUBTTL	NUMCON -- HANDLE ^EN<PATTERN>
+
+;These routine tries to find n of the specified pattern character
+;If they do, the string is stored in arbbuf and arbcnt is incremented
+;Once only and the skip return is taken.  failure takes the non-skip
+;Return, with the arbbuf setup anyway.
+
+NUMCON:	ILDB	CN,T1			;Get count
+	SOJE	CN,@PATCON(CS)		;Dispatch if just one
+	JRST	NUMC.2			;And skip fetch char
+NUMC.1: ILDB	C,ALTP			;Get a new char
+	CAIN	C,12			;See if eol
+	 JRST	ISTRU1			;Yes
+NUMC.2:	PUSHJ	P,@PATCUM(CS)		;See if matches
+	 JRST	ISFAL1			;Fail unless not
+	SOJG	CN,NUMC.1		;Yes--Loop for all
+	ILDB	C,ALTP			;Get last
+	PJRST	@PATCON(CS)		;And dispatch
+	SUBTTL	F/S CUMTINUATION CHECKING ROUTINES (NUMBERS)
+
+;These routines are just like xxxcon routines except they dispatch
+;To nstru/nsfals instead of istru/isfals as the former routines
+;Do not terminate the arbtrary string nor increment the arbcnt 
+;Counter. they are duplicated for speed only, vs having a flag
+;In the xxxcon routines to control storage.
+
+LTRCUM:	MOVE	T5,CTBL(C)	; Get char bits
+	TLNE	T5,LETF_16	; Test for a letter
+	JRST	NSTRU		; Yes, jump
+	JRST	NSFALS		; No, jump
+
+UCLCUM:	TDZA	T5,T5		; Set zero for upper case
+LCLCUM:	MOVEI	T5,40		; Set 40 for lower case
+	CAIL	C,"A"(T5)	; Test for letter
+	CAILE	C,"Z"(T5)	; Test for letter
+	JRST	NSFALS		; No, jump
+	JRST	NSTRU		; Yes, jump
+
+DGTCUM:	CAIL	C,"0"		; Test for a decimal digit
+	CAILE	C,"9"		; Test for a decimal digit
+	JRST	NSFALS		; No, jump
+	JRST	NSTRU		; Yes, jump
+
+ALMCUM:	MOVE	T5,CTBL(C)	; Get char bits
+	TLNE	T5,<LETF!SNUMF>_16 ; Test for letter/number
+	JRST	NSTRU		; Yes, jump
+	JRST	NSFALS		; No, jump
+
+SPCCUM:	CAIE	C,40		; Test for space
+	CAIN	C,11		; Test for tab
+	JRST	NSTRU		; Yes, jump
+	JRST	NSFALS		; No, jump
+
+EOLCUM:	CAIE	C,15		; Test for end of line
+	JRST	NSFALS		; No, jump
+	JRST	NSTRU		; Yes, jump
+
+BOLCUM:	CAIE	C,215		; TEST FOR BOL
+	JRST	NSFAL1		; NO, JUMP
+	JRST	NSTRU1		; YES, JUMP
+
+QUOCUM:	ILDB	CS,T1		;Get next char
+	JUMPE	CS,ERRISS	;Error if zero
+	JRST	TSTCHR		;And go test
+
+ANYCUM:	CAIE	C,15			;Eol
+	 CAIN	C,215			;Bol
+	  JRST	NSFALS			;Yes--Lose
+	JRST	NSTRU			;No--Win
+
+SEPCUM:	MOVE	T5,CTBL(C)		; Get table ent
+	JUMPG	T5,NSFALS		; Not a sep
+	TRNN	FL2,QSEPF		; Check . % $
+	TRNN	T5,NSEPF		; Checking - do we have one?
+	JRST	NSTRU		; No: sep
+	JRST	NSFALS		; Yes: not a sep
+MR1CON:!
+INFCON:	TLNN	FL,NEGF		; This has no meaning
+	TLOE	FL,ARBITG	; Are we seeing 
+	 JRST	ERRISS		;Yes, illeal string
+	PUSH	P,T1		; Save search pointer
+	MOVEI	T5,0		; Set arbitrary string to null
+	IDPB	T5,T2
+	SOJLE	T4,ILFMTR
+	AOS	T5,ARBCNT
+	MOVEM	T2,ARBPTR(T5)	;Save pointer to n'th string
+	PUSH	P,ARBCNT	; Save in case we come back with no match
+	PUSH	P,T2
+	PUSH	P,T4
+	PUSH	P,C
+	CAIE	CS,.PTMR1	; Test for '1 or more'
+	JRST	CHKTHS		; No, jump
+	TLO	FL,DEMCHR	; Character demanded now
+	PUSHJ	P,READCH	; Test for next character matches
+	  JRST	ARBFAI		; No, then this doesn't match
+	JRST	ARBAL1		; Yes, then treat as normal arbitrary
+CHKTHS:	TLO	FL,DEMCHR	; Need a character now
+	PUSHJ	P,READCH	; Call self recursively
+	JRST	PROCED		; This could not match just scan on
+ARBAL1:				; To here on first match
+	MOVE	T2,-3(P)	; Restore arbit count
+	MOVEM	T2,ARBCNT
+	MOVE	T4,-1(P)	; And arbit chr count
+	MOVE	T2,-2(P)	; And pointer
+	PUSH	P,ALTP		; Save chr pointer
+	TLZ	FL,ARBITG	; Can see another  now
+	PUSHJ	P,LINMAT	; A MATCH
+	JRST	RECUR		; No, try for another of that chr
+	ADJSP	P,-7		; Get all that junk off stack
+	JRST	CPOPJ1 		; And return to caller of linmat
+RECUR:	POP	P,ALTP		; Get back pointer
+	POP	P,C		; And chr
+	MOVE	T4,-2(P)	; Restore count
+	MOVEM	T4,ARBCNT
+	POP	P,T4
+	POP	P,T2		; Also chr counter and pointer
+	DPB	C,T2		; Put in that chr
+	MOVEI	T5,0		; And terminator
+	IDPB	T5,T2
+	SOJLE	T4,ILFMTR
+	MOVE	T5,ARBCNT	;Get arbcnt
+	MOVEM	T2,ARBPTR(T5)	;Save pointer to n'th string
+	PUSH	P,T2
+	PUSH	P,T4		; Resave
+	MOVE	T1,-3(P)	; Restore search pointer
+	ILDB	C,ALTP		; Get another chr
+	PUSH	P,C		; Sav it
+	TLZ	FL,NEGF		; Turn this off for recursion
+	CAIE	C,12		; End of world?
+	JRST	CHKTHS
+ARBFAI:				; To here to fail the match
+	ADJSP	P,-5		; Reduce stack
+	POPJ	P,		; And error ret
+PROCED:	TLZ	FL,ARBITG!NEGF	; Just go on
+	POP	P,C
+	POP	P,T4
+	POP	P,T2
+	POP	P,ARBCNT
+	POP	P,(P)		; Get rid of extra pointer
+	JRST	CHRMAT		; Continue match scanning
+	SUBTTL	ISTRU/ISFALS
+
+;These routines are called with  c/ char to store in arbitrary buffer.
+;The buffer counter is terminated with a null following and arbcnt
+;Count is incremented. istru returns cpopj
+;If neg flag on, cpopj1 if neg flag off. isfals returns cpopj if neg
+;Flag off, cpopj1 if neg flag on.
+
+ISFALS:	CAIN	C,15		; Is it a return
+	  AOJA	T4,.+2		; Adjust count and enter a null string
+	IDPB	C,T2		; Save in arbit
+	MOVEI	T5,0
+	IDPB	T5,T2
+	SUBI	T4,2		; Count them
+	JUMPLE	T4,ILFMTR	; This line must have illegal format
+	AOS	T5,ARBCNT	; One more seen
+	MOVEM	T2,ARBPTR(T5)	;Store pointer to n'th string
+ISFAL1:	TLNE	FL,NEGF		; Was neg flag on?
+	 JRST	[CAIE	C,15	;Eol
+		  CAIN	C,215	;Bol
+		   POPJ P,	;Yes--Never win
+		 AOS	(P)	;No--Skip return
+		 POPJ	P,]	;..
+	POPJ	P,
+
+ISTRU:	CAIN	C,15
+	  AOJA	T4,.+2
+	IDPB	C,T2		; Save chr
+	MOVEI	T5,0
+	IDPB	T5,T2
+	SUBI	T4,2
+	JUMPLE	T4,ILFMTR
+	AOS	T5,ARBCNT
+	MOVEM	T2,ARBPTR(T5)	;Store pointer to n'th string
+ISTRU1:	TLNN	FL,NEGF		; Negate?
+	 AOS	(P)		; No, match
+	POPJ	P,
+	SUBTTL	NSTRU/NSFALS
+
+;These routines are just like istru/isfals except that they do
+;Not terminate the arbitrary string with a null nor is the
+;Arbcnt counter incremented. these are used
+;By the numcon continuation routine to treat ^e5d as 1 string
+
+NSFALS:	CAIN	C,15		; Is it a return
+	  AOJA	T4,.+2		; Adjust count and enter a null string
+	IDPB	C,T2		; Save in arbit
+	SOJLE	T4,ILFMTR	; This line must have illegal format
+NSFAL1:	TLNE	FL,NEGF		; Was neg flag on?
+	JRST	[CAIE	C,15	;Eol
+		  CAIN	C,215	;Bol
+		   POPJ P,	;Yes--Never win
+		 AOS	(P)	;No--Skip return
+		 POPJ	P,]	;..
+	POPJ	P,
+
+NSTRU:	CAIN	C,15
+	  AOJA	T4,.+2
+	IDPB	C,T2		; Save chr
+	SOJLE	T4,ILFMTR
+NSTRU1:	TLNN	FL,NEGF		; Negate?
+	 AOS	(P)		; No, match
+	POPJ	P,
+ILFMTR: MOVE	T1,(PNTR)	; Give him an error message about
+	MOVEM	T1,LINOUT	; This dirty line
+	OUTSTR	LINOUT		; Poof
+	MOVE	T2,CPG
+	PUSHJ	P,DPRNT##
+	NERROR	ILFMT
+
+	XLIST
+	LIT
+	LIST
+	RELOC	0
+
+ENUM:	BLOCK	1
+ARBPTR::	BLOCK	^D100
+CHRBLK:	BLOCK	^D100
+ZSW0:!
+DSW:	BLOCK	1
+MSW:	BLOCK	1
+SLSW:	BLOCK	1
+LSW:	BLOCK	1
+TSW:	BLOCK	1
+FNSW:	BLOCK	1
+ZSW1==.-1
+
+	END

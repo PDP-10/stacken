@@ -1,0 +1,612 @@
+TITLE	LPTL03 - LN03 device driver for LPTSPL-10
+SUBTTL	Kevin O'Kelley		01-Feb-88
+
+;
+;
+;	COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1984,1985,1986,1987,1988.
+;			ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+;
+
+	SEARCH	GLXMAC			;SEARCH GALAXY PARAMETERS
+	SEARCH	QSRMAC			;SEARCH QUASAR PARAMETERS
+	SEARCH	ORNMAC			;SEARCH ORION/OPR PARAMETERS
+	SEARCH	LPTMAC			;SEARCH LPTSPL PARAMETERS
+	PROLOG	(LPTL03)
+
+IF2,<PRINTX Assembling GALAXY-10 LPTL03>
+
+
+	SALL				;FOR CLEAN LISTINGS
+	.DIRECT	FLBLST			;FOR CLEANER LISTINGS
+
+	ENTRY	LPTL03			;LOAD IF LIBRARY SEARCH
+
+	%%.LPT==:%%.LPT			;VERSION
+IFDEF .MCRV.,<.VERSION <%%.LPT>>
+; Dispatch table for this device driver
+
+LPTL03::DEVDSP	(L03,<LN03>)
+
+
+; Driver-specific per-job data
+
+	.ORG	J$DWDS
+
+L03OWD:! BLOCK	1			;ORIGINAL WIDTH
+L03OWC:! BLOCK	1			;ORIGINAL WIDTH CLASS
+L03SIZ:!
+
+	.ORG
+
+IF2,<
+	IFL <DRVWDS-<L03SIZ-J$DWDS>>,<
+	PRINTX ? LN03 driver definitions overflow storage
+	>
+> ;END IF2
+SUBTTL	Global routines -- L03INX - Initialize the printer
+
+
+; Device initialization.  This routine is called by the
+; SETUP message processor to initialize device dependent
+; data in the job data base.
+;
+; Call:	MOVE	J, job data base address
+;	MOVE	M, Page containing SETUP message or 0 if LPTSPL startup
+;	PUSHJ	P,L03INX
+;
+; TRUE return:	Initialization complete
+; FALSE return:	S1 contains -1 if must try a different driver, or
+;		S1 contains a standard response-to-setup code
+;		S2 contains any extra attributes (for RSU.FL)
+
+L03INX:	JUMPE	M,.RETT			;RETURN IF LPTSPL INITIALIZATION
+	MOVE	S1,STREAM##		;GET STREAM NUMBER
+	MOVE	S1,JOBOBA##(S1)		;AND THE OBJECT BLOCK
+	MOVE	S1,OBJ.ND(S1)		;GET STATION NUMBER
+	PUSHJ	P,LPTANF##		;MUST BE ANF-10
+	SKIPN	J$LLAT(J)		; OR A LAT LINE
+	JUMPF	INIT.1			;NO: NOT OUT KIND OF DEVICE
+	MOVE	S1,SUP.ST(M)		;GET DEVICE NAME
+	PUSHJ	P,LPTLIN##		;GENERATE DEVICE NAME
+	JUMPF	INIT.1			;DEVICE NOT OUR TYPE
+	MOVE	T1,J$LDEV(J)		;GET DEVICE NAME
+	DEVCHR	T1,UU.PHY		;GET DEVICE CHARACTERISTICS
+	TXNE	T1,DV.TTY		;DEFEND AGAINST NUL
+	TXNE	T1,DV.DSK		; OR NOT A TTY
+	JRST	INIT.3			;  OR CONTROLLING A JOB
+	MOVE	T1,[2,,T2]		;SET UP UUO AC
+	MOVEI	T2,.TOTRM		;WANT TO READ TERMINAL TYPE
+	MOVE	T3,J$LION(J)		;GET I/O INDEX
+	TRMOP.	T1,			;READ TERMINAL TYPE
+	  JRST	INIT.3			;PREHISTORIC MONITOR
+	CAME	T1,['LN03  ']		;CORRECT TERMINAL TYPE?
+	JRST	INIT.3			;NO, DEVICE IS NOT FOR US
+	MOVEM	T1,J$LTYP(J)		;SAVE AS UNIT TYPE FOR QUASAR
+	HRLZI	T1,LPTL03		;POINT TO DISPATCH TABLE
+	HRRI	T1,J$$DEV(J)		;MAKE A BLT POINTER
+	BLT	T1,J$$DND(J)		;COPY INTO JOB STORAGE AREA
+	SETOM	J$LLCL(J)		;LN03 DOES LOWER CASE
+	SETOM	J$POSF(J)		;LN03 DOES POSITIONING
+	SETOM	J$FFDF(J)		;LN03 DOES FORMFEEDS
+	SETOM	J$MNTF(J)		;LN03 SUPPORTS MOUNTABLE FORMS
+	MOVE	S1,%RSUOK		;GET RESPONSE TO SETUP CODE
+	SETZ	S2,			;NO EXTRA ATTRIBUTES
+	$RETT
+
+INIT.1:	MOVNI	S1,1			;-1 MEANS DEVICE NOT FOR US
+	$RETF				;RETURN
+
+INIT.2:	SKIPA	S1,[%RSUNA]		;UNIT NOT AVAILABLE
+INIT.3:	MOVEI	S2,%RSUDE		;UNIT WILL NEVER BE AVAILABLE
+	$RETF				;RETURN
+SUBTTL	Global routines -- L03IPC - Special IPCF message processing
+
+
+; This routine will process any special messages peculiar to
+; the device driver.
+;
+; Call:	MOVE	M, IPCF message address
+;	MOVE	S2, message type
+;	PUSHJ	P,L03IPC
+;
+; TRUE return:	Message processed by this driver
+; FALSE return:	Message unknown to this driver
+;		S1 must contain -1, S2 must be preserved
+
+L03IPC:	MOVNI	S1,1			;WE HAVE NO SPECIAL MESSAGE
+	$RETF				;RETURN
+SUBTTL	Global routines -- L03SCD - Scheduler call
+
+
+; This routine is provided for drivers which must do special
+; things at LPTSPL job scheduler level.  For most drivers, it
+; is a no-op.
+;
+; Call:	MOVE	J,  job data base address
+;	MOVE	P1, stream number
+;	PUSHJ	P,L03SCD
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+L03SCD::$RETT				;RETURN
+SUBTTL	Global routines -- L03WAK - Wakeup timer check
+
+
+; This routine is provided for special devices that may have
+; critical time dependencies.  The driver is called buy the
+; CHKTIM routine to see if a premature wakeup is necessary.
+;
+; Call:	MOVE	J,  job data base address
+;	MOVE	S1, current UDT
+;	MOVE	S2, normal wakeup time
+;	PUSHJ	P,L03WAK
+;
+; TRUE return:	OK to zero JOBWKT if needed
+; FALSE return:	Never zero JOBWKT under any circumstances
+;
+; On either return, S1 must be preserved and S2 may be altered to
+; contain the desired wakeup time.  Most drivers will always want
+; their JOBWKT entry zeroed unless their keeping track of several
+; wakeup times.
+
+L03WAK:	$RETT				;RETURN
+SUBTTL	Global routines -- L03OPX - OPEN device
+
+
+; This routine will setup device specific information for an OPEN.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03OPX
+;
+; TRUE return:	Appropriate response-to-setup code returned in S1
+; FALSE return:	ditto
+
+L03OPX:	MOVEI	T1,.IOPIM		;OPEN MODE
+	PUSHJ	P,LPTOPN##		;SETUP I/O, OPEN CHANNEL, ETC.
+	JUMPF	OPEN.1			;CAN'T HAVE IT RIGHT NOW
+	PUSHJ	P,INTCNL##		;CONNECT TO INTERRUPT SYSTEM
+	JUMPF	OPEN.2			;GIVE UP
+	TXO	S,INTRPT		;INDICATE WE'RE CONNECTED
+	MOVEI	S1,%RSUOK		;LOAD THE CODE
+	$RETT				;RETURN
+
+OPEN.1:	SKIPA	S1,[%RSUNA]		;UNIT NOT AVAILABLE
+OPEN.2:	MOVEI	S2,%RSUDE		;UNIT WILL NEVER BE AVAILABLE
+	$RETF				;RETURN
+SUBTTL	Global routines -- L03CLS - CLOSE device
+
+
+; This routine is called to CLOSE the channel.  In simple
+; drivers which use standard TOPS-10 I/O facilities, this
+; is accomplished with a CLOSE or RESDV. UUO.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03CLS
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+L03CLS:	PJRST	LPTCLS##		;CALL COMMON CLOSE ROUTINE
+SUBTTL	Global routines -- L03FLS - Flush a job
+
+
+; This routine is called whenever a job is to be flushed.
+; Most drivers don't need to do anything special and a
+; common routine in LPTSPL can be called.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03FLS
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+L03FLS:	PJRST	LPTFLS##		;CALL COMMON FLUSH ROUTINE
+SUBTTL	Global routines -- L03FVU - Load VFU
+
+
+; This routine is called to load the VFU for a printer.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03VFU
+;
+; TRUE return:	VFU loaded or no VFU needed
+; FALSE return:	VFU load failed
+
+L03VFU:	$RETT				;DO NOTHING
+SUBTTL	Global routines -- L03RAM - Load RAM
+
+
+; This routine is called to load the character translation
+; RAM for a printer.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03RAM
+;
+; TRUE return:	RAM loaded or no RAM needed
+; FALSE return:	RAM load failed
+
+L03RAM:	$RETT				;DO NOTHING
+SUBTTL	Global routines -- L03LER - File LOOKUP error processing
+
+
+; This routine is provided for special devices which accumulate
+; LPTSPL run log data differently than most.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03LER
+;
+; TRUE return:	Never
+; FALSE return:	Always
+
+L03LER:	PJRST	LPTLER##		;CALL COMMON ERROR ROUTINE
+SUBTTL	Global routines -- L03IER - File input error processing
+
+
+; This routine is provided for special devices which accumulate
+; LPTSPL run log data differently than most.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03IER
+;
+; TRUE return:	Never
+; FALSE return:	Always
+
+L03IER:	PJRST	LPTIER##		;CALL COMMON ERROR ROUTINE
+SUBTTL	Global routines -- L03OUT - Output a buffer
+
+
+; This routine is provided for special devices that cannot
+; use the conventional output routine (LPTOUT) or must first
+; condition the data before doing the output.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03OUT
+;
+; TRUE return:
+; FALSE return:
+
+L03OUT:	PJRST	LPTOUT##		;CALL COMMON OUTPUT ROUTINE
+SUBTTL	Global routines -- L03OER - Output error processing
+
+
+; This routine provides for driver or device-specific I/O error
+; processing.  When called, both S1 and J$LIOS(J) will contain
+; the returned I/O error status bits (GETSTS information).  No
+; attempt will be made to determine the validity or severity of
+; any errors.  That is left for the driver.
+;
+; Call:	MOVE	S1,J$LIOS(J)	;Justed updated with physical GETSTS
+;	MOVE	S2,J$XIOS(J)	;Just updated with physical DEVOP.
+;	PUSHJ	P,L03OER
+;
+; TRUE return:	No output error or error recovery sucessful
+; FALSE return:	Unrecoverable output error
+
+L03OER:	PJRST	LPTOER##		;CALL COMMON ERROR ROUTINE
+SUBTTL	Global routines -- L03EOX - Output EOF processing
+
+
+; This routine is called at the end of the job to do special
+; EOF processing for the device being used.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03EOX
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+L03EOX:	$TEXT	(SENDCH,<^T/RIS/^A>)	;RESET TO INITIAL STATE
+	$RETT				;
+SUBTTL	Global routines -- L03BJB - Begining of job
+
+
+; This routine is called at the begining of job processing.
+; It is used to reset device dependent job parameters such
+; as switching back to a default font.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03BJB
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+L03BJB:	SETOM	J$XTOP(J)		;TOP OF PAGE
+	MOVEI	S1,^D132		;
+	EXCH	S1,J$FWID(J)		;SET THE WIDTH TO 132
+	MOVEM	S1,L03OWD(J)		; AND SAVE THE OLD VALUE
+	MOVEI	S1,3			;
+	EXCH	S1,J$FWCL(J)		;SET THE WIDTH CLASS TO 3
+	MOVEM	S1,L03OWC(J)		; AND SAVE THE OLD VALUE
+	$RETT				;RETURN
+SUBTTL	Global routines -- L03EJB - End of job
+
+
+; This routine is called at the end of job processing.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03EJB
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+L03EJB:	$RETT				;NO SPECIAL HANDLING
+SUBTTL	Global routines -- L03BFL - Begining of input file
+
+
+; This routine is called at the begining of input file
+; processing. It; is used to reset device dependent file
+; parameters such as non-sticky font specs and attributes.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03BFL
+;
+; TRUE return:	Print file
+; FALSE return:	Do not print file
+
+L03BFL:	PUSHJ	P,SENDFF##		;SKIP TO TOP OF PAGE
+	LOAD	S1,.FPINF(E),FP.FPF	;GET /PRINT
+	CAIE	S1,%FPGRF		;IS THIS FILE GRAPHICS?
+	TDZA	S1,S1			;NO, CLEAR THE BREAK MASK
+	MOVEI	S1,[EXP -1,-1,-1,-1]	;YES, BREAK ON ALL CHARACTERS
+	MOVEM	S1,J$DBRK(J)		;SAVE THE BIT MASK
+	JUMPN	S1,BFIL.1		;GRAPHICS: USE PORTRAIT
+	MOVE	S1,L03OWD(J)		;GET THE ORIGINAL WIDTH
+	CAILE	S1,^D80			;NEED TO SWITCH TO PORTRAIT?
+	JRST	BFIL.2			;NO, LEAVE IT IN LANDSCAPE
+	MOVEM	S1,J$FWID(J)		;RESTORE THE WIDTH
+	MOVE	S1,L03OWC(J)		;
+	MOVEM	S1,J$FWCL(J)		;RESTORE THE WIDTH CLASS
+BFIL.1:	$TEXT	(SENDCH,<^T/RIS/^A>)	;RESET TO INITIAL STATE
+	$TEXT	(SENDCH,<^T/PORT/^A>)	;USE PORTRAIT
+	$RETT				;
+BFIL.2:	$TEXT	(SENDCH,<^T/RIS/^A>)	;RESET TO INITIAL STATE
+	$TEXT	(SENDCH,<^T/LAND/^A>)	;USE LANDSCAPE
+	$RETT				;
+SUBTTL	Global routines -- L03EFL - End of input file
+
+
+; This routine is called at the end of input file
+; processing.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03EFL
+;
+; TRUE return:	Continue file processing
+; FALSE return:	Do not print additional copies of file
+
+L03EFL:	$RETT				;NO SPECIAL HANDLING
+SUBTTL	Global routines -- L03BAN - Banner initialization
+
+
+; This routine is called at the start of banner processing.
+; It is used to alter the appearance if a banner page.  For
+; example, a special font or page orientation could be selected
+; at this time and it would only affect the printing of the
+; banner page.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03BAN
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+L03BAN:
+;	PJRST	L03HDR			;FALL INTO L03HDR
+SUBTTL	Global routines -- L03HDR - Header initialization
+
+
+; This routine is called at the start of header processing.
+; It is used to alter the appearance if a header page.  For
+; example, a special font or page orientation could be selected
+; at this time and it would only affect the printing of the
+; header page.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03HDR
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+L03HDR: JUMPE	S1,L03WID		;ZERO: JUST SET PARAMETERS
+	SETOM	J$XTOP(J)		;TOP OF PAGE
+	$TEXT	(SENDCH,<^T/RIS/^A>)	;RESET TO INITIAL STATE
+	$TEXT	(SENDCH,<^T/HEAD/^A>)	;USE SPECIAL LANDSCAPE
+	$TEXT	(SENDCH,<^T/BOX/^A>)	;DRAW A BOX AROUND IT
+	MOVEI	C,.CHCRT		;MAKE SURE (AB)USER DIDN'T
+	PUSHJ	P,PHSOUT##		;LEAVE THE CARRIAGE SOMEPLACE STRANGE
+	PJRST	L03WID			;CHANGE TO 132-CHARACTER MODE
+SUBTTL	Global routines -- L03WID - Header width initialization
+
+
+; This routine is called to initialize the page width for
+; header processing.  It is needed because page orientation
+; (determined by LPTL03) could affect the width of the page
+; hence, the number of characters that may be printed on a
+; single line.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03WID
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+L03WID:	MOVEI	S1,^D132		;CHANGE WIDTH TO 132
+	MOVEM	S1,J$FWID(J)		;
+	MOVEI	S1,3			;CHANGE ASSOCIATED WIDTH CLASS
+	MOVEM	S1,J$FWCL(J)		;
+	$RETT				;RETURN
+SUBTTL	Global routines -- L03RUL - Ruler processing
+
+
+; This routine is called to output the ruler lines between jobs.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03RUL
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+L03RUL:	$RETT				;NO SPECIAL RULER ACTION
+SUBTTL	Global routines -- L03SHT - Stream shutdown
+
+
+; This routine is called when a stream is shutdown, just
+; prior to releasing the job data page.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,L03SHT
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+L03SHT:	$RETT				;NO SPECIAL HANDLING
+SUBTTL	Global routines -- L03STS - Status message generation
+
+
+; This routine allows a driver to append device specific data to the
+; status update message text which is sent to QUASAR.  This text is
+; appears on queue listings and SHOW STATUS displays.  It appears as
+; the second line of request or unit status display.  LPTSPL will start
+; the text with "   Started at ...".  The driver may then append useful
+; information such as "printed 47 out of 56 pages".
+
+L03STS::PJRST	LPTSTS##		;CALL COMMON CODE
+SUBTTL	Global routines -- L03CHR - File data intercept
+
+
+; This routine is called for file data only, if the character in C
+; is in the break mask pointed to by J$DBRK and the special interpretation
+; (graphics) flag is set. (J$FASC .LT. 0)  See FILCHR.
+;
+; Call:	MOVE	J, job data base address
+;	MOVE	C, break character
+;	PUSHJ	P,L03CHR
+;
+; TRUE return:	Break condition handled
+; FALSE return:	Abort job (eg, error in escape sequence)
+
+L03CHR:	PJRST	PHSOUT##		;NO SPECIAL HANDLING: PUT IT
+SUBTTL	Global routines -- L03CHO - Character translator
+
+
+; This routine will handle character translation.  Called when a character
+; is about to be sent to what everyone else thinks is the physical device.
+; It simulates a hardware translation RAM.
+;
+; Call:	MOVE	J, job data base address
+;	MOVE	C, intercepted character
+;	PUSHJ	P,L03CHO
+;
+; TRUE return:	Character translated if necessary, caller to output
+; FALSE return:	Character processed here, nothing to output
+
+L03CHO:	$RETT				;NO SPECIAL HANDLING
+SUBTTL	Control sequences
+
+
+; Beginning of an escape sequence
+;
+DEFINE	SEQBGN,<
+	..WRD=0
+> ;End DEFINE SEQBGN
+
+
+; Body of an escape sequence
+;
+DEFINE	SEQ (ARGS),<
+	IRP (ARGS),<
+		IFIDN <ARGS><ESC>,<SEQADD (.CHESC)>
+		IFDIF <ARGS><ESC>,<IRPC (ARGS),<SEQADD ("ARGS")>>
+	> ;End IRP
+> ;End DEFINE SEQ
+
+
+; End of an escape sequence
+;
+DEFINE	SEQEND,<
+	IFE <..WRD>,<EXP 0>
+	IFN <..WRD>,<
+		SEQADD	<0>
+		SEQADD	<0>
+		SEQADD	<0>
+		SEQADD	<0>
+	> ;End IFN
+	IF2 <PURGE ..WRD>
+> ;End DEFINE SEQBGN
+
+
+; Helpful macro to add a character
+;
+DEFINE SEQADD (CHR),<
+	..WRD=<..WRD_7>+CHR
+	IFN <..WRD&177B7>,<
+		EXP	<..WRD_1>
+		..WRD=0
+	> ;End IFN
+> ;End DEFINE SEQADD
+RIS:	SEQBGN
+	SEQ	<ESC,c>			; RIS/Reset to initial state
+	SEQEND
+PORT:	SEQBGN
+	SEQ	<ESC,[?20 J>		; PFS/Page format select
+	SEQ	<ESC,[1;80s>		; SLRM/Set left/right margins
+	SEQ	<ESC,[1;66r>		; STBM/Set top/bottom margins
+	SEQ	<ESC,[3g>		; TBC/Tabulation clear
+	SEQ	<ESC,[9;17;25;33;41;49;57;65;73u>
+	SEQEND
+LAND:	SEQBGN
+	SEQ	<ESC,[?21 J>		; PFS/Page format select
+	SEQ	<ESC,[87 C>		; GSS/Graphic size selection
+	SEQ	<ESC,[100;76 B>		; GSM/Graphic size modification
+	SEQ	<ESC,[87;54 G>		; SPI/Spacing pitch increment
+	SEQ	<ESC,[5;136s>		; SLRM/Set left/right margins
+	SEQ	<ESC,[1;67r>		; STBM/Set top/bottom margins
+	SEQ	<ESC,[15m>		; SGR/(LANDSCAPE font)
+	SEQ	<ESC,[3g>		; TBC/Tabulation clear
+	SEQ	<ESC,[13;21;29;37;45;53;61;69;77;>
+	SEQ	<85;93;101;109;117;125;133u>
+	SEQEND
+HEAD:	SEQBGN
+	SEQ	<ESC,[?23 J>		; PFS/Page format select
+	SEQ	<ESC,[87 C>		; GSS/Graphic size selection
+	SEQ	<ESC,[100;76 B>		; GSM/Graphic size modification
+	SEQ	<ESC,[87;54 G>		; SPI/Spacing pitch increment
+	SEQ	<ESC,[7;136s>		; SLRM/Set left/right margins
+	SEQ	<ESC,[4;67r>		; STBM/Set top/bottom margins
+	SEQ	<ESC,[15m>		; SGR/(LANDSCAPE font)
+	SEQ	<ESC,[3g>		; TBC/Tabulation clear
+	SEQ	<ESC,[16;24;32;40;48;56;64;72;80;>
+	SEQ	<88;96;104;112;120;128;136u>
+	SEQEND
+BOX:	SEQBGN
+	SEQ	<ESC,[;;;7500;20!|>	; Horizontal lines
+	SEQ	<ESC,[;;5650;7500;20!|>	;
+	SEQ	<ESC,[1;;;5650;20!|>	; Vertical lines
+	SEQ	<ESC,[1;7482;;5650;20!|>;
+	SEQEND
+
+
+SENDCH:	MOVE	C,S1			;GET THE CHARACTER
+	PJRST	PHSOUT##		;WRITE IT
+SUBTTL	Literal pool
+
+
+L03LIT:	LIT
+
+L03END::!END

@@ -1,0 +1,81 @@
+@@SUM_HEAD
+
+
+                     - Summary of signal states -
+
+TRUE   FALSE  NAME
+----   -----  ----
+
+@@SIG_LINE
+\  \
+@@SUM_LINE
+\>>>>  \>>>>  \
+@@FIELD
+\>>>>>  \
+@@STOP_MESSAGE
+
+    - Crash due to \.
+    - No function reads taken. (See RETRIEVE FULL for details).
+      
+@@FIELD_HEAD
+
+
+                    - Fields from function reads -
+
+VALUE   FIELD
+-----   -----
+
+@@CRAM_HEAD
+
+----------------
+
+Sequence number: \
+@@CRAM_OCTAL
+
+CRAM word in octal:
+
+   LOC   0-15   16-31  32-47  48-63  64-79  80-85
+   \000/ \00000 \00000 \00000 \00000 \00000 \0
+@@CRAM_MICROCODE
+
+CRAM word by field (microcode listing format):
+
+   LOC   A    B    C    D    E    F    G
+   \000, \000,\000,\000,\000,\000,\000,\000
+@@CRAM_TRACON
+
+CRAM word by field (TRACON format):
+
+   LOC /  J  T AR  AD BR MQ FM SCAD SC FE SH  # VMA MEM COND SPEC M
+   \000/\000 \ \0 \000 \  \  \  \00  \  \  \ \00  \  \0   \0   \0 \
+
+@@DRAM
+DRAM word by field:
+
+    ADR: A B P J
+    \00/ \ \ \ \00
+@@SIG_HEAD
+
+Signal name breakdown follows (Error signals first) :
+
+
+                  - Signals in alphabetical order -
+
+STATE  NAME
+-----  ----
+
+@@REG
+
+Registers:
+
+    AR: \00000,,000000  ARX: \00000,,000000  FM: \00000,,000000
+    BR: \00000,,000000  BRX: \00000,,000000  AD: \00000,,000000
+    MQ: \00000,,000000  ADX: \00000,,000000  
+
+    PC:       \0,,000000   PI ON:   \00  SC: \000  FM BLOCK: \0
+    VMA:      \0,,000000   PI HOLD: \00  FE: \000  FM ADDR:  \0
+    VMA HELD: \0,,000000   PI GEN:  \00
+@@FINAL
+
+** End of KLERR report. \ entries were processed. **
+@@

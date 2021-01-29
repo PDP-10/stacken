@@ -1,0 +1,308 @@
+MODULE MDA (					!Examine MCB dump
+		IDENT = '003010',
+		LANGUAGE (BLISS16, BLISS36) ,
+		MAIN = MDA
+		) =
+BEGIN
+!
+!
+!
+! COPYRIGHT (C) 1978 BY
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+! COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: MDA
+!
+! ABSTRACT:
+!
+!
+! THIS MODULE CONTAINS THE ROOT ROUTINES FOR THE MCB DUMP ANALYZER
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 14-AUG-78
+!
+! MODIFIED BY:
+!
+!	Alan D. Peckham, 2-Jul-80 : VERSION 3
+! 01	- Update for MCB V3.0
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    MDA : NOVALUE;				!MCBDA main routines.
+
+!
+! INCLUDE FILES
+!
+
+LIBRARY 'MDACOM';				!MDA COMMON DEFINITIONS
+
+!
+! MACROS:
+!
+
+MACRO
+    SUPPORT_STRING =
+	%CHAR(MDA_SUPPORT), %,
+    VERSION_STRING =
+	%NUMBER(MDA_VERSION), %,
+    UPDATE_STRING =
+	%IF MDA_UPDATE NEQ 0
+	%THEN %STRING('.', %NUMBER (MDA_UPDATE)), %FI %,
+    EDIT_STRING =
+	%IF MDA_EDIT NEQ 0
+	%THEN %STRING('-', %NUMBER (MDA_EDIT)), %FI %,
+    VERSION_DISPLAY =
+	%STRING(SUPPORT_STRING VERSION_STRING UPDATE_STRING EDIT_STRING) %;
+
+!
+! EQUATED SYMBOLS:
+!
+
+BIND
+    VERSION = CH$ASCII ('Version ', VERSION_DISPLAY),
+    LENGTH = %CHARCOUNT ('Version ', VERSION_DISPLAY);
+
+GLOBAL BIND
+    VERPTR = CH$ASCII (VERSION_DISPLAY),
+    VERLNG = %CHARCOUNT (VERSION_DISPLAY);
+
+!
+! OWN STORAGE:
+!
+
+GLOBAL
+    FLAGS : BITVECTOR [M_MAX_BITS],		!Processing flags.
+    TSKCNT,
+    TSKLST : BLOCKVECTOR [MDA_MAX_TSKS, 2],
+    PRCCNT,
+    PRCLST : BLOCKVECTOR [MDA_MAX_PRCS, 1],
+    DMPCNT,
+    DMPLST : BLOCKVECTOR [MDA_MAX_DMPS, 4],
+    DMPBLK : INITIAL (0),
+    DMPOFF,
+    XSTART : INITIAL (1),
+    LSTBLK : INITIAL (0),
+    STBBLK : INITIAL (0),
+    TTYBLK : INITIAL (0);
+
+!
+! EXTERNAL REFERENCES:
+!
+
+EXTERNAL ROUTINE
+    ANALYZE : NOVALUE,				!Dump crash context.
+    ATL : NOVALUE,				!Dump active task list.
+    BUFFERS : NOVALUE,				!Dump COMM/EXEC buffers.
+    CEX : NOVALUE,				!Dump COMM/EXEC information.
+    CLOSE,					!Close a file.
+    CLQ : NOVALUE,				!Display the clock queue.
+    CMD,					!Get a user command.
+    DEV : NOVALUE,				!Dump the device data bases.
+    DMPOPN,					!Initialize the dump file.
+    DUMP : NOVALUE,				!Dump memory.
+    FXD : NOVALUE,				!Dump the fixed tasks.
+    HDR : NOVALUE,				!Dump the task headers.
+    HELP : NOVALUE,				!Give the user help.
+    LSTOPN,					!Initialize the listing device.
+    PCBMAP : NOVALUE,				!Dump partition map.
+    PCBS : NOVALUE,				!Dump the PCBs.
+    POOL : NOVALUE,				!Dump the RSX pool.
+!    PROCESS : NOVALUE,				!Display a process memory image.
+    RSX : NOVALUE,				!Dump RSX11 information.
+    STBOPN,					!Initialize the symbol tables.
+    STD : NOVALUE,				!Dump the system task directory.
+    TASK : NOVALUE,				!Dump a task image.
+    TTYOPN : NOVALUE,				!Initialize the user's terminal.
+    TYPE : NOVALUE;				!Display a line on the user's tty.
+
+ROUTINE MDA : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+    XSTART = .XSTART - 1;			!Retry count
+    TTYOPN (TTYBLK);				!Get the user's tty.
+
+    DO
+	BEGIN
+
+	IF CMD ()
+	THEN
+	    BEGIN
+	    DMPOPN (DMPBLK);			!Initialize the dump file
+	    LSTOPN (LSTBLK, .FLAGS [M_WIDE], DMPBLK); !and the listing device
+	    STBOPN (STBBLK);			!and the symbol tables.
+
+	    !+
+	    ! Analyze the crash context
+	    !-
+
+	    IF .FLAGS [M_ANALYZE] THEN ANALYZE ();	!Dump the crash context.
+
+	    !+
+	    ! Dump the RSX context information
+	    !-
+
+	    IF .FLAGS [M_RSX_CTXT] THEN RSX ();		!Process the RSX11 data bases.
+
+	    !+
+	    ! Call appropriate routines to dump requested partition information.
+	    !-
+
+	    IF .FLAGS [M_RSX_PARS] THEN PCBMAP ();	!Dump the partition map.
+
+	    !+
+	    ! Dump requested task information.
+	    !-
+
+	    IF .FLAGS [M_RSX_ATL] THEN ATL ();	!Display the active task list.
+
+	    IF .FLAGS [M_RSX_FXD] THEN FXD ();	!Display the fixed tasks.
+
+	    IF .FLAGS [M_RSX_STD] THEN STD ();	!Display the system task directory.
+
+	    IF .FLAGS [M_RSX_HDR] THEN HDR ();	!Display the task headers.
+
+	    !+
+	    ! Dump the Partition Contrl Blocks
+	    !-
+
+	    IF .FLAGS [M_RSX_PCBS] THEN PCBS ();	!Display the PCBs.
+
+	    !+
+	    ! Dump device information.
+	    !-
+
+	    IF .FLAGS [M_RSX_DEV] THEN DEV ();	!Display the device data bases.
+
+	    !+
+	    ! Dump the clock queue.
+	    !-
+
+	    IF .FLAGS [M_RSX_CLQ] THEN CLQ ();	!Display the clock queu entries.
+
+	    !+
+	    ! Dump the RSX pool if asked nicely.
+	    !-
+
+	    IF .FLAGS [M_RSX_POOL] THEN POOL ();	!Display the RSX pool.
+
+	    !+
+	    ! Dump any requested tasks.
+	    !-
+
+	    IF .TSKCNT GTR 0
+	    THEN
+		BEGIN
+
+		LOCAL
+		    TSKNUM;
+
+		INCR TSKNUM FROM 0 TO .TSKCNT - 1 DO
+		    TASK (TSKLST [.TSKNUM, 0, 0, 0, 0]);
+
+		TSKCNT = 0;
+		END;
+
+	    !+
+	    ! Dump the MCB context information
+	    !-
+
+	    CEX ();				!Process the MCB comm/exec data bases.
+
+	    !+
+	    ! Display the buffer pools.
+	    !-
+
+	    IF .FLAGS [M_CEX_POOL] THEN BUFFERS ();
+
+	    !+
+	    ! Dump any processes requested.
+	    !-
+
+!	    IF .PRCCNT GTR 0
+!	    THEN
+!		BEGIN
+!
+!		LOCAL
+!		    PRCNUM;
+!
+!		INCR PRCNUM FROM 0 TO .PRCCNT - 1 DO
+!		    PROCESS (PRCLST [.PRCNUM, 0, 0, 0, 0]);
+!
+!		PRCCNT = 0;
+!		END;
+
+	    DUMP ();				!Process any memory dump requests.
+	    CLOSE (LSTBLK);			!All finished with these.
+	    CLOSE (DMPBLK);			!
+	    END;
+
+	!+
+	! Give the MDA version number
+	!-
+
+	IF .FLAGS [M_VERSION] THEN TYPE (VERSION, LENGTH);
+
+	!+
+	! Give the user help
+	!-
+
+	IF .FLAGS [M_HELP] THEN HELP (TTYBLK, CH$ASCIZ ('HLP:MCBDA.HLP'));
+
+	END
+    WHILE NOT .FLAGS [M_EXIT];
+
+    END;					!OF MDA
+END
+
+ELUDOM

@@ -1,0 +1,158 @@
+TITLE	GLXTMP -- GLXLIB program template.
+
+SEARCH	GLXMAC			;Get GLXLIB symbols
+
+PROLOG	GLXTMP
+
+GLXVER==1			;Major version 1
+GLXMIN==0			;No minor version yet
+GLXWHO==2			;Who last patched this (JEQ)
+GLXEDT==1			;Edit level
+
+.TEXT	"/SYMSEG:LOW/LOCALS"	;Debugging aid
+
+; Macros:
+
+DEFINE	FLDDB.(TYP,FLGS,DATA,HLPM,DEFM,LST),<
+	..XX==<FLD(TYP,CM%FNC)>+FLGS+<Z LST>
+	IFNB <HLPM>,<..XX==CM%HPP!..XX>
+	IFNB <DEFM>,<..XX==CM%DPP!..XX>
+	EXP	..XX
+	IFNB <DATA>,<DATA>
+	IFB  <DATA>,<0>
+	IFNB <HLPM>,<POINT 7,[ASCIZ \HLPM\]>
+	IFB  <HLPM>,<IFNB <DEFM>,<0>>
+	IFNB <DEFM>,<POINT 7,[ASCIZ \DEFM\]>
+>;End of DEFINE FLDDB.
+
+SUBTTL  Data area
+
+CMDBLK:	BLOCK	.CMGJB+1	;The command state block
+PDL:	BLOCK	<PDLSIZ==^D100>	;Push down list
+CMDBUF:	BLOCK	<BUFSIZ==100>	;Command buffer
+ATMBUF:	BLOCK	<ATMSIZ==100>	;Atom buffer
+REPADR:	BLOCK	1		;Reparse address.
+NXTCMD:	BLOCK	1		;Address to go to for next command.
+STACKP:	BLOCK	1		;Stack pointer for each command level.
+CMDGJB:	BLOCK	16		;GTJFN% argument block for COMND%
+BUZZFB:	FLDDB.(.CMNOI)		;Function block for buzzing.
+
+; Initialization block:
+
+IB:	$BUILD	IB.SZ
+	 $SET	IB.OUT,,T%TTY
+	 $SET	IB.FLG,IT.OCT,1
+	$EOB
+
+; Command state template:
+
+CMDTMP:	EXP	0		;Flags,,reparse address
+	XWD	.PRIIN,.PRIOU	;Input JFN,,output JFN
+	POINT	7,PROMPT	;Byte pointer to prompter
+	POINT	7,CMDBUF	;Byte pointer to command buffer
+	POINT	7,CMDBUF	;Byte pointer to next-to-be-parsed
+	EXP	BUFSIZ*5-1	;Count of space left in buffer
+	EXP	0		;Number of unparsed chars
+	POINT	7,ATMBUF	;Byte pointer to atom buffer
+	EXP	ATMSIZ*5-1	;Space left in atom buffer
+	EXP	CMDGJB		;GTJFN% block pointer
+CMTSIZ==.-CMDTMP		;Get size of template
+SUBTTL  Main lupe
+
+START:	JFCL			;Ignore CCL entry
+	RESET			;Reset the spinning world
+	MOVE	P,[		;Load the stack pointer
+		IOWD	PDLSIZ,PDL]
+	MOVEI	S1,IB.SZ	;Load size of init block
+	MOVEI	S2,IB		;Load address of init block
+	PUSHJ	P,I%INIT	;Initialize the world
+	MOVEI	S1,CMDBLK	;Load command state block address
+	HRLI	S1,CMDTMP	;Load address of template
+	BLT	S1,CMDBLK+CMTSIZ-1 ;Fill in the block from the template
+;*
+;* Now we start parsing commands.
+;*
+	PUSHJ	P,ENTLVL	;Enter the initial command level.
+	MOVEI	S1,PROMPT	;Load address of normal prompter.
+	PUSHJ	P,SETPRO	;Set prompter & reparse address, init COMND%.
+	MOVEI	S2,[FLDDB.(.CMKEY,,CMDTAB)]
+	PUSHJ	P,PARSE		;Get a command
+	 JUMPF	CMDERR		; Error, go complain
+	HRRZ	S2,(T2)		;Load routine address
+	JRST	(S2)		;Dispatch
+
+PROMPT:	ASCIZ	"GLXTMP>"
+
+CMDTAB:	$STAB			;Start of command table
+	 KEYTAB	.EXIT, <Exit>
+	$ETAB
+SUBTTL  Parsing subroutines.
+;*
+;* Here to perform a COMND% jsys for the user.  Call with S2 pointing
+;* to a function data block.
+;*
+PARSE:	MOVEI	S1,CMDBLK	;Load pointer to command state block.
+	PUSHJ	P,S%CMND	;Do the COMND%
+	MOVE	T1,CR.FLG(S2)	;Get flags
+	MOVE	T2,CR.RES(S2)	;Get value
+	MOVE	T3,CR.PDB(S2)	;Get PDB pointers
+	TXNE	T1,CM%RPT	;Any need for a reparse?
+	 JRST	PARS.2		; Yes, go set up for reparsing.
+	TXNN	T1,CM%NOP	;Did it parse?
+	 $RETT			; Yes, return true
+	$RETF			;Nope, return false
+;*
+;* Here on parsing errors.
+;*
+CMDERR:	$TEXT	T%TTY,<^M^J?Command error - ^E/[-1]/>
+PARS.2:	MOVE	P,STACKP	;Restore stack pointer
+	JRST	@REPADR		;Return to somewhere.
+;*
+;* Here to confirm a command.
+;*
+CONFRM:	PUSHJ	P,.SAVET	;Save all registers.
+	MOVEI	S2,[FLDDB.(.CMCFM)]
+	PUSHJ	P,PARSE		;Call the parser
+	 JUMPF	CMDERR		; Check for errors
+	$RETT			;No errors, return true.
+;*
+;* Here to act noisy.
+;*
+BUZZ:	HRROM	S1,BUZZFB+.CMDAT;Set up FDB for parsing.
+	MOVEI	S2,BUZZFB	;Load FDB address.
+	JRST	PARSE		;Go do the work.
+;*
+;* Routine to set up prompter and reparse address.
+;*
+SETPRO:	HRROM	S1,CMDBLK+.CMRTY
+	POP	P,REPADR	;Load new reparse address from top-of-stack
+	MOVEI	S1,CMDBLK	;Load command state block address
+	MOVEI	S2,[FLDDB.(.CMINI)]
+	PUSHJ	P,S%CMND	;Init COMND%
+	JRST	@REPADR		;Return via reparse address
+;*
+;* Here to enter a subcommand level.
+;*
+ENTLVL:	POP	P,TF		;Get our return address.
+	PUSH	P,NXTCMD	;Save previous command loop address.
+	PUSH	P,STACKP	;Save previous stack pointer.
+	MOVEM	TF,NXTCMD	;Save the new loop address.
+	MOVEM	P,STACKP	;Save the new stack pointer.
+	JRST	@NXTCMD		;Return to caller.
+;*
+;* Here to exit a subcommand level.
+;*
+EXILVL:	POP	P,TF		;Get our return address.
+	MOVE	P,STACKP	;Load this level stack pointer.
+	POP	P,STACKP	;Restore previous stack pointer.
+	POP	P,NXTCMD	;Restore previous command loop address.
+	JRST	@TF		;Return.
+SUBTTL  Command handlers -- EXIT and ^Z
+
+.EXIT:	MOVEI	S1,[ASCIZ "to monitor"]
+	PUSHJ	P,BUZZ		;Give buzz words.
+	PUSHJ	P,CONFRM	;Confirm command
+	$HALT			;Visit operating system
+	JRST	@NXTCMD		;Back for next command
+
+END	START

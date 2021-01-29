@@ -1,0 +1,2160 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                          STCMAC Users Manual
+
+
+
+
+
+
+                              A Product Of
+
+                     Storage Technology Corporation
+                     Information Services Division
+                         as of STCMAC version 2
+
+
+
+
+
+
+
+
+
+
+
+
+                               CHAPTER 1
+
+                              DESCRIPTION
+
+
+
+     STCMAC is a macro source program which is used to build STCMAC.UNV,
+STCUNV.UNV,  and TYPER.REL.  These contain definitions for commonly used
+macros which are intended to make life easier for the  MACRO-10  hacker.
+These  universal  files  (and .REL file) differ only in content.  STCMAC
+contains all macro definitions, STCUNV contains a subset of  the  macros
+contained   in  STCMAC  which  does  not  include  the  "$TYPER"  macro.
+TYPER.REL contains a stand-alone expansion of the $TYPER macro.
+
+
+
+
+
+     Any comments/suggestions/complaints concerning this document should
+be directed to:
+
+                            D. Robert Banks
+                            or Rex Shadrick
+                      c/o Storage Technology Corp.
+                            2270 S. 88th St.
+                       Louisville, Colorado 80027
+
+
+
+     Any comments concerning STCMAC should be directed to  Rex  Shadrick
+at the above address.
+
+
+
+
+
+
+
+
+
+
+
+
+                               CHAPTER 2
+
+                    STC SPECIFIC SYMBOL DEFINITIONS
+
+
+
+     STCMAC contains some symbol definitions that are of importance only
+to  programs  written  for  STC.   These symbols are definitions for STC
+privilege bits (used in the JBTPRV monitor table), local FACT.SYS  entry
+definitions,  and  two  local  CALLI  UUOs  (USRNM.  and USRLG.).  These
+definitions are of little or no importance to anyone outside of STC  and
+can be ignored.
+
+
+
+
+
+
+
+
+
+
+
+
+                               CHAPTER 3
+
+                          VERSION/TITLE MACROS
+
+
+
+     There are two macros which manipulate version numbers.   They  are:
+"$VRSN"  and  "$TITLE".  Note that these macros define symbols which are
+required by other STCMAC macros and routines.
+
+
+
+3.1  THE $VRSN MACRO
+
+     This macro is used  to  define  the  program's  version  number  in
+TOPS-10  compatible  format.  It requires two arguments:  a three letter
+abbreviation of the program name (preferably the  program's  CCL  name),
+and the version number in the format that is typed by DIRECT.  Example:
+
+         $VRSN   STC,1(60)-2
+
+
+     This defines six symbols of importance to  the  programmer.   These
+are:  xxxVER, xxxMIN, xxxEDT, xxxWHO, xxx.VN, and TP.PFX, where "xxx" is
+the CCL name given as the first argument.  xxxVER is the  major  version
+number,  xxxMIN  is  the minor version number, xxxEDT is the edit level,
+xxxWHO is the programmer (0-7), xxx.VN is a 36 bit version number  which
+is the combined form of the previous four numbers (note that this symbol
+is generated using the "VRSN." macro from MACTEN.UNV) and TP.PFX  is  an
+18 bit quantity which is the SIXBIT CCL name.
+
+
+
+3.2  THE $TITLE MACRO
+
+     This macro is used in conjunction with the $VRSN macro to  generate
+a  "TITLE"  pseudo-op, with the program's version number appended to the
+text of the title statement.  This macro takes five arguments:   a  text
+string  which is the main body of the title statement, the program's CCL
+name (the same as the  one  given  to  the  $VRSN  macro),  an  optional
+pseudo-op to be used instead of "TITLE" (e.g.  "UNIVERSAL" to generate a
+universal file), a number to specify which pass  to  execute  the  macro
+(more  of this later), and another text string which will be appended to
+the line following the version number that is generated.
+VERSION/TITLE MACROS                                            Page 3-2
+THE $TITLE MACRO
+
+
+     This macro can be used to construct virtually any type of statement
+the  programmer would want that contains the program's version number in
+text  format,  but  is  normally  used  to  generate  a  TITLE/UNIVERSAL
+pseudo-op.  Some examples of the use of $TITLE are:
+
+         $TITLE  STCUNV - STC Common Macro Definitions,STC,UNIVERSAL
+
+ Would generate:
+
+         UNIVERSAL       STCUNV - STC Common Macro Definitions %1(60)-2
+
+         $TITLE  <\EBUTIL >,EBU,SIXBIT,3,<\>
+
+ Would generate:
+
+         SIXBIT  \EBUTIL %1(1)-4\
+
+         $TITLE  <[Assembling STCUNV Version>,STC,PRINTX,1,<, pass 1]>
+
+         $TITLE  <[Assembling STCUNV Version>,STC,PRINTX,2,<, pass 2]>
+
+ Would generate:
+
+IF1,<    PRINTX  [Assembling STCUNV Version %1(60)-2, pass 1]
+>
+
+IF2,<    PRINTX  [Assembling STCUNV Version %1(60)-2, pass 2]
+>
+
+
+     The pass number argument to  $TITLE  is  a  two  bit  number  which
+instructs  $TITLE which passes to assemble this macro on.  This value is
+assumed to be 3 if zero, blank or omitted.  An argument of 1 will direct
+it to assemble only during pass 1, 2 for pass 2 or 3 for both passes.
+
+
+
+3.2.1  The $PASS Macro
+
+     The last two examples are contained in a single special-case  macro
+called  "$PASS".   This is a single macro whose main function is to type
+on the user's console what it is that  (s)he  is  assembling.   The  two
+arguments passed to this macro are the program's name and the CCL prefix
+(as given in the $TITLE macro).
+
+An example of its use:
+
+         $PASS   STCUNV,STC
+
+
+     Would generate the last two $TITLE macros given above.
+
+
+
+
+
+
+
+
+
+
+
+
+                               CHAPTER 4
+
+                           RELOCATION MACROS
+
+
+
+     There are several macros defined which are used to control  program
+relocation,   phase,  and  literal/variable  pool.   These  macros  are:
+$RELOC, $ABS, $END, $HIGH, $LIT, $LOW, $PRGEND and $VAR.
+
+
+
+4.1  THE $RELOC MACRO
+
+     This macro is invoked a maximum of once per program and  should  be
+used  before  any  other  relocation macros are called.  There are three
+optional arguments:  the first specifies whether one or two segment code
+is  to  be  generated,  the second determines whether literals are to be
+dumped when the segment changes and the third is the high  segment  base
+relocation  address.   The  first  argument  is  either "ONE" for single
+segment (low segment only) code or "TWO" for two segment code (high  and
+low  segments).   The  second  argument is either "LIT" to dump literals
+when the segment changes (via $HIGH or  $LOW)  or  "NOLIT"  to  suppress
+dumping of literals.  When "LIT" is set, the literal pool will be dumped
+in the current segment before the segment is changed.  The defaults  for
+the arguments are "TWO,NOLIT,400000".  An example of its use:
+
+         $RELOC  TWO,LIT
+
+
+
+
+4.2  THE $ABS MACRO
+
+     This macro is used to generate absolute assembly code (i.e.   "LOC"
+pseudo-op).   Its  single  argument  is  the  address to begin assembly.
+Example:
+
+         $ABS    137
+
+RELOCATION MACROS                                               Page 4-2
+THE $END MACRO
+
+
+4.3  THE $END MACRO
+
+     This macro will dump the literal pool (in  the  high  segment)  and
+variable pool (in the low segment) and generate an "END" statement.  The
+single optional argument is the start address of the program as  in  the
+"END" pseudo-op.  Example:
+
+         $END    START
+
+
+
+
+4.4  THE $HIGH MACRO
+
+     This macro will reset the relocation to high  segment  code.   This
+macro  should  only be used if two segments were specified to the $RELOC
+macro.  If the "LIT" option was specified to $RELOC,  then  the  literal
+pool will be dumped before changing segments.  Example:
+
+         $HIGH
+
+
+
+
+4.5  THE $LIT MACRO
+
+     This macro will set the relocation to the high segment,  then  dump
+the literal pool.  Example:
+
+         $LIT
+
+
+
+
+4.6  THE $LOW MACRO
+
+     This will set the program relocation to the low segment.  If  "LIT"
+was given in the $RELOC call, the literals will be dumped in the current
+segment before changing to the low segment.  Example:
+
+         $LOW
+
+
+
+
+4.7  THE $PRGEND MACRO
+
+     This macro will dump the literal and variable pools (as in the $END
+macro),  then  generate  a PRGEND pseudo-op, optionally with the program
+start address.  Example:
+
+         $PRGEND
+
+RELOCATION MACROS                                               Page 4-3
+THE $VAR MACRO
+
+
+4.8  THE $VAR MACRO
+
+     This sets the program relocation to the low segment and  dumps  the
+variable pool.  Example:
+
+         $VAR
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               CHAPTER 5
+
+                              STACK MACROS
+
+
+
+     STCMAC contains macros which allocate frames or local variables  on
+the software stack.  These routines require that the stack pointer is in
+register 17, defined as "P", and will also save register 16 and  use  it
+for a frame pointer during the context of the variables/frame.
+
+
+
+5.1  THE $VARIABLE MACRO
+
+     This macro is used to stack registers 1  through  16  and  allocate
+local  variables  on  the  stack.   This  macro  generates a call to the
+routine with the entry point ".FRAME", which will use register 16 for  a
+frame pointer.
+
+     The format of the call is:
+
+$VARIABLE (call variable,register variable,<variable list>)
+
+
+     The "call variable" is a stack variable which  will  point  to  the
+address of the return address on the stack, the "register variable" is a
+stack variable which points to the address on the stack where  registers
+1  thru  16 are saved and "variable list" is a list of variable names to
+be generated.  These variables are macro  definitions  which  implicitly
+index  register  16,  so  instructions  using  these  symbols cannot use
+indexing.  On the next "POPJ P,", these variables  are  deallocated  and
+all  saved registers are restored.  The format of the variable list is a
+list of symbol names for  unit  length  variables.   For  multiple  word
+variables,  the  format  of the variable name is of the form:  "<VAR,4>"
+which would generate four words of storage for  the  symbol  "VAR".   On
+return  from  the macro, register "T1" will point to the argument block.
+Note that the generated storage is NOT pre-zeroed.
+STACK MACROS                                                    Page 5-2
+THE $FRAME MACRO
+
+
+5.2  THE $FRAME MACRO
+
+     This  macro  generates  the  subroutine  which  is  called  by  the
+$VARIABLE  macro.  This macro is expanded in the expansion of the $TYPER
+macro.  The generated code is a subroutine  which  has  a  global  entry
+called ".FRAME" and will call the routines generated by the "$LOCAT" and
+"$PARAM" macros.  There is a single  optional  argument  to  this  macro
+which  is the CPU type (PDP6, KA10, KI10 or KL10), which if omitted will
+default to the CPU type that it is being expanded on.  This will produce
+adjust  stack pointer (ADJSP) instructions if running on a KL10 or later
+CPU.
+
+
+
+5.3  THE $LOCAT MACRO
+
+     This macro expands to  a  routine  which  calculates  an  effective
+address.   The  reason  there  is  a  subroutine  to do this rather than
+relying on the hardware is the case where the address is a register that
+has  been  saved  on  the stack, this routine will properly point to the
+location on the stack where the register has been saved.   This  assumes
+that  register  16  points  to  a  frame on the stack which contains the
+registers, as setup by the $VARIABLE macro and .FRAME subroutine.
+
+     The routine generated has a global entry point of ".LOCAT", expects
+the address to be calculated in T1, will return the effective address in
+T1 and destorys T2.  This macro is expanded by the "$TYPER" macro.
+
+
+
+5.4  THE $PARAM MACRO
+
+     The $PARAM macro generates a routine to find  the  address  of  the
+instruction  which  called the current routine.  This routine is used by
+.FRAME, and assumes the calling instruction to be an XCT or  PUSHJ  P,@.
+This  routine properly detects DDT breakpoints.  The entry point to this
+routine is ".PARAM", and is contained in TYPER.REL along with .FRAME and
+.LOCAT.
+
+
+
+
+
+
+
+
+
+
+
+
+                               CHAPTER 6
+
+                              TYPER MACROS
+
+
+
+     The TYPER macros are a set of  macro  definitions  and  subroutines
+which  are designed to make ASCII output easier for the programmer, thus
+leaving him more time for more esoteric programming.  They are primarily
+used  for  TTY output, however they may also be used to do output to any
+device or file.  These macros depend on symbols that  are  generated  by
+the $VRSN and $RELOC macros.
+
+
+                                  NOTE
+
+
+                    The code generated by the  $TYPE  and
+               $TYPES  macros  is  one location of inline
+               code which is a PUSHJ P, indirect or  XCT.
+               All  $TYPE  and $TYPES calls can therefore
+               be SKIPped around.
+
+
+
+
+
+6.1  THE $NUMBER MACRO
+
+     The $NUMBER macro is used to generate a  descriptor  word  for  the
+$NUM  output  type call (used by the $TYPE macro).  This macro creates a
+single word which describes the location for the number  to  be  output,
+and the format in which it is to be typed.  The call is:
+
+         $NUMBER ($ADR,$TYP,$WID,$DEC,$NOT)
+
+
+     Where "$ADR" is the address of the data to be output, "$TYP" is the
+output  type;   one of "DOUBLE", "SINGLE" or "UNSIGNED" (default), which
+selects double/single precision or unsigned output.  "$WID" is the width
+of  the  integer  portion  of  the  number (0 is default), "$DEC" is the
+number of digits to be typed to the  right  of  the  decimal  point  for
+single/double  precision  or  the  output  radix  for unsigned (5 is the
+default for single/double, 8 for unsigned).  "$NOT" is the notation  for
+output;  for single/double:  "REGULAR" for regular floating point output
+or  "SCIENTIFIC"  for  scientific  type  output,  for  unsigned  output:
+TYPER MACROS                                                    Page 6-2
+THE $NUMBER MACRO
+
+
+"BLANK"  for  blank  fill  on  leading zeroes or "ZERO" for zero fill on
+leading zeroes.  "REGULAR" or "ZERO" is the default for  this  field  if
+not specified.
+
+
+
+6.2  THE $TYPE MACRO
+
+     The $TYPE macro is the macro which  is  used  to  output  an  ASCII
+string  with  output conversions for outputting numbers, ASCII or SIXBIT
+substrings, etc.  The arguments to the macro call describe the  type  of
+message   (error,   warning,   information,   or  operator  intervention
+required), the message prefix, and the type of output conversion  to  be
+used for the supplied arguments at runtime.  The format of the call is:
+
+         $TYPE   ($HDR,$SFX,$SUB,$TXT,$TRL,$RET,$ORN)
+
+
+     Where  "$HDR"  is  the  message  type,"$SFX"  is  the  last   three
+characters  of  the  message  prefix,  "$SUB"  is the substitution type,
+"$TXT" is the ASCII text, "$TRL" is the trailer code (i.e.  <CR><LF>  or
+no  <CR><LF>),  "$RET"  is  the  address  to return to and "$ORN" is the
+output routine to be used.  These are described in detail below:
+
+
+
+6.2.1  $HDR
+
+     This argument specifies the header type to  be  used.   The  header
+types available are:
+
+         Option  Leading Description
+          Type    Char
+           F        ?    For a fatal error.
+           I        [    For an information message.
+           M        "    For an operator information message.
+           N             For no header or prefix.
+           O        $    For operator intervention required.
+           T      <TAB>  For a leading tab with no prefix.
+           W        %    For a warning message.
+
+
+     A six character message prefix consisting of the program's CCL name
+(as  defined  for  the  $VRSN  macro) and a three character abbreviation
+(supplied as the "$SFX" argument) will be output for header types F,  I,
+M,  O and W, followed by a <TAB> character (Control-I) will be output at
+the beginning of the message.  If the header type is I, a  "]"  will  be
+output  at  the  end  of the line, unless the "N" option is given as the
+argument "$TRL", in which case the "]" will be deferred until then  next
+$TYPE  call  which  ends the line without specifying that the trailer be
+omitted.
+TYPER MACROS                                                    Page 6-3
+THE $TYPE MACRO
+
+
+6.2.2  "$SFX"
+
+     This argument is a three character suffix which is appended to  the
+program's CCL name to be output as part of the message prefix.  An error
+message will be issued if this argument  is  non-blank  when  used  with
+header  type  "T".  If the suffix is non-blank when used with the header
+type "N", the code generated will be an XCT  instruction  of  the  $TYPE
+call  which  uses the same suffix with a header type of F, I, M, O or W.
+The $TYPE macro will generate a label of the form "$$$sfx" (where  "sfx"
+is  this  argument), which implies that there can be only one call which
+uses this suffix with any header type other than "N".
+
+
+
+6.2.3  "$SUB"
+
+     This argument specifies the substitution type to  be  performed  on
+the argument passed in accumulator "T1".  This substitution is performed
+on the first occurrence of a  "|"  (vertical  bar)  character  which  is
+encountered in the supplied ASCII string.  These substitutions are:
+
+
+
+
+     6.2.3.1  $NON - 
+
+          No substitution is to be performed.
+
+
+
+     6.2.3.2  $ASC - 
+
+          The ASCIZ string pointed to by T1 is output.
+
+
+
+     6.2.3.3  $BIT - 
+
+          T1 contains the address of the following argument block.  This
+     will  type an ASCIZ string which corresponds to the non-zero bit in
+     the bit mask given.  Examples of this substitution type  are  given
+     later.
+
+         c(T1)+0/        Flags and the address of the message table.
+         c(T1)+1/        The bits to be tested.
+         c(T1)+2/        The bit mask to be ANDed.
+         c(T1)+3/        Pointers to user message separators.
+TYPER MACROS                                                    Page 6-4
+THE $TYPE MACRO
+
+
+      The flags in the first word are:
+
+         TF.AND  Output "and" before the final message string.
+         TF.OR   Output "or" before the final message string.
+         TF.FLD  Output field values.
+         TF.LIN  Separate the message strings with <CR><LF>.
+         TF.USR  Separate the messages with the strings supplied in the
+                 fourth word.
+         TF.SIX  The message strings are in SIXBIT.
+         TF.BIT  The second word is an indirect pointer.
+         TF.MSK  The third word is an indirect pointer.
+
+
+          This will take the bit word (the second argument word  or  the
+     word  pointed to by the second argument word if TF.BIT is set), AND
+     it against the bit mask (third argument word or the word pointed to
+     by  the  third  argument word if TF.MSK is set), then scan the bits
+     from the most significant bit to the least significant bit.  If one
+     of  these  bits  is  found to be on (a "1"), then the corresponding
+     message from the message table (pointed to by the right half of the
+     first  argument  word)  will  be  output.  The string to be used to
+     separate the message strings if more than one bit is set is a comma
+     (",")  unless  a  user  separator string is given if TF.USR is set.
+     Then it is the string pointed to by the left  half  of  the  fourth
+     argument  word.   Otherwise  the separator is <CR><LF> if TF.LIN is
+     set.  The final two message  strings  are  separated  by  "and"  if
+     TF.AND is set, "or" if TF.OR is set or the string pointed to by the
+     right half of the third argument word if TF.USR is set.  If  TF.FLD
+     is  set, then the bit mask is used to extract a value to be used as
+     an index into the message table to output a single message.
+
+          This substitution type is useful for outputting error messages
+     in which the program is given a bit mask of what errors occured (as
+     in the case of the device status bits on an I/O  error).   For  the
+     case  of  having  an  error number (like a LOOKUP/ENTER error), the
+     TF.FLD option can be used.
+
+
+
+     6.2.3.4  $BLK - 
+
+          This format will type the number in T1 in decimal unless it is
+     an  integral multiple of 128, in which case it will type the number
+     divided  by  128,  followed  by  a  "B"   (for   "blocks").    This
+     substitution type is used to output file sizes.
+
+
+
+     6.2.3.5  $CHR - 
+
+          This will type the contents of T1 as a single right  justified
+     ASCII character.
+TYPER MACROS                                                    Page 6-5
+THE $TYPE MACRO
+
+
+     6.2.3.6  $COR - 
+
+          This is used to type a core size passed in T1.  If the  number
+     is  an  integral  multiple  of  512  (1024 if running on a KA-10 or
+     PDP-6), the number will be divided by 512 (or 1024) and typed  with
+     a  "P" ("K" for KA-10 or PDP-6) appended.  Otherwise, the number is
+     typed in decimal.
+
+
+
+     6.2.3.7  $DAT - 
+
+          This will type the contents of T1 as dd-mmm-yy, where "dd"  is
+     the day of the month, "mmm" is the three letter abbreviation of the
+     month, and "yy" is the year.
+
+          If the argument in T1 is minus 1, then  the  current  date  is
+     typed,  else  it  is  assumed  to  be  in  DEC  15  bit date format
+     (((year-1964)*12+month-1)*31+day-1).
+
+
+
+     6.2.3.8  $DAY - 
+
+          This will print a day of the week.  If the contents of  T1  is
+     minus  one,  then  the  current  day will be printed, otherwise the
+     argument is assumed to be in universal date/time format.
+
+
+
+     6.2.3.9  $DEC - 
+
+          This will type the contents of T1 in decimal.
+
+
+
+     6.2.3.10  $DTL - 
+
+          This will type a date in "long" format  (e.g.   September  30,
+     1978).  If the argument in T1 is negative, then the current date is
+     printed, if the left half of T1 is positive and non-zero,  then  it
+     is  assumed  to be a universal date/time, if the left half is zero,
+     then it will processed as a 15 bit date.
+
+
+
+     6.2.3.11  $ENT - 
+
+          This will type the OPEN and LOOKUP/ENTER blocks as pointed  to
+     by T1.  The left half of T1 contains the address of the open block,
+     the right half contains the  address  of  the  LOOKUP/ENTER  block.
+     This    will    type    the    file    name    in    the    format:
+     "dev:file.ext[P,Pn,sfd1, ...]".
+TYPER MACROS                                                    Page 6-6
+THE $TYPE MACRO
+
+
+     6.2.3.12  $FUL - 
+
+          This assumes that the contents of T1 is six SIXBIT characters,
+     and will type them converted to ASCII including trailing spaces.
+
+
+
+     6.2.3.13  $FUN - 
+
+          If T1 is negative and bits 1 thru 12 are zero, this will  type
+     the  ASCIZ  string pointed to by T1, otherwise it will type T1 as a
+     right justified ASCII character, In both cases, control  characters
+     are typed as "^X", and lower case characters are typed as "'X".
+
+
+
+     6.2.3.14  $HEX - 
+
+          The contents of T1 are typed out as a hexadecimal integer.
+
+
+
+     6.2.3.15  $LFT - 
+
+          The contents of the left half of T1 are typed (assumed  to  be
+     three or less SIXBIT characters).  Trailing spaces are deleted.
+
+
+
+     6.2.3.16  $LIN - 
+
+          This  will  type  a  carriage-return/line-feed  sequence.   No
+     argument is required.
+
+
+
+     6.2.3.17  $LKP - 
+
+          This  substitution   type   is   identical   to   the   "$ENT"
+     substitution.
+
+
+
+     6.2.3.18  $NAM - 
+
+          This substitution type is used to output a  user  name  up  to
+     twelve  characters in length.  On entry, T1 contains the address of
+     the first of the two SIXBIT words.  Trailing spaces are deleted.
+TYPER MACROS                                                    Page 6-7
+THE $TYPE MACRO
+
+
+     6.2.3.19  $NUM - 
+
+          This types a number in a according to a format defined by  the
+     user.  The contents of T1 contain the word generated by the $NUMBER
+     macro, which describes the format for the number to be typed.
+
+
+
+     6.2.3.20  $OCT - 
+
+          Will output the contents of T1 in octal.
+
+
+
+     6.2.3.21  $PFX - 
+
+          Will type the program's CCL name followed by the  contents  of
+     T1.   If  T1  is  positive  it is typed as an ASCII character right
+     justified, if negative, as a SIXBIT string.
+
+
+
+     6.2.3.22  $PPN - 
+
+          Types the contents of T1 in "PPn" format, i.e.  [P,Pn].
+
+
+
+     6.2.3.23  $PRO - 
+
+          Types the contents of T1 as a three digit  octal  number  with
+     leading  zeros,  enclosed  in  angle  brackets  (<nnn>),  as a file
+     protection code.
+
+
+
+     6.2.3.24  $PTH - 
+
+          Types the path block pointed to by T1 as [P,Pn,sfd1, ...].
+
+
+
+     6.2.3.25  $R50 - 
+
+          Types the contents of T1 as six RADIX-50 characters,  trailing
+     spaces deleted.
+TYPER MACROS                                                    Page 6-8
+THE $TYPE MACRO
+
+
+     6.2.3.26  $RUN - 
+
+          Types the contents of T1 as program runtime, if bit 0 is  zero
+     then  T1  is  assumed  to be in milliseconds, otherwise in jiffies.
+     The format in which it is typed out depends upon the width  of  the
+     field given in the $TYPES JST call.  If the width is negative, then
+     the null fields of the output (i.e.  hours and minutes)  are  space
+     filled),  if  zero they are suppressed, if positive, all fields are
+     output.
+
+
+
+     6.2.3.27  $SCN - 
+
+          Will type a SCAN compatible file specification block which  is
+     pointed    to    by    T1.    The   file   name   is   printed   as
+     "dev:file.exe[P,Pn,sfd1, ...]" with any  wildcards  output  in  the
+     appropriate places (e.g.  "DSKA:A?????.*[?,?]").
+
+
+
+     6.2.3.28  $SIX - 
+
+          Will type the contents of T1 as up to  six  SIXBIT  characters
+     with trailing spaces deleted.
+
+
+
+     6.2.3.29  $SPC - 
+
+          Types a string of spaces.  T1 contains the number of spaces to
+     be output.
+
+
+
+     6.2.3.30  $SUB - 
+
+          Types the string pointed to by T1 as an ASCII string, but with
+     substitutions, similar to the "$TXT" argument to the $TYPE call.
+
+
+
+     6.2.3.31  $TIM - 
+
+          Types the contents of  T1  as  a  time  of  day  in  the  form
+     "hh:mm:ss",  where  T1  contains  the  number of milliseconds since
+     midnight or minus one for the current time.
+TYPER MACROS                                                    Page 6-9
+THE $TYPE MACRO
+
+
+     6.2.3.32  $TML - 
+
+          This types a time of day  in  the  format  hh:mm  {a.m.|p.m.},
+     where  the argument is either milliseconds since midnight, or minus
+     one for the current time.
+
+
+
+     6.2.3.33  $UNV - 
+
+          Types a date/time in  the  format:   dd-mmm-yy:hh:mm:ss.   The
+     contents  of  T1  are  assumed  to contain a date/time in universal
+     date/time format.
+
+
+
+     6.2.3.34  $VER - 
+
+          Types the contents  of  T1  in  version  number  format  (i.e.
+     12D(123)-4).
+
+
+
+     6.2.3.35  $XWD - 
+
+          Similar to $PPN except that the square brackets ("[]") are not
+     typed.
+
+
+
+     6.2.3.36  $UR1 Thru $UR7 - 
+
+          Uses a user supplied output conversion routine as given in the
+     "$TYPES RTN" call.
+
+
+
+     6.2.3.37  $IND - 
+
+          This performs no immediate substitution or conversion, but  is
+     used  to  give  multiple substitution types in a single $TYPE call.
+     This specifies to .TYPER that the contents of T1  contains  in  the
+     left  half  the negative number of arguments supplied, in the right
+     half the  address  of  the  table  of  words  each  containing  the
+     substitution  type  and  address  of  the argument (the address may
+     contain  indirect  bits  and  indexing).    Each   word   is   used
+     successively  to  control  a  substitution  as  a  "|" character is
+     encountered in the text string.
+
+
+
+     If no argument is given as the substitution type, $NON  is  assumed
+to be the default.
+TYPER MACROS                                                   Page 6-10
+THE $TYPE MACRO
+
+
+6.2.4  "$TXT"
+
+     This argument is the ASCII string to be output.  Any "|" characters
+found  in  the  string will flag a substitution to be performed and call
+the indicated conversion routine.
+
+
+
+6.2.5  "$TRL"
+
+     This specifies the trailing string to be appended to the text.   It
+may    be    one   of:    "N"   for   no   trailer,   or   "C"   for   a
+carriage-return/line-feed sequence.  In the case of "C", if the  message
+type  was  information  ("I"),  then the "]" will be inserted before the
+<CR><LF> sequence.  If this argument is left blank, "C" is assumed.
+
+
+
+6.2.6  "$RET"
+
+     This specifies the address to return to on completion of the  $TYPE
+call.   If  left  blank,  "N"  is assumed, which will return to the next
+instruction following the call.  The returns are:
+
+         Return  Description
+           C     Return to the monitor and allow a CONTINUE.
+           E     Return to the monitor and reset all I/O.
+           M     Return without resetting I/O, but don't allow
+                 a CONTINUE.
+           N     Return to the next instruction.
+           N1    Return to the next instruction plus 1.
+           P     Perform a return in behalf of the caller
+                 (similar to calling with "PJRST").
+           P1    Similar to "P", but skip returns.
+           S     Calls .FMSGE in SCAN following the message,
+                 for fatal error processing.
+
+
+     If there is a return code given, but does  not  match  any  of  the
+above,  then  it  is assumed to be an address, and will be transfered to
+upon completion.
+
+
+
+6.2.7  "$ORN"
+
+     This is the output routine to be used by .TYPER.   If  left  blank,
+then  the  default  output routine as set by the last $TYPES OUT call is
+used.  If the output routine is  set  to  zero,  then  .TYPER's  default
+output routine is used.
+TYPER MACROS                                                   Page 6-11
+THE $TYPE MACRO
+
+
+     Some examples of the $TYPE call are:
+
+         $TYPE   (N,,$NON,<This is a message.>)
+         $TYPE   (I,MSG,$NON,<This is an information message>)
+
+ Would type:
+
+This is a message.
+[PFXMSG  This is an information message]
+
+ Some substitutions:
+
+         MOVEI   T1,[SIXBIT \USER NAME\]
+         $TYPE   (I,USR,$NAM,<The user name is |>)
+
+ Produces:
+
+[PFXUSR  The user name is USER NAME]
+
+         MOVE    T1,.MYPPN##
+         $TYPE   (W,PPN,$PPN,<The PPn is |>)
+
+ Produces:
+
+%PFXPPN  The PPn is [1,2]
+
+         DATE    T2,
+         MOVE    T1,[-3,,[$DAY   [-1]
+                          $TML   [-1]
+                          $DTL   T2]]
+         $TYPE   (M,DAY,$IND,<Today is |, | |>)
+
+Produces something like:
+
+"PFXDAY  Today is Monday, September 25, 1978 08:30 a.m.
+
+ An example of the $BIT substitution:
+
+         OUT     DSK,
+         POPJ    P,
+         GETSTS  DSK,T2
+         MOVEI   T1,[TF.AND!TF.BIT+MSGTAB
+                     T2
+                     IO.ERR]
+         $TYPE   (F,ODE,$BIT,<Output DSK error, status = |>,,P)
+
+MSGTAB:  [ASCIZ  \Improper mode\]
+         [ASCIZ  \Hard device error\]
+         [ASCIZ  \Hard data error\]
+         [ASCIZ  \Block too large\]
+
+ Would print something like:
+
+?PFXODE  Output DSK error, status = Improper mode and Hard data error
+TYPER MACROS                                                   Page 6-12
+THE $TYPER MACRO
+
+
+6.3  THE $TYPER MACRO
+
+     The $TYPER macro when called, will  generate  the  code  needed  to
+process  $TYPE  and $TYPES macro calls.  This macro exists in STCMAC.UNV
+but not in STCUNV.UNV.  TYPER.REL is  a  standalone  expansion  of  this
+macro.  For programs which use SCAN, STCUNV.UNV should be searched since
+it will use much less core at assembly time, and the program  should  be
+loaded  with  TYPER.REL.   The expansion of this macro also includes the
+expansion of the $FRAME, $PARAM and $LOCAT macros.  The  format  of  the
+$TYPER macro call is:
+
+         $TYPER  ($LST,$SCN,$SEG,$CPU)
+
+
+     Where "$LST" is either "LIST" or "NOLIST" depending on  whether  or
+not  the  programmer  wants  the  expanded  code in the program listing,
+"$SCN" is either "SCAN" or "NOSCAN" to specify whether or not SCAN  will
+be  loaded  with  this  program, "$SEG" is "ONE" or "TWO" to specify the
+number of segments of code to be generated and "$CPU" is the CPU type to
+generate code for.  The defaults are:
+
+         $TYPER  (LIST,SCAN,TWO)
+
+
+     Where the cpu type defaults to the type on which  the  assembly  is
+taking place.
+
+
+
+6.4  THE $TYPES MACRO
+
+     The $TYPES macro is used in conjunction with  the  $TYPE  macro  to
+control  output  destination,  time  stamping,  etc.   There is a single
+argument to this macro, the format of the call is:
+
+         $TYPES  fnc
+
+
+     Where "fnc" is one of the following:
+
+
+
+
+
+     6.4.1  BUG
+
+          This option implies  that  a  fatal  program  error  has  been
+     detected.   This  will cause an error message to be typed, then the
+     program will exit.
+TYPER MACROS                                                   Page 6-13
+THE $TYPES MACRO
+
+
+     6.4.2  COL
+
+          Will return in AC T1 the current horizontal  position  in  the
+     output  line.  This column counter is valid only when time stamping
+     and/or justification are being used.
+
+
+
+     6.4.3  DMP
+
+          Will force the text buffer to be dumped if the standard output
+     routine  is  being used.  This routine normally buffers in core the
+     entire line to be output, then outputs it all at once when  end  of
+     line  is  encountered.  This call will force the partial line to be
+     output.
+
+
+
+     6.4.4  ERR
+
+          This will cause all fatal error messages (i.e., all  with  the
+     header  type  "F")  to increment .JBERR.  This is used as a flag to
+     other programs that a system program error has occured.
+
+
+
+     6.4.5  INI
+
+          This call should be performed before any other $TYPE or $TYPES
+     calls.   This  will  initialize  TYPER, and setup the program's CCL
+     name and initial output routine.  On entry, .TYPES assumes that the
+     CCL  name  is  in SIXBIT in the left half of T1, the initial output
+     routine in the right half of T1.  If the  output  routine  is  left
+     zero, the standard output routine will be used.  A sample call is:
+
+         MOVSI   T1,TP.PFX
+         $TYPES  INI
+
+
+
+
+     6.4.6  JST
+
+          This is used to setup software tab stops in the  output  line.
+     On  entry,  T1 contains in the left half the negative number of tab
+     stops, in the right half the address of  the  table  of  tab  stops
+     formatted  "XWD  width,column".   The  tab  stop  table  must be in
+     ascending order.  For a tab stop with a non-zero width, if a  $BLK,
+     $COR,  $DEC,  $HEX,  $NUM, $OCT, $RUN or $XWD substitution is used,
+     the number will be  output  right  justified  in  the  field,  with
+     leading space fill.
+TYPER MACROS                                                   Page 6-14
+THE $TYPES MACRO
+
+
+     6.4.7  LOC
+
+          This routine is used  to  obtain  the  contents  of  a  memory
+     location.   It  is  assumed  that  the calling routine has issued a
+     "$VARIA" macro call prior to calling this function.  On  entry,  T1
+     contains  an address (indexing and indirect may be used), on return
+     T1 will contain the contents of that location.
+
+
+
+     6.4.8  OUT
+
+          Takes the address of an  output  routine  in  T1.   This  will
+     change  the  default  output  routine  to  be  used.  On return, T1
+     contains the address of the previous output  routine.   The  output
+     routine  specified  will be given the character to be output in the
+     right half of T1.  The left half of T1 will contain  a  -1  if  the
+     character is part of a time stamp, -2 if it is part of a time stamp
+     label or zero if none of the above.  The  output  routine  may  not
+     destroy any AC.
+
+
+
+     6.4.9  PRM
+
+          This call will clear  a  possible  Control-O,  then  output  a
+     prompt  on  the  user  console.  On entry, T1 should contain (right
+     justified) ">" for a standard prompt, "!" for a running prompt, "/"
+     for  a  paused  prompt or "#" for a continuation line on any of the
+     above.  The prompt output is of the form "ccl> ",  where  "ccl"  is
+     the  program's  CCL  name  as given in the $TYPES INI call, and the
+     character following is the character passed in T1 on  entry.   This
+     routine  does  an implied $TYPES DMP to insure that the prompt gets
+     output.
+
+
+
+     6.4.10  RTN
+
+          This call is used to identify user defined output routines  to
+     be  used  with  the  "$UR1"  thru "$UR7" substitution types for the
+     $TYPE call.  T1 should contain in  the  left  half  the  number  of
+     routines given, and the address of the table of the routines in the
+     right half.  The first routine in the table is  assigned  to  $UR1,
+     the  second  to $UR2, etc.  These output routines will be given the
+     argument it T1 on entry and may destroy T1, T2, T3  and  T4.   Note
+     that  while  in the context of these routines, the user AC's 1 thru
+     16 have been pushed on the  stack,  and  AC  16  contains  a  frame
+     pointer.
+TYPER MACROS                                                   Page 6-15
+THE $TYPES MACRO
+
+
+     6.4.11  RST
+
+          This call will restore the status of TYPER as saved by  $TYPES
+     SAV.
+
+
+
+     6.4.12  SAV
+
+          This call will save the status of the type routines so that  a
+     $TYPE  or  $TYPES  call  will  work  if  executed during a software
+     interrupt which occurs while executing inside TYPER.  This  can  be
+     called to save the status only one level deep.
+
+
+
+     6.4.13  SYS
+
+          This call will change the system  prefix  (the  program's  CCL
+     name).   On entry T1 should contain the new prefix in the left half
+     (in SIXBIT).
+
+
+
+     6.4.14  TIM
+
+          This will instruct TYPER to precede  all  output  produced  by
+     $TYPE  calls  with  a  time  stamp.   The time stamp is of the form
+     "hh:mm:ss msg<TAB>", which is the time of the day, and "msg" is  an
+     optional  SIXBIT  label  which is some kind of message abbreviation
+     (like the "USER" and "MONTR" labels in a batch log file).  On entry
+     T1  contains  a  -1  if  normal  time stamps, zero to turn off time
+     stamps or -1 in the left half and the address of a location (in the
+     right  half)  which  contains a SIXBIT label to be output following
+     the stamp.  In all cases, on return T1 contains the  previous  time
+     stamp argument.
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               CHAPTER 7
+
+                        THE ERROR MESSAGE MACRO
+
+
+
+     $PRINT is a macro to  produce  assembly  time  error  messages  via
+PRINTX  pseudo-ops.   The format and use of the macro is similar to that
+of $TYPE except that there is no substitution  performed,  or  alternate
+return  addresses  or output routines (for nearly obvious reasons).  The
+format of the call is:
+
+         $PRINT  ($HDR,$PFX,$TXT)
+
+
+     Where $HDR is one of F, I, O, W (which do roughly the  same  things
+as  in  the $TYPE call), $PFX is a three character string to be appended
+to the CCL name (TP.PFX) for a message prefix, and $TXT is the  text  to
+be  output.   This  macro  generates  no  code,  and is only of value at
+assembly time.
+
+
+
+
+
+
+
+
+
+
+
+
+                               CHAPTER 8
+
+                        PUTTING IT ALL TOGETHER
+
+
+
+     This chapter deals with how to use all of what has  been  explained
+in  the  previous sections.  Using these macros is very simple after the
+programmer has gotten some experience with them, however they may look a
+bit  complicated  at  first.   This  will  attempt  to  make some of the
+interactions between the macros a little bit more clear.
+
+     The most probable reason anybody would want to  use  any  of  these
+macros  is  to  take  an  advantage  of  the $TYPE macro to type his/her
+error/warning messages.  A good rule of thumb to keep in  mind  is  that
+since  this  macro  references  symbols  produced  by  most of the other
+macros, it is generally a good idea to use all of them  ($VRSN,  $TITLE,
+$RELOC,  etc.).   If  the  program uses SCAN, it is advisable to use the
+TYPER.REL module, which contains the processors for  the  $TYPE,  $TYPES
+and  $VARIA macros.  In doing this, the program being created can search
+STCUNV.UNV instead of STCMAC.UNV, which will save about 20 pages of core
+at  assembly  time.   If  the  program  does  not  use  scan  and/or has
+non-standard AC definitions, the $TYPER macro must  be  expanded  within
+the program, which implies searching STCMAC.UNV.
+
+     The following sections deal with the specifics of how  to  properly
+setup and use everything.
+
+
+                                  NOTE
+
+
+                    The STCMAC macros use a special macro
+               definition  format  defined in STC's local
+               version of MACRO-10.  This  is  the  macro
+               expansion  format  (SALL,  LALL  and XALL)
+               enclosed in square brackets preceding  the
+               argument  list.   If this version of MACRO
+               is  not  being  used   to   assemble   the
+               programs,  then  a  "/P"  switch should be
+               given to macro during  assembly  to  avoid
+               overflowing   the   assembler's  push-down
+               stack.
+
+
+PUTTING IT ALL TOGETHER                                         Page 8-2
+INITIALIZING EVERYTHING
+
+
+8.1  INITIALIZING EVERYTHING
+
+     Before any of the heavy  macros  can  be  used,  things  should  be
+properly  initialized.   This  consists  of  defining  a version number,
+generating the title using the $TITLE macro if we want pretty titles and
+initializing the relocation macros.  It is strongly recommended that the
+program also search MACTEN and UUOSYM.
+
+     The first page of a program could look something like:
+
+
+; Required Symbols
+
+         SEARCH  STCUNV,MACTEN,UUOSYM,SCNMAC
+
+; Assembly Directives:
+
+         SALL                    ;For neat listings
+
+; Required Modules:
+
+         .REQUIRE        REL:TYPER       ;For $TYPE calls
+         .REQUEST        REL:SCN7C       ;For scanner
+         .REQUIRE        REL:HELPER      ;For /HELP
+
+; Version number stuff
+
+         $VRSN   EXE,1(7)-4      ;Version number of EXEUTL
+
+         $RELOC  TWO             ;Initialize the STCMAC routines
+
+         $ABS    136             ;Set to customer version word
+         EXE.VN                  ;Put in our version
+         EXE.VN                  ;Both places just for fun
+
+         $TITLE  EXEUTL -- Utility for Tweaking EXE Files,EXE
+         $PASS   EXEUTL,EXE
+
+
+
+
+8.2  AC DEFINITIONS
+
+     Some of the macros (like $TYPER) require specific  definitions  for
+some  AC  names.   Generally,  using SCAN compatible definitions (AC's 1
+thru 4 named T1 thru T4, AC's 5 thru 10 named P1 thru P4  and  P  =  17)
+will  work.   The  main  requirement  is  that  the  stack pointer is in
+register 17 with the name "P" and that there are AC definitions  for  T1
+thru  T4  and  P1  thru P4.  Other combinations are possible, but mostly
+untested.  If the $TYPER macro encounters some kind of inconsistency  in
+the  definitions  while  being  expanded, it will issue an error message
+(using the $PRINT macro) to warn the programmer.
+PUTTING IT ALL TOGETHER                                         Page 8-3
+RUNTIME INITIALIZATION OF THE TYPER ROUTINES
+
+
+8.3  RUNTIME INITIALIZATION OF THE TYPER ROUTINES
+
+     Before any $TYPE or $TYPES  calls  can  be  executed  by  the  user
+program,  the  $TYPES  INI  call  should  be issued.  This will properly
+initialize the TYPER routines so that everything will function normally.
+If  using SCAN, the best place to put this call is fairly soon after the
+.ISCAN call.
+
+     An example of the initialization is:
+
+         MOVE    T1,ISCNPT               ;Get the ISCAN pointer
+         PUSHJ   P,.ISCAN##              ;Go initialize SCAN
+         MOVSI   T1,TP.PFX               ;Get system prefix
+         $TYPES  INI                     ;Initialize TYPER
+
+
+     Note that the symbol "TP.PFX" is defined by the $VRSN macro.
+
+     After this initialization, the programmer is free to use any of the
+$TYPE and $TYPES calls.
+
+
+
+8.4  SOME HINTS ON USING STCMAC
+
+     There are some useful things associated with  these  macros,  which
+may not justify using STCMAC to begin with, but nice to have anyway.
+
+
+
+8.4.1  $TYPES BUG
+
+     This macro is used  where  the  programmer  has  detected  a  fatal
+program  bug, i.e.  some section of code that (s)he thinks is impossible
+or improbable to get to, or anything that (s)he does  not  know  how  to
+handle.   This  macro  can be used in the place of a HALT instruction or
+something equally gross.  This macro generates one line of  inline  code
+(as  does  $TYPE),  and  will produce an error message which informs the
+user that a program logic error has occurred and will give the  absolute
+and relative (to the module) PC of the error.
+
+
+
+8.4.2  $VARIA, .LOCAT And .PARAM
+
+     These are useful for subroutine entry and parameter fetching.   The
+$VARIA macro is used on entry to the subroutine to stack AC's 1 thru 16,
+and allocate any required local storage.  On return, T1 will  contain  a
+pointer  to  the  argument list (assuming that the subroutine was called
+with  a  PUSHJ  P,@[addr ....).   Any  addresses  passed  as   arguments
+(including  saved  AC's)  can  be  located using the .LOCAT routine.  An
+example of how this can be done is shown in appendix A.
+PUTTING IT ALL TOGETHER                                         Page 8-4
+SOME HINTS ON USING STCMAC
+
+
+8.4.3  The $PRINT Macro
+
+     This macro is useful for outputting assembly time error messages or
+information.
+
+
+
+8.4.4  $TYPES OUT
+
+     By  changing  the  default  output  routine  via  this  call,   the
+programmer  can direct his output to virtually anything (s)he wants.  It
+can be used to output to a file, build a string in  core,  etc.   Having
+done  so, the programmer then has full access to the $TYPE macro and all
+associated routines to do formatted output  to  a  file  (or  any  other
+destination  (s)he  has in mind).  The $TYPE macro has a fairly high per
+character overhead, but for limited applications, it can make life a lot
+easier.   Care  should  be  taken that the program always keeps track of
+where the output is going so that error messages don't end up in a  user
+file  when  they should have been printed on the console.  Note that the
+last argument to the $TYPE macro performs a similar function,  but  only
+for the context of the call.
+
+
+
+
+
+
+
+
+
+
+
+
+                              APPENDIX A
+
+                            A SAMPLE PROGRAM
+
+
+
+     The following is an example of a program which  uses  most  of  the
+macros  and their options.  In no way should this be considered the only
+way to use these things, just  an  example.   This  is  not  the  entire
+program, just selected portions.
+
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  D. Robert Banks, 5-Aug-78
+
+; Required Symbols
+
+         SEARCH  STCUNV,MACTEN,UUOSYM,SCNMAC,IBMPRM,QSRMAC
+
+; Assembly Directives:
+
+         SALL                            ;For neat listings
+
+         .DIRECTIVE      FLBLST          ;Default listing
+
+         INTERN  DOTPOP                  ;For IBMLBL
+
+; Required Modules:
+
+         .REQUIRE        DSK:IBMLBL      ;For tape label calls
+         .REQUIRE        REL:TYPER       ;For $TYPE calls
+         .REQUEST        REL:SCN7C       ;For the scanner
+         .REQUIRE        REL:HELPER      ;For help messages
+         .REQUIRE        REL:WLD7A       ;For finding input specs
+
+; Version Number Stuff:
+
+         $VRSN   EBU,1(1)-4      ;Our version number
+
+         %EBUTIL==:EBU.VN
+
+         $RELOC  TWO             ;Initialize the STCMAC routines
+
+         $ABS    136             ;Set to customer version word
+         %EBUTIL                 ;Put in our version
+         %EBUTIL                 ;Both places just for fun
+
+         $TITLE  EBUTIL -- General EBCDIC Tape Utility,EBU
+         $PASS   EBUTIL,EBU
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Definitions -- AC's
+
+;AC definitions:
+
+                         ;AC definitions are SCAN compatible
+     F==0                ;Flag AC
+    T1==1                ;Temp AC's
+    T2==2                ; ...
+    T3==3                ; ...
+    T4==4                ; ...
+    P1==5                ;Preserved AC's
+    P2==6                ; ...
+    P3==7                ; ...
+    P4==10               ; ...
+     N==7                ;Alternate definition
+     C==10               ; ...
+    M1==11               ;Marginal AC's (may or may not be saved)
+    M2==12               ; ...
+    M3==13               ; ...
+    M4==14               ; ...
+   LVL==15               ;Typeout level
+   FRM==16               ;Used by $VARIA and $FRAME
+     P==17               ;guess
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Definitions -- Macros
+
+; Macro to perform a TAPOP. function
+DEFINE   $TAPOP  ($FUN,$VAL),<
+         PUSHJ   P,@[BYTE (12) $FUN (6) 0 (18) %TAPOP
+                     $VAL]
+>                                ;End $TAPOP
+
+; Macro to save locs 
+
+DEFINE   $SAV [SALL] ($LST),<
+         PUSHJ   P,[
+IRP      $LST,<     PUSH P,$LST          ;;Save the loc
+                    $SWPN -1(P),(P)>     ;;Swap it with the return
+                    POPJ P,]>            ;;Return
+
+; Macro to restore locs saved by $SAV
+
+DEFINE   $RST [SALL] ($LST),<
+         PUSHJ   P,[
+IRP      $LST,<     $SWPN -1(P),(P)      ;;Swap with return
+                    POP  P,$LST>         ;;Restore the loc
+                    POPJ P,]>
+
+; Macro to swap the contents of two memory locations
+; * Note * this instruction cannot be SKIP'ed around
+
+DEFINE   $SWPN [SALL] ($ADR1,$ADR2),<
+         EXCH    T1,$ADR1
+         EXCH    T1,$ADR2
+         EXCH    T1,$ADR1>
+
+; Macro to swap the contents of n pairs of memory locations.
+; * Note * This macro can be "SKIP'ed", but is very slow.
+DEFINE   $SWP [SALL] ($LST),<
+         PUSHJ   P,@[%SWP                ;;Call the swap routine
+
+IRP      $LST,<
+                     $SWP1 $LST>         ;;Insert the two locs
+
+                      0]>                ;;End of "DEFINE SWP"
+
+DEFINE   $SWP1 [SALL] ($LST),<$SWP2 ($LST)>
+
+DEFINE   $SWP2 [SALL] ($VAR1,$VAR2),<
+                     <EXP 1B0+$VAR1>     ;;First loc
+                     <EXP     $VAR2>     ;;Second loc
+>                                ;End of "DEFINE SWP1"
+A SAMPLE PROGRAM
+
+
+
+; Macro to perform a GETTAB function
+
+DEFINE   $GETAB [SALL] ($FNC,$LOC),<
+         PUSHJ   P,@[%GETAB
+                     $FNC
+                     $LOC]
+>                                        ;End Define $GETAB
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Storage -- LOWsegment
+
+         $LOW                    ;Relocate to low segment
+
+PDL:     BLOCK   PDLSIZ          ;Push down stack
+OFFSET:  BLOCK   1               ;Starting offset
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Top Level -- Initialization
+
+         $HIGH                           ;Set to high segment
+
+EBUTIL::TDZA     T1,T1                   ;No starting offset
+         MOVEI   T1,1                    ;CCL entry
+         MOVEM   T1,OFFSET               ;Save starting offset
+         RESET                           ;All I/O
+         STORE   17,0,17,0               ;Zero the AC's
+         MOVE    P,[IOWD PDLSIZ,PDL]     ;Setup the PDP
+         STORE   T1,BZ$INI,EZ$INI,0      ;Zero the low segment
+
+;     Here  with  the  basic  info  setup,  now  initialize  the
+; scanner and the typeout routines.
+
+         MOVE    T1,ISCNPT               ;Get the ISCAN pointer
+         PUSHJ   P,.ISCAN##              ;Go initialize SCAN
+
+         MOVE    T1,[TP.PFX,,PRTCHR]     ;Get the system prefix
+         $TYPES  INI                     ;Initialize TYPER
+         MOVEI   T1,AD.LOG               ;Get default loglevel
+         MOVEM   T1,LOGLVL               ;Store
+         MOVEI   T1,AD.MSG               ;Get default msglvl
+         MOVEM   T1,MSGLVL               ;Store
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Top Level -- Main Loop
+
+MAIN:    PUSH    P,.JBFF##               ;Save free core pointer
+         PUSHJ   P,CLRANS                ;Go reset low segment
+         TXZ     F,F$CLR                 ;Clear per command bits
+
+         MOVE    T1,TSCNPT               ;Get .TSCAN pointer
+         PUSHJ   P,.TSCAN##              ;Go call the scanner
+         MOVE    T1,OSCNPT               ;Get the .OSCAN pointer
+         PUSHJ   P,.OSCAN##              ; and read SWITCH.INI
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Tape to Disk Routines -- EBCOPY
+
+; Here to read a tape.
+
+EBCOPY:  TXNE    F,F.WRT                 ;Reading tape?
+         $TYPES  BUG                     ;No, should never get here
+         MOVEI   LVL,MSGNON              ;Set global typeout
+         PUSHJ   P,PSI%ON                ;Go turn on the PSI system
+           SKIPA                         ;Can't, skip prompt
+         PUSHJ   P,DOPRMT                ;Give a prompt
+
+; Fall into loop
+A SAMPLE PROGRAM
+
+
+
+; Open the disk channel
+
+         MOVEI   T1,.IODMP               ;Get dump mode I/O
+         IORM    T1,OPNDSK+.OPMOD        ;Store
+         SETZM   OPNDSK+.OPBUF           ;No buffers
+         MOVE    T1,OPNDSK+.OPDEV        ;Get the device name
+         OPEN    DSK,OPNDSK              ;Get the disk
+           $TYPE (F,EOO,$SIX,<Error Opening Output device |>,,ABORTF)
+
+; Go create the file on disk
+
+         MOVEI   T1,.RBTIM               ;Get size of ENTER
+         MOVEM   T1,DSKBLK+.RBCNT        ;Store it
+         ENTER   DSK,DSKBLK              ;Go create the file
+           JRST  [HRRZ   T2,DSKBLK+.RBEXT  ; Error, get code
+                  MOVE   T1,[-2,,[$OCT   T2; and pointers
+                                  $ENT   [OPNDSK,,DSKBLK]]]
+                  $TYPE  (F,ECF,$IND,<Enter Error | Creating
+|>,,ABORTF)]
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Tape to Disk Routines -- EBCDON
+
+; Here at the end of command
+
+EBCDON:  PUSHJ   P,PSI%OF                ;Turn off PSI
+         MOVEI   LVL,MSGNON              ;Reset the message level
+         $TYPE   (N)                     ;Give a blank line
+         JRST    .POPJ1##                ;Give skip return
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Switch Processors -- TABLST
+
+;     Here from Scan on a /TABLE switch to list the  translation
+; table parameters.
+
+; Calling sequence:
+;        PUSHJ   P,TABLST
+;          never return here
+;        return here always
+
+; uses AC's T1-T4 M1-M3
+
+TABLST:  MOVEI   LVL,MSGNON              ;Since (s)he asked ...
+         SKIPN   TABNAM                  ;Is there one?
+         JRST    TABL04                  ;No, not yet
+
+         MOVE    T1,[-4,,[$SIX   TABNAM    ; Table name
+                          $PPN   TABPPN    ; PPn of modifier
+                          $NAM   [TABNM1]  ; Name of modifier
+                          $UNV   TABDAT]]  ; Date of creation
+         $TYPE   (I,TBL,$IND,<Using table | from | (|), created |>)
+
+         SKIPE   TABTXT                  ;Any text?
+         PUSHJ   P,[MOVEI T1,TABTXT        ; Yes, get pointer
+                    $TYPE (I,TBD,$ASC,<Description:
+|>,,P)]
+
+         SKIPN   TABCHG                  ;Any changes?
+           JRST  TABL03                  ;No -- press on
+
+         $TYPE   (N,,$NON,<Alterations to standard table:
+EBCDIC   was     is      (Was and is are Octal of ASCII)>)
+         MOVE    T4,[-100,,TABCHG]       ;Get AOBJN pointer
+
+TABL01:  SKIPN   T2,(T4)                 ;Get an entry
+         JRST    TABL02                  ;Zero, all done
+         LDB     M1,[POINT 8,T2,7]       ;Get Hex number
+         LDB     M2,[POINT 9,T2,16]      ;Get was
+         LDB     M3,[POINT 9,T2,25]      ;Get is
+         MOVE    T1,[-3,,[$HEX   M1        ; EBCDIC
+                          $OCT   M2        ; was
+                          $OCT   M3]]      ; is
+         $TYPE   (N,,$IND,<|     |       |>)
+         AOBJN   T4,TABL01               ;Loop for all
+
+TABL02:  $TYPE   (N,,$NON,,,P1)          ;Give blank line at end
+
+TABL03:  $TYPE   (I,NCT,$NON,<No Changes to standard Table>,,P1)
+
+TABL04:  $TYPE   (I,NTL,$NON,<No Table Loaded>,,P1)
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Runtime Command Processor -- Turn on PSI
+
+;     Here from top level  to  enable  the  Programmed  Software
+; Interrupt  system  to  give interrupts when a line of input is
+; typed by the user.
+
+; Calling sequence:
+;        PUSHJ   P,PSI%ON
+;        return here always
+
+; Uses AC's T1-T4
+
+PSI%ON:  MOVEI   LVL,MSGNON              ;Set global typeout
+         TXZ     F,F.PSI                 ;Don't assume anything
+         MOVEI   T1,TTYSER               ;Trap address
+         MOVEM   T1,PSIVCT+.PSVNP        ;Put it in the block
+         MOVX    T1,PS.VTO               ;Disable with DEBRK. UUO
+         MOVEM   T1,PSIVCT+.PSVFL        ;Store in flags
+         MOVEI   T1,PSIVCT               ;Get the addr
+         PIINI.  T1,                     ;Initialize PSI
+           $TYPE (W,PUF,$NON,<Cannot enable interrupts for TTY>,,p)
+         MOVX    T1,PS.FON!PS.FAC        ;Turn on+add condition
+         HRRI    T1,T2                   ;Get address of args
+         MOVSI   T2,'TTY'                ;Get device name
+         MOVX    T3,PS.RID               ;Interrupt on input done
+         SETZ    T4,                     ;No priority
+         PISYS.  T1,                     ;Turn it on
+           $TYPE (N,PUF)                 ;Error
+         SETZ    T1,                     ;Insure proper prompt
+         TXO     F,F.PSI                 ;Success!!
+         JRST    .POPJ1##                ;Return
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Runtime Command Processor -- Turn PSI Off
+
+;      Here from the top level to disable PSI interrupts.
+
+; Calling sequence:
+;        PUSHJ   P,PSI%OF
+;        return here always
+
+; Uses AC T1
+
+PSI%OF:  MOVEI   LVL,MSGNON              ;Set global typeout
+         TXZN    F,F.PSI                 ;PSI on?
+         POPJ    P,                      ;No, just return here
+         PUSH    P,T1                    ;Yes, save T1
+         MOVX    T1,PS.FOF               ;Get "turn off" bit
+         PISYS.  T1,                     ;Do it
+           $TYPE (W,CRT,$NON,<Cannot remove TTY from interrupt system>)
+         POP     P,T1                    ;Restore T1
+         POPJ    P,                      ;Return
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Runtime Command Processor -- TTY Interrupt
+
+;     Here  on a "PSI" interrupt.  Stacks all AC's and calls the
+; runtime command processor.
+
+; Called by a line of input ready on the user's console,
+; returns with "DEBRK." UUO.
+
+; Preserves all AC's except P
+
+TTYSER:  $SAV    <T1,T2,T3,T4,P1,P2,P3,P4,M1,M2,M3,M4,LVL>
+         $TYPES  SAV                     ;Save the state of TYPER
+         MOVEI   T1,PRTCHR               ;Get the name of routine
+         $TYPES  OUT                     ;Set the output routine
+         PUSH    P,T1                    ;Save the old routine
+         SETO    T1,                     ;Get some ones in T1
+         TXNE    F,F.LOG                 ;Are we logging?
+         $TYPES  TIM                     ;Yes, turn timestamps on
+         TXNE    F,F.LOG                 ; ...
+         $TYPE   (N,,$NON,,,,LOGOUT)     ;Force a free <CR><LF>
+         PUSHJ   P,RUNCOM                ;Go do some commands
+         TXNE    F,F.LOG                 ;Logging?
+         JRST    [SETZ   T1,               ; Yes, turn
+                  $TYPES TIM               ;  timestamps off
+                  $TYPE  (N,,$NON,,,,LOGOUT)
+                  JRST   .+1]              ; And continue
+         POP     P,T1                    ;Restore the old routine
+         $TYPES  OUT                     ;Reset the routine
+         $TYPES  RST                     ;Restore TYPER
+         $RST    <LVL,M4,M3,M2,M1,P4,P3,P2,P1,T4,T3,T2,T1>
+         DEBRK.                          ;Return from interrupt
+           JFCL                          ;Shouldn't get here
+         $TYPES  BUG                     ;*** Error
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Subroutines -- Prompt Routine
+
+;     Routine  to  type a prompt on the user console.  Called by
+; Scan or runtime command processor.  Prompts are  of  the  form
+; "EBUc ", where  "c" is one of: ">" if top level prompt, "!" if
+; running,  "/"  if  stopped  during  a  command,  or   "#"   if
+; continuation in any above case.
+
+; Calling sequence:
+;        PUSHJ   P,DOPRMT
+;        return here always
+
+; Uses AC T1, all AC's preserved by $TYPES PRM
+
+DOPRMT:  MOVEI   LVL,MSGNON              ;Set global typeout
+         TXNE    F,F.RUN                 ;Doing a command now?
+         JRST    DOPR02                  ;Yes -- other chars
+         TLZE    T1,-1                   ;Continuation?
+
+DOPR01:  SKIPA   T1,["#"]                ;Yes--inform the user
+         MOVEI   T1,">"                  ;No--output a carrot
+         $TYPES  PRM                     ;Go type an ASCII string
+         POPJ    P,                      ;Return
+
+DOPR02:  TLZE    T1,-1                   ;Continuation?
+         JRST    DOPR01                  ;Yes -- go do it
+         TXNE    F,F.STOP                ;Stopped?
+         SKIPA   T1,["/"]                ;Yes -- say so
+         MOVEI   T1,"!"                  ;No -- say running
+         $TYPES  PRM                     ;Give the prompt
+         POPJ    P,                      ; and return
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Subroutines -- PRTCHR - Put a Character
+
+;   Here from TYPER with char in T1, <LH> non-zero if time stamp
+; character.  Compare  LVL  to  MSGLVL  and  LOGLVL to see if we
+; really want to print this.
+
+; Calling sequence:
+;        MOVE    T1,character, <LH> non-zero if time-stamp
+;        PUSHJ   P,PRTCHR
+;        return here always
+
+; Destroys no AC's
+
+PRTCHR:  TLNN    T1,-1                   ;Time stamp chr?
+         CAMGE   LVL,MSGLVL              ;No -- MSGLVL low enough
+         SKIPA                           ;No -- skip OUTCHR
+         OUTCHR  T1                      ;Output the char
+         TXNE    F,F.LOG                 ;Log file open?
+         CAMGE   LVL,LOGLVL              ;Yes -- check LOGLVL
+         POPJ    P,                      ;No, just return
+;        PJRST   LOGOUT                  ;Yes -- output
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Subroutines -- DOTPOP - Perform a TAPOP.
+
+;      Here to perform an internal $TAPOP macro call.
+
+; Calling sequence:
+;        PUSHJ   P,@[BYTE (12) function, (6) 0, (18) %TAPOP
+;                    value]
+;        return here with returned value in T1, abort job if
+;                fatal error occurs in TAPOP.
+
+; Uses AC T1, preserves AC T2,
+;  AC's T1-T4 are preserved by ERTPOP
+
+%TAPOP:  $VARIA  (TAPCAL,TAPREG)         ;Set some stuff up
+         LDB     T2,[POINT 12,0(T1),11]  ;Get the function code
+         MOVEM   T2,TOPBLK+0             ;Store in the block
+         MOVE    T1,1(T1)                ;Get the value
+         TLNE    T1,37                   ;Skip if immediate
+         PUSHJ   P,.LOCAT##              ;Get effective addr
+         MOVEM   T1,TOPBLK+2             ;Store in the block
+         PUSHJ   P,DOTP01                ;Enter the routine
+           PJRST ERTPOP                  ;Error, issue message
+         MOVEM   T1,T1-1+TAPREG          ;Store result in T1
+         POPJ    P,                      ;And return
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  Subroutines -- Handle $SWP Macro
+
+;     Routine  to  swap  the  contents  of  n  pairs  of  memory
+; locations without destroying anything
+
+; Calling sequence:
+
+;        PUSHJ   P,@[%SWP
+;                    addr1               ;Swap with:
+;                    addr2
+;                    addr1
+;                    addr2
+;                       etc.             ;Indefinite number
+;                    0]                  ;To terminate the list
+;        return here, nothing destroyed
+
+; Preserves all AC's except LVL and P
+
+%SWP:    $VARIA  (SWPCAL,SWPREG)         ;Save the regs
+         MOVEI   T3,1(T1)                ;Point to the first addr
+
+%SWP01:  SKIPN   T1,(T3)                 ;Get the first addr
+         POPJ    p,                      ;Zero, done
+         PUSHJ   P,.LOCAT##              ;Get the effective addr
+         MOVE    T4,T1                   ;Put it in T4
+         MOVE    T1,1(T3)                ;Get the second addr
+         PUSHJ   P,.LOCAT##              ;Get the effective addr
+         EXCH    T2,(T1)                 ;Get contents of second
+         EXCH    T2,(T4)                 ;EXCH with first loc
+         EXCH    T2,(T1)                 ;Finish off
+         ADDI    T3,2                    ;Point to next pair
+         JRST    %SWP01                  ;Loop for all pairs
+A SAMPLE PROGRAM
+
+
+
+         SUBTTL  End
+
+         
+         $END    EBUTIL
+
+
+
+
+                                 INDEX
+
+
+
+
+$ABS . . . . . . . . . . . . . . . . 4-1
+$ASC . . . . . . . . . . . . . . . . 6-3
+$BIT . . . . . . . . . . . . . . . . 6-3, 6-11
+$BLK . . . . . . . . . . . . . . . . 6-4, 6-13
+$CHR . . . . . . . . . . . . . . . . 6-4
+$COR . . . . . . . . . . . . . . . . 6-5, 6-13
+$DAT . . . . . . . . . . . . . . . . 6-5
+$DAY . . . . . . . . . . . . . . . . 6-5
+$DEC . . . . . . . . . . . . . . . . 6-5, 6-13
+$DTL . . . . . . . . . . . . . . . . 6-5
+$END . . . . . . . . . . . . . . . . 4-1 to 4-2
+$ENT . . . . . . . . . . . . . . . . 6-5 to 6-6
+$FRAME . . . . . . . . . . . . . . . 5-2, 6-12
+$FUL . . . . . . . . . . . . . . . . 6-6
+$FUN . . . . . . . . . . . . . . . . 6-6
+$HDR . . . . . . . . . . . . . . . . 6-2
+$HEX . . . . . . . . . . . . . . . . 6-6, 6-13
+$HIGH  . . . . . . . . . . . . . . . 4-1 to 4-2
+$IND . . . . . . . . . . . . . . . . 6-9
+$LFT . . . . . . . . . . . . . . . . 6-6
+$LIN . . . . . . . . . . . . . . . . 6-6
+$LIT . . . . . . . . . . . . . . . . 4-1 to 4-2
+$LKP . . . . . . . . . . . . . . . . 6-6
+$LOCAT . . . . . . . . . . . . . . . 5-2, 6-12
+$LOW . . . . . . . . . . . . . . . . 4-1 to 4-2
+$NAM . . . . . . . . . . . . . . . . 6-6
+$NON . . . . . . . . . . . . . . . . 6-3, 6-9
+$NUM . . . . . . . . . . . . . . . . 6-1, 6-7, 6-13
+$NUMBER  . . . . . . . . . . . . . . 6-1, 6-7
+$OCT . . . . . . . . . . . . . . . . 6-7, 6-13
+$ORN . . . . . . . . . . . . . . . . 6-10
+$PARAM . . . . . . . . . . . . . . . 5-2, 6-12
+$PASS  . . . . . . . . . . . . . . . 3-2
+$PFX . . . . . . . . . . . . . . . . 6-7
+$PPN . . . . . . . . . . . . . . . . 6-7, 6-9
+$PRGEND  . . . . . . . . . . . . . . 4-1 to 4-2
+$PRINT . . . . . . . . . . . . . . . 7-1, 8-2, 8-4
+$PRO . . . . . . . . . . . . . . . . 6-7
+$PTH . . . . . . . . . . . . . . . . 6-7
+$R50 . . . . . . . . . . . . . . . . 6-7
+$RELOC . . . . . . . . . . . . . . . 4-1 to 4-2, 6-1, 8-1
+$RET . . . . . . . . . . . . . . . . 6-10
+$RUN . . . . . . . . . . . . . . . . 6-8, 6-13
+$SCN . . . . . . . . . . . . . . . . 6-8
+$SFX . . . . . . . . . . . . . . . . 6-2 to 6-3
+$SIX . . . . . . . . . . . . . . . . 6-8
+$SPC . . . . . . . . . . . . . . . . 6-8
+$SUB . . . . . . . . . . . . . . . . 6-2 to 6-3, 6-8
+$TIM . . . . . . . . . . . . . . . . 6-8
+$TITLE . . . . . . . . . . . . . . . 3-1 to 3-2, 8-1 to 8-2
+$TML . . . . . . . . . . . . . . . . 6-9
+$TRL . . . . . . . . . . . . . . . . 6-2, 6-10
+$TXT . . . . . . . . . . . . . . . . 6-2, 6-8, 6-10
+$TYPE  . . . . . . . . . . . . . . . 6-1 to 6-2, 6-9, 6-12 to 6-15,
+                                     7-1, 8-1, 8-3 to 8-4
+$TYPER . . . . . . . . . . . . . . . 1-1, 5-2, 6-12, 8-1 to 8-2
+$TYPES . . . . . . . . . . . . . . . 6-1, 6-8 to 6-10, 6-12 to 6-15,
+                                     8-1, 8-3 to 8-4
+$TYPES BUG . . . . . . . . . . . . . 6-12, 8-3
+$TYPES COL . . . . . . . . . . . . . 6-13
+$TYPES DMP . . . . . . . . . . . . . 6-13 to 6-14
+$TYPES ERR . . . . . . . . . . . . . 6-13
+$TYPES INI . . . . . . . . . . . . . 6-13 to 6-14, 8-3
+$TYPES JST . . . . . . . . . . . . . 6-8, 6-13
+$TYPES LOC . . . . . . . . . . . . . 6-14
+$TYPES OUT . . . . . . . . . . . . . 6-10, 6-14, 8-4
+$TYPES PRM . . . . . . . . . . . . . 6-14
+$TYPES RST . . . . . . . . . . . . . 6-15
+$TYPES RTN . . . . . . . . . . . . . 6-9, 6-14
+$TYPES SAV . . . . . . . . . . . . . 6-15
+$TYPES SYS . . . . . . . . . . . . . 6-15
+$TYPES TIM . . . . . . . . . . . . . 6-15
+$UNV . . . . . . . . . . . . . . . . 6-9
+$UR1 . . . . . . . . . . . . . . . . 6-9, 6-14
+$UR2 . . . . . . . . . . . . . . . . 6-14
+$UR7 . . . . . . . . . . . . . . . . 6-9, 6-14
+$VAR . . . . . . . . . . . . . . . . 4-1, 4-3
+$VARIA . . . . . . . . . . . . . . . 6-14, 8-1, 8-3
+$VARIABLE  . . . . . . . . . . . . . 5-1 to 5-2
+$VER . . . . . . . . . . . . . . . . 6-9
+$VRSN  . . . . . . . . . . . . . . . 3-1, 6-1 to 6-2, 8-1, 8-3
+$XWD . . . . . . . . . . . . . . . . 6-9, 6-13
+
+.FMSGE . . . . . . . . . . . . . . . 6-10
+.FRAME . . . . . . . . . . . . . . . 5-1 to 5-2
+.ISCAN . . . . . . . . . . . . . . . 8-3
+.JBERR . . . . . . . . . . . . . . . 6-13
+.LOCAT . . . . . . . . . . . . . . . 5-2, 8-3
+.PARAM . . . . . . . . . . . . . . . 5-2, 8-3
+.TYPER . . . . . . . . . . . . . . . 6-9 to 6-10
+.TYPES . . . . . . . . . . . . . . . 6-13
+
+ADJSP  . . . . . . . . . . . . . . . 5-2
+
+Breakpoint . . . . . . . . . . . . . 5-2
+BUG  . . . . . . . . . . . . . . . . 6-12, 8-3
+
+COL  . . . . . . . . . . . . . . . . 6-13
+
+DDT  . . . . . . . . . . . . . . . . 5-2
+DDT breakpoint . . . . . . . . . . . 5-2
+Description  . . . . . . . . . . . . 1-1
+DMP  . . . . . . . . . . . . . . . . 6-13 to 6-14
+
+ERR  . . . . . . . . . . . . . . . . 6-13
+
+Frame  . . . . . . . . . . . . . . . 5-1
+Frame Pointer  . . . . . . . . . . . 5-1
+
+HALT . . . . . . . . . . . . . . . . 8-3
+Hexadecimal  . . . . . . . . . . . . 6-6
+
+INI  . . . . . . . . . . . . . . . . 6-13 to 6-14
+
+JST  . . . . . . . . . . . . . . . . 6-8, 6-13
+
+LIST . . . . . . . . . . . . . . . . 6-12
+LOC  . . . . . . . . . . . . . . . . 6-14
+Local Variables  . . . . . . . . . . 5-1
+
+MACTEN . . . . . . . . . . . . . . . 3-1, 8-2
+
+NOLIST . . . . . . . . . . . . . . . 6-12
+NOSCAN . . . . . . . . . . . . . . . 6-12
+
+Octal. . . . . . . . . . . . . . . . 6-7
+OPEN/LOOKUP/ENTER/RENAME Blocks  . . 6-5
+OUT  . . . . . . . . . . . . . . . . 6-10, 6-14, 8-4
+
+PRINTX . . . . . . . . . . . . . . . 7-1
+PRM  . . . . . . . . . . . . . . . . 6-14
+
+RST  . . . . . . . . . . . . . . . . 6-15
+RTN  . . . . . . . . . . . . . . . . 6-9, 6-14
+
+SAV  . . . . . . . . . . . . . . . . 6-15
+SCAN . . . . . . . . . . . . . . . . 6-8, 6-10, 6-12, 8-1 to 8-3
+STCMAC.UNV . . . . . . . . . . . . . 1-1, 6-12, 8-1
+STCUNV.UNV . . . . . . . . . . . . . 1-1, 6-12, 8-1
+SYS  . . . . . . . . . . . . . . . . 6-15
+
+TF.AND . . . . . . . . . . . . . . . 6-4
+TF.BIT . . . . . . . . . . . . . . . 6-4, 6-11
+TF.FLD . . . . . . . . . . . . . . . 6-4
+TF.LIN . . . . . . . . . . . . . . . 6-4
+TF.MSK . . . . . . . . . . . . . . . 6-4
+TF.OR  . . . . . . . . . . . . . . . 6-4
+TF.SIX . . . . . . . . . . . . . . . 6-4
+TF.USR . . . . . . . . . . . . . . . 6-4
+TIM  . . . . . . . . . . . . . . . . 6-15
+TITLE  . . . . . . . . . . . . . . . 3-1
+TP.PFX . . . . . . . . . . . . . . . 3-1, 6-13, 7-1, 8-3
+TYPER  . . . . . . . . . . . . . . . 6-1, 6-13
+TYPER.REL  . . . . . . . . . . . . . 1-1, 5-2, 6-12, 8-1
+
+UNIVERSAL  . . . . . . . . . . . . . 3-1
+Universal date/time  . . . . . . . . 6-5, 6-9
+USRLG. . . . . . . . . . . . . . . . 2-1
+USRNM. . . . . . . . . . . . . . . . 2-1
+UUOSYM.  . . . . . . . . . . . . . . 8-2
+
+Vertical bar . . . . . . . . . . . . 6-3
+VRSN." . . . . . . . . . . . . . . . 3-1
+
+Xxx.VN . . . . . . . . . . . . . . . 3-1
+XxxEDT . . . . . . . . . . . . . . . 3-1
+XxxMIN . . . . . . . . . . . . . . . 3-1
+XxxVER . . . . . . . . . . . . . . . 3-1
+XxxWHO . . . . . . . . . . . . . . . 3-1
+

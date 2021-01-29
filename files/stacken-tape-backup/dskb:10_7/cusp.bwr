@@ -1,0 +1,376 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+              CUSP Beware File for TOPS-10 Version 7.04
+
+
+
+
+
+                             Revision:  3
+
+                        Date:  August 28, 1988
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1987,  1988.   ALL  RIGHTS
+RESERVED.
+
+
+THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND  COPIED
+ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH  LICENSE AND WITH THE
+INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR  ANY  OTHER
+COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE  SOFTWARE  IS  HEREBY
+TRANSFERRED.
+
+THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE  WITHOUT  NOTICE
+AND  SHOULD  NOT  BE  CONSTRUED  AS  A COMMITMENT BY DIGITAL EQUIPMENT
+CORPORATION.
+
+DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF  ITS
+SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+CUSP Beware File for TOPS-10 Version 7.04                       Page 2
+
+
+                          Table of Contents
+
+
+This file contains the following information concerning  this  release
+of CUSPs with TOPS-10 Version 7.04.
+
+
+     1.0        Introduction
+
+
+     2.0        BOOT
+
+
+     3.0        DECmail
+
+
+     4.0        New GALAXY Version 5.1
+
+
+     5.0        LOGIN/LOGOUT
+
+
+     6.0        Utilities Which Do Not Support Long Symbols
+
+
+     7.0        RSX20F
+
+
+     8.0        ORION (LCP)
+
+
+     9.0        TWICE
+
+
+    10.0        DECnet CUSPs
+CUSP Beware File for TOPS-10 Version 7.04                       Page 3
+
+
+1.0  INTRODUCTION
+
+This beware file contains important information  about  TOPS-10  CUSPs
+that  are  being  shipped with the 7.04 release of TOPS-10.  This file
+should be read before installing any CUSPs mentioned herein.
+
+
+
+2.0  BOOT
+
+BOOT Version 4 must be used to load Version 7.04 of the  monitor.   It
+has  been  made  available  on  Autopatch  tapes  in addition to being
+included on the standard distribution  tapes.   Previous  versions  of
+BOOT  may  not be used to bootstrap monitors later than 7.03.  The new
+BOOT will successfully load a 7.03 or later monitor.   Therefore,  you
+should  ensure  that  a  copy  of the new BOOT has been placed on your
+front end file system.   When  this  is  done,  no  special  drop-back
+procedures will be necessary with respect to BOOT.
+
+
+
+3.0  DECMAIL
+
+MX now works correctly with non-DECnet versions of TOPS-10.  Therefore
+MXL.EXE has not been shipped.
+
+
+
+4.0  NEW GALAXY VERSION 5.1
+
+This version of GALAXY will run under 7.03 and 7.04 with no changes.
+
+
+
+4.1  New Features And Functionality
+
+This new GALAXY replaces the GALAXY Version  5.1  which  was  released
+with  TOPS-10  Version  7.03,  and  provides  some  new  features  and
+enhancements  that  are  intended  to  optimize  the   efficiency   of
+DECsystem-10 site operations and management.  These enhancements are:
+
+     1.  Bug  fixes  in  almost  all  areas  of  GALAXY,  to   correct
+         deficiencies that were reported since the last release.
+
+     2.  NEBULA supports the new Digital DQS protocol as well  as  the
+         old one.
+
+     3.  New GALAXY startup procedure and spooler  operation.   QUASAR
+         now  starts all other GALAXY components that it requires only
+         when they are needed.  At QUASAR startup, PULSAR, ORION,  and
+         CATLOG are started by QUASAR.  QUASAR also waits indefinitely
+         for ACTDAE to start.  The rest  of  the  components  (LPTSPL,
+         BATCON,  FAL,  etc.) are started only when they are needed or
+         as specified in the PRCDAT macro in  QSRMAC.   Some  spoolers
+         will log out after "n" minutes of idleness ("n" can be set in
+CUSP Beware File for TOPS-10 Version 7.04                       Page 4
+
+
+         GALGEN) and others will log out after all streams  have  been
+         shut down.
+
+     4.  Merged MOUNT and QUEUE.  The MOUNT-class  commands  ALLOCATE,
+         DEALLOCATE,  DISMOUNT,  MOUNT, and SHOW QUEUE/SHOW ALLOCATION
+         now invoke the QUEUE program instead of MOUNT.   This  change
+         allows  all the user-level interfacing with GALAXY to be made
+         through a single program.  All MOUNT-class commands  work  as
+         they   did   previously.   In  addition,  SWITCH.INI  is  now
+         supported for MOUNT-class commands.
+
+     5.  New LCP commands.  Two new commands have been added to LCP --
+         SHOW HOST-INITIATED-REQUESTS and SHOW PENDING-REQUESTS.  They
+         show   information   about   the   current   state   of   any
+         host-initiated LAT connect requests that may be outstanding.
+
+     6.  Improvements to CATLOG.  The CATLOG program now maintains the
+         structure,  magtape,  and  DECtape  catalogs  in a single RMS
+         indexed file named CATLOG.SYS.  A conversion program, CATCNV,
+         will read the existing STRLST.SYS, MTALST.SYS, and DTALST.SYS
+         files and create the initial CATLOG.SYS file.
+
+
+
+
+4.2  Installing New GALAXY
+
+In general, the installation of GALAXY has not changed.  However,  two
+steps must be performed before starting the new GALAXY:
+
+     1.  System catalog conversion
+
+     2.  Editing SYS:SYSJOB.INI
+
+
+
+
+4.2.1  System Catalog Conversion - CATLOG  now  uses  a   single   RMS
+indexed  file, CATLOG.SYS, to hold the structure, magtape, and DECtape
+catalogs.  The CATCNV program must be  run  to  read  the  STRLST.SYS,
+MTALST.SYS,  and  DTALST.SYS files and create the CATLOG.SYS file.  To
+run CATCNV:
+
+     1.  Log in as PPN [1,2].
+
+     2.  Run the CATCNV program from the CUSP tape area.  If the  CUSP
+         tape  had  been restored on structure DSKB, for example, then
+         type
+
+                  RUN DSKB:CATCNV[10,7,CATLOG]
+
+     3.  When the program finishes, the CATLOG.SYS file will be  built
+         in SSL:[1,4].
+
+CUSP Beware File for TOPS-10 Version 7.04                       Page 5
+
+
+4.2.2  Editing SYS:SYSJOB.INI - SYSJOB.INI must be changed to  reflect
+the new GALAXY startup procedure.  Because QUASAR uses FRCLIN to start
+its components, it cannot begin to do this until INITIA  has  finished
+reading  SYSJOB.INI.   Therefore  none  of the other GALAXY components
+will appear until FRCLIN becomes free.  Note:  ORION will start NML if
+DECnet is present in the monitor.  A sample SYSJOB.INI is shown below:
+
+         SET DEFAULT ACCOUNT MUMBLE
+         LOG
+         FILDAE
+         LOG
+         ACTDAE
+         LOG
+         DAEMON
+         LOG            ;GALAXY JOBS
+         QUASAR
+         LOG
+         MX
+
+
+
+4.3  GALAXY And TOPS-10 Versions 7.04, 7.03, And 7.02
+
+The new GALAXY requires no modifications to run under 7.03.   However,
+unpredictable  behavior will result if it is run under 7.02.  The 7.02
+fallback code HAS BEEN REMOVED and running this new version of  GALAXY
+under TOPS-10 7.02 is NOT supported.
+
+
+
+4.4  Known Bugs And Deficiencies
+
+     1.  NEBULA will sometimes crash during error recovery.  This will
+         be fixed in a future Autopatch tape.
+
+     2.  Modifying the queue name or destination node of a DQS request
+         in  the queue does not work.  This is a temporary restriction
+         and will be fixed in a future Autopatch tape.
+
+     3.  FAL and IBMSPL, defined as "start command" spoolers,  do  not
+         log  out  after all streams have been shutdown.  This will be
+         corrected on a future Autopatch tape.
+
+     4.  Programs using GALAXY software may report 
+
+              %Use STOPCD macro for stopcode XXX instead of $STOP 
+
+         during assembly.  The $STOP macro will work as before but  it
+         is advised that the sources of your program be changed to use
+         the new STOPCD macro.  The  new  STOPCD  macro  uses  minimal
+         GLXLIB resources.
+
+CUSP Beware File for TOPS-10 Version 7.04                       Page 6
+
+
+5.0  LOGIN/LOGOUT
+
+The traditional LOGOUT functionality is  now  provided  by  the  LOGIN
+CUSP.  Programs which currently do RUN UUOs to LOGOUT will continue to
+work, but these programs should be modified to run LOGIN.  Until  such
+modifications  can be made, the 7.04 version of LOGIN can be copied to
+LOGOUT.EXE.  In addition, the old LOGOUT CUSP is being distributed  on
+the Customer-Supported Tools tape with the name GLXLGO.MAC.
+
+The 7.04 version of LOGIN will run successfully under  7.03  monitors,
+eliminating the need for any special drop-back procedures.
+
+
+
+6.0  UTILITIES WHICH DO NOT SUPPORT LONG SYMBOLS
+
+The overlay handler, GLOB, and MAKLIB  do  not  support  long-id  .REL
+blocks  generated  by  FORTRAN.   There  are  no plans to modify these
+programs to provide such support.
+
+MACRO does not support long symbol names.   Therefore,  the  names  of
+MACRO  subroutines called from a FORTRAN program cannot be longer than
+six characters.
+
+
+
+7.0  RSX20F
+
+The CUSP tape contains the TOPS-10 Version 7.04 release of the  RSX20F
+front-end  software  for  both  1090  (DECtape) and 1091/1095 (Floppy)
+based systems.  This software, comprising Version VA16-00 (for 1090's)
+and  VE16-00  (for  1091/1095's)  includes  the  following  fixes  and
+enhancements:
+
+     1.  All known PCOs to RSX20F on TOPS-20  have  been  applied  and
+         tested on TOPS-10.
+
+     2.  A problem with reading and processing the last card in a deck
+         with CD20 card readers has been fixed.
+
+     3.  A problem where in some  cases  the  name  of  the  microcode
+         recorded  in  KLI's  configuration  file became corrupted has
+         been fixed.
+
+     4.  The serial numbers of all disk drives visible  to  the  front
+         end's  RH11  disk controller are now passed to the Monitor at
+         system startup.
+
+
+In addition, this version of RSX20F comes with a new, simplified,  and
+automated  installation procedure.  This new procedure, called RSXINS,
+allows you to install RSX20F on your system in five minutes  or  less.
+To support RSXINS, two tools are included:  F11 and FELOAD.
+
+F11 is a TOPS-10 program that allows a privileged user  to  manipulate
+CUSP Beware File for TOPS-10 Version 7.04                       Page 7
+
+
+the  FE.SYS  file on a disk pack.  It provides commands that allow the
+reading and writing of files in the area as well as the  creation  and
+deletion  of  the  FE.SYS  file  itself.  In addition, F11 can write a
+binary PDP-11 formatted file into the boot blocks of a disk.   All  of
+these features are used by the RSXINS procedure.
+
+FELOAD is a PDP-11 program that serves as the  new  primary  bootstrap
+for  RSX20F.   It  is written into the boot blocks by F11 as a part of
+the RSXINS installation procedure.
+
+The RSX20F files reside in a number of  subdirectories,  organized  as
+follows:  
+
+          Directory              Contents          _________              ________
+
+          [10,7,RSX20F]          RSXINS procedure and documentation
+          [10,7,RSX20F,DECTAP]   DECtape (1090) RSX20F distribution
+          [10,7,RSX20F,FLOPPY]   Floppy (1091/1095) RSX20F 
+                                 distribution
+          [10,7,F11]             F11 installation tool
+          [10,7,FELOAD]          FELOAD PDP-11 bootstrap program
+
+It is imperative that the subdirectory structure be maintained, as the
+FLOPPY and DECTAP directories contain identically-named files.
+
+You may wish to print out and read the files SIGC8.MEM  and  SIGXD.MEM
+in  the  RSX20F  subdirectory.   They  contain  the  chapters from the
+forthcoming TOPS-10 Software Installation Guide that describe both the            _______ ________ ____________ _____
+use  of the RSXINS procedure and also the method for creating bootable
+front-end media for the new software.
+
+
+
+8.0  ORION (LCP)
+
+Users with local modifications must rebuild with the 7.04 ORION (LCP).
+ORION  will  give  errors  with  the  7.04  monitor  if the 7.04 ORION
+software is not used.
+
+
+
+9.0  TWICE
+
+The TWICE functionality is now an integral part of  the  monitor,  and
+the TWICE program is now obsolete.  Please refer to the monitor beware
+file for more information.
+
+
+
+10.0  DECNET CUSPS
+
+The following DECnet CUSPs have been moved from the DECnet tape to the
+CUSP tape:  CTHNRT, FAL, NFT, and NIPGEN.

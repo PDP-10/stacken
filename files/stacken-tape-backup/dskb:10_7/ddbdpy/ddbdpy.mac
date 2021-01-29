@@ -1,0 +1,4243 @@
+	SUBTTL	Initialization  Rex W. Shadrick  /DVB/DRB/RWS/TW/JMS  21-Dec-80
+
+
+; This routine is set up to scan 702 or 703 disk DDB chains and
+; output some useful information.  This routine is set up to
+; drive an ASR33, Mini-Bee, Hazeltine 2000, Hazeltine Modular-One,
+; LSI ADM-1, LSI ADM-3, DEC VT05, DEC VT50, DEC VT52, DEC VT61 or DEC VT100
+; terminal.
+
+;Search some universal files
+
+	SEARCH	MACTEN		;Get some macros
+	SEARCH	UUOSYM		;Get some nice symbols			[274]
+
+
+;Make the listing look nice
+
+	SALL			;Suppress macro expansion
+	.DIREC	FLBLST		;Suppress multi-line binary		[277]
+
+
+;Define the version number
+
+DDBVER==6	;Version 6 of DDBDPY					[274]
+DDBMIN==0	;Minor version number					[274]
+DDBWHO==1	;Last editor						[274]
+DDBEDT==302	;Last edit number					[274]
+
+	LOC	137
+
+.JBVER:	VRSN.	DDB		;Store the version number		[274]
+
+	TWOSEG			;Setup two segment relocation		[274]
+	RELOC
+	SUBTTL	Table of Contents
+
+
+;		     Table of Contents for DDBDPY
+;
+;				  Section		      Page
+;
+;
+;    1. History
+;        1.1    Revisions  . . . . . . . . . . . . . . . . . .   4
+;        1.2    Suggestions  . . . . . . . . . . . . . . . . .  10
+;    2. Definitions
+;        2.1    Conditional Values . . . . . . . . . . . . . .  11
+;        2.2    Constant Values  . . . . . . . . . . . . . . .  12
+;        2.3    Macros
+;            2.3.1    .MNVAL . . . . . . . . . . . . . . . . .  16
+;            2.3.2    .TITLE, .DSPCL and .DSPTB  . . . . . . .  20
+;            2.3.3    .HLPTX . . . . . . . . . . . . . . . . .  22
+;            2.3.4    .ASPAG . . . . . . . . . . . . . . . . .  23
+;    3. Program Initalization  . . . . . . . . . . . . . . . .  24
+;    4. The DDB Scanning Loop  . . . . . . . . . . . . . . . .  31
+;    5. Make the Header Line and Output the Buffer . . . . . .  37
+;    6. Command Scanner
+;        6.1    Read the Command Character . . . . . . . . . .  40
+;        6.2    The Command Dispatch Table . . . . . . . . . .  41
+;        6.3    The Command Processors . . . . . . . . . . . .  42
+;    7. Input Routines
+;        7.1    SCAN - Input a File Specification  . . . . . .  48
+;        7.2    OCTIN/DECIN - Input a Number . . . . . . . . .  52
+;        7.3    WLDOCT - Input a Wild Octal Number . . . . . .  53
+;        7.4    WLDSIX - Input Wild SIXBIT . . . . . . . . . .  54
+;        7.5    CLRLIN - Clear to End of Line  . . . . . . . .  55
+;        7.6    TSTEOL - Test of End-of-Line Character . . . .  56
+;    8. Output Routines
+;        8.1    PPNOUT/PPNJST - Output a PPN . . . . . . . . .  57
+;        8.2    OCTOUT/DECOUT/OCTJST/DECJST  . . . . . . . . .  58
+;        8.3    CHROUT - Output a Character  . . . . . . . . .  59
+;        8.4    PRVOUT - Output a Protection . . . . . . . . .  60
+;        8.5    JUST - Justify the Output  . . . . . . . . . .  61
+;        8.6    ASCOUT - Output an ASCIZ String  . . . . . . .  62
+;        8.7    SIXOUT - Output a SIXBIT Word  . . . . . . . .  63
+;        8.8    TTLLIN - Set Up for the Title Line . . . . . .  64
+;        8.9    BEGLIN - Set up for a Display Line . . . . . .  65
+;        8.10   ENDLIN - Finish off a Display Line . . . . . .  66
+;        8.11   COMOUT - Output a Comma  . . . . . . . . . . .  67
+;        8.12   CLNOUT - Output a Colon  . . . . . . . . . . .  68
+;        8.13   LBROUT, RBROUT - Output a Bracket  . . . . . .  69
+;        8.14   SLHOUT - Output a Slash  . . . . . . . . . . .  70
+;        8.15   SPAOUT - Output a Space  . . . . . . . . . . .  71
+;    9. Output Routines - STROUT - Output a Structure Name and  72
+	SUBTTL	Table of Contents (page 2)
+
+;		     Table of Contents for DDBDPY
+;
+;				  Section		      Page
+;
+;
+;   10. Output Routines
+;       10.1    SCALE - Scale a Decimal Number . . . . . . . .  73
+;       10.2    TIMOUT - Output a Time . . . . . . . . . . . .  74
+;       10.3    TWOOUT - Output Atleast Two Digits . . . . . .  75
+;       10.4    SIXJST - Output a Justified SIXBIT Word  . . .  76
+;       10.5    JOBOUT - Output Some Job Status  . . . . . . .  77
+;       10.6    CMDOUT - Output the Command String . . . . . .  90
+;       10.7    SPCOUT - Output a File Specification . . . . .  92
+;       10.8    WPPOUT - Output a Wild PPN . . . . . . . . . .  93
+;       10.9    WOCOUT - Output a wild octal number  . . . . .  94
+;   11. Display Initalization
+;       11.1    TRMDSP - Get the Default Terminal Type . . . .  95
+;       11.2    SETDSP - Set up Display Size . . . . . . . . .  96
+;   12. Useful Routines
+;       12.1    HGHSIZ/LOWSIZ - Get a Segment Size . . . . . .  97
+;       12.2    ADJTIM - Convert UDT to Jiffies  . . . . . . .  98
+;       12.3    PAGADJ - Page Adjustment . . . . . . . . . . .  99
+;       12.4    TSTABR - Test for an Abbreviation  . . . . . . 100
+;       12.5    RSTTRM - Restore Terminal Characteristics  . . 101
+;   13. DDB Scanning Routines
+;       13.1    FNDSTR - Find a Structure Name . . . . . . . . 102
+;       13.2    GETLDB - Map a LDB Page into Core  . . . . . . 103
+;       13.3    MAPSTR - Map a STR given its Pointer . . . . . 104
+;       13.4    GETUNI - Get a UNI from the DDB Pointer  . . . 105
+;       13.5    GETBLK - Map a Data Structure  . . . . . . . . 106
+;       13.6    FUNWRD - Get a Word from Funny Space . . . . . 109
+;       13.7    MAPFUN - Map a Job's Funny Space . . . . . . . 110
+;       13.8    MAPUPT - Map a Job's UPT . . . . . . . . . . . 111
+;   14. DDB Test Routines
+;       14.1    TSTPRG - Test for Program  . . . . . . . . . . 112
+;       14.2    TSTNOT - Test for NOT Logged-In  . . . . . . . 113
+;       14.3    TSTLOG - Test for Logged-In  . . . . . . . . . 114
+;       14.4    TSTFIL - Test for a File Specification . . . . 115
+;       14.5    TSTJOB - Test for a Job  . . . . . . . . . . . 116
+;   15. Display Routines
+;       15.1    TRMCLR - Clear the Screen  . . . . . . . . . . 117
+;       15.2    TRMEOS - Clear to End of Screen  . . . . . . . 118
+;       15.3    TRMEOL - Clear to End of Line  . . . . . . . . 119
+;       15.4    TRMHOM - Home the Screen . . . . . . . . . . . 120
+;   16. The Error Message Routines . . . . . . . . . . . . . . 121
+;   17. Data/Storage
+;       17.1    High Segment . . . . . . . . . . . . . . . . . 122
+;       17.2    Low Segment  . . . . . . . . . . . . . . . . . 127
+;   18. The End  . . . . . . . . . . . . . . . . . . . . . . . 134
+	SUBTTL	History -- Revisions
+
+
+; Edit	  Date			Comment
+;
+;  ***	27-May-75  Change the major version number from 4 to 5.
+;
+;  134	27-May-75  Add support for the Hazeltine-2000, DEC VT05B, LSI
+;		   ADM-1 and DEC VT50 terminals.
+;
+;  135	28-May-75  Replace the macro '.TTYDP' with the file
+;		   'SYS:DDBDPY.INI'.
+;
+;  136  29-May-75  Add the option to change the display back to the
+;		   default display for this terminal.
+;
+;  137  29-May-75  List spooled device DDBs.
+;
+;  140  04-Jun-75  Change the title line and remove the "I" command.
+;
+;  141  04-Jun-75  Add support for the 602 monitor.
+;
+;  142	04-Jun-75  Change the output under the 'OTH' column.
+;
+;  143  04-Jun-75  More of edit 141.
+;
+;  144	06-Jun-75  Improve the Control-C (^C) intercept routine and
+;		   remove the "L" and "T" commands.
+;
+;  145	06-Jun-75  More of edit 135.
+;
+;  146	19-Sep-75  Display the entered spooled name (602), allow "J"
+;		   command if not [1,2] (but only look at the job if
+;		   logged in under the same programmer number) and
+;		   change the "P" command to the "L" command.
+;
+;  147	20-Oct-75  Add the "K" command which kills the display and
+;		   LOGOUTs the job.
+;
+;  150  23-Oct-75  Add a debugging aid.
+;
+;  151  04-Nov-75  Add support to display the entire path of the file
+;		   being displayed and add "P" command to display this
+;		   information.
+;
+;  152  05-Nov-75  Rewrite subroutines 'SCAN' and 'TSTFIL'.
+;
+;  153  07-Nov-75  Add some small goodies and fix some minor bugs.
+;
+;  154  07-Nov-75  Rewrite subroutine 'FNDSTR' and display the mount
+;		   count.
+;
+;  155  10-Nov-75  Display the current command string being processed.
+; Edit	  Date			Comment
+;
+;  156  10-Nov-75  Allow a space between commands.
+;
+;  157  18-Nov-75  Make the "K" command restore the line characteristics
+;		   before the RUN UUO is executed.
+;
+;  160  05-Dec-75  Change the "J" command to display more information
+;		   about the job.
+;
+;  161  10-Dec-75  More of edit 160.
+;
+;  162  10-Dec-75  Remove 506 support (too many questionable symbols)
+;		   and don't allow subjobs to run DDBDPY.
+;
+;  163  12-Dec-75  Add DEC VT52 support and don't allow the title
+;		   buffer to overflow.
+;
+;  164  18-Dec-75  Replace the allocated length by the unit status
+;		   (i.e. idle, seek, seek wait, position, ...) and
+;		   the LOOKUP count.
+;
+;  165  23-Dec-75  Reenable the old "T" Command  (complement the output
+;		   of the title line), get the jiffies per second from
+;		   the monitor and do one update and pause on an ESCAPE.
+;
+;  166  21-Jan-76  More of edit 165 - timout was outputting the parts
+;		   of a second incorrectly.
+;
+;  167  25-Jan-76  Correct the core size of a job on a VM monitor.
+;
+;  170  19-Mar-76  Put the allocated length back and fix the six
+;		   digit PPN problem.
+;
+;  171  24-Mar-76  Under the 'OTH' column output an 'I' for input wait
+;		   or an 'O' for output wait and clear the terminal
+;		   input buffer on a 'K' command.
+;
+;  172  26-Mar-76  Fix the Hazeltine clear to the end-of-screen routine.
+;
+;  173  05-Apr-76  Change the sleep time after 10 scans.
+;
+;  174  21-Apr-76  More of edit 173.
+;
+;  175  28-Apr-76  Allow lower case commands.
+;
+;  176  04-May-76  Add support for the Hazeltine "Modular One".
+;
+;  177  17-May-76  Search MACTEN and UUOSYM instead of C.
+;
+;  200  28-Jun-76  Allow a tab as a break character between commands.
+;
+;  201  28-Jun-76  Add the rescan code.
+; Edit	  Date			Comment
+;
+;  202  11-Aug-76  Do a little more code clean up.
+;
+;  203  01-Sep-76  Allow only privileged users to run DDBDPY and more
+;		   of edit 201.
+;
+;  204  15-Oct-76  Add support for the 603 monitor, add support for
+;		   the LSI ADM-3 and DEC VT61 terminals, and improve
+;		   edit 173.
+;
+;  205  26-Oct-76  Improve the DDB to output code.
+;
+;  206  30-Nov-76  Change the default PPN specification for the
+;		   F, J and L commands:
+;			[OPR]	->  [*,*]
+;		      [non-OPR] -> [*,PRG]
+;
+;  207  22-Feb-77  Don't clear the terminal input buffer on a "^Z"
+;		   or "^C" and clear to the end of the command line
+;		   on "K" command.
+;
+;  210  22-Feb-77  More of edit 204 (603 monitor support).
+;
+;  211  23-Feb-77  Change the file specification for the 'INI' file,
+;		   'SYS:DDBDPY.INI' -> 'SYS:DISPLA.INI'.
+;
+;  212  10-Mar-77  Allow DDBDPY to run as a subjob, but not a batch
+;		   or MIC subjob.
+;
+;  213  14-Mar-77  Add a little 2741 support, allow "<" and ">" around
+;		   the PPN specification.
+;
+;  214  06-May-77  Output an 'S' If the structure is mounted single
+;		   access, in the header, and change 'RD' to 'RED' and
+;		   'WT' to 'WRT', in the job display.
+;
+;  215  06-May-77  Put in a check for a null structure name.
+;
+;  216  13-May-77  Add a third line to the job display.
+;
+;  217  18-May-77  Change LSI and LSI3 to ADM1 and ADM3 respectively,
+;		   to be consistent with TECO %124.
+;
+;  220  19-May-77  Fix a bug in the path mode output.
+;
+;  221  20-May-77  Output the user's active search list on a 'J' command.
+;
+;  222  20-May-77  Add support for the node/line convension in
+;		   'DISPLA.INI'.
+; Edit	  Date			Comment
+;
+;  223  24-May-77  On the job display output event wait codes:
+;			TK - (1) Tape kontroller wait
+;			TR - (2) Tape rewind wait
+;			LP - (3) Label processing wait
+;			NW - (4) Network wait
+;			IP - (5) IPCF system process receive wait
+;			FI - (6) Front end device input wait
+;			FO - (7) Front end device output wait
+;			D6 - (10) DAS60 device wait
+;
+;  224  26-May-77  On the job display output the smaller of the two,
+;		   free on the structure or LOGIN quota.
+;
+;  225  02-Jun-77  On start-up always reset the sleep time after 10
+;		   scans.
+;
+;  226  02-Jul-77  Search STCMAC to get the $VRSN and $TITLE macros.
+;
+;  227  03-Jul-77  Add the "N" command, display jobs not logged-in
+;		   under this PPN, the default PPN is the user's.
+;
+;  230  18-Jul-77  Add support for super-mode I/O.
+;
+;  231  18-Jul-77  Add support for ERSATZ Devices:
+;		      SYS:*.EXE  -> ALL:*.EXE[1,4]
+;		      SYSA:*.SHR -> DSKA:*.SHR[1,4]
+;
+;  232  19-Jul-77  Allow users with SPY privileges to have Godliness.
+;
+;  233  19-Jul-77  Change the "P" command to "E" command for 'Extended'
+;		   status and output the logical name, protection code
+;		   and I/O mode.
+;
+;  234  20-Jul-77  Add a new "P" command which output only DDBDPY that
+;		   from jobs running a program.
+;
+;  235  21-Jul-77  Remove some questionable conditional code.
+;
+;  236  21-Jul-77  Add support for 'ALL' in 'SYS:DISPLA.INI':
+;		     ALL_OPR:VT50 -> On all nodes, OPR is a VT50
+;		     XXX_ALL:VT52 -> On node XXX all terminals are
+;					VT52s
+;		     ALL_ALL:VT05 -> On all nodes all terminals
+;					are VT05s
+;
+;  237  09-Mar-78  Fix a bug in the display of the command buffer, "A"
+;		   was being output as "J0".
+;
+;  240  09-Mar-78  Make ADM3s work if "TTY NO BLANK" is enabled.
+;
+;  241  09-Mar-78  Search STCUNV instead of STCMAC.
+; Edit	  Date			Comment
+;
+;  242  09-Mar-78  Output the high segment name if it is different than
+;		   the low segment name.
+;
+;  243  19-May-78  Add support for the Soroc IQ-120 terminal.
+;
+;  244  08-Sep-78  Make DDBDPY and TECO more compatiable in the use of
+;		   terminal types in DISPLA.INI.
+;
+;  245  28-Sep-78  Output the low segment size correctly for non-sharable
+;		   VM systems.
+;
+;  246  26-Oct-78  SL and HB are swapped in the job output.
+;
+;  ***  26-Oct-78  Change the major version number from 5 to 6
+;
+;  247  17-Apr-80  Add support for monitor version 700.
+;
+;  250  02-May-80  Do lots of code clean up.
+;
+;  251  07-May-80  Fix two bugs:
+;		     1) LDRREM was defined wrong.
+;		     2) When the terminal type (via TRMOP.) was
+;			known, the input routine (INCHR) was
+;			trashed.
+;
+;  252  07-May-80  Add support for the Datamedia 1521 (DM1521).
+;
+;  253  12-May-80  Put FTKL around some DDB definitions so that it will work
+;		   on the 2020.  JMS @ CSM
+;
+;  254  12-May-80  Get the value of .PDJSL right for KL 701.  JMS @ CSM
+;
+;  255	09-Sep-80  Add feature-test ITTYPE.  If non-zero, use ITTYPE.REL to
+;		   do the TRMOP. and/or read SYS:DISPLA.INI to get the terminal
+;		   type.  ITTYPE also allows for aliases in DISPLA.INI, such
+;		   as CRT=ADM3.  JMS @ CSM
+;
+;  256	16-Sep-80  ADP users running on CSM's 2020 need to be able to look at
+;		   all DDBs without knowing the magic word.  Pretend that
+;		   everybody running on that CPU is [1,2] by testing the CPU
+;		   serial number for being 4275.  JMS @ CSM
+;
+;  257	16-Oct-80  Change default monitor version to 701.  Change
+;		   IFE MONVER-603 to IFL MONVER-700 etc.
+;
+;  260  27-Oct-80  Can't get LDB information for a detached job, so
+;		   don't output ICC/OCC/CMD information.
+; Edit	  Date			Comment
+;
+;  261  15-Dec-80  If 7.01, make the DDBDPY run in 2 segments.
+;
+;  262  15-Dec-80  Make the ERSATZ device stuff work with 7.01.
+;
+;  263	 3-Feb-81  If a PAGE. UUO fails, reset the PDL and go back to DDBMAN.
+;
+;  264   5-Aug-81  Insert code for VT100 terminal.
+;
+;  265	24-Nov-81  Destroy all SPY pages so that RUN uuo to LOGOUT won't get
+;		   "?1P of core needed".
+;
+;  266	14-May-85  Update for 7.02/7.03 and KL paging.
+;
+;  267	27-May-85  Convert more constants to symbols, rework the terminal 
+;		   display stuff.
+;
+;  270	 3-Jun-85  Output the number of funny pages as part of the job's core
+;		   size.
+;
+;  271	 3-Jun-85  Clean up the code that outputs structure names and free
+;		   counts.
+;
+;  272	 3-Jun-85  Type the job's path after the character counts in th job
+;		   display.
+;
+;  273	 8-Jun-85  Rework the display code and add lots of terminal name
+;		   aliases.
+;
+;  274	10-Jun-85  Add hacks to allow this to be assembled with brain damaged
+;		   MACRO.  This implies the removal of SYSUNV features.
+;
+;  275	12-Jun-85  Add the "O" command which will enable the display of swapped
+;		   out DDBs.  Since this is expensive and requires the use of
+;		   JOBPEK, require its use to those people who have poke privs
+;		   or are logged in under [1,2]
+;
+;  276	17-Jun-85  Output the job's LIB: on a fourth job status line if one
+;		   exists.
+;
+;  277  12-Sep-85  Do a little minor clean up here and there.
+;
+;  300  12-Sep-85  Add the "C" command, which will cycle through all the
+;                  displayable DDBs.
+;
+;  301  15-Nov-85  Output the job's current context number as part of the
+;		   second status line of the job display and as part of the
+;		   extended file display.
+;
+;  302  15-Nov-85  Add .IOAS8 (eight bit ASCII mode) to the I/O modes table
+;		   (MODTAB), even though it isn't possible to anything we
+;		   type about.
+;
+;		** End of the Revision History **
+	SUBTTL	History -- Suggestions
+
+
+;    Date			Suggestion
+;
+;  27-May-75  Output the DDBs in order of oldest to newest.
+;
+;  10-Dec-75  Add split screen support (the upper half is for DDBDPY
+;	      and the lower half is for an interactive subjob).
+;
+;  28-Apr-76  On VT05, VT50, VT52 and VT61 terminals clear to the E-O-L
+;	      instead of clearing the line then typing the data.
+;
+;  22-Feb-77  Add support to scan 'SWITCH.INI'.
+;
+;  19-Jul-77  Output DTA (file name and next record) and MTA (next
+;	      file and record).
+;
+;  12-May-80  Output spooling name (.RBSPL) for the extended path.
+;
+;  12-May-80  Output .RBSPL in the OTH column on normal display, so we can
+;	      tell which file the spooler is working on.  (QXJ54Z.LPT=FOR06)
+;
+;  12-May-80  Ignore spaces between the comand and the argument (eg "P LPTSPL")
+;
+;  16-Oct-80  Exit on Control-C like SYSDPY does, by erasing only the bottom
+;	      2 lines.  This leaves most of the display intact.
+;
+;		** End of the Suggestion History **
+	SUBTTL	Definitions -- Conditional Values
+
+
+;Define some conditional assembly values
+
+	ND	FTMOUNT,-1	;Non-zero to display the mount count
+	ND	FTSLEEP,-1	;Non-zero to adjust the sleep time
+	ND	FTDEBUG,0	;Non-zero to allow a debugging aid
+	ND	FTPRIV,0	;Non-zero to check privileges to run ddbdpy
+	ND	FTPROG,-1	;Non-zero to make programmer number match
+	ND	FTPROJ,0	;Non-zero to make project number match
+	ND	FTKL,-1		;Non-zero for KL DDB definitions	[253]
+
+
+;Define some conditional values
+
+	ND	MONVER,703	;The version of the monitor DDBDPY will
+				; run under
+	ND	PDLSIZ,^D20	;The default size of the push down list
+	ND	PATSIZ,^D50	;The default patch size when debugging
+	ND	PASWRD,'HOST  '	;The password for the 'G' command
+	ND	MAXSTR,^D4	;The default number of structures to be
+				; typed on the title line
+	ND	SLPSCN,^D10	;The sleep time counter
+	ND	SLPDEF,^D5000	;The default hibernate time between scans
+	ND	SLPMIN,^D30000	;The minimum sleep time without adjustment
+	ND	SLPADJ,^D30000	;The new sleep time after adjustment
+	ND	SLPPTY,^D60000	;The sleep time on a PTY
+	ND	MAXLIN,^D26	;The default maximum number of lines
+	ND	WHTSIZ,^D11	;The default command string buffer
+	ND	LINLEN,^D75	;Default line length (including <CR><LF><0>) [273]
+	ND	LINSIZ,^D15	;The default line size (5 char per word)
+	ND	BUFSIZ,<LINSIZ*<MAXLIN-1>>  ;The size the line buffer
+	ND	FSTPAG,210	;First randomly mappable page		[266]
+	ND	TTLLNS,3	;Number of lines in the title		[267]
+	ND	DDBMAX,46	;Maximum number of DDB words we want	[275]
+	SUBTTL	Definitions -- Constant Values
+
+
+;Define the accumulators
+
+	F=0	;Flags
+	T1=1	;Temporary AC
+	T2=2	;Temporary AC
+	T3=3	;Temporary AC
+	T4=4	;Temporary AC
+	T5=5	;Temporary AC
+	P1=6	;Holds the current display type		(Permanent AC)
+	P2=7	;Holds the link to the current DDB	(Permanent AC)
+	P3=10	;Holds the link to the current ACC	(Permanent AC)
+		; or the link to the current PDB	(Job display)
+	P4=11	;Holds the link to the current AKB	(Permanent AC)
+		; or the link to the current NMB
+		; or the link to the current STR
+		; or the job status			(Job display)
+	P5=12	;Holds the link to the current PPB	(Permanent AC)
+		; or the job or segment number		(Job display)
+	C=13	;Holds a character
+	CC=14	;Holds the column count
+	LC=15	;Holds the line count
+	BP=16	;Holds a byte pointer
+	P=17	;Holds the push down pointer
+
+
+;Define an I/O channel to the TTY and to the disk
+
+	SYS==16		;I/O channel to SYS
+	TTY==17		;I/O channel to the TTY
+;Define some permanent flags for 'F' (left half)
+
+	F.XTN==1B0	;If on, display the entire path (sign bit)
+	F.HLP==1B1	;If on, give a help text
+	F.INI==1B2	;If on, the program has be initalized
+	F.WLD==1B3	;If on, check for a event to occur
+	F.GOD==1B4	;If on, the job is privileged
+	F.CLR==1B5	;If on, clear the screen before this scan
+	F.DDT==1B6	;If on, DDT is loaded and don't do some goodies
+	F.WHT==1B7	;If on, display the current command being processed
+	F.JOB==1B8	;If on, using job display mode
+	F.PAS==1B9	;If on, in pass one of the job display
+	F.POK==1B10	;If on, we're allowed to do JOBPEKs		[275]
+	F.PEK==1B11	;If on, we are doing JOBPEKs			[275]
+	F.TTL==1B12	;If on, don't output the title line
+	F.ESC==1B13	;If on, do an update and then pause
+	F.RES==1B14	;If on, we are in rescan mode
+	F.CYC==1B15	;If on, cycling through displayable DDBs	[300]
+
+
+;Define some temporary flags for 'F' (right half)
+
+	F.NOD==1B18	;If on, node name seen
+	F.DEV==1B19	;If on, device name seen
+	F.FIL==1b20	;If on, file name seen
+	F.EXT==1B21	;If on, extension was seen
+	F.PPN==1B22	;If on, PPN was seen
+	F.AST==1B23	;If on, astrisk was seen
+	F.DIG==1B24	;If on, a digit has been output
+	F.NEG==1B25	;If on, a negative sign must be output
+	F.LOW==1B26	;If on, get get the low segment size
+	F.DCT==1B27	;If on, don't clear the terminal input buffer
+	F.SUP==1B29	;If on, the file is for super-mode I/O
+	F.SCN==1B30	;The path's /SCAN switch			[272]
+	F.TMP==1B31	;Random temporary bit				[276]
+;Define some status bits about the job or segment
+
+	JS.RUN==1B0	;The job is runnable
+	JS.CMW==1B1	;The job is in a command wait
+	JS.JNA==1B3	;The job number is assigned
+	JS.LOK==1B5	;The job is locked in core
+	JS.SWP==1B7	;The job is swapped
+	JS.NSH==1B8	;The job can't be shuffled
+	JS.CLK==1B18	;The job has a clock request
+	JS.JDC==1B20	;The job is in a DAEMON wait
+	JS.DCE==1B22	;The job is waiting for a device to continue
+	JS.SFL==1B33	;The job will pause on a disk full condition
+
+	SS.SNA==1B0	;The segment number is assigned
+	SS.SPY==1B0	;The segment is a SPY segment (GETSGN)		[266]
+	SS.SHR==1B1	;The high segment is sharable
+
+
+;Define some customer privilege bits
+
+	JP.DPY==1B34	;The user has privileges to run DDBDPY
+	JP.PAS==1B35	;The user can't change her password
+
+; Define some other random monitor constants:
+
+	SECMAP==540	;Section 0 map pointer offset in EPT/UPT	[266]
+;Define some terminal flags (stored in the LH of P1)
+
+TM%DUM==1B0		;The terminal is dumb (TTY, ADM3)		[273]
+TM%EOL==1B1		;Clear to end of line works			[273]
+TM%FIL==1B2		;Terminal needs to be filled			[273]
+TM%CLR==1B3		;Terminal can clear screen (instead of home, ers) [273]
+TM%LFS==1B4		;Spew lots of <CR><LF>s to clear to EOS		[273]
+TM%PFX==37B13		;The prefix index				[273]
+TM%LEN==177B20		;The terminal's length (in lines)		[273]
+TM%WID==777B29		;The terminal's width (in characters)		[273]
+TM%CLS==77B35		;The terminal's class				[273]
+
+; Define some terminal class flags:
+
+TTYFLG==TM%DUM!TM%CLR	;Flags for TTY					[273]
+ADMFLG==TM%EOL!TM%FIL	;ADM-1,2 can clear to end of line		[273]
+AD3FLG==TM%DUM!TM%LFS	;ADM3s need special attention			[273]
+DM1FLG==TM%CLR!TM%EOL	;Datamedia 1521					[273]
+IQ1FLG==ADMFLG!TM%CLR	;And an IQ-120 can clear the screen		[273]
+HZLFLG==TM%FIL!TM%CLR	;Hazeltines need fill				[273]
+VTXFLG==TM%EOL		;VT-5x, VT-61, VT-100 and ANSI			[273]
+MBEFLG==VTXFLG!TM%CLR&<^-TM%EOL> ;Minibee can't clear to end of line	[273]
+V05FLG==TM%EOL!TM%FIL	;VT-05B flags					[273]
+
+;Other terminal miscellany
+
+%HZ1HP==^D68		;Column to clear to on a Hazeltine terminal	[273]
+	SUBTTL	Definitions -- Macros -- .MNVAL
+
+
+IFN <<MONVER-702>&<MONVER-703>>,<
+	PRINTX	?DDBNSM Not a monitor supported by DDBDPY
+	PASS2
+	END >
+
+
+DEFINE	.MNVAL ($SYM,$702,$703),<
+
+	IFE <MONVER-702>,<
+		$SYM==$702 >
+
+	IFE <MONVER-703>,<
+		$SYM==$703 >>
+
+
+NS==-1		;** No such symbol in this monitor **
+; Define some values used by DDBDPY in the DDB (device data block)
+
+	.MNVAL	DEVNAM,0,0 	;The device name in SIXBIT
+	.MNVAL	DEVCHR,1,1 	;The device characteristics (job number bits 0-6)
+	.MNVAL	DEVIOS,2,2 	;The input/output status
+		.MNVAL	IOSUPR,1B2,1B2	;Super-mode I/O
+		.MNVAL	IOSIO,20,20	;Output wait
+		.MNVAL	IOSIOW,1,1 	;Input/output wait
+	.MNVAL	DEVSER,3,3 	;The link to the next DDB (LH)
+	.MNVAL	DEVMOD,4,4 	;The device characteristics (char.,,modes)
+	.MNVAL	DEVLOG,5,5	;The logical name for the device
+	.MNVAL	DEVSPL,12,12	;The spool bit for this DDB
+	.MNVAL	DEVPAL,13,13	;The pre-allocation word
+		.MNVAL	DEPPAL,20,20	;Pre-allocated (bit 31 603)
+	.MNVAL	DEVFIL,22,23	;The file name in SIXBIT
+	.MNVAL	DEVEXT,23,24	;The file extension in SIXBIT (LH)
+IFN FTKL,<	;There is a FTKL&FTMP conditional in COMMOD at DEVPPN+1.[253]
+	.MNVAL	DEVREL,33,33	;The relative block in the file to read or write
+	.MNVAL	DEVPRI,45,45	;The disk priority (bits 27-29)
+>  ;End of IFN FTKL							[253]
+
+IFE FTKL,<	;Definition for KI and KS				[253]
+	.MNVAL	DEVREL,27,27	;The relative block in the file to read or write
+	.MNVAL	DEVPRI,41,41	;The disk priority (bits 27-29)
+>  ;End of IFE FTKL							[253]
+
+
+; Define some values used by DDBDPY in the NMB (file name data block)
+
+	.MNVAL	NMBNAM,0,0 	;The name of SFD in SIXBIT
+	.MNVAL	NMBPPB,1,1 	;The link to the father SFD (LH)
+		.MNVAL	NMPUPT,2,2 	;The SFD name is in NMBNAM (bit)
+	.MNVAL	NMBACC,3,3	;The link to the NMB's ACC		[272]
+
+
+; Define some values used by DDBDPY in the ACC (access data block)
+
+	.MNVAL	ACCALC,0,0 	;The blocks allocated to this file (602)
+	.MNVAL	ACCDOR,3,3 	;The list link word (if zero, access is not
+				; dormant)
+	.MNVAL	ACCPPB,4,4 	;The link to the proj-prog block (RH 602)
+	.MNVAL	ACCSTS,5,5 	;The file status (RH)
+		.MNVAL	ACPREN,200,200	;A RENAME UUO in progress (bit)
+		.MNVAL	ACPDEL,100,100	;The file marked for deletion (bit)
+		.MNVAL	ACPSMU,4,4	;Simultaneous update (bit 602)
+	.MNVAL	ACCWRT,6,6 	;The blocks written in the file
+	.MNVAL	ACCPRV,7,7	;The protection code of the file (bits 0-8)
+
+; Define some values used by DDBDPY in the PPB (proj-prog block)
+
+	.MNVAL	PPBNAM,0,0 	;Project number,,Programmer number
+	.MNVAL	PPBSYS,1,1	;Link to the next PPB (LH)
+	.MNVAL	PPBUFB,2,2	;Link to the UFB's for this PPN (LH)
+
+
+; Define some values used by DDBDPY in the UFB (user file directory block)
+
+	.MNVAL	UFBTAL,0,0 	;Project number,,Programmer number
+	.MNVAL	UFBPPB,1,1	;Link to the next UFB (LH)
+	.MNVAL	UFBFSN,4,4	;The file structure number (bits 0-5)
+
+
+; Define some values used by DDBDPY in the UNI (unit data block)
+
+	.MNVAL	UNINAM,0,0 	;The unit name (i.e. RPA0)
+	.MNVAL	UNISTR,4,4 	;The link to the file structure data block (RH)
+
+
+; Define some values used by DDBDPY in the STR (file structure data block)
+
+	.MNVAL	STRNAM,0,0 	;The file structure name in SIXBIT
+	.MNVAL	STRFSN,1,1	;The file structure number (RH)
+	.MNVAL	STRTAL,11,11	;The number of free blocks
+	.MNVAL	STRMNT,13,13	;The mount count for this structure
+	.MNVAL	STRJOB,20,20	;The single access job
+
+
+; Define some values used by DDBDPY in the LDB (line data block)
+
+	.MNVAL	LDBBCT,20,41	;The commands type (LH) and
+				; the input wakeup's (RH)
+	.MNVAL	LDBICT,21,42	;The input character count
+	.MNVAL	LDBOCT,22,43	;The output character count
+; LDBDCH: The terminal characteristics word:
+		.MNVAL	LDRPTY,1B18,1B18;The terminal is a PTY
+		.MNVAL	LDRREM,1B25,1B25;The terminal is remote
+	.MNVAL	LDBREM,33,57	;The remote line number (bits 0-7)
+IFN FTKL,<	;KL has 4 words for the RSX-20F stuff			[253]
+	.MNVAL	LDBMIC,41,65	;The terminal is under MIC control
+>  ;End of IFN FTKL							[253]
+IFE FTKL,<	;4 words not in the LDB
+	.MNVAL	LDBMIC,41,41	;The terminal is under MIC control
+>  ;End of IFE FTKL							[253]
+; Define some values used by DDBDPY in the PDB (process data block)
+
+IFN FTKL,<	;The KL has EBOX & MBOX counters in the PDB		[253]
+	.MNVAL	.PDJSL,30,34	;The job's search list			[254]
+	.MNVAL	.PDOSL,71,72	;The old style LIB: PPN			[276]
+	.MNVAL	.PDCTC,NS,77	;The current context block pointer	[301]
+>  ;End of IFN FTKL							[253]
+IFE FTKL,<	;4 words not in the PDB					[253]
+	.MNVAL	.PDJSL,24,24	;The job's search list
+	.MNVAL	.PDOSL,64,65	;The old style LIB: PPN			[276]
+	.MNVAL	.PDCTC,NS,73	;The current context block pointer	[301]
+>  ;End of IFE FTKL							[253]
+		.MNVAL	.FSFNC,45,45	;The fence active/passive
+		.MNVAL	.FSEND,46,46	;The logical end
+		.MNVAL	.FSTMP,47,47	;The temporary
+		.MNVAL	.FSSTP,77,77	;The physical end
+		.MNVAL	FS.WLK,100,100	;The structure is write-locked
+		.MNVAL	FS.NCR,200,200	;The structure is no-create
+
+
+; Define some locations in the context block:
+
+	.MNVAL	.CTFLG,NS,0	;Offset to the context flags		[301]
+		.MNVAL	CNOMSK,NS,777	;Mask for reading the context # [301]
+
+
+; Define some locations in the monitor
+
+	.MNVAL	LIMLVL,5,5	;The maximum SFD nesting level
+	.MNVAL	GTBSLF,410,410	;The absolute address that contains the
+				; address of the 'GETTAB' pointers
+	.MNVAL	HI,400000,400000;The offset to the SPY segment
+	SUBTTL	Definitions -- Macros -- .TITLE, .DSPCL and .DSPTB
+
+
+DEFINE	.TITLE ($MON,$CPU),<
+
+	TITLE.	DDB,DDBDPY,<Disk DDB Display Program for a $CPU $MON monitor>
+>
+
+IFN FTKL,<	.TITLE	\MONVER,KL>
+IFE FTKL,<	.TITLE	\MONVER,non-KL>
+	DDBTTL			;Generate the title line		[274]
+
+;Define the terminal classes.  The .CLS macro is of the form:
+;	.CLS	$CLS,$CLR,$HOM,$EOS,$EOL
+;	$CLS - Terminal class suffix (matches similar arg in the .DSP macro)
+;	$CLR - Character value or routine to home and clear screen
+;	$HOM - Character value or routine to home screen
+;	$EOS - Character value or routine to clear to end of screen
+;	$EOL - Character value or routine to clear to end of line
+
+DEFINE	.DSPCL <
+	.CLS	DUM,0,0,0,0
+	.CLS	ADM,52,36,131,124
+	.CLS	AD3,32,0,AD3EOS,0
+	.CLS	D15,14,31,13,35
+	.CLS	HZL,34,22,HZ1EOS,23
+	.CLS	V05,0,35,37,36
+	.CLS	VTX,105,110,112,113
+>
+; Define the known terminal types.  the .DSP macro is of the form:
+;	.DSP	$NAM,$FLG,$WID,$LEN,$PFX,$CLS,$LBL
+;		$NAM - The name of the terminal (6 chars or less)
+;		$FLG - Terminal type flags 
+;		$WID - Line width
+;		$LEN - Number of lines per screen
+;		$PFX - Word of escape sequence prefix 
+;		$CLS - Terminal class suffix
+;		$LBL - Optional label to be assigned to flags word storage
+
+DEFINE	.DSPTB <
+	.DSP	ADM1,ADMFLG,^D80,^D24,ESC,ADM
+	.DSP	ADM3,AD3FLG,^D80,^D24,NUL,AD3
+	.DSP	ADM3A,AD3FLG,^D80,^D24,NUL,AD3
+	.DSP	ANSI52,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	DAS21,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	DM1521,DM1FLG,^D80,^D24,NUL,D15
+	.DSP	GIGI,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	H19,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	HZLONE,HZLFLG,^D80,^D24,ALT,HZL
+	.DSP	HZL200,HZLFLG,^D77,^D26,ALT,HZL
+	.DSP	IQ120,IQ1FLG,^D79,^D24,ESC,ADM
+	.DSP	MINIBE,MBEFLG,^D79,^D24,ESC,VTX
+	.DSP	PRO350,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	TTY,TTYFLG,^D72,^D19,NUL,DUM,%TTYTP
+	.DSP	VK100,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT05B,V05FLG,^D80,^D24,NUL,V05
+	.DSP	VT50,VTXFLG,^D80,^D12,ESC,VTX
+	.DSP	VT50H,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	VT52,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	VT55,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	VT61,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	VT62,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	VT71,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	VT72,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	VT78,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	VT80,VTXFLG,^D80,^D24,ESC,VTX
+	.DSP	VT100,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT101,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT102,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT102J,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT103,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT105,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT110,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT125,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT131,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT132,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT170,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT180,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT185,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT200,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT220,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT240,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT241,VTXFLG,^D80,^D24,CSI,VTX
+	.DSP	VT278,VTXFLG,^D80,^D24,CSI,VTX >
+	SUBTTL	Definitions -- Macros -- .HLPTX
+
+
+DEFINE	.HLPTX ($MON,$VER,$EDT)<
+
+XLIST	;;Turn the listing off
+
+ASCIZ	~DDBDPY %'$VER($EDT) Help Text - Set up for a $MON Monitor
+Each command must be terminated by a break character
+^C (Control-C) OR ^Z (Control-Z) will exit the job
+
+<CR>  Update the listing
+<ALT> Update the listing and wait for a new command
+  +   Advance the listing by one page
+  -   Decrement the listing by one page
+  A   List all the disk DDBs (privileged command)
+  C   Complement the cycling of displayable DDBs
+  D   Change the type of display
+  E   Complement the listing of the extended status
+  F   List only the DDBs that reference a file specification
+  H   This help text
+  J   List only the DDBs from a job
+  K   Kill the execution and this job
+  L   List only the DDBs that are from jobs logged-in under a PPN
+  N   List only the DDBs that are from jobs not logged-in under a PPN
+  O   Complement the listing of swapped out DDBs (privileged command)
+  P   List only the DDBs that are from jobs running a program
+  S   Change the sleep time between updates
+  T   Complement the listing of the title line
+  W   Complement the listing of the command buffer~
+
+LIST	;;Turn the listing on
+
+>
+	SUBTTL	Definitions -- Macros -- .ASPAG
+
+; Small macro to assign page numbers:
+
+DEFINE	.ASPAG ($PAG,$CNT<1>),<		;;				[266]
+	'$PAG'PAG==LSTPAG		;; Assign the next page number	[266]
+	$PAG=LSTPAG_^D9			;; Assign the address		[266]
+LSTPAG==LSTPAG+$CNT			;; Bump to the next page	[266]
+	'$PAG'PAG=='$PAG'PAG		;; Display the page in listing	[266] >
+	SUBTTL	Program Initalization
+
+
+	RELOC	400000		;Put the code in the high segment	[274]
+
+DDBDPY:	JFCL			;Ignore CCL entry
+	MOVX	T1,%CNDVN	;Get the monitor			%%%[266]
+	GETTAB	T1,		; version number
+	 JRST	E$$DRM		;No - before 503
+	ANDX	T1,777B11	;Remove the costumer version number and	%%%[266]
+	CAME	T1,[<MONVER>B11];Skip if the right monitor		[266,274]
+	JRST	E$$DRM		;Jump if an illegal monitor version number
+
+	MOVX	T1,%VMUPM	;Get the exec virtual address		[266]
+	GETTAB	T1,		;  of the current job's UPT		[266]
+	 JRST	E$$DRM		;Can't get it? Die			[266]
+	MOVEM	T1,UPT		;Store as the UPT word address		[266]
+	LSH	T1,-^D9		;Convert it to a page number		[266]
+	HRRM	T1,UPTBLK+1	;Store for our subsequent PAGE. UUOs	[266]
+	HRRM	T1,DELUPT+1	;  that map and unmap UPT pages		[266]
+	MOVX	T1,%VMLST	;Get the offset to the
+	GETTAB	T1,		; swappable DDBs in UPMP
+	 JRST	E$$DRM		;Can't get it? Die			%%%[266]
+	ADD	T1,UPT		;Relocate it
+	MOVEM	T1,LSTLOC	;Save for later
+
+	SETZB	F,PAGNUM	;Reset all the flags and current page number
+IFN FTDEBUG,<
+	SKIPE	.JBDDT##	;Skip if DDT isn't loaded
+	TXO	F,F.DDT		;Set the DDT is loaded flag >
+	MOVX	T1,SLPDEF	;Get the default sleep time between scans
+	HRRM	T1,HIBTIM	;Save for later
+	RESCAN	1		;Skip if there isn't a RESCAN'able command
+	TXO	F,F.RES		;Set the rescan flag
+
+	MOVX	T1,%CNSIZ	;Get the size of
+	GETTAB	T1,		; the monitor
+	 JRST	E$$NPS		;No - go inform the user
+	MOVEM	T1,MEMSIZ	;Store for later
+	LSH	T1,-^D9		;Get the number of monitor pages
+	MOVE	T2,[.PAGSP,,T3]	;Get the function for the PAGE. UUO
+	MOVX	T3,^O1		;Get the argument count
+	MOVX	T4,HI_<-^D9>	;Get the argumnent for the function
+DDBD0A:	PAGE.	T2,UU.PHY	;Put a monitor map into my address space
+	 JRST	E$$NPS		;No - go inform the user
+	ADD	T4,[^O1,,^O1]	;On to the next page
+	SOJG	T1,DDBD0A	;Loop until all the pages have been allocated
+
+DDBDP0:	RESET			;Reset the world
+	HRRZ	P5,HI+GTBSLF	;Get the address of the start of the
+				; GETTAB tables
+	MOVEI	T2,HI(P5)	;Save the address of
+	HRRM	T2,GETSLF	; the GETTAB tables
+
+; Find out where funny space lives:
+
+	HRRZ	T4,HI+.GTVM(P5)	;Point to the virtual memory data	[266]
+	MOVE	T1,HI+%VMLNM_-^D18(T4)	;Get the UPT offset for the	[276]
+	ADD	T1,UPT		;  logical names table			[276]
+	MOVEM	T1,.USLNM	;Store for later			[276]
+	MOVE	T1,HI+%VMPPB_-^D18(T4)	;Get the first funny page number [266]
+	LSH	T1,-^D9		;Convert to a page number		[266]
+	MOVEM	T1,FUNFST	;Store as the first funny page number	[266]
+	MOVE	T2,HI+%VMPPE_-^D18(T4)	;Get the end of funny space	[266]
+	LSH	T2,-^D9		;Convert to a page number		[266]
+	MOVEM	T2,FUNLST	;Store for later			[266]
+	CAIL	T1,PFFPAG	;Make sure we don't			[266]
+	 CAILE	T2,HI_-^D9	;  own any of these pages		[266]
+	  JRST	E$$OPP		;Error - overlap funny pages		[266]
+	HRRZ	T4,HI+.GTC0C(P5) ;Point to CPU0 constants table		[266]
+	MOVE	T3,HI+%CCTOS_-^D18(T4)	;Get the EPT address		[266]
+	HRRZ	T3,HI+SECMAP(T3)	;Get the section 0 map pointer	[266]
+	LSH	T3,^D9		;Convert page number to address		[266]
+	ADDI	T3,HI(T1)	;Point to the funny space pointers	[266]
+	HLRZ	T3,(T3)		;Get the funny page offset into UPT	[266]
+	ANDI	T3,^O777	;Mask off accessibility bits		[266]
+	HRRZM	T3,FUNPAG	;Save it for later			[266]
+
+	HRRZ	T2,HI+.GTLVD(P5);Get the address of level-D table
+
+	MOVEI	T1,HI+%LDSPB_-^D18(T2)	;Get the address of the
+	MOVEM	T1,GETSPB		; pointer to the PPBs
+
+	MOVEI	T1,HI+%LDSTR_-^D18(T2)	;Get the address of the
+	MOVEM	T1,GETSTR		; pointer to the STRs
+	HRRZ	T1,@T1			;Get the STRSYS offset		[266]
+	IORM	T1,STRSYS		;Store it in the magic pointer	[266]
+
+	HRRZ	T1,HI+%LDDVU_-^D18(T2)	;Get the offset into the DDB for [266]
+	IORM	T1,DEVUNI		; the unit data block (UDB)	[266]
+
+	HRRZ	T1,HI+%LDNMB_-^D18(T2)	;Get the offset into the DDB for [266]
+	IORM	T1,DEVSFD		; the father SFD's NMB pointrer	[266]
+
+	HRRZ	T1,HI+%LDBLK_-^D18(T2)	;Get the offset into the DDB for [266]
+	IORM	T1,DEVBLK		; the next logical block number	[266]
+
+	HRRZ	T1,HI+%LDRSU_-^D18(T2)	;Get the offset into the DDB for [266]
+	IORM	T1,DEVACC		; the Access table (ACC)	[266]
+
+	HRRZ	T1,HI+%LDSPN_-^D18(T2)	;Get the offset into the DDB for [266]
+	IORM	T1,DEVSPN		; the spooled file name		[266]
+
+	HRRZ	P2,HI+.GTCNF(P5)	;Get the max
+	MOVE	T1,HI+%CNSJN_-^D18(P2)	; number of
+	HRRI	T1,-1(T1)		; jobs on the
+	HRRZM	T1,JOBMAX		; system
+
+	HRRZ	T1,HI+%CNDJB_-^D18(P2)	;Get the offset into the DDB for [266]
+	IORM	T1,JOBPTR		; the job number		[266]
+IFG .PDCTC,IORM	T1,CTXPTR		; and the context number	[301]
+
+	HRRZ	T1,HI+%CNLDB_-^D18(P2)	;Get the offset into the DDB for [266]
+	IORM	T1,DDBLDB		; the LDB associated with this DDB [266]
+
+	HRRZ	T1,HI+%CNDCH_-^D18(P2)	;Get the offset into the LDB for [266]
+	IORM	T1,LDBDCH		; the line characteristics word	[266]
+
+	MOVE	T1,HI+.GTC0V(P5)	;Get the pointer
+	MOVEI	T1,HI+10(T1)		; to HIGHJB
+	MOVEM	T1,HIJOB		;Save for later
+
+	MOVEI	T1,HI+%CNDTM_-^D18(P2)	;Get the address
+	HRRZM	T1,GETDAT		; of the date
+
+	MOVE	T1,HI+%CNPTY_-^D18(P2)	;Get the PTYs on the system
+	HLRZM	T1,PTYMIN		;Save the minimum PTY number
+
+	MOVEI	T1,^D60		;Get default time for a jiffy
+	MOVE	T2,HI+%CNSTS_-^D18(P2)  ;Get the states word
+	TXNE	T2,ST%CYC	;Skip if a 60 cycle clock
+	MOVEI	T1,^D50		;Set up for a 50 cycle clock
+	MOVEM	T1,JIFFIE	;Save the time of a jiffy for later
+	IMULI	T1,^D60		;Get jiffies per minutes
+	MOVEM	T1,JIFMIN	;Save for later
+	IMULI	T1,^D60		;Get jiffies per hour
+	MOVEM	T1,JIFHOR	;Save for later
+
+	HRRZ	T1,HI+%CNPDB_-^D18(P2)	;Get the address
+	MOVEI	T1,HI(T1)		; of the PDB
+	HRRM	T1,GETPDB		; table
+
+	HRRZ	T1,HI+%CNSFD_-^D18(P2)	;Get the address		[272]
+	MOVEI	T1,HI(T1)		; of the JBTSFD			[272]
+	HRRM	T1,GETSFD		; table				[272]
+
+	LDB	T1,[POINTR HI+.GTEDN(P5),SL.MAX]  ;Make
+	ADDI	T1,1				  ; a
+	MOVEM	T1,MAXEDN			  ; pointer
+	MOVNS	T1				  ; to
+	HRLZS	T1				  ; the
+	HRR	T1,HI+.GTEDN(P5)		  ; ERSATZ
+	TXZ	T1,^O777000			  ; on
+	ADDI	T1,EDN				  ; the
+	MOVEM	T1,GETEDN			  ; system
+
+	HRRZ	T1,HI+.GTEDN(P5);The
+	LSH	T1,-^D9		; monitor
+	HRLM	T1,EDNBLK+^O1	; pages
+	ADDI	T1,^D1		; to
+	HRLM	T1,EDNBLK+^O2	; allocate
+
+	MOVE	T1,[.PAGSP,,DELEDN]  ;Delete the old
+	PAGE.	T1,		     ; ERSATZ page
+	 JFCL			     ;Assume the first time here
+	MOVE	T1,[.PAGSP,,EDNBLK]  ;Map in the new
+	PAGE.	T1,		     ; ERSATZ page
+	 JRST	E$$NPS		     ;No - Go inform the user
+
+	MOVE	T2,[-GETSIZ,,GETTBL]  ;Set the GETTAB pointers
+DDBDP1:	LDB	T1,[POINT 9,(T2),8]  ;Get the table to look at
+	HRRZ	T1,@GETSLF	;Get the address of the table
+	MOVEI	T1,HI(T1)	;Set up for SPYing
+	HRRM	T1,(T2)		;Save for later use
+	AOBJN	T2,DDBDP1	;Loop back back if not finished
+
+	MOVEI	T1,DDBDP0	;Set up to have IMRs
+	MOVEM	T1,.JBAPR##	; restart the program
+	MOVX	T1,AP.ILM	;Set up to trap
+	APRENB	T1,		; ILL MEM REFs
+
+IFN FTDEBUG,<
+	TXNE	F,F.DDT		;Skip if DDT isn't loaded
+	JRST	DDBDP2		;Skip setting up the Control-C intercept >
+	MOVEI	T1,INTBLK	;Set up to intercept
+	MOVEM	T1,.JBINT##	; Control-Cs (^C)
+	SETZM	INTBLK+2	;Reset the intercept block
+
+DDBDP2:	MOVE	T1,CMDWAT	;Set up the default input
+	MOVEM	T1,INCHR	; routine (INCHWL C)
+	MOVE	P,[-PDLSIZ,,PDL];Set up the push down list
+
+	TXOE	F,F.INI		;Skip if the program was just started
+	JRST	DDBDP7
+
+	PJOB	P5,		;Get my job number
+	MOVEM	P5,CURJOB	;Save my job number for later
+	MOVE	T1,@GETPRV	;Get the user's privileges
+IFN FTPRIV,<
+	TXNN	T1,JP.DPY	;Skip if the user is privleged
+	JRST	E$$NPR		;Not enough privileges >
+	TXNE	T1,JP.SPA!JP.SPM;Skip if the user has SPY privileges
+	TXO	F,F.GOD		;Set the God bit
+	TXNE	T1,JP.POK	;Skip if the user has POKE privileges	[275]
+	TXO	F,F.GOD!F.POK	;Yes, we're allowed to JOBPEK		[275]
+	MOVE	T1,@GETPPN	;Get my PPN
+	MOVEM	T1,MYPPN	;Save for later
+	CAMN	T1,[1,,2]	;Skip if not 1,2
+	JRST	DDBDP3		;Go set the God bit
+IFE FTPROJ,<
+   IFN FTPROG,<
+	HRRZM	T1,IDIR		;Assume [*,PRG]
+	HLLOS	IDIRMSK >>
+IFN FTPROJ,<
+   IFE FTPROG,<
+	HLLZM	T1,IDIR		;Assume [PRJ,*]
+	HRROS	IDIRMSK >
+   IFN FTPROG,<
+	MOVEM	T1,IDIR		;Assume [PRJ,PRG]
+	SETOM	T1,IDIRMSK >>
+	MOVE	T1,[IROUTI,,ROUTIN]  ;Set up the initial
+	BLT	T1,BLTEND	     ; scan conditions
+	TXOA	F,F.WLD		;Set the wild flag
+DDBDP3:	TXO	F,F.GOD!F.POK	;Set the God bit			[275]
+
+IFN FTSLEEP,<
+	MOVX	T1,SLPSCN	;Set the default
+	MOVEM	T1,SLPCNT	; sleep counter >
+	SKIPN	T4,@GETTTY	;Get the address of my terminal's DDB
+	 JRST	E$$TTF		;Error - no DDB
+	ADD	T4,DDBLDB	;Get the address of			[266]
+	MOVE	T4,HI(T4)	; the terminal's LDB			[266]
+	JUMPE	T4,E$$TTF	;Jump if the address is zero
+	PUSHJ	P,GETLDB	;Set SPY-page for LDB
+	MOVE	T3,@LDBDCH	;Get the device characteristic bits	[266]
+	TXNN	T3,LDRPTY	;Skip if a PTY
+	JRST	DDBDP4		;Skip some PTY code
+	MOVX	T1,JB.LBT	;Get the batch bit
+	SKIPN	HI+LDBMIC(T4)	;Skip if a MIC Cojob
+	TDNE	T1,@GETLIM	;Skip if not a batch job
+	JRST	E$$CRS		;Can't run DDBDPY
+	MOVX	T1,SLPPTY	;Sleep time
+	HRRM	T1,HIBTIM	; on a PTY
+IFN FTSLEEP,<
+	SETZM	SLPCNT		;Don't reset the sleep counter >
+DDBDP4:	DPB	T3,[POINT 9,TRM+1,35]  ;Store the ten terminal number
+
+	MOVSI	T3,-TRMSIZ	;Set a AOBJN counter
+DDBDP6:	MOVE	T2,TRMTAB(T3)	;Get the TRMOP. to preform
+	HLRZM	T2,TRM+2	;Save the new status
+	HRRZM	T2,TRM		;Save the read function
+	MOVE	T1,[2,,TRM]	;Read the bit in
+	TRMOP.	T1,		; question
+	 JRST	E$$TTF		;No - go inform the user
+	MOVEM	T1,TRMSAV(T3)	;Save for later
+	MOVEI	T2,.TOSET(T2)	;Change the function into a set
+	MOVEM	T2,TRM		;Save for later
+	MOVE	T1,[3,,TRM]	;Set the function
+	TRMOP.	T1,		; in question
+	 JRST	E$$TTF		;No - go inform the user
+	AOBJN	T3,DDBDP6	;Jump if not finished
+
+	PUSHJ	P,TRMDSP	;Set up the default display type
+	PUSHJ	P,PAGADJ	;Set up the screen size info
+	PUSHJ	P,CMDOUT	;Go setup the command string buffer
+DDBDP7:
+IFN FTDEBUG,<
+	TXNE	F,F.DDT		;Skip if DDT wasn't loaded
+	JRST	DDBDP8		;Skip the init code >
+	INIT	TTY,IO.SUP!.IOASC  ;Init the TTY with echo off
+	SIXBIT	~TTY~
+	OCT	0
+	 JRST	E$$CIT		;No - inform the user!!
+
+DDBDP8:	TXZN	F,F.RES		;Skip if in rescan mode
+	JRST	DDBMAN		;Go start the DDB scanning
+	PUSHJ	P,WLDSIX	;Go get the command that started me
+	 JRST	DDBD12		;Error in rescan of name
+	HRROI	T2,['DDBDPY']	;Get the pointer the the DDBDPY command
+	PUSHJ	P,TSTABR	;Go test for an abbreviation
+	 JRST	DDBD12		;Not the right command
+	JRST	DDBD11
+DDBD10:	XCT	INCHR		;Get the next character
+DDBD11:	CAIE	C," "		;Skip if the character is a space
+	CAIN	C,.CHTAB	;Skip if the character isn't a tab
+	JRST	DDBD10		;Go get the next character
+	CAIE	C,"!"		;Skip if a comment line
+	CAIN	C,";"		;Skip if not a comment line
+	JRST	DDBD12		;Go through the rest of the line away
+	JRST	CMDTST		;Go test the command
+DDBD12:	PUSHJ	P,CLRLIN	;Clear to the end of the line
+	SUBTTL	The DDB Scanning Loop
+
+
+DDBMAN:	MOVE	P,[-PDLSIZ,,PDL];Set up the push down list		[263]
+	TXZE	F,F.CLR		;Skip if the screen shouldn't be cleared
+	PUSHJ	P,TRMCLR	;Go clear the screen
+	SETZB	LC,DDBCNT	;Zero some counters
+	SETZB	P2,JOB		;Clear the initial job number
+
+DDBLOP:	PUSHJ	P,NXTDDB	;Get the next DDB in the chain
+	 JRST	DDBEND		;Finished with the chain
+	MOVX	T1,DV.DSK	;Get the device is a disk bit
+	TDNN	T1,DEVMOD(P2)	;Skip if the DDB is for a disk
+	JRST	[SKIPGE	DEVSPL(P2)	;Skip if the device isn't spooled
+		 JRST	DDBLO0		;Go list the DDB
+		 JRST	DDBLOP]		;Go try the next DDB
+DDBLO0:	MOVX	T1,IOSUPR	;Get the super-mode I/O flag
+	TDNE	T1,DEVIOS(P2)	;Skip if not super-mode I/O
+	JRST	[TXO	F,F.SUP		;Remember that it is super-mode
+		 JRST	DDBL0A]		;Go output the DDB if wanted
+	TXZ	F,F.SUP		;Clear the super-mode flag
+	HRRZ	P3,@DEVACC	;Get the pointer to ACCTAB		[266]
+	JUMPE	P3,DDBLOP	;Jump if zero
+	SKIPE	HI+ACCDOR(P3)	;Skip if the file isn't dormant
+	JRST	DDBLOP		;Go try the next DDB
+	HRRZ	P5,HI+ACCPPB(P3);Get the PPB pointer
+	JUMPE	P5,DDBLOP	;No PPB - try next DDB then
+
+DDBL0A:	TXNE	F,F.WLD		;Skip if wild processor isn't wanted
+	JRST	@ROUTIN		;Go excute the wild processor
+DDBLO1:	MOVE	T1,DDBCNT	;Get the DDB counter
+	CAML	T1,PAGFST	;Skip if the DDB is to soon
+	CAML	T1,PAGLST	;Skip if the DDB is in time
+	JRST	DDBL13		;Go count the DDB
+	PUSHJ	P,BEGLIN	;Set up the line
+	MOVEI	T4,^D2		;Set up output the job number
+	LDB	T1,JOBPTR	;Get the job number of this DDB
+	PUSHJ	P,DECJST	;Output the job number
+	LDB	T1,STSPTR	;Get the file status
+	TXNE	F,F.SUP		;Skip if not super I/O
+	MOVEI	T1,3		;A fake mode for super I/O
+	MOVE	T1,STSTAB(T1)	;Get the mode and
+	PUSHJ	P,SIXOUT	; output it
+	LDB	T5,JOBPTR	;Get the job number again
+	SKIPN	T5,@GETPP	;Skip if the PPN for this
+				; job is non-zero
+	JRST	DDBLOP
+	MOVEI	T4,^D6		;Set up to output the PPN
+	PUSHJ	P,PPNJST	;Go output the PPN
+	MOVEI	T1,^D17		;Justify to
+	PUSHJ	P,JUST		; column 17
+	TXNE	F,F.SUP		;Skip if not super-mode I/O
+	JRST	[PUSHJ	P,GETUNI	;Get the pointer to the UDB	[266]
+		  JRST	DDBLOP		;No such UDB			[266]
+		 MOVE  T1,UNINAM(T1)	;Output the
+		 PUSHJ P,SIXOUT		; unit name
+		 MOVEI T4,^D29		;Output the logical
+		 MOVE  T1,@DEVBLK	; block to be read		[266]
+		 PUSHJ P,DECJST		; or written
+		 MOVEI T1,^D63		;Justify to
+		 PUSHJ P,JUST		; column 63
+		 JRST  DDBL6A]
+	PUSHJ	P,FNDSTR	;Go find the structure name
+	 JRST	DDBLOP		;Go abort the output
+	PUSHJ	P,SIXOUT	;Go output the structure name
+	MOVEI	T1,^D22		;Justify to
+	PUSHJ	P,JUST		; column 22
+	SKIPN	T1,DEVFIL(P2)	;Skip if the file name is non-zero
+	JRST	DDBLOP
+	HLRZ	T5,DEVEXT(P2)	;Get the extension
+	CAIN	T5,'UFD'	;Skip if it isn't a UFD
+	JRST	[PUSHJ P,LBROUT		;Output an open bracket
+		 MOVE  T5,T1		;Get the ppn in the right place
+		 PUSHJ P,PPNOUT		;Go output the PPN
+		 MOVE  T1,['].UFD ']	;Output
+		 PUSHJ P,SIXOUT		; '].UFD'
+		 JRST  DDBLO5]		;Skip outputting the UFD
+	SKIPGE	DEVSPL(P2)	;Skip if not a spooled file
+	SKIPN	T2,@DEVSPN	;Skip if a non-zero entered spooled name [266]
+	JRST	DDBLO2		;Go output the file name
+	MOVE	T1,T2		;Output the entered
+	PUSHJ	P,SIXOUT	; spooled name
+	MOVEI	T1,^D28		;Justify to
+	PUSHJ	P,JUST		; column 28
+	MOVEI	C,"*"		;Output a
+	PUSHJ	P,CHROUT	; asterisk
+	JRST	DDBLO3		;Go output the spooled device
+DDBLO2:	PUSHJ	P,SIXOUT	;Output the file name
+	JUMPE	T5,DDBLO4	;Jump if the extension is zero
+	MOVEI	T1,^D29		;Justify to
+	PUSHJ	P,JUST		; column 29
+DDBLO3:	MOVSI	T1,(T5)		;Get the extension again
+	PUSHJ	P,SIXOUT	;Output the extension
+DDBLO4:	MOVEI	T1,^D32		;Justify to
+	PUSHJ	P,JUST		; column 32
+	JUMPL	F,[PUSHJ P,GETUNI	;Get the link to the UDB	[266]
+		    JRST DDBLOP		;Jump if no UDB			[266]
+		   MOVE  T1,UNINAM(T1)  ;Get the unit name
+		   LSH   T1,-^D6	;Shift in a space
+		   PUSHJ P,SIXOUT	;Output the unit name
+		   MOVEI T4,^D7
+		   MOVE	 T1,@DEVBLK	;Output the logical block	[266]
+		   PUSHJ P,DECJST	   ; to be read or written
+		   MOVEI T4,^D6		;Set up output the
+		   JRST  DDBLO6]	; relative block
+	MOVEI	T4,^D6
+	MOVE	T5,HI+PPBNAM(P5);The PPN of the file
+	PUSHJ	P,PPNJST	;Go output the PPN
+DDBLO5:	MOVEI	T1,^D45		;Justify to
+	PUSHJ	P,JUST		; column 45
+	MOVEI	T4,^D5
+DDBLO6:	MOVE	T1,DEVREL(P2)	;Get the next (relative) block
+	PUSHJ	P,DECJST	; to be read or written
+	MOVEI	T4,^D6
+	MOVE	T1,HI+ACCWRT(P3);Get the number of blocks written
+	PUSHJ	P,DECJST	;Output it
+	MOVEI	T4,^D6
+	MOVE	T1,HI+ACCALC(P3);Get the number of blocks allocated
+	PUSHJ	P,DECJST	;Output it
+	PUSHJ	P,SPAOUT	;Output a space
+DDBL6A:	LDB	T1,[POINT 3,DEVPRI(P2),29]  ;The disk priority
+	JUMPE	T1,DDBLO7	;Jump if zero
+	TRZE	T1,4		;Skip if negative
+	MOVEI	C,"-"
+	PUSHJ	P,CHROUT	;Output a minus sign or a space
+	PUSHJ	P,DECOUT	;Output the disk priority
+	PUSHJ	P,SPAOUT	;Output a space
+DDBLO7:	TXNE	F,F.SUP		;Skip if not super I/O
+	JRST	DDBL7A		;Skip some non-super I/O stuff
+	MOVEI	C,"S"
+	SKIPGE	DEVSPL(P2)	;Skip if the file isn't a spoolled file
+	PUSHJ	P,CHROUT	;Output a "S"
+	HRRZ	T1,HI+ACCSTS(P3);Get the file status
+	MOVEI	C,"D"
+	TRNE	T1,ACPDEL	;Skip if the file isn't marked for deletion
+	PUSHJ	P,CHROUT	;Output a 'D'
+	MOVEI	C,"R"
+	TRNE	T1,ACPREN	;Skip if the file isn't being renamed
+	PUSHJ	P,CHROUT	;Output a 'R'
+	MOVEI	C,"M"
+	TRNE	T1,ACPSMU	;Skip if not simultaneous update, multi-user
+	PUSHJ	P,CHROUT	;Output a 'M'
+	MOVEI	C,"P"
+	MOVX	T1,DEPPAL	;Get the pre-allocation bit
+	TDNE	T1,DEVPAL(P2)	;Skip if not pre-allocated
+	PUSHJ	P,CHROUT	;Output a 'P'
+DDBL7A:	HLRZ	T1,DEVIOS(P2)	;Get the I/O status
+	TRNN	T1,IOSIOW	;Skip if in I/O wait
+	JRST	DDBLO8		;Jump not in an I/O wait
+	MOVEI	C,"I"		;Assume input wait
+	TRNE	T1,IOSIO	;Skip if input wait
+	MOVEI	C,"O"		;Output wait
+	PUSHJ	P,CHROUT	;Output the wait state
+DDBLO8:	PUSHJ	P,ENDLIN	;Go finish off the line
+	AOJ	LC,		;Increment the line count
+	JUMPGE	F,DDBL13	;Jump if the extended status isn't wanted
+	PUSHJ	P,BEGLIN	;Set up the line
+IFG .PDCTC,<		;If this monitor has multiple contexts		[301]
+	MOVEI	T4,^D3		;Get the number of digits to output	[301]
+	LDB	T1,CTXPTR	;Get the context number			[301]
+	PUSHJ	P,DECJST	;Output it (offset from job number)	[301] >
+	TXNE	F,F.SUP		;Skip if not super I/O
+	JRST	DDBL12		;Skip some non-super I/O stuff
+IFLE .PDCTC,MOVEI T4,^D10
+IFG .PDCTC,MOVEI T4,^D7		;Account for context number if output	[301]
+	MOVE	T5,HI+PPBNAM(P5);Get the PPN to be output
+	PUSHJ	P,PPNJST	;Output the PPN
+	HRRZ	P4,@DEVSFD	;See if the file is in an SFD		[266]
+	JUMPE	P4,DDBL12	;Skip if the file is in an SFD
+	PUSH	P,[0]		;Set a flag
+DDBLO9:	PUSH	P,HI+NMBNAM(P4)	;Save the SFD name
+DDBL10:	HLRZ	P4,HI+NMBPPB(P4);Get the pointer to the next NMB
+	TRZN	P4,NMPUPT	;Skip if the contains the SFD name
+	JUMPN	P4,DDBL10	;Go save the SFD name
+	JUMPN	P4,DDBLO9	;Go get the next NMB pointer
+DDBL11:	POP	P,T1		;Get the SFD name back
+	JUMPE	T1,DDBL12	;Jump if the flag was found
+	PUSHJ	P,COMOUT	;Output a comma
+	PUSHJ	P,SIXOUT	;Output the SFD name
+	JRST	DDBL11		;Go get the next SFD level
+
+DDBL12:	MOVEI	T1,^D33		;Output the
+	MOVE	T2,DEVLOG(P2)	; logical
+	PUSHJ	P,SIXJST	; name
+	TXNE	F,F.SUP		;Skip if not super I/O
+	JRST	DDB12A		;Skip the protection code
+	MOVEI	T1,^D40			      ;Output the
+	LDB	T2,[POINT 9,HI+ACCPRV(P3),8]  ; protection
+	PUSHJ	P,PRVOUT		      ; code
+DDB12A:	LDB	T2,[POINTR DEVIOS(P2),IO.MOD] ;Output the
+	MOVE	T2,MODTAB(T2)		      ; I/O mode
+	MOVEI	T1,^D47			      ; of the
+	PUSHJ	P,SIXJST		      ; DDB
+	HRRZ	T1,DEVIOS(P2)	;Get the I/O status
+	TXNN	T1,IO.IMP!IO.DER!IO.DTE!IO.BKT!IO.EOF!IO.ACT
+	JRST	DDB12B		;Skip some code
+	MOVEI	C,":"		;Output a
+	PUSHJ	P,CHROUT	; colon
+	MOVEI	C,"I"
+	TXNE	T1,IO.IMP	;Skip if not improper mode
+	PUSHJ	P,CHROUT	;Output a 'I'
+	MOVEI	C,"X"
+	TXNE	T1,IO.DER	;Skip if not device error
+	PUSHJ	P,CHROUT	;Output a 'X'
+	MOVEI	C,"D"
+	TXNE	T1,IO.DTE	;Skip if not data error
+	PUSHJ	P,CHROUT	;Output a 'D'
+	MOVEI	C,"B"
+	TXNE	T1,IO.BKT	;Skip if not block to large
+	PUSHJ	P,CHROUT	;Output a 'B'
+	MOVEI	C,"E"
+	TXNE	T1,IO.EOF	;Skip if not end-of-file
+	PUSHJ	P,CHROUT	;Output a 'E'
+	MOVEI	C,"A"
+	TXNE	T1,IO.ACT	;Skip if not I/O active
+	PUSHJ	P,CHROUT	;Output a 'A'
+	MOVEI	C,"H"
+	TXNE	T1,IO.WHD	;Skip if not write headers
+	PUSHJ	P,CHROUT	;Output a 'H'
+DDB12B:	PUSHJ	P,ENDLIN	;Go finish off the line
+	AOJ	LC,		;Increment the line count
+DDBL13:	AOS	DDBCNT		;Increment DDB count
+	JRST	DDBLOP		;Go try the next DDB
+	SUBTTL	Make the Header Line and Output the Buffer
+
+
+DDBEND:	MOVX	T1,CL.AD3	;Get the ADM-3 class			[273]
+	CAIN	T1,(P1)		;Skip if not a LSI ADM-3		[273]
+	OUTSTR	[BYTE (7).CHCRT,.CHLFD,0]
+	MOVEM	LC,CURCNT	;Save the line count
+	TXNE	F,F.TTL		;Skip if the title flag is set
+	JRST	DDBEN7		;Go output the DDB buffer
+	SETZ	LC,		;Set up the for
+	PUSHJ	P,TTLLIN	; the title line
+	TXNN	F,F.JOB		;Skip if the job display is wanted
+	JRST	DDBEN0		;Skip the job display stuff
+	PUSHJ	P,JOBOUT	;Get set up the job buffer
+ 	 JRST	DDBEN4		;Go terminate the line off right
+
+DDBEN0:	MOVE	T1,DDBCNT	;Output the number
+	PUSHJ	P,DECOUT	; of DDBs
+	PUSHJ	P,SPAOUT	;Output a space
+	MOVE	T1,PAGNUM	;Get the current page number
+	AOJ	T1,
+	PUSHJ	P,DECOUT	;Output the current page number
+	PUSHJ	P,SLHOUT	;Output a slash
+	SKIPE	T1,DDBCNT	;Skip if the DDB count is zero
+	SOJ	T1,		;Make it one less
+	ADD	T1,PAGSIZ
+	IDIV	T1,PAGSIZ	;Get the number of pages of DDBs
+	PUSHJ	P,DECOUT	;Output the number of pages
+	HLRZ	P4,@GETSTR	;Get the pointer to the structure chain
+	JUMPE	P4,DDBEN4	;Jump if the end of the chain was reached
+
+DDBEN1:	PUSHJ	P,MAPSTR	;Map the STR				[266]
+	 JRST	DDBEN4		;Can't?  Pretend end of chain		[266]
+DDBE1A:	SKIPN	STRNAM(P4)	;Skip if a non-null structure name	[266]
+	JRST	DDBEN3		;Go try the next structure
+	MOVE	T1,STRMNT(P4)	;Get the mount count for this structure	[271]
+	PUSHJ	P,SCALE		;Find out how many digits here		[271]
+	MOVEI	T4,1(T2)	;Save the number needed for mount count	[271]
+	MOVE	T1,STRNAM(P4)	;Get the structure name			[271]
+	MOVE	T2,STRTAL(P4)	;Get the free space on this structure	[271]
+	PUSHJ	P,STROUE	;Output the structure and space		[271]
+	 JRST	DDBEN2		;Doesn't fit, go try a new line		[271]
+IFN FTMOUNT,<
+	PUSHJ	P,CLNOUT	;Output a colon
+	SKIPLE	STRJOB(P4)	;Skip if the structure is mounted single [266]
+	JRST	[MOVEI	C,"S"		;Output an 'S' for
+		 PUSHJ	P,CHROUT	; single access
+		 JRST	DDBEN3]		;Keep on truck'n
+	MOVE	T1,STRMNT(P4)	;Get the mount count for this structure	[266]
+	PUSHJ	P,DECOUT	;Output the mount count >
+	JRST	DDBEN3		;Go get the next STR			[271]
+DDBEN2:	PUSHJ	P,ENDLIN	;Terminate the current line
+	AOJ	LC,		;Increment the line count
+	CAIL	LC,TTLLNS	;Too many title lines?			[266,267]
+	JRST	DDBEN5		;Yes, do no more			[266]
+	PUSHJ	P,TTLLIN	;Set up a title line
+	JRST	DDBE1A		;And try to output it again		[271]
+DDBEN3:	HLRZ	P4,@STRSYS	;Get pointer to the next structure	[266]
+	JUMPN	P4,DDBEN1	;Go display this structure
+DDBEN4:	PUSHJ	P,ENDLIN	;Finish off the line
+	AOJ	LC,		;Increment the line count
+
+	CAILE	LC,^D2		;Skip if two or less title lines
+	JRST	DDBEN5		;Skip some crude code
+	PUSHJ	P,TTLLIN	;Set up another title line
+	MOVEI	T1,STLBUF	;Assume not outputting the path
+	TXNE	F,F.XTN		;Skip extended status isn't wanted
+	MOVEI	T1,PTHBUF	;Get the extended status buffer
+	PUSHJ	P,ASCOUT	;Output text to the buffer
+	PUSHJ	P,ENDLIN	;Finish off the line right
+	AOJ	LC,		;Increment the line count
+
+DDBEN5:	MOVEI	T5,TTLBUF	;The pointer to the title line
+DDBEN6:	TXNN	P1,TM%EOL	;Skip if this terminal can clear to eol [273]
+	PUSHJ	P,TRMEOL	;Clear to the end of the line
+	OUTSTR	(T5)		;Output a title line
+	TXNE	P1,TM%EOL	;Can we really clear to end of line?	[273]
+	PUSHJ	P,TRMEOL	;Yes, do it now				[273]
+	OUTSTR	[BYTE (7).CHCRT,.CHLFD,0] ;Finish off the line		[273]
+	MOVEI	T5,LINSIZ(T5)	;Get the pointer to the next line
+	SOJG	LC,DDBEN6	;Loop until finished
+
+DDBEN7:	MOVEI	T5,LINBUF	;Set up the line buffer
+	SKIPG	LC,CURCNT	;Skip if no lines to output
+	JRST	DDBEN9		;Skip some code
+DDBEN8:	TXNN	P1,TM%EOL	;Skip if this terminal can clear to eol [273]
+	PUSHJ	P,TRMEOL	;Go clear to the end of the line
+	OUTSTR	(T5)		;Go output a line
+	TXNE	P1,TM%EOL	;Can we really clear to end of line?	[273]
+	PUSHJ	P,TRMEOL	;Yes, do it now				[273]
+	OUTSTR	[BYTE (7).CHCRT,.CHLFD,0] ;Finish off the line		[273]
+	MOVEI	T5,LINSIZ(T5)	;Point to the next line
+	SOJG	LC,DDBEN8	;Jump if more lines to output
+
+DDBEN9:	PUSHJ	P,TRMEOS	;Go clear to the end of the screen
+IFN FTSLEEP,<
+	SOSE	SLPCNT		;Skip if time to adjust the sleep time
+	JRST	DDBE10		;Skip some code
+	MOVX	T1,SLPADJ	;Adjust the sleep
+	HRRM	T1,HIBTIM	; time interval
+	PUSHJ	P,CMDOUT	;Set up command string buffer
+DDBE10: >
+	TXNN	F,F.HLP!F.WHT	;Skip if the help or command buffer is needed
+	JRST	DDBE11		;Go home the terminal
+	MOVEI	T1,WHTBUF	;Get the address of the command line
+	TXNE	F,F.HLP		;Skip if help isn't needed
+	MOVEI	T1,[ASCIZ ~  ** Type "H<CR>" for help **~]
+	OUTSTR	(T1)		;Output the line
+	CAXN	P1,%TTYTP	;Skip if not an hard copy display
+	OUTSTR	[BYTE (7).CHCRT,.CHLFD,0]
+DDBE11:	PUSHJ	P,TRMHOM	;Go home the terminal
+	SUBTTL	Command Scanner -- Read the Command Character
+
+
+	TXNN	F,F.CYC		;Cycling through all the DDBs?		[300]
+	JRST	CMDFRZ		;Nope, go see if anything input		[300]
+	SKIPE	T1,DDBCNT	;Calculate the number of		[300]
+	SUBI	T1,^D1		; displayable DDB pages			[300]
+	IDIV	T1,PAGSIZ	; found on the last scan		[300]
+	AOS	T2,PAGNUM	;Look at the next page			[300]
+	CAMLE	T2,T1		;Looking beyond the last page?		[300]
+	SETZM	PAGNUM		;Yep, then start over			[300]
+	PUSHJ	P,PAGADJ	;Find the DDBs to be output		[300]
+
+CMDFRZ:	TXZE	F,F.ESC		;Skip if the screen shouldn't be frozen	[300]
+	JRST	CMDWAT		;Go wait for a new command
+
+	SKPINL			;Skip if a command was typed
+	 JRST	CMDFIN		;No - go hibernate
+
+CMDWAT:	INCHWL	C		;Get a char from the TTY
+
+CMDTST:	CAIL	C,"a"		;Skip if less than a lower case A
+	CAILE	C,"z"		;Skip if less than a lower case Z
+	JRST	CMDTS0		;Jump if not lower case character
+	MOVEI	C,"A"-"a"(C)	;Convert to upper case
+CMDTS0:	TXZ	F,F.HLP		;Clear the command error flag
+	MOVSI	T2,-CMDSIZ	;Set up a AOBJN counter
+CMDTS1:	MOVS	T1,CMD(T2)	;Get a char to test
+	CAIE	C,(T1)		;Skip if the char match
+	AOBJN	T2,CMDTS1	;Jump if not finished
+	JUMPGE	T2,CMDERR	;Jump if a match wasn't found
+	HLRZS	T1		;Get the flags and where to go too
+	TRZN	T1,EC		;Skip if eol should follow the command
+	JRST	(T1)		;No - go to the right routine
+	PUSHJ	P,TSTEOL	;Go test for an EOL
+	 JRST	CMDERR		;Not EOL - go give an error message
+	JRST	(T1)		;Found an EOL go to the routine
+
+
+;Here if a command error was detected
+
+CMDERR:	CAIE	C,.CHCNC	;Skip if a Control-C was input
+	CAIN	C,.CHCNZ	;Skip if a Control-Z wasn't input
+	JRST	CMDABT		;Go abort the job
+	CLRBFI			;Clear the input buffer
+	TXO	F,F.HLP		;Set the help flag
+	JRST	DDBMAN		;Go do a rescan
+	SUBTTL	Command Scanner -- The Command Dispatch Table
+
+
+	EC==400000	;Command should be followed by an EOL char
+
+
+CMD:	.CHTAB,,CMDWAT		;Go get the next command
+	.CHCRT,,DDBMAN+EC	;Do a rescan now (carriage-return)
+	.CHESC,,CMDESC		;Freeze the screen (altmode)
+	   " ",,CMDWAT		;Go get the next command
+	   "+",,CMDNXT+EC	;Output next page
+	   "-",,CMDLST+EC	;Output previous page
+	   "A",,CMDALL+EC	;Go do the normal job sequence
+	   "C",,CMDCYC+EC	;Complement the DDB display cycling	[300]
+	   "D",,CMDDSP		;Set up a new output display
+	   "E",,CMDXTN+EC	;Complement the extended status
+	   "F",,CMDFIL		;Set up to test for a file specification
+	   "G",,CMDGOD		;Complement the God bit
+	   "H",,CMDHLP+EC	;Set to print a help message
+	   "J",,CMDJOB		;Set up to test for a job
+	   "K",,CMDKIL+EC	;Kill the display and the job
+	   "L",,CMDLOG		;Set up to test for a logged in job
+	   "N",,CMDNOT		;Set up to test for a not logged in job
+	   "O",,CMDSWP+EC	;Complement the swapped enable		[275,277]
+	   "P",,CMDPRG		;Set up to test for a program
+	   "S",,CMDSLP		;Go get the sleep time
+	   "T",,CMDTTL+EC	;Complement the output of the title
+	   "W",,CMDWHT+EC	;Complement the command buffer bit
+CMDSIZ==.-CMD
+	SUBTTL	Command Scanner -- The Command Processors
+
+
+;Here on a "-" command - Decrement the display by one page
+
+CMDLST:	SOSGE	PAGNUM		;Decrement the page pointer
+
+
+;Here on a "+" command - Advance the display by one page
+
+CMDNXT:	AOS	PAGNUM		;Increment the page pointer
+	PUSHJ	P,PAGADJ	;Set up the page boundary
+	JRST	CMDNOW		;Do a rescan now
+
+
+;Here on a "G" command - Complement the God bit
+
+CMDGOD:	PUSHJ	P,WLDSIX	;Go get the password
+	 JRST	CMDERR		;Error while getting the password
+	PUSHJ	P,TSTEO0	;Go test for an EOL character
+	 JRST	CMDERR		;Error, not an EOL character
+	CAXE	T1,PASWRD	;Skip if the right password was input
+	JRST	CMDERR		;Go give a command error
+	TXCN	F,F.GOD		;Complement the God bit			[275]
+	TXO	F,F.POK		;Allow JOBPEKs if we're enabling	[275]
+	JRST	CMDNOW		;Go do a rescan
+
+
+;Here on a Control-C or Control-Z command - Abort the program
+
+CMDABT:	TXO	F,F.DCT		;Don't clear the terminal input buffer
+	CLRBFO			;Clear the output buffer
+	PUSHJ	P,TRMCLR	;Go clear the screen
+CMDAB0:	SETZM	INTBLK+.EROPC	;Allow more Control-Cs
+	PUSHJ	P,RSTTRM	;Go restore the trminal characteristics
+CMDAB1:	TXZN	F,F.DCT		;Skip if buffer isn't to be cleared
+	CLRBFI			;Clear the input buffer
+IFN FTDEBUG,<
+	TXNN	F,F.DDT		;Skip if ddt is loaded >
+	RELEASE	TTY,		;Release the TTY
+	SETZM	.JBINT##	;Disable Control-C intercept
+	MONRT.			;Return to monitor mode
+	JRST	DDBDPY		;Restart the program on a continue
+
+
+;Here on a "W" command - Complment the 'what' bit
+
+CMDWHT:	TXC	F,F.WHT		;Complement the command buffer bit
+	JRST	CMDNOW		;Do a rescan now
+;Here on a "N" command - Change the logged in PPN not to display
+
+CMDNOT:	TXNE	F,F.GOD		;Skip if not God
+	PUSHJ	P,SCAN		;Go get the PPN
+	 JRST	CMDERR		;An error inform the user
+	TXNE	F,F.PPN		;Skip if a PPN wasn't input
+	JRST	CMDNO0		;Skip some code
+	MOVE	T1,MYPPN	;Get my PPN
+	MOVEM	T1,XDIR		;Save for
+	SETOM	XDIRMSK		; 'TSTNOT'
+CMDNO0:	MOVEI	T1,TSTNOT	;Set up to get the not logged in PPN
+	MOVEM	T1,XROUTIN	;Save for later
+	JRST	CMDFI0		;Go set everything right
+
+
+;Here on a "L" command - Change the logged in PPN to display
+
+CMDLOG:	SKIPA	T1,[TSTLOG]	;Set up to get the logged in PPN
+
+
+;Here on a "F" command - Change the file specification to display
+
+CMDFIL:	MOVEI	T1,TSTFIL	;Set up to test a file specification
+	MOVEM	T1,XROUTIN	;Save for later
+	PUSHJ	P,SCAN		;To scan the file specification
+	 JRST	CMDERR		;Error in specification
+CMDFI0:	MOVE	T1,[XROUTI,,ROUTIN]  ;Set to store the specification
+	BLT	T1,BLTEND	     ; in the right place
+	TXZ	F,F.JOB		;Zero the job display flag
+CMDFI1:	TXO	F,F.WLD		;Set the wild flag
+CMDFI2:	SETZM	PAGNUM		;Start on page one
+	PUSHJ	P,PAGADJ	;Set up the page boundary
+CMDFI3:	PUSHJ	P,CMDOUT	;Go build the command string buffer
+	JRST	CMDNOW		;Go do a rescan
+
+
+;Here on a "P" command - Change the program to test for
+
+CMDPRG:	MOVEI	T1,TSTPRG	;Set up to test a program
+	MOVEM	T1,XROUTIN	;Save for later
+	PUSHJ	P,SCAN		;Go get the program to test
+	 JRST	CMDERR		;Error in specification
+	TXNE	F,F.PPN		;Skip if a PPN wasn't input
+	JRST	CMDPR0		;
+	SETZM	XDIR		;Reset the directory
+	SETZM	XDIRMSK		;Reset the directory mask
+CMDPR0:	MOVE	T1,IDIR		;Save the
+	MOVEM	T1,IPPN		; user's
+	MOVE	T1,IDIRMSK	; default PPN
+	MOVEM	T1,IPPNMSK	; specification
+	JRST	CMDFI0		;Go set everything right
+;Here on a "J" command - Change the job number to display
+
+CMDJOB:	PUSHJ	P,DECIN		;Go get a decimal number
+	 JRST	CMDERR		;Jump if no EOL seen
+	CAIG	T1,^D0		;Skip if not job zero
+	MOVE	T1,CURJOB	;Convert job zero into my job number
+	CAMLE	T1,JOBMAX	;Skip if the job number is .LT. JOBMAX
+	JRST	CMDERR		;Jump if job number is out of range
+	MOVEM	T1,JOBNUM	;Save the job number for later
+	MOVE	T1,IDIR		;Get the default
+	MOVEM	T1,DIR		; directory
+	MOVE	T1,IDIRMSK	;Get the default
+	MOVEM	T1,DIRMSK	; directory mask
+	MOVEI	T1,TSTJOB	;Set up to test for a job
+	MOVEM	T1,ROUTIN	;Save for laver
+	TXO	F,F.JOB!F.PAS	;Set some job display flags
+	SETZM	JOBTTL		;Start with the job's search list	[271]
+	JRST	CMDFI1		;Clear the page counter and do a rescan
+
+
+;Here on an "A" command - Display all DDBs
+
+CMDALL:	TXNN	F,F.GOD		;Skip if God
+	JRST	CMDERR		;Go inform user not a valid command
+	TXZ	F,F.WLD!F.JOB	;Clear the wild and job display flags
+	JRST	CMDFI2		;Clear the page counter and do a rescan
+
+
+;Here on a "H" command - Display a help text
+
+CMDHLP:	PUSHJ	P,TRMCLR	;Go clear the screen
+	OUTSTR	HLPBUF		;Output the help message
+	PUSHJ	P,TRMHOM	;Go home the terminal
+	TXO	F,F.CLR		;Clear the screen before next scan
+	JRST	CMDWAT		;Go wait for a command
+
+
+;Here on a "C" command - Complement the cycling of displayable DDBs	[300]
+
+CMDCYC:	TXC	F,F.CYC		;Try the other for awhile (I guess)	[300]
+	JRST	CMDFI2		;Go start a page 1			[300]
+
+;Here on a "K" command - Kill the display and the job
+
+CMDKIL:	PUSHJ	P,CLRLIN	;Clear to the end of the command line
+	PUSHJ	P,TRMCLR	;Clear the terminal
+	PUSHJ	P,RSTTRM	;Go restore the terminal characteristics
+	MOVX	T1,%CNSIZ	;Get the size of
+	GETTAB	T1,		; the monitor
+	 JRST	E$$NPS		;No - go inform the user
+	LSH	T1,-^D9		;Get the number of monitor pages
+	MOVE	T2,[.PAGSP,,T3]	;Get the function for the PAGE. UUO
+	MOVX	T3,^O1		;Get the argument count
+	MOVE	T4,[PA.GAF+HI_<-^D9>]	;Unmap the specified page
+KILL1:	PAGE.	T2,UU.PHY	;Put a monitor map into my address space
+	 JRST	E$$NPS		;No - go inform the user
+	ADD	T4,[^O1,,^O1]	;On to the next page
+	SOJG	T1,KILL1	;Loop to delete all SPY pages
+	MOVEI	T1,PFFPAG-FSTPAG ;Get the number of preassigned pages to delete
+	MOVE	T4,[PA.GAF+FSTPAG] ;Get the first preassgined page number
+KILL2:	PAGE.	T2,		;Delete a page
+	  JFCL			;Don't worry if it wasn't mapped
+	SOJG	T1,KILL2	;Loop to delete all preassigned pages
+	MOVE	T1,FUNLST	;Get the first unused exec funny page
+	MOVE	T4,FUNFST	;Get the first funny page number
+	SUB	T1,T4		;Compute the number of pages to delete
+	TXO	T4,PA.GAF	;Say we're deleting pages
+KILL3:	PAGE.	T2,		;Delete a page
+	  JFCL			;Don't worry if not there
+	SOJG	T1,KILL3	;Loop for all funny pages
+	MOVEI	T1,LGOBLK	;Point to args
+	RUN	T1,UU.PHY	;Run SYS:LOGOUT
+	  HALT	.		;Cannot fail
+;Here on a "S" command - Change the sleep time between displays
+
+CMDSLP:	PUSHJ	P,DECIN		;Go get a decimal number
+	 JRST	CMDERR		;No End-Of-Line, go inform user
+	CAILE	T1,^D60		;Skip if less than 61 seconds
+	JRST	CMDERR		;Error if the time is greater than 60
+	IMULI	T1,^D1000	;Convert to milliseconds
+	CAIN	T1,^D0		;Skip if the sleep time isn't zero
+	MOVEI	T1,^D250	;Set the sleep time to 250 milliseconds
+	HRRM	T1,HIBTIM	;Save for later
+IFN FTSLEEP,<
+	TXNN	F,F.GOD		;Skip if God
+	CAXL	T1,SLPMIN	;Skip if less the minimum sleep time
+	TDZA	T1,T1		;Don't adjust the sleep time
+	MOVX	T1,SLPSCN	;Set the sleep
+	MOVEM	T1,SLPCNT	; time counter >
+	JRST	CMDFI3		;Go update the screen now
+
+
+;Here on a "ESCAPE" command - Freeze the screen
+
+CMDESC:	TXO	F,F.ESC		;Pause after updating the screen
+	JRST	DDBMAN		;Go update the screen now
+
+
+;Here on a "D" command - Change the type of display
+
+CMDDSP:	PUSHJ	P,WLDSIX	;Go get the new display type
+	 JRST	CMDERR		;Error while seaching for a display type
+	PUSHJ	P,TSTEO0	;Test for an EOL character
+	 JRST	CMDERR		;Error, not an EOL character
+	SKIPA			;Skip into the following code		[273]
+
+CMDDS0:	MOVE	T1,TRMNAM	;Get the terminal's type		[273]
+	PUSHJ	P,SETDSP	;Go set up the screen size
+	JRST	CMDFI2		;Go clear the page number and do a rescan
+;Here on a "E" command - Change the display of the extended status
+
+CMDXTN:	TXC	F,F.XTN		;Complement the entire path bit
+	JRST	CMDDS0		;Go set up the screen size
+
+
+;Here on a "T" command - Change the display of the title line
+
+CMDTTL:	TXC	F,F.TTL		;Complement the title bit
+	JRST	CMDDS0		;Go set up the screen size
+
+
+;Here on an "O" command - Change the display of swapped out DDBs
+
+CMDSWP:	TXNN	F,F.POK		;Are we allowed to do this?		[275]
+	JRST	CMDERR		;No, go complain			[275]
+	TXC	F,F.PEK		;Yes, complement the bit		[275]
+	JRST	CMDFI2		;Go do a rescan				[275]
+
+
+;Here to sleep for awhile
+
+CMDFIN:	MOVE	T1,HIBTIM
+	HIBER	T1,		;Hibernate awhile
+	 JFCL			;No - punt it
+	INCHSL	C		;Skip if input made me wake up
+	 JRST	DDBMAN		;No - go do a rescan
+	JRST	CMDTST		;Go test this new command
+
+
+;Here to see if the screen should be updated now
+
+CMDNOW:	CAIE	C," "		;Skip if the character is an space
+	CAIN	C,.CHTAB	;Skip if the character is a tab
+	JRST	CMDWAT		;Go wait for a new command
+	CAIN	C,.CHESC	;Skip if the character isn't an escape
+	JRST	CMDWAT		;Go wait for a new command
+	JRST	DDBMAN		;Go update the screen now!!!
+	SUBTTL	Input Routines -- SCAN - Input a File Specification
+
+
+;SCAN - Input a file specification
+;Call:	PUSHJ	P,SCAN
+;	 * Non-skip return - An error was detected while scanning *
+;	* Skip return - XNOD block contains the file-spec. *
+;Uses:	F, T1-5 and C
+
+SCAN:	MOVE	T1,[INOD,,XNOD]	;Set up the initial conditions
+	BLT	T1,XBLTEND	; for scan - ALL:*.*[MYPPN]
+	TXZ	F,F.NOD!F.DEV!F.FIL!F.EXT!F.PPN  ;Clear some flags
+
+SCAN0:	PUSHJ	P,WLDSIX	;Go read a SIXBIT word
+	 POPJ	P,		;Error in the SIXBIT routine
+	CAIE	C,"["		;Skip if an open bracket
+	CAIN	C,"<"		;Skip if not an open carrot
+	JRST	SCNDIR		;Go process it
+	CAIN	C,"_"		;Skip if not a backarrow (underscore)
+	JRST	SCNNOD		;Go process it
+	CAIN	C,":"		;Skip if not a colon
+	JRST	SCNDEV		;Go process it
+SCAN1:	CAIN	C,"."		;Skip if not an period
+	JRST	SCNFIL		;Go process it
+SCAN2:	PUSHJ	P,TSTEO0	;Go see if an EOL was found
+	 POPJ	P,		;No EOL - error return
+
+SCNEXT:	TXNE	F,F.FIL		;Skip if no file-name seen
+	JRST	SCNEX0
+	JUMPE	T1,SCNEX1	;Jump if default name is wanted
+	TXO	F,F.FIL		;Set the file seen flag
+	MOVEM	T1,XFIL		;Save for later
+	MOVEM	T2,XFILMSK	;Save for later
+	JRST	SCNEX1		;Go test for ERSATZ device
+SCNEX0:	TXO	F,F.EXT		;Set the extension seen flag
+	HLR	T1,T2		;Get the extension mask
+	MOVEM	T1,XEXT		;Save for later
+	CAME	T1,['UFD',,-1]	;Skip if the extension is 'UFD'
+	JRST	SCNEX1		;Go test for ERSATZ device
+	MOVE	T1,[1,,1]	;Move the
+	EXCH	T1,XDIR		; directory
+	MOVEM	T1,XFIL		; to the file
+	SETO	T1,		; name and [1,1]
+	EXCH	T1,XDIRMSK	; to the
+	MOVEM	T1,XFILMSK	; directory
+SCNEX1:	TXNE	F,F.DEV		;Skip if device wasn't input
+	TXNE	F,F.PPN		;Skip if directory wasn't input
+	PJRST	.POPJ1		;Give a good return
+	SETCM	T1,XDEVMSK	;Get the device mask
+	JUMPN	T1,.POPJ1	;Skip if any wild-cards input
+	HLRZ	T1,XDEV		;Get the possible ERSATZ device
+	MOVE	T3,GETEDN	;Get a pointer to ERSATZ devices
+SCNEX2:	HLRZ	T2,(T3)		;Get a real ERSATZ device
+	CAME	T1,T2		;Skip if equal
+	AOBJN	T3,SCNEX2	;Loop until all have been tried
+	JUMPGE	T3,.POPJ1	;Return if no match was found
+	ADD	T3,MAXEDN	;Get the pointer
+	HRRZ	T3,(T3)		; to the PPN
+	SKIPG	T1,HI(T3)	;Skip a real ERSATZ device
+	PJRST	.POPJ1		;** No way to get the LIB PPN **
+REPEAT 0,<
+	JRST	[JUMPE	T1,.POPJ1	;Return to caller
+		 MOVE	P5,CURJOB	;Get my job number
+		 HLRZ	T1,@GETSFD	;Get LIB info
+		 TXZ	T1,JBPSYS!JBPXSY;Clear some bits
+		 JUMPE	T1,.POPJ	;Jump if no LIB
+		 MOVE	T1,HI+PPBNAM(T1);Get the LIB PPN
+		 JRST	SCNEX3]		;See if valid for this user >
+SCNEX3:	TXNE	F,F.GOD		;Skip if not Godly
+	JRST	SCNEX4		;Jump if no need to test the PPN
+	MOVE	T2,T1		;Get a copy of the PPN
+	XOR	T2,XDIR		;Compare the PPNs
+	TDNE	T2,XDIRMSK	;Skip if good enough
+	POPJ	P,		;Give an error return
+SCNEX4:	MOVEM	T1,XDIR		;Save the PPN
+	SETOM	T1,XDIRMSK	;Reset the mask
+	HRRZ	T1,XDEV		;Get the structure name
+	SKIPN	T1		;Skip if null
+	TLOA	T1,'ALL'	;Set the device name to 'ALL'
+	TLOA	T1,'DSK'	;Set the device name to 'dskx'
+	SETZM	XDEVMSK		;Reset the device mask
+	MOVEM	T1,XDEV		;Save the device name
+	TXO	F,F.PPN		;Inform the caller a PPN was input
+	PJRST	.POPJ1		;Give a good return
+SCNNOD:	TXON	F,F.NOD		;Skip if the node flag is set
+	TXNE	F,F.DEV!F.FIL!F.PPN  ;Skip if none are set
+	POPJ	P,		;Error return
+	JUMPE	T1,.POPJ	;Null node is illegal - error return
+	MOVEM	T1,XNOD		;Save for later
+	MOVEM	T2,XNODMSK	; ..
+	JRST	SCAN0		;Go look for more
+
+SCNDEV:	TXON	F,F.DEV		;Skip if the device flag is set
+	TXNE	F,F.FIL!F.PPN	;Skip if none are set
+	POPJ	P,		;Error return
+	JUMPE	T1,.POPJ	;Null device is illegal - error return
+	CAMN	T1,IDEV		;Skip if the device isn't 'ALL'
+	JRST	SCAN0		;Go look for more
+	MOVEM	T1,XDEV		;Save for later
+	MOVEM	T2,XDEVMSK	; ..
+	JRST	SCAN0		;Go look for more
+
+SCNFIL:	TXOE	F,F.FIL		;Skip if I haven't been here before
+	POPJ	P,		;Error return
+	JUMPE	T1,SCAN0	;Jump if the default name is wanted
+	MOVEM	T1,XFIL		;Save for later
+	MOVEM	T2,XFILMSK	; ..
+	JRST	SCAN0		;Go look for more
+SCNDIR:	TXOE	F,F.PPN		;Skip if I haven't been here before
+	POPJ	P,		;Error return
+	PUSHJ	P,WLDOCT	;Go get the project number then
+	CAIE	C,","		;Skip if a comma
+	POPJ	P,		;Error return
+	CAMN	T3,[-1,,0]	;Skip if the project number isn't zero
+	HLRO	T3,MYPPN	;Use my project number then
+IFN FTPROJ,<
+	TXNE	F,F.GOD		;Skip if not a privileged user
+	JRST	SCNDI0
+	HLRO	T4,MYPPN	;Get the uesr's project number
+	CAME	T3,T4		;Skip if the input project and the
+				; user's project number don't match
+	POPJ	P,		;Error return >
+SCNDI0:	HRLZM	T3,XDIR		;Save for later
+	HLLZM	T3,XDIRMSK	; ..
+	PUSHJ	P,WLDOCT	;Go get the programmer number then
+	CAMN	T3,[-1,,0]	;Skip if the programmer number isn't zero
+	HRRO	T3,MYPPN	;Use my programmer number then
+IFN FTPROG,<
+	TXNE	F,F.GOD		;Skip if not a privileged user
+	JRST	SCNDI1
+	HRRO	T4,MYPPN	;Get the uesr's programmer number
+	CAME	T3,T4		;Skip if the input programmer and the
+				; user's programmer number don't match
+	POPJ	P,		;Error return >
+SCNDI1:	HRRM	T3,XDIR		;Save for later
+	HLRM	T3,XDIRMSK	; ..
+REPEAT 0,<			;		**** Save T1-T2 ****
+	PUSH	P,P1		;Save P1
+	MOVSI	P1,-<LIMLVL+1>	;Set up a counter
+SCNDI2:	CAIE	C,","		;Skip if the character is a comma
+	JRST	SCNDI4		;Go test for EOL
+	AOBJP	P1,SCNDI3	;Jump if too many SFD
+	PUSHJ	P,WLDSIX	;Go read the SFD name
+	 JRST	SCNDI3		;Error in SFD name
+	JUMPE	T1,SCNDI3	;Null SFD is an illegal
+	MOVEM	T1,XDIR+1(P1)	;Save the SFD name
+	MOVEM	T2,XDIRMSK+1(P1);Save the SFD mask
+	JRST	SCNDI2		;Loop back for more
+SCNDI3:	POP	P,P1		;Restore P1
+	POPJ	P,		;Error RETURN
+SCNDI4:	POP	P,P1		;Restore P1 >
+	CAIE	C,"]"		;Skip if the break character was a "]"
+	CAIN	C,">"		;Skip if the break character wasn't a ">"
+	JRST	[XCT	INCHR		;Get the next character then
+		 JRST	SCAN1]		;Go test for a "."
+	JRST	SCAN2		;Go test for an EOL
+	SUBTTL	Input Routines -- OCTIN/DECIN - Input a Number
+
+
+;OCTIN - Input an octal number
+;DECIN - Input a decimal number
+;Call:	PUSHJ	P,OCTIN/DECIN
+;	* Return - The result is in T1 *
+;Uses:	T1-3 and C
+
+OCTIN:	SKIPA	T3,[^D8]	;Set up of octal input
+DECIN:	MOVEI	T3,^D10		;Set up of decimal input
+RDXIN:	SETZ	T1,		;Clear the input buffer
+RDXIN0:	XCT	INCHR		;Get a character
+	CAIL	C,"0"		;Skip if less than an ASCII zero
+	CAIL	C,"0"(T3)	;Skip if less than the radix of input
+	PJRST	TSTEO0		;Go test for EOL
+	IMULI	T1,(T3)		;Muliply by the radix
+	ADDI	T1,-"0"(C)	;Add in the new digit
+	JRST	RDXIN0		;Go get another char
+	SUBTTL	Input Routines -- WLDOCT - Input a Wild Octal Number
+
+
+;WLDOCT - Input a wild octal number
+;Call:	PUSHJ	P,WLDOCT
+;	* Return - The result is in T3; RH = mask, LH = number *
+;Uses:	T3-4 and C
+
+WLDOCT:	MOVSI	T3,-1		;Set up the default number
+	MOVEI	T4,^D7		;Set up a character counter
+WLDOC0:	SOJL	T4,.POPJ	;Return if more than six digits input
+	XCT	INCHR		;Get a character
+	CAIL	C,"0"		;Skip if less than a "0"
+	CAILE	C,"7"		;Skip if less than an "8"
+	JRST	WLDOC1
+	LSH	T3,3		;Multiply by 8
+	TLO	T3,7		;Put a 7 in the mask
+	ORI	T3,-"0"(C)	;Add in the last number
+	JRST	WLDOC0		;Go get another number
+WLDOC1:	CAIN	C,"*"		;Skip if not an astrisk
+	JRST	WLDOC2
+	CAIE	C,"?"		;Skip if a question mark
+	POPJ	P,		;Return
+	LSH	T3,3		;Multiply by 8
+	JRST	WLDOC0		;Loop for more digits
+WLDOC2:	CAME	T3,[-1,,0]	;Skip if the default number
+	POPJ	P,		;Error return
+	SETZ	T3,		;Set the '*' flag
+	XCT	INCHR		;Get the next character
+	POPJ	P,		;Return
+	SUBTTL	Input Routines -- WLDSIX - Input Wild SIXBIT
+
+
+;WLDSIX - Input a wild SIXBIT word
+;Call:	PUSHJ	P,WLDSIX	;Get wild SIXBIT word and mask
+;	 * Non-skip return - Illegal sintax on input *
+;	* Skip return - Wild SIXBIT input in T1 and mask in T2 *
+;Uses:	T1-5 and C
+
+WLDSIX:	TXZ	F,F.AST		;Reset the astrisk flag
+	SETZ	T1,		;Reset the SIXBIT word
+	SETO	T2,		;Reset the mask word
+	MOVE	T3,[POINT 6,T1]	;Set up a byte pointer
+
+WLDSI0:	XCT	INCHR		;Get a character from the user
+	CAIL	C,"a"		;Skip if less than a lower case A
+	CAILE	C,"z"		;Skip if less than a lower case Z
+	JRST	WLDSI3		;Go store the character
+	MOVEI	C,"A"-"a"(C)	;Convert lower case to upper case
+
+WLDSI1:	TXNE	F,F.AST		;Skip if an astrisk has been input
+	POPJ	P,		;Error
+WLDSI2:	MOVEI	C,' '-" "(C)	;Convert ASCII to SIXBIT
+	TXNE	T3,77B5		;Skip if the SIXBIT word is full
+	IDPB	C,T3		;Store the character
+	JRST	WLDSI0		;Go get the next character
+
+WLDSI3:	CAIG	C,"Z"		;Skip if greater than a "Z"
+	CAIGE	C,"0"		;Skip if greater than a "0"
+	JRST	WLDSI4		;Go test for an "*" or "?"
+	CAIGE	C,"A"		;Skip if greater than a "A"
+	CAIG	C,"9"		;Skip if greater than a "9"
+	JRST	WLDSI1		;Go store the character
+
+WLDSI4:	CAIN	C,"*"		;Skip if not an astrisk
+	JRST	WLDAST		;Go process the astrisk
+	CAIE	C,"?"		;Skip if a question mark
+	PJRST	.POPJ1		;Give a good return
+
+WLDQST:	TXNE	F,F.AST		;Skip if the astrisk flag isn't set
+	POPJ	P,		;Error return
+	MOVX	T4,77B5		;Set up the question mark mask
+	JRST	WLDAS0		;To store the character and mask
+
+WLDAST:	TXOE	F,F.AST		;Skip it astrisk flag isn't set and set it
+	POPJ	P,		;Error return
+	SETO	T4,		;Set the mask flag
+WLDAS0:	LDB	T5,[POINT 6,T3,5]  ;Get the location of the byte
+	LSH	T4,-^D36(T5)	;Position the mask
+	XOR	T2,T4		;Store the mask
+	JRST	WLDSI2		;To store the character
+	SUBTTL	Input Routines -- CLRLIN - Clear to End of Line
+
+
+;CLRLIN - Clear to the end of a command line
+;Call:	PUSHJ	P,CLRLIN
+;	* Return *
+;Uses:	T5 and C
+
+CLRLIN:	MOVSI	T5,-<EOLSIZ-2>	;Get the number of end of line characters
+CLRLI0:	CAMN	C,EOL(T5)	;Skip if not this character
+	POPJ	P,		;Return
+	AOBJN	T5,CLRLI0	;Loop until all have been tried
+	XCT	INCHR		;Get the next character
+	JRST	CLRLIN		;Go try this character
+	SUBTTL	Input Routines -- TSTEOL - Test of End-of-Line Character
+
+
+;TSTEOL - Test for an EOL character
+;Call:	MOVE	C,<The character to test>
+;	PUSHJ	P,TSTEOL
+;	 * Non-skip return - Not an EOL character *
+;	* Skip return - An EOL character *
+;Uses:	T5 and C
+
+TSTEOL:	XCT	INCHR		;Get a character
+TSTEO0:	CAIN	C,.CHCRT	;Skip if the char isn't a carriage return
+	XCT	INCHR		;Get another character then
+	MOVSI	T5,-EOLSIZ	;Set up an AOBJN counter
+TSTEO1:	CAMN	C,EOL(T5)	;Skip if it equals this char
+	JRST	.POPJ1		;Give an E-O-L return
+	AOBJN	T5,TSTEO1	;Jump if more char to test
+	POPJ	P,		;Return
+
+
+;The EOL character set
+
+EOL:	.CHBEL			;A bell
+	.CHLFD			;A line-feed
+	.CHVTB			;A vertical-tab
+	.CHFFD			;A form-feed
+	.CHCNZ			;A Control-Z
+	.CHESC			;An escape
+	.CHTAB			;A tab
+	" "			;A space
+EOLSIZ==.-EOL
+	SUBTTL	Output Routines -- PPNOUT/PPNJST - Output a PPN
+
+
+;PPNOUT - Output a PPN without justification
+;PPNJST - Output a PPN with (right) justification
+;Call:	MOVE	T4,<The justification counter (PPNJST)>
+;	MOVE	T5,<The PPN to output>
+;	PUSHJ	P,PPNOUT/PPNJST
+;	* Return *
+;Uses:	T1-5, BP, C and CC
+
+PPNOUT:	SETZ	T4,		;Clear the justify counter
+PPNJST:	HLRZ	T1,T5		;Set to output the proj number
+	PUSHJ	P,OCTJST	;Output the proj number
+	PUSHJ	P,COMOUT	;Output a comma
+	MOVEI	T1,(T5)		;Set up to output the prog number
+;	PFALL	OCTOUT		;Fall into OCTOUT
+	SUBTTL	Output Routines -- OCTOUT/DECOUT/OCTJST/DECJST
+
+
+;OCTOUT - Output an octal number without justification
+;DECOUT - Output a decimal number without justification
+;OCTJST - Output an octal number with (right) justification
+;DECJST - Output a decimal number with (right) justification
+;Call:	MOVE	T4,<The justification counter (OCTJST/DECJST)>
+;	MOVE	T1,<The number to output>
+;	PUSHJ	P,OCTOUT/DECOUT/OCTJST/DECJST
+;	* Return *
+;Uses:	T1-4, BP, C and CC
+
+OCTOUT:	TDZA	T4,T4
+DECOUT:	TDZA	T4,T4
+
+OCTJST:	SKIPA	T3,[^D8]	;Set up for octal output
+DECJST:	MOVEI	T3,^D10		;Set up for decimal output
+RDXJST:	JUMPGE	T1,RDXJS0	;Jump if the number of positive
+	MOVNS	T1		;Make the number positive
+	SOJ	T4,		;Decrement column counter
+	TXOA	F,F.NEG		;Set the negative flag and skip
+RDXJS0:	TXZ	F,F.NEG		;Clear the negative flag
+RDXJS1:	SOJ	T4,		;Decrement column counter
+	IDIVI	T1,(T3)		;Get a digit
+	MOVEI	C,"0"(T2)	;Convert binary to ASCII
+	HRLM	C,(P)		;Save for later
+	JUMPE	T1,RDXJS3	;Jump if no more digits to output
+	PUSHJ	P,RDXJS1	;Go get another digit
+RDXJS2:	HLRZ	C,(P)		;Get a digit
+	PJRST	CHROUT		;Go output the digit
+RDXJS3:	TXNE	F,F.NEG		;Skip if not negative
+	PUSH	P,["-",,RDXJS2]	;Set up to output a "-"
+	JUMPLE	T4,RDXJS2	;Jump if no spaces to output
+	MOVEI	C," "
+RDXJS4:	PUSHJ	P,CHROUT	;Output a space
+	SOJG	T4,RDXJS4	;Jump if more spaces to output
+	JRST	RDXJS2		;Go output some digits
+	SUBTTL	Output Routines -- CHROUT - Output a Character
+
+
+;CHROUT - Output a Character
+;Call:	MOVE	C,<The character to output>
+;	PUSHJ	P,CHROUT
+;	* Return *
+;Uses:	 BP and CC
+
+CHROUT:	AOJ	CC,		;Increment the column counter
+	CAMGE	CC,LINWID	;Don't output if done too many		[276]
+	IDPB	C,BP		;Save the char
+	POPJ	P,		;Return
+	SUBTTL	Output Routines -- PRVOUT - Output a Protection
+
+
+;PRVOUT - Output a protection code
+;Call:	MOVE	T4,<The justification counter>
+;	MOVE	T2,<The protection code>
+;	PUSHJ	P,PRVOUT
+;	* Return *
+;Uses:	T1-4, BP, C and CC
+
+PRVOUT:	PUSHJ	P,JUST		;Justify everything first
+	MOVEI	T3,^D3		;Set up a counter
+	MOVE	T1,['> <000']	;Get the protection mask
+PRVOU0:	ROTC	T1,-^D3		;Get a digit
+	ROT	T1,-^D3		;Convert to sixbit
+	SOJG	T3,PRVOU0	;Loop until finished
+	ROT	T1,-^D6		;Allow room for the open carrot
+	PJRST	SIXOUT		;Output the protection code
+	SUBTTL	Output Routines -- JUST - Justify the Output
+
+
+;JUST - Justify the output
+;Call:	MOVE	T1,<The column to justify to>
+;	PUSHJ	P,JUST
+;	* Return *
+;Uses:	T1, BP, C and CC
+
+JUST:	SUBI	T1,(CC)		;Get the number of spaces needed
+	JUMPLE	T1,.POPJ	;Jump if none to output
+	MOVEI	C," "
+JUST0:	PUSHJ	P,CHROUT	;Output a space
+	SOJG	T1,JUST0	;Loop if more spaces to output
+	POPJ	P,		;Return
+	SUBTTL	Output Routines -- ASCOUT - Output an ASCIZ String
+
+
+;ASCOUT - Output an ASCIZ String
+;Call:	MOVEI	T1,<The address of the ASCIZ string>
+;	PUSHJ	P,ASCOUT
+;	* Return *
+;Uses:	T1, BP, C and CC
+
+ASCOUT:	TLOA	T1,(POINT 7)	;Set up the byte pointer
+ASCOU0:	PUSHJ	P,CHROUT	;Output the char
+	ILDB	C,T1		;Get the next char
+	JUMPN	C,ASCOU0	;Go output the char if non-null
+	POPJ	P,		;Return
+	SUBTTL	Output Routines -- SIXOUT - Output a SIXBIT Word
+
+
+;SIXOUT - Output a SIXBIT word
+;Call:	MOVE	T1,<The SIXBIT word to output>
+;	PUSHJ	P,SIXOUT
+;	* Return *
+;Uses:	T1-2, BP, C and CC
+
+SIXOUT:	JUMPE	T1,.POPJ	;Jump if nothing to output
+SIXOU0:	SETZ	T2,		;Clear a shift register
+	ROTC	T1,6		;Get the char into T2
+	MOVEI	C," "-' '(T2)	;Convert from SIXBIT to ASCII
+	PUSHJ	P,CHROUT	;Output the char
+	JUMPN	T1,SIXOU0	;Loop for more characters
+	POPJ	P,		;Return
+	SUBTTL	Output Routines -- TTLLIN - Set Up for the Title Line
+
+
+;TTLLIN - Set up to output the title line
+;Call:	MOVEI	LC,<The line number>
+;	PUSHJ	P,TTLLIN
+;	* Return *
+;Uses:	 BP and CC
+
+TTLLIN:	MOVEI	BP,(LC)		     ;Make a byte
+	IMULI	BP,LINSIZ	     ; pointer to the
+	ADD	BP,[POINT 7,TTLBUF]  ; current line
+	SETZ	CC,		;Reset the column count
+	POPJ	P,		;Return
+	SUBTTL	Output Routines -- BEGLIN - Set up for a Display Line
+
+
+;BEGLIN - Set up to output a display line
+;Call:	PUSHJ	P,GETLIN
+;	* Return *
+;Uses:	BP and CC
+
+BEGLIN:	MOVEI	BP,(LC)		     ;Make a byte
+	IMULI	BP,LINSIZ	     ; pointer to the
+	ADD	BP,[POINT 7,LINBUF]  ; current line
+	SETZ	CC,		;Reset the column count
+	POPJ	P,		;RETURN
+	SUBTTL	Output Routines -- ENDLIN - Finish off a Display Line
+
+
+;ENDLIN - Finish off a display line
+;Call:	PUSHJ	P,ENDLIN
+;	* Return *
+;Uses:	T1, BP, C and CC
+
+ENDLIN:	MOVX	T1,%HZ1HP	;Assume a Hazeltine terminal		[273]
+	MOVX	T2,CL.HZL	;Get the class for a Hazeltine terminal	[273]
+	CAIN	T2,(P1)		;Is it a Hazeltine terminal?		[273]
+	PUSHJ	P,JUST		;Clear thru column 68
+	SETZ	C,		;Get a null				[273]
+	PJRST	CHROUT		;Go put a null char in the line buffer
+	SUBTTL	Output Routines -- COMOUT - Output a Comma
+
+
+;COMOUT - Output a comma
+;Call:	PUSHJ	P,COMOUT
+;	* Return *
+;Uses:	BP, C and CC
+
+COMOUT:	MOVEI	C,","		;Get a comma to output
+	PJRST	CHROUT		;Output it and return
+	SUBTTL	Output Routines -- CLNOUT - Output a Colon
+
+
+;CLNOUT - Output a colon
+;Call:	PUSHJ	P,CLNOUT
+;	* Return *
+;Uses:	BP, C and CC
+
+CLNOUT:	MOVEI	C,":"		;Get a colon to output
+	PJRST	CHROUT		;Output it and return
+	SUBTTL	Output Routines -- LBROUT, RBROUT - Output a Bracket
+
+;LBROUT - Output a left bracket ("[")
+;RBROUT - Output a right bracket ("]")
+;Call:	PUSHJ	P,LBROUT
+;	* Return *
+;Uses:	BP, C and CC
+
+LBROUT:	SKIPA	C,["["]		;Get a left bracket			[276]
+RBROUT:	MOVEI	C,"]"		;Get a right bracket			[276]
+	PJRST	CHROUT		;Output it and return			[276]
+	SUBTTL	Output Routines -- SLHOUT - Output a Slash
+
+
+;SLHOUT - Output a slash
+;Call:	PUSHJ	P,SLHOUT
+;	* Return *
+;Uses:	BP, C and CC
+
+SLHOUT:	MOVEI	C,"/"		;Get a slash to output
+	PJRST	CHROUT		;Output it and return
+	SUBTTL	Output Routines -- SPAOUT - Output a Space
+
+
+;SPAOUT - Output a space
+;Call:	PUSHJ	P,SPAOUT
+;	* Return *
+;Uses:	BP, C and CC
+
+SPAOUT:	MOVEI	C," "		;Get a space to output
+	PJRST	CHROUT		;Output it and return
+	SUBTTL	Output Routines - STROUT - Output a Structure Name and Free Count
+
+;STROUT - Output a structure name and free count
+;Call:	MOVE	T1,<SIXBIT structure name>
+;	MOVE	T2,<free space to be typed>
+;	PUSHJ	P,STROUT
+;	 * Non-skip return - structure won't fit on this line
+;	* Skip return - output successfully
+;Call:	MOVE	T1,<SIXBIT structure name>
+;	MOVE	T2,<free count>
+;	MOVE	T4,<number of overhead characters>
+;	PUSHJ	P,STROUE
+;	 * Non-skip return - couldn't fit on the line
+;	* Skip return - structure output
+;Uses: BP, C and CC
+
+STROUE:	PUSH	P,T1		;Save all				[271]
+	PUSH	P,T2		; the appropriate			[271]
+	PUSH	P,T3		; registers				[271]
+	PUSH	P,T4		;  ...					[271]
+	ADDI	T4,2(CC)	;Compute the amount of overhead chars	[271]
+	JRST	STRO01		;Jon the common code below		[271]
+
+STROUT:	PUSH	P,T1		;Save the				[271]
+	PUSH	P,T2		; two arguments				[271]
+	PUSH	P,T3		;And a couple				[271]
+	PUSH	P,T4		; of other registers			[271]
+	MOVEI	T4,2(CC)	;Account for the ":" and leading space	[271]
+
+STRO01:	ADDI	T4,1		;Count this character (assumes at least one) [271]
+	LSH	T1,^D6		;Shift to next character		[271]
+	JUMPN	T1,STRO01	;Loop if more chars in the name		[271]
+
+	MOVE	T1,T2		;Get the free count			[271]
+	PUSHJ	P,SCALE		;Get the number of digits needed	[271]
+	ADD	T4,T2		;Add it into the sum			[271]
+
+; We have the length needed.  See if it'll fit on this line
+
+	CAML	T4,LINWID	;Will it fit on this line?		[271,273]
+	 JRST	STRO99		;No, just return unsuccessfully		[271]
+	AOS	-4(P)		;Yes, cause a skip return		[271]
+	SKIPE	CC		;Are we in column zero?			[271]
+	PUSHJ	P,SPAOUT	;No, output a space			[271]
+	MOVE	T1,-3(P)	;Get the structure name back		[271]
+	PUSHJ	P,SIXOUT	;Output it				[271]
+	PUSHJ	P,CLNOUT	;Output the separator			[271]
+	MOVE	T1,-2(P)	;Get the free count back		[271]
+	PUSHJ	P,DECOUT	; and output it				[271]
+
+STRO99:	POP	P,T4		;Restore the saved			[271]
+	POP	P,T3		; temp ACs				[271]
+	POP	P,T2		;Restore the free count			[271]
+	POP	P,T1		;  and the structure name		[271]
+	POPJ	P,		;Return					[271]
+	SUBTTL	Output Routines -- SCALE - Scale a Decimal Number
+
+;SCALE - Figure out how many digits in a decimal number
+;Call:	MOVE	T1,<number to be output>
+;	PUSHJ	P,SCALE
+;	* Returns T2 containing the number of digits to be output
+;Uses T1, T2
+
+SCALE:	MOVSI	T2,-STENLN	;Get the powers of ten table length	[271]
+
+; Loop here to figure out how namy digits:
+
+SCAL01:	CAML	T1,STEN(T2)	;Big enough power of ten yet?		[271]
+	AOBJN	T2,SCAL01	;No, try the next power of ten		[271]
+	HRRZS	T2		;Get the number of digits		[271]
+	POPJ	P,		;And return				[271]
+
+; The powers of ten table:
+
+STEN:	^D0		;(Should be 1, but even 0 needs a digit)	[271]
+	^D10		;10^1						[271]
+	^D100		;10^2						[271]
+	^D1000		;10^3						[271]
+	^D10000		;10^4						[271]
+	^D100000	;10^5						[271]
+	^D1000000	;10^6						[271]
+	^D10000000	;10^7						[271]
+	^D100000000	;10^8						[271]
+	^D1000000000	;10^9						[271]
+	^D10000000000	;10^10						[271]
+STENLN==.-STEN		;Length of this table				[271]
+	SUBTTL	Output Routines -- TIMOUT - Output a Time
+
+
+;TIMOUT - Output a time value
+;Call:	MOVE	T1,<The time in jiffies>
+;	PUSHJ	P,TIMOUT
+;	* Return *
+;Uses:	T1-4, BP, C and CC
+
+TIMOUT:	TXZ	F,F.DIG		;Clear the digit output flag
+	IDIV	T1,JIFHOR	;Get the number of hours
+	PUSH	P,T2		;Save the minutes and seconds for later
+	JUMPE	T1,TIMOU0	;Jump if the hours field is zero
+	PUSHJ	P,TWOOUT	;Output the hours
+	PUSHJ	P,CLNOUT	;Output a colon
+TIMOU0:	POP	P,T1		;Restore the minutes and seconds
+	IDIV	T1,JIFMIN	;Get the minutes
+	PUSH	P,T2		;Save the seconds for later
+	TXNN	F,F.DIG		;Skip is a digit has been output
+	JUMPE	T1,TIMOU1	;Jump if the minutes field is zero
+	PUSHJ	P,TWOOUT	;Output the minutes
+	PUSHJ	P,CLNOUT	;Output a colon
+TIMOU1:	POP	P,T1		;Restore the seconds
+	IDIV	T1,JIFFIE	;Get the whole seconds
+	PUSH	P,T2		;Save the part of a second for later
+	PUSHJ	P,TWOOUT	;Output the whole seconds
+	MOVEI	C,"."		;Output
+	PUSHJ	P,CHROUT	; a "."
+	POP	P,T1		;Restore the part of a second
+	IMULI	T1,^D100	;Convert to
+	IDIV	T1,JIFFIE	; centi-seconds
+;	PFALL	TWOOUT		;Fall into TWOOUT
+	SUBTTL	Output Routines -- TWOOUT - Output Atleast Two Digits
+
+
+;TWOOUT - Output atleast two decimal digits
+;Call:	MOVE	T1,<The number to output>
+;	PUSHJ	P,TWOOUT
+;	* Return *
+;Uses:	F, T1-4, BP, C and CC
+
+TWOOUT:	TXON	F,F.DIG		;Skip if a digit has been output
+	PJRST	DECOUT		;Output the number and return
+	MOVEI	C,"0"		;Set up to output a zero
+	CAIGE	T1,^D10		;Skip if the number is greater than 9
+	PUSHJ	P,CHROUT	;Output a zero
+	PJRST	DECOUT		;Output the number and return
+	SUBTTL	Output Routines -- SIXJST - Output a Justified SIXBIT Word
+
+
+;SIXJST - Output a justified SIXBIT Word
+;Call:	MOVE	T4,<The column to justify to>
+;	MOVE	T2,<The SIXBIT word to output>
+;	PUSHJ	P,SIXJST
+;	* Return *
+;Uses:	T1-2, BP, C and CC
+
+SIXJST:	PUSHJ	P,JUST		;Justify to the right column
+	MOVE	T1,T2		;Get the SIXBIT word to be output
+	PJRST	SIXOUT		;Now output it and return
+	SUBTTL	Output Routines -- JOBOUT - Output Some Job Status
+
+
+;JOBOUT - Output some job status
+;Call:	PUSHJ	P,JOBOUT
+;	* Return *
+;Uses:	F, T1-5, P2-5, BP, C and CC
+
+JOBOUT:	MOVE	P5,JOBNUM	;Get the job number
+	MOVE	P4,@GETSTS	;Get the job's status
+	TXNN	P4,JS.JNA	;Skip if the job number has be assigned
+	PJRST	.POPJ1		;The job isn't in use
+	SKIPE	P2,@GETTTY	;Skip if on TTY associated with the job
+	ADDI	P2,HI		;Relocate to the high segment		[266]
+	SKIPN	P3,@GETPDB	;Skip if the job has a pdb
+	PJRST	.POPJ1		;The job isn't in use
+
+	PUSH	P,P5		;The save job number for later
+	MOVE	T1,['PRG:  ']	;Output
+	PUSHJ	P,SIXOUT	; 'PRG:'
+	MOVE	T1,@GETPRG	;Get the program name
+	PUSHJ	P,SIXOUT	; and output it
+	MOVE	T2,@GETPRG	;Get the low segment name again
+	SKIPLE	P5,@GETSGN	;Skip if the high segment doesn't exists
+	SKIPN	T1,@GETPRG	;Skip if a non-null high segment name
+	JRST	JOBO0A		;Ok, then skip some code
+	CAMN	T1,T2		;Skip if they aren't the same
+	JRST	JOBO0A		;Ok, then skip some code
+	MOVEI	C,"+"		;Output
+	PUSHJ	P,CHROUT	; a "+"
+	PUSHJ	P,SIXOUT	;Output the high segment name
+JOBO0A:	MOVE	P5,(P)		;Get the segment job number back
+	MOVEI	T1,^D18		;Justify to column
+	MOVE	T2,['COR:  ']	; 18 and output
+	PUSHJ	P,SIXJST	; 'COR:'
+	SKIPG	P5,@GETSGN	;Skip if there is a high segment
+	TDZA	T1,T1		;Clear the high segment size
+	PUSHJ	P,HGHSIZ	;Get the high segment size
+	MOVE	T5,T1		;Save the high segment size
+	MOVE	P5,(P)		;Restore the job number
+	PUSHJ	P,LOWSIZ	;Get the low segment size
+	SKIPG	P5,@GETSGN	;Skip if a high segment
+	JRST	JOBO0B		;Skip some code
+	MOVX	T2,SS.SHR	;Get the sharable bit
+	TDNN	T2,@GETSTS	;Skip if non-sharable
+	SUB	T1,T5		;Adjust the low segment size
+JOBO0B:	PUSHJ	P,DECOUT	;Output the low segment size
+	JUMPLE	P5,JOBOU0	;Jump if no high segment
+	MOVEI	C,"+"		;Output
+	PUSHJ	P,CHROUT	; a "+"
+	MOVE	T1,T5		;Get the high
+	PUSHJ	P,DECOUT	; segment size
+JOBOU0:	JUMPGE	P5,JOBOU1	;Jump if not SPYing
+	MOVSI	T1,'+S '	;Output '+S' to show
+	PUSHJ	P,SIXOUT	; job is SPYing
+JOBOU1:	POP	P,P5		;Restore the job number
+	MOVEI	C,"+"		;Output					[270]
+	PUSHJ	P,CHROUT	; a "+"					[270]
+	HLRZ	T1,@GETPDB	;Get the number of funny pages		[270]
+	PUSHJ	P,DECOUT	;Output it				[270]
+	MOVEI	C,"P"		;Assume the core is in pages
+	CAIGE	CC,^D32		;Don't output if we've typed too much	[270]
+	PUSHJ	P,CHROUT	;Output the core size
+	MOVEI	T1,^D33		;Justify to column			[270]
+	MOVE	T2,['STS:  ']	; 33 and output
+	PUSHJ	P,SIXJST	; 'STS:'
+	MOVSI	T1,'^W '	;Assume command wait state
+	TXNE	P4,JS.RUN	;Skip if not in a run state
+	MOVSI	T1,'CW '	;Assume core wait state
+	TXNE	P4,JS.CMW	;Skip if not in command wait
+	JRST	JOBOU4		;Go output the state
+	MOVSI	T1,'OW '	;Assume operator wait
+	TXNE	P4,JS.DCE	;Skip if not in operator wait
+	JRST	JOBOU4		;Go output the state
+	MOVSI	T1,'^D '	;Assume DAEMON wait state
+	TXNE	P4,JS.JDC	;Skip if not in DAEMON wait
+	JRST	JOBOU4		;Go output the state
+	MOVSI	T1,'^C '	;Assume the job is stopped
+	JUMPGE	P4,JOBOU4	;Go output the state
+	LDB	T1,[POINT 5,P4,14]  ;Get the state of the job
+	IDIVI	T1,^D3		;Get the word the state is in
+	IMULI	T2,^D12		;Get the shift value to get the state
+	MOVE	T1,@GETWSN	;Get the right state for the job
+	LSH	T1,(T2)		;Get the state if the right place
+	ANDX	T1,7777B11	;Clear any unneeded bits
+	CAME	T1,['EW    ']	;Skip if in an event wait state
+	JRST	JOBOU2		;Skip the EW state stuff
+	LDB	T2,[POINT 5,@GETST2,24]  ;Get the event wait code
+	JUMPE	T2,JOBOU4	;Zero is unknown
+	CAIG	T2,EVWSIZ	;Skip if greater than the known one's
+	MOVE	T1,EVWTAB-1(T2)	;Get the event wait state
+	JRST	JOBOU4		;Go output the state
+JOBOU2:	CAME	T1,['SL    ']	;Skip if in a sleep state
+	JRST	JOBOU3		;Go test the 'TI' state
+	TXNN	P4,JS.CLK	;Skip if in a clock request queue
+	MOVSI	T1,'HB '	;Change the state to HIBERnate
+	JRST	JOBOU4		;Go output the state
+JOBOU3:	CAMN	T1,['TI    ']	;Skip if not terminal I/O wait
+	SKIPL	DEVIOS(P2)	;Skip if output wait
+	JRST	JOBOU4		;Go output the state
+	MOVSI	T1,'TO '	;Change the state to terminal output
+JOBOU4:	PUSHJ	P,SIXOUT	;Output the state of the job
+				; Note - T1 is zero on return
+	TXNE	P4,JS.LOK	;Skip if the job isn't locked in core
+	MOVSI	T1,' LS'	;Job is locked in core shuffling allowed
+	TXNE	P4,JS.NSH	;Skip if the job can be shuffled
+	MOVSI	T1,' LK'	;Job is locked in core in place
+	JUMPN	T1,JOBOU7	;Go output the state of the job
+	TXNN	P4,JS.SWP	;Skip if the job is swapped
+	JRST	JOBOU5		;Go see if virtual
+	MOVSI	T1,' SW'	;Assume swapped
+	SKIPGE	@GETSWP		;Skip if not fragmented
+	MOVSI	T1,' SF'	;Set the job to swapped and fragmented
+JOBOU5:
+	HLRZ	T2,@GETVRT	;Get the virtual flags for the job
+	JUMPE	T2,JOBOU7	;Jump if not virtual
+	JUMPE	T1,JOBOU6	;Jump if not swapped
+	TLNN	T1,'SW'^!'SF'	;Skip if not fragmented
+	TLCA	T1,'SF'^!'F'^!'M'  ;Set the state to 'VF'
+	TLC	T1,'SW'^!'S'^!'M'  ;Set the state to 'VS'
+JOBOU6:	TLC	T1,'VM'		   ;Set the state to 'VM'
+JOBOU7:	PUSHJ	P,SIXOUT	;Output the state of the job
+	MOVEI	T1,^D43		;Justify to column			[270]
+	MOVE	T2,['RUN:  ']	; 43 and get 'RUN:'
+	TXNE	F,F.PAS		;Skip if not pass one
+	TRO	T2,' ? '	;Change to 'RUN:?'
+	PUSHJ	P,SIXJST	;Output the SIXBIT message
+	MOVN	T1,@GETTIM	;Get the run time of the job
+	EXCH	T1,TOTTIM	;Save for the next scan
+	SUB	T1,TOTTIM	;Get the incremental run time
+	CAIGE	T1,0		;Skip if non-negative
+	MOVN	T1,TOTTIM	;Use the total runtime (assume new job)
+	MOVEM	T1,DELTIM	;Save for later
+	TXNN	F,F.PAS		;Skip if pass one
+	PUSHJ	P,TIMOUT	;Output the incremental run time
+	PUSHJ	P,SLHOUT	;Output a slash
+	MOVN	T1,TOTTIM	;Get the total run time
+	PUSHJ	P,TIMOUT	;Output total run time
+
+	MOVEI	T1,^D63		;Justify to column			[270]
+	MOVE	T2,['CPU:  ']	; 63 and get 'CPU:'
+	TXNE	F,F.PAS		;Skip if not pass one
+	TRO	T2,' ? '	;Change to 'CPU:?'
+	PUSHJ	P,SIXJST	;Output the SIXBIT message
+	MOVE	T1,DELTIM	;Get the delta runtime
+	IMULI	T1,^D100	;Set up to get a percentage
+	MOVN	T2,@GETDAT	;Get the date
+	EXCH	T2,CURDAT	;Save for the next scan
+	SUB	T2,CURDAT	;Get the delta date
+	PUSHJ	P,ADJTIM	;Convert to the right format
+	MOVE	T3,T2		;Round the
+	ASH	T3,-^D1		; percentage
+	ADD	T1,T3		; of runtime
+	IDIV	T1,T2		;Get the percentage of runtime
+	TXNN	F,F.PAS		;Skip if pass one
+	PUSHJ	P,DECOUT	;Output the percentage of runtime
+	PUSHJ	P,SLHOUT	;Output a slash
+	MOVN	T1,TOTTIM	;Get the runtime
+	IMULI	T1,^D100	;Set up to get a percentage
+	MOVN	T2,CURDAT	;Get the length of time the
+	SUB	T2,@GETJLT	; job has been logged in
+	PUSHJ	P,ADJTIM	;Convert to the right format
+	MOVE	T3,T2		;Round the
+	ASH	T3,-^D1		; percentage
+	ADD	T1,T3		; of runtime
+	IDIV	T1,T2		;Get the percentage
+	PUSHJ	P,DECOUT	; of runtime
+	PUSHJ	P,ENDLIN	;Finish off the line right
+	AOJ	LC,		;Increment the line count
+	PUSHJ	P,TTLLIN	;Set up for the new line
+	MOVE	T1,DEVNAM(P2)	;Get the terminal name
+	MOVE	T4,@DDBLDB	;Get the link to the terminal's LDB	[266]
+	JUMPE	T4,[SETO T5,		;The job is detached		[260]
+		    HRLI T1,'DET'	;Say the job is detached
+		    TXNN F,F.GOD	;Skip if GOD
+		    TRZ  T1,-1		;Clear the terminal number
+		    JRST JOBO10]	;Go output the terminal name
+	PUSHJ	P,GETLDB	;Set SPY-page for LDB
+	MOVE	T5,T4		;Save for later
+	MOVE	T2,@LDBDCH	;Get the terminal characteristic bits	[266]
+	TXNN	T2,LDRPTY	;Skip if a PTY
+	JRST	JOBO10		;No need to change anything
+	ANDX	T2,777		;Remove some unneeded bits
+	SUB	T2,PTYMIN	;Convert from TTY range to PTY range
+	MOVSI	T1,'PTY'	;Set the terminal to be a PTY
+	PUSH	P,JOBOU9	;Set up to make the PTY name
+JOBOU8:	IDIVI	T2,^D8		;Get a digit
+	HRLM	T3,(P)		;Save it for later
+	CAIN	T2,0		;Skip if not finished
+	SKIPA	T3,[POINT 6,T1,17]  ;Set up a type pointer
+	PUSHJ	P,JOBOU8	;Loop back
+	HLRZ	T2,(P)		;Restore a digit
+	MOVEI	T2,'0'(T2)	;Convert from binary to SIXBIT
+	IDPB	T2,T3		;Store the digit in the name
+JOBOU9:	POPJ	P,JOBO10	;Magic
+JOBO10:	PUSHJ	P,SIXOUT	;Output the terinal name
+
+	MOVEI	T1,^D7		;Justify to column
+	MOVE	T2,['HPQ:  ']	; 7 and output
+	PUSHJ	P,SIXJST	; 'HPQ:'
+	LDB	T1,[POINT 4,@GETRTD,9]  ;Get the HPQ level
+	PUSHJ	P,DECOUT	;Output the level number
+
+	MOVEI	T1,^D13		;Justify to column
+	MOVE	T2,['PRI:  ']	; 13 and output
+	PUSHJ	P,SIXJST	; 'PRI:'
+	LDB	T1,[POINT 3,@GETSPL,26]  ;Get the disk priority
+	TRZE	T1,4		;Skip if a positive priority
+	MOVNS	T1		;Negate the absolute value of the priority
+	PUSHJ	P,DECOUT	;Output the priority
+
+	MOVEI	T1,^D20		;Justify to column 20
+	MOVE	T2,['DSK:E ']	;Assume error on quota exausted
+	TXNE	P4,JS.SFL	;Skip if error on disk full condition
+	TRC	T2,'E '^!'P '	;Change error to pause
+	PUSHJ	P,SIXJST	;Output the message
+
+	MOVEI	T1,^D26		;Justify to column
+	MOVE	T2,['DDB:  ']	; 26 and output
+	PUSHJ	P,SIXJST	; 'DDB:'
+	MOVE	T1,DDBCNT	;Output the
+	PUSHJ	P,DECOUT	; DDB count
+	MOVEI	T1,^D33		;Justify to column 33
+	MOVE	T2,['RED:  ']	; and output 'RED:'
+	TXNE	F,F.PAS		;Skip if not pass one
+	TRO	T2,' ? '	;Change to 'RED:?'
+	PUSHJ	P,SIXJST	;Output the SIXBIT message
+	LDB	T1,[POINT 24,@GETRCT,35]  ;Get the number of disk reads
+	MOVNS	T1		;Negate the number the disk reads
+	EXCH	T1,DSKRED	;Save for the next scan
+	SUB	T1,DSKRED	;Get the incremental disk reads
+	TXNN	F,F.PAS		;Skip if pass one
+	PUSHJ	P,DECOUT	;Output the incremental disk reads
+	PUSHJ	P,SLHOUT	;Output a slash
+	MOVN	T1,DSKRED	;Output the total
+	PUSHJ	P,DECOUT	; disk reads
+
+	MOVEI	T1,^D49		;Justify to column 49
+	MOVE	T2,['WRT:  ']	; and get 'WRT:'
+	TXNE	F,F.PAS		;Skip if not pass one
+	TRO	T2,' ? '	;Change to 'WRT:?'
+	PUSHJ	P,SIXJST	;Output the SIXBIT message
+	LDB	T1,[POINT 24,@GETWCT,35]  ;Get the number of disk writes
+	MOVNS	T1		;Negate the number the disk writes
+	EXCH	T1,DSKWRT	;Save for the next scan
+	SUB	T1,DSKWRT	;Get the incremental disk writes
+	TXNN	F,F.PAS		;Skip if pass one
+	PUSHJ	P,DECOUT	;Output the incremental disk writes
+	PUSHJ	P,SLHOUT	;Output a slash
+	MOVN	T1,DSKWRT	;Output the total
+	PUSHJ	P,DECOUT	; disk writes
+IFG .PDCTC,<		;If this monitor has alternate contexts		[301]
+	SKIPN	T3,HI+.PDCTC(P3);Get the current context pointer	[301]
+	JRST	JOB10B		;No context pointer? Don't write this	[301]
+IFN .CTFLG,ADDI	T3,.CTFLG	;Point to the context flags word	[301]
+	PEEK	T3,		;Get the context flags			[301]
+	MOVEI	T1,^D63		;Justify to column 63			[301]
+	MOVE	T2,['CTX:  ']	; and get 'CTX:'			[301]
+	PUSHJ	P,SIXJST	;Output the header			[301]
+	LDB	T1,[POINTR T3,CNOMSK] ;Extract the context number	[301]
+	PUSHJ	P,DECOUT	;Output the context number		[301]
+JOB10B: >		;End IFG .PDCTC					[301]
+	PUSHJ	P,ENDLIN	;Finish the line off
+	AOJ	LC,		;Increment the line count
+	PUSHJ	P,TTLLIN	;Set up for the next line
+
+	MOVE	T1,@GETPPN	;Get the job's PPN			[272]
+	XOR	T1,DIR		;Compare the PPN against		[272]
+	TDNE	T1,DIRMSK	;  what we're allowed to see		[272]
+	TXNE	F,F.GOD		;Not normally allowed.  Are we GOD?	[272]
+	SKIPA			;It's ok to do this then		[272]
+	JRST	JOBO11		;No, just output the character counts	[272]
+JOB10A:	MOVE	T1,JOBTTL	;Get the job title line type		[272]
+	JRST	@[JOBO13		;Output the search list		[272]
+		  JOBO11		;Output character counts	[272]
+  		  JOBO20		;Output the job's path		[272]
+		  JOBO26](T1)		;Output the job's LIB: spec	[276]
+
+JOBO11:	JUMPL	T5,JOB11A	;Jump if detached			[260]
+	MOVE	T1,['ICC:  ']	;Output
+	PUSHJ	P,SIXOUT	; 'ICC:'
+	MOVE	T1,HI+LDBICT(T5);Get the input character count
+	PUSHJ	P,DECOUT	;Output it
+
+	MOVEI	T1,^D12		;Justify to column
+	MOVE	T2,['OCC:  ']	; 12 and output
+	PUSHJ	P,SIXJST	; 'OCC:'
+	MOVE	T1,HI+LDBOCT(T5);Get the output character count
+	PUSHJ	P,DECOUT	;Output it
+
+	MOVEI	T1,^D24		;Justify to column
+	MOVE	T2,['CMD:  ']	; 24 and output
+	PUSHJ	P,SIXJST	; 'CMD:'
+	HLRZ	T1,HI+LDBBCT(T5);Get the command count
+	PUSHJ	P,DECOUT	;Output it
+
+JOB11A:	MOVEI	T1,^D33		;Justify to column			[260]
+	MOVE	T2,['UUO:  ']	; 33 and output
+	PUSHJ	P,SIXJST	; 'UUO:'
+	MOVE	T1,@GETUUC	;Output the UUO
+	PUSHJ	P,DECOUT	; count
+
+	MOVEI	T1,^D45		;Justify to column
+	MOVE	T2,['KCS:  ']	; 45 and output
+	PUSHJ	P,SIXJST	; 'KCS:'
+	MOVE	T1,@GETKCT	;Output the
+	IDIV	T1,JIFFIE	; non-VM
+	PUSHJ	P,DECOUT	; Kill-Core-Seconds
+
+	PUSHJ	P,CLNOUT	;Output a colon
+	MOVE	T1,@GETVKS	;Output
+	IDIV	T1,JIFFIE	; the VM
+	PUSHJ	P,DECOUT	; Kilo-Core-Seconds
+
+JOBO12:	AOS	T1,JOBTTL	;Increment the title type		[272]
+	CAIL	T1,4		;Have we overflowed?			[272]
+	SETZM	JOBTTL		;Yes, start back over with the search list [272]
+	TXZ	F,F.PAS		;Clear the pass one flag
+	POPJ	P,		;Return
+JOBO13:	MOVE	T1,@GETPPN	;Get the user's PPN
+	HLRZ	T4,@GETSPB	;Get the pointer to the PPB chain
+	TRNA			;Fast skip
+JOBO14:	HLRZ	T4,HI+PPBSYS(T4);Get the pointer to the next PPB
+	JUMPE	T4,JOBO15	;Jump if end of the chain
+	CAME	T1,HI+PPBNAM(T4);Skip if the user's PPB
+	JRST	JOBO14		;Keep on truck'n
+	MOVE	T5,[POINT 9,HI+.PDJSL(P3)]  ;Get the pointer to the search list
+JOBO15:	ILDB	T3,T5		;Get a file structure number
+	ANDX	T3,77		;Clear some flags
+	CAIN	T3,.FSTMP	;Skip if not a temporary structure
+	JRST	JOBO15		;Go try the next structure
+	CAIE	T3,.FSEND	;Skip if the end of the search list
+	CAIN	T3,.FSFNC	;Skip if the end of the active search list
+	JRST	JOBO12		;Finished
+	CAIN	T3,.FSSTP	;Skip if the end of everything
+	JRST	JOBO12		;Finished
+	HLRZ	P4,@GETSTR
+JOBO16:	PUSHJ	P,MAPSTR	;Go map this STR			[266]
+	 JRST	JOBO15		;Can't?  At least we tried		[266]
+	HRRZ	T2,STRFSN(P4)	;Get this file structure number
+	CAMN	T2,T3		;Skip if not a match
+	JRST	JOBO17		;Yea! We found it
+	HLRZ	P4,@STRSYS	;Get the pointer to the next structure
+	JUMPN	P4,JOBO16	;Skip if not the end of the line
+	JRST	JOBO15		;Well I tried
+JOBO17:	HLRZ	T2,HI+PPBUFB(T4);Get the pointer to the UFB chain
+	TRNA			;Fast skip
+JOBO18:	HLRZ	T2,HI+UFBPPB(T2);Get the pointer to the next PPB
+	JUMPE	T2,JOBO19	;Jump if the end of the chain
+	LDB	T1,[POINT 6,HI+UFBFSN(T2),5]  ;Get the file structure number
+	CAME	T1,T3		;Skip if the right structure
+	JRST	JOBO18		;Keep on truck'n
+	MOVE	T2,HI+UFBTAL(T2);Get the login quota
+	CAMLE	T2,STRTAL(P4)	;Skip if smaller than structure free
+JOBO19:	MOVE	T2,STRTAL(P4)	;Get the free space on the structure	[271]
+	MOVE	T1,STRNAM(P4)	;Get the structure name			[271]
+	PUSHJ	P,STROUT	;Output the structure and free space	[271]
+	 JRST	JOBO12		;It don't fit, so we're done		[271]
+	JRST	JOBO15		;Go find the next structure
+
+;Here to output the job's path
+
+JOBO20:	HRRZ	P4,@GETSFD	;Get the job's path pointer		[272]
+	TRZE	P4,1		;Is /SCAN set?				[272]
+	TXO	F,F.SCN		;Yes, remember that for later		[272]
+	MOVE	T1,['PATH:[']	;Get a header				[272]
+	PUSHJ	P,SIXOUT	;Output it				[272]
+	SKIPE	P4		;Did we get any kind of pointer?	[272]
+	TRZE	P4,2		;Is this just a UFB pointer?		[272]
+	SKIPA			;No SFDs, it's pretty easy then		[272]
+	JRST	JOBO21		;No, do it the hard way			[272]
+	SKIPE	P4		;Did we really get anything?		[272]
+	SKIPN	T5,HI+PPBNAM(P4);Yes, get the PPN			[272]
+	MOVE	T5,@GETPPN	;No, get from the job table		[272]
+	PUSHJ	P,PPNOUT	;Output the PPN				[272]
+	JRST	JOBO25		;Continue at end of path		[272]
+
+; Here if the path is in an SFD.  We have to follow the NMBs up
+
+JOBO21:	PUSH	P,[0]		;Put a marker on the stack		[272]
+	HLRZ	T4,HI+NMBACC(P4);Get the ACC pointer			[272]
+	HRRZ	T4,HI+ACCPPB(T4);Get the PPB pointer			[272]
+	MOVE	T5,HI+PPBNAM(T4);Get the PPN				[272]
+	PUSHJ	P,PPNOUT	;Go output it				[272]
+
+;Loop here finding superior SFDs
+
+JOBO22:	PUSH	P,HI+NMBNAM(P4)	;Save this SFD's name			[272]
+JOBO23:	HLRZ	P4,HI+NMBPPB(P4);Get the pointer to the next NMB	[272]
+	TRZN	P4,NMPUPT	;Skip if it points to the father SFD	[272]
+	JUMPN	P4,JOBO23	;Nope.  Try the next			[272]
+	JUMPN	P4,JOBO22	;Yep.  Save the SFD name		[272]
+
+; Unwind the SFDs:
+
+JOBO24:	POP	P,T1		;Restore an SFD name			[272]
+	JUMPE	T1,JOBO25	;Exit loop if we're done		[272]
+	PUSHJ	P,COMOUT	;Output a comma				[272]
+	PUSHJ	P,SIXOUT	;Output the SFD name			[272]
+	JRST	JOBO24		;Loop for all SFD names			[272]
+
+;Done with the path proper. Output /SCAN/NEW/SYS, etc
+
+JOBO25:	PUSHJ	P,RBROUT	;Output a terminator			[272]
+	MOVE	T1,['/SCAN ']	;Get the switch				[272]
+	TXZE	F,F.SCN		;Was it set?				[272]
+	PUSHJ	P,SIXOUT	;Yes, type it then			[272]
+	MOVE	T5,@GETSFD	;Get the JBTSFD entry back		[272]
+	MOVE	T1,['/SYS  ']	;Get the/SYS switch			[272]
+	TLNE	T5,1		;Is it set?				[272]
+	PUSHJ	P,SIXOUT	;Yes, type it then			[272]
+	MOVE	T1,['/NEW  ']	;Get the /NEW switch			[272]
+	TLNE	T5,2		;Is it set?				[272]
+	PUSHJ	P,SIXOUT	;Yes, type it too			[272]
+	JRST	JOBO12		;Finish line and exit			[272]
+
+; Here to output the job's LIB: specification:
+
+JOBO26:	MOVE	T5,@GETSFD	;Get the SFD/LIB pointer word		[276]
+	TLNN	T5,777774	;Any LIB spec?				[276]
+	JRST	[SETZM	JOBTTL		;Nope. Reset the title line counter [276]
+		 JRST	JOB10A]		;And output something else	[276]
+	MOVE	T1,['LIB:  ']	;Yes, get the prefix			[276]
+	PUSHJ	P,SIXOUT	;Output it				[276]
+	SKIPN	T5,HI+.PDOSL(P3);Any old style LIB: PPN?		[276]
+	JRST	JOBO27		;No.  Gotta do it the hard way		[276]
+	JRST	JOBO34		;Output the PPN and finish up		[276]
+
+; Here if we have to output a new style LIB:.  First, find the logical spec:
+
+JOBO27:	PUSHJ	P,MAPUPT	;Go map the UPT				[276]
+	 JRST	JOBO33		;Error?  Just output the PPB contents	[276]
+	SKIPN	P2,@.USLNM	;Get the logical name pointer		[276]
+	JRST	JOBO33		;None?  Just output the PPB again	[276]
+	TLZ	P2,-1		;Get rid of the AC index		[276]
+	PUSHJ	P,MAPFUN	;Go map the funny spage for this guy	[276]
+	 JRST	JOBO33		;Can't?  Just output the PPB contents	[276]
+
+;Loop for each logical name def.  Find one that looks like a LIB:
+
+JOBO28:	PUSHJ	P,FUNWRD	;Get the next pointer			[276]
+	 JRST	JOBO33		;Can't? Just output the PPB contents	[276]
+	JUMPE	T1,JOBO33	;None? Just output the PPB thing	[276]
+	JUMPG	T1,JOBO28	;Ignore this if not /SEARCH		[276]
+	HRRZ	P2,T1		;Copy the /LIB: pointer			[276]
+	PUSHJ	P,MAPFUN	;Go map it				[276]
+	 JRST	JOBO33		;Can't?  Just give up			[276]
+	ADDI	P2,1		;Skip over the name itself		[276]
+	TXOA	F,F.TMP		;Don't output a comma first time out	[276]
+JOBO29:	PUSHJ	P,RBROUT	;Finish the previous path		[276]
+JOBO30:	PUSHJ	P,FUNWRD	;Get the device name			[276]
+	 JRST	JOBO36		;Error?  Sounds like the end of the def	[276]
+	JUMPE	T1,JOBO36	;End of def if no device name		[276]
+	TXZN	F,F.TMP		;First time through here?		[276]
+	PUSHJ	P,COMOUT	;Nope, output a separator		[276]
+	PUSHJ	P,SIXOUT	;Output the device name			[276]
+	PUSHJ	P,CLNOUT	;Output the separator			[276]
+	PUSHJ	P,FUNWRD	;Get the filename			[276]
+	 JRST	JOBO36		;Error ...				[276]
+	SKIPE	T1		;Any filename?				[276]
+	PUSHJ	P,SIXOUT	;Yes, output it				[276]
+	PUSHJ	P,FUNWRD	;Get the extension			[276]
+	 JRST	JOBO36		;Error again ...			[276]
+	JUMPE	T1,JOBO31	;Skip this if no extension		[276]
+	MOVEI	C,"."		;Get the separator			[276]
+	PUSHJ	P,CHROUT	;Output it				[276]
+	PUSHJ	P,SIXOUT	;Output the extension			[276]
+
+; Output the path in this section of the logical definition:
+
+JOBO31:	PUSHJ	P,FUNWRD	;Get the PPN				[276]
+	 JRST	JOBO36		;Error ...				[276]
+	JUMPE	T1,JOBO30	;Start next piece if no path		[276]
+	MOVE	T5,T1		;Copy the PPN				[276]
+	PUSHJ	P,LBROUT	;Output the beginning of the path	[276]
+	PUSHJ	P,PPNOUT	;Output the PPN				[276]
+
+JOBO32:	PUSHJ	P,FUNWRD	;Get the next SFD name			[276]
+	 JRST	JOBO35		;Can't - finish the path and quit	[276]
+	JUMPE	T1,JOBO29	;No more SFDs, finish this path		[276]
+	PUSHJ	P,COMOUT	;Got an SFD, output a separator		[276]
+	PUSHJ	P,SIXOUT	;Then output the SFD name		[276]
+	JRST	JOBO32		;Loop for all SFDs			[276]
+JOBO33:	HLRZ	T1,@GETSFD	;Get the PPB pointer			[276]
+	TRZ	T1,3		;Get rid of junk			[276]
+	MOVE	T5,HI(T1)	;Get the LIB: PPN			[276]
+JOBO34:	PUSHJ	P,LBROUT	;Output a left bracket			[276]
+	PUSHJ	P,PPNOUT	;Output the PPN				[276]
+JOBO35:	PUSHJ	P,RBROUT	;Output the end of path separator	[276]
+JOBO36:	JRST	JOBO12		;Finish line and exit			[276]
+	SUBTTL	Output Routines -- CMDOUT - Output the Command String
+
+
+;CMDOUT - Output the current command string
+;Call:	PUSHJ	P,CMDOUT
+;	* Return *
+;Uses:	T1-4, BP, C and CC
+
+CMDOUT:	PUSH	P,C		;Save C for later
+	MOVE	BP,[POINT 7,WHTBUF]  ;Set up the pointer to the buffer
+	SETZ	CC,		;Reset the buffer counter
+	TXNN	F,F.WLD		;Skip if the wild processor is in use
+	JRST	CMDOU4		;Go inform user
+	MOVE	T1,ROUTINE	;Get the address of the wild processor
+	CAIN	T1,TSTFIL	;Skip if not the "F" command
+	JRST	CMDOU2		;Go output the "F" command string
+	CAIN	T1,TSTJOB	;Skip if not the "J" command
+	JRST	CMDOU3		;Go output the "J" command string
+	CAIN	T1,TSTLOG	;Skip if not the "L" command
+	JRST	CMDOU0		;Go output the "L" command string
+	CAIN	T1,TSTPRG	;Skip if not the "P" command string
+	JRST	CMDOU1		;Go output the "P" command string
+
+	SKIPA	C,["N"]		;Output an "N"
+
+CMDOU0:	MOVEI	C,"L"		;Output an "L"
+	PUSHJ	P,CHROUT	;Output the character
+	PUSHJ	P,WPPOUT	;Go output the PPN for the "L" command
+	JRST	CMDOU5
+
+CMDOU1:	SKIPA	C,["P"]		;Output a "P"
+
+CMDOU2:	MOVEI	C,"F"		;Output a "F"
+	PUSHJ	P,CHROUT	;Output the character
+	PUSHJ	P,SPCOUT	;Go output the file spec
+	JRST	CMDOU5
+
+CMDOU3:	MOVEI	C,"J"		;Output
+	PUSHJ	P,CHROUT	; the "J"
+	MOVE	T1,JOBNUM	;Go output the job number
+	PUSHJ	P,DECOUT	; for the "J" command
+	JRST	CMDOU5
+
+CMDOU4:	MOVEI	C,"A"		;Output
+	PUSHJ	P,CHROUT	; the "A"
+CMDOU5:	MOVSI	T1,' D '	;Output
+	PUSHJ	P,SIXOUT	; the " D"
+	MOVE	T1,TRMNAM	;Output the				[273]
+	PUSHJ	P,SIXOUT	; display name
+
+	MOVSI	T1,' E '	;Set up to output a "E" if in path mode
+	TXNE	F,F.XTN		;Skip if not in extended status mode
+	PUSHJ	P,SIXOUT	;Output a "E" if a extended status mode
+
+	MOVSI	T1,' O '	;Set up to output an "O" if in swap mode [275]
+	TXNE	F,F.PEK		;Are we in swapped DDB mode?		[275]
+	PUSHJ	P,SIXOUT	;Yes, say so				[275]
+
+	MOVSI	T1,' S '	;Output
+	PUSHJ	P,SIXOUT	; the " S"
+	HRRZ	T1,HIBTIM	;Get the HIBERnate time
+	IDIVI	T1,^D1000	;Convert from milliseconds to seconds
+	PUSHJ	P,DECOUT	;Output the time
+
+	MOVSI	T1,' T '	;Set up to output a "T" if in title suppression
+	TXNE	F,F.TTL		;Skip if the title is wanted
+	PUSHJ	P,SIXOUT	;Output a " T" if in title suppression mode
+
+	MOVSI	T1,' C '	;Assume we're cycling through the DDBs	[300]
+	TXNE	F,F.CYC		;Are we cycling through the DDBs?	[300]
+	PUSHJ	P,SIXOUT	;Can't be wrong all the time		[300]
+
+	MOVSI	T1,' W '	;Output
+	PUSHJ	P,SIXOUT	; the " W"
+
+	IDPB	T1,BP		;Store a null character in the buffer
+	POP	P,C		;Restore C
+	POPJ	P,		;Return
+	SUBTTL	Output Routines -- SPCOUT - Output a File Specification
+
+
+;SPCOUT - Output a file specification
+;Call:	PUSHJ	P,SPCOUT
+;	* Return *
+;Uses:	T1-5, BP, C and CC
+
+SPCOUT:	MOVE	T1,DEV		;Output the
+	PUSHJ	P,SIXOUT	; device name
+	PUSHJ	P,CLNOUT	;Output a colon
+	HLRZ	T5,EXT		;Get the extension
+	CAIN	T5,'UFD'	;Skip if not 'UFD'
+	JRST	[MOVE	T3,FIL		;Get the file name
+		 MOVE	T4,FILMSK	; and file name mask
+		 PUSHJ	P,WPPOU0	;Output the name as a UFD
+		 JRST	SPCOU0]		;Continue
+	MOVE	T1,FIL		;Output the
+	PUSHJ	P,SIXOUT	; file name
+SPCOU0:	JUMPE	T5,WPPOUT	;Jump if the extension is zero
+	MOVEI	C,"."		;Output
+	PUSHJ	P,CHROUT	; a period
+	MOVSI	T1,(T5)		;Output the
+	PUSHJ	P,SIXOUT	; extension
+;	PFALL	WPPOUT		;Fall into WPPOUT
+	SUBTTL	Output Routines -- WPPOUT - Output a Wild PPN
+
+
+;WPPOUT - Output a wild PPN
+;Call:	PUSHJ	P,WPPOUT
+;	* Return *
+;Uses:	T1-4, BP, C and CC
+
+WPPOUT:	MOVE	T3,DIR		;Get the directory and
+	MOVE	T4,DIRMSK	; directory mask
+WPPOU0:	PUSHJ	P,LBROUT	;Output a "["
+	HLLZ	T1,T4		;Get the project mask
+	HLR	T1,T3		;Get the project number
+	PUSHJ	P,WOCOUT	;Output the wild project number
+	PUSHJ	P,COMOUT	;Output a comma
+	HRLZI	T1,(T4)		;Get the programmer mask
+	HRRI	T1,(T3)		;Get the programmer number
+	PUSHJ	P,WOCOUT	;Output the wild programmer number
+	PJRST	RBROUT		;Output a "]" and return
+	SUBTTL	Output Routines -- WOCOUT - Output a wild octal number
+
+
+;WOCOUT - Output a wild octal number
+;Call:	MOVSI	T1,<The wild mask>
+;	HRRI	T1,<The wild number>
+;	PUSHJ	P,WOCOUT
+;	* Return *
+;Uses:	T1-2, BP, C and CC
+
+WOCOUT:	JUMPE	T1,WOCOU3	;Jump if the number is completely wild
+	TXZ	F,F.DIG		;Clear the digit seen flag
+	MOVEI	T2,^D6		;Set up a counter
+WOCOU0:	JUMPGE	T1,WOCOU1	;Jump if this digit is wild
+	LDB	C,[POINT 3,T1,20]  ;Get a digit
+	TXNN	F,F.DIG		;Skip if a digit has been seen
+	JUMPE	C,WOCOU2	;Jump if the digit is a zero
+	TROA	C,"0"		;Convert binary to ASCII and skip
+WOCOU1:	MOVEI	C,"?"		;Set up to output a question mark
+	TXO	F,F.DIG		;Set the digit seen flag
+	PUSHJ	P,CHROUT	;Output the digit or question mark
+WOCOU2:	LSH	T1,^D3		;Adjust the mask
+	SOJG	T2,WOCOU0	;Loop back if not finished
+	POPJ	P,		;Return
+WOCOU3:	MOVEI	C,"*"		;Set up to output an
+	PJRST	CHROUT		; astrisk and return
+	SUBTTL	Display Initalization -- TRMDSP - Get the Default Terminal Type
+
+
+;TRMDSP - Get the default terminal type
+;Call:	PUSHJ	P,TRMDSP
+;	* Return - P1 contains terminal type offset *
+;Uses:	T1-4, P1, P3 and C
+
+TRMDSP:	MOVE	T1,[2,,T2]	;Point to the TRMOP. argument block	[266]
+	MOVX	T2,.TOTRM	;Get the function to read the term type	[266]
+	MOVE	T3,TRM+1	;Get the terminal number		[266]
+	TRMOP.	T1,		;Get the terminal's type		[266]
+	 MOVX	T1,'TTY   '	;Error?  Just get the default		[266]
+;	PFALL	SETDSP		;Set the other display parameters	[255]
+	SUBTTL	Display Initalization -- SETDSP - Set up Display Size
+
+
+;SETDSP - Set up the display size parameters
+;Call:	MOVE	T1,<SIXBIT terminal type>
+;	PUSHJ	P,SETDSP
+;	* Returns terminal class in <RH> of P1, flags in LH, PREFIX setup
+;Uses:	T1-T4, P1
+
+SETDSP:	MOVSI	T2,-DSPSIZ	;Get an AOBJN pointer to term types	[266,273]
+	CAME	T1,DSPNAM(T2)	;Proper terminal type?			[266,273]
+	 AOBJN	T2,.-1		;No, try the next one			[266,273]
+	SKIPL	T2		;Find anything?				[266,273]
+	 MOVX	T2,%TTYTP	;No, assume TTY				[266,273]
+	MOVEM	T1,TRMNAM	;Save the terminal's name		[273]
+	MOVE	P1,DSPNUM(T2)	;Get the terminal's flags		[273]
+	LDB	T1,[POINTR P1,TM%PFX] ;Get the prefix index		[273]
+	MOVE	T1,PFXTAB(T1)	;Get the prefix				[273]
+	MOVEM	T1,PREFIX	;Store					[273]
+	LDB	T1,[POINTR P1,TM%WID] ;Get the terminal's width		[273]
+	MOVEM	T1,LINWID	;Store for later			[273]
+	LDB	T1,[POINTR P1,TM%LEN] ;Get the number of lines per page	[273]
+	MOVEM	T1,TRMLIN	;Store the number of lines on the screen [273]
+	TXNN	F,F.TTL		;Do we want the title line?		[273]
+	MOVEI	T1,-TTLLNS(T1)	;Yes, reserve some lines		[273]
+	SUBI	T1,1		;Account for the command echo buffer	[273]
+	TXNE	F,F.XTN		;Skip it the path option isn't wanted
+	LSH	T1,-^D1		;Divide by two
+	MOVEM	T1,PAGSIZ	;Save for later
+	TRZ	P1,^-TM%CLS	;Mask off junk				[273]
+	TXO	F,F.CLR		;Set up clear the screen on the next scan
+	POPJ	P,		;Return
+	SUBTTL	Useful Routines -- HGHSIZ/LOWSIZ - Get a Segment Size
+
+
+;HGHSIZ - Get the high segment size
+;LOWSIZ - Get the low segment size
+;Call:	MOVE	P4,<The job status>
+;	MOVE	P5,<The job/segment number>
+;	PUSHJ	P,HGHSIZ/LOWSIZ
+;	* Return - The result is in T1 *
+;Uses:	F and T1
+
+IFGE MONVER-703,<		;New core size computation		[266]
+HGHSIZ:	MOVE	T1,@GETIMI	;Get the image swapped in size		[266]
+	TLZ	T1,777770	;Get rid of junk			[266]
+	JUMPN	T1,.POPJ	;Return if we got something		[266]
+	HLRZ	T1,@GETSWP	;Get the swapped size			[266]
+	POPJ	P,		;Return only the last 9 bits		[266]
+
+LOWSIZ:	MOVE	T1,@GETIMI	;Get the swapped in image size		[266]
+	TLZ	T1,777770	;Get rid of junk			[266]
+	SKIPN	T1		;Anything there?			[266]
+SEGSI0:	HLRZ	T1,@GETSWP	;No, get it from the swap word		[266]
+	POPJ	P,		;And return with the segment size	[266] >
+IFLE MONVER-702,<		;Old core size computation		[266]
+HGHSIZ:	TXZA	F,F.LOW		;Clear the low segment flag
+LOWSIZ:	TXO	F,F.LOW		;Set the low segment flag
+	MOVE	T1,@GETSWP	;Get the swapped size
+	TXNE	F,F.LOW		;Skip if the high segment
+	JRST	LOWSI3		;Return only the last 9 bits
+	MOVX	T1,SS.SHR	;Get the sharable bit
+	TDNE	T1,@GETSTS	;Skip if the segment isn't sharable
+	JRST	LOWSI0		;Go use the old way
+	MOVS	T1,@GETSWP	;Get the swapped size
+	JRST	LOWSI3		;Return only the last 9 bits
+LOWSI0:	MOVS	T1,@GETADR	;Get the protection register info
+	JUMPE	T1,LOWSI1	;Jump if zero
+	TXNE	F,F.LOW		;Skip if the high segment
+	TXNN	P4,JS.SWP	;Skip if swapped
+	JRST	LOWSI2		;Go convert words to pages or K
+LOWSI1:	MOVE	T1,@GETSWP	;Get the swapped size
+	ANDI	T1,777		;Get only 9 bits
+	JUMPN	T1,.POPJ	;Return the result
+	MOVS	T1,@GETADR	;Get the protection register
+LOWSI2:	AOJ	T1,		;Round up the nearist unit
+	LSH	T1,-^D9		;Convert words to pages
+LOWSI3:	ANDI	T1,777		;Clear out some trash
+	POPJ	P,		;Return the result			[266] >
+	SUBTTL	Useful Routines -- ADJTIM - Convert UDT to Jiffies
+
+
+;ADJTIM - Convert UDT to jiffies
+;Call:	MOVE	T2,<The UDT to be converted>
+;	PUSHJ	P,ADJTIM
+;	* Return - T2 contains time in jiffies *
+;Uses:	T2-3
+
+ADJTIM:	MUL	T2,[^D<24*60*60*1000>]  ;Adjust the faction of a day
+	ASHC	T2,^D17		;Adjust this result
+	MUL	T2,JIFFIE	;Convert from milliseconds
+	DIVI	T2,^D1000	; to jiffies
+	POPJ	P,		;Return
+	SUBTTL	Useful Routines -- PAGADJ - Page Adjustment
+
+
+;PAGADJ - Set up the page boundaries
+;Call:	PUSHJ	P,PAGADJ
+;	* Return *
+;Uses:	T1
+
+PAGADJ:	MOVE	T1,PAGNUM	;Get the page to output
+	IMUL	T1,PAGSIZ	;Get the first
+	MOVEM	T1,PAGFST	; DDB to output
+	ADD	T1,PAGSIZ	;Get the last
+	MOVEM	T1,PAGLST	; DDB to output
+	POPJ	P,		;Return
+	SUBTTL	Useful Routines -- TSTABR - Test for an Abbreviation
+
+
+;TSTABR - Test for an abbreviated SIXBIT word in a table
+;Call:	MOVE	T1,<The SIXBIT word to test>
+;	MOVE	T2,<AOBJN pointer to the table>
+;	PUSHJ	P,TSTABR
+;	 * Non-skip return - Error:  T3 contains: *
+;	 *		       0 - No abbreviation found *
+;	 *		       1 - No unique abbreviation found *
+;	* Skip return - T2 contains offset to avvreviation *
+;Uses:	T1-5
+
+TSTABR:	SETO	T4,		;Reset a counter
+
+TSTAB0:	LSH	T4,-6		;Shift the mask one character to the right
+	TDNE	T1,T4		;Skip if out of characters
+	JRST	TSTAB0		;Loop back until finished
+
+	SETZ	T3,		;Clear the flag for later
+	HRRZM	T2,TEMP		;Set the base address for later
+
+TSTAB1:	MOVE	T5,(T2)		;Get a word to test
+	XOR	T5,T1		;Try to clear some characters
+	JUMPE	T5,TSTAB3	;Jump if a match was found
+	ANDCM	T5,T4		;Clear any characters at the end of the word
+	JUMPN	T5,TSTAB2	;Jump if not a valid abbreviation
+	TRON	T3,1		;Skip a if not the first match
+	TLOA	T3,(T2)		;Set the flag for an abreviation found
+	TLZ	T3,-1		;More than one abbreviation found
+TSTAB2:	AOBJN	T2,TSTAB1	;Loop back if not finished
+
+	TLNN	T3,-1		;Skip if an abbreviation was found
+	POPJ	P,		;Error - T3 contains a:
+				;	0 - No abbreviation found
+				;	1 - No unique abbreviation found
+
+	HLRZ	T2,T3		;Set up T2 to point to the abbreviation
+TSTAB3:	SUB	T2,TEMP		;Set up T2 to be 0, 1, 2, ...
+	JRST	.POPJ1		;Give a good return
+	SUBTTL	Useful Routines -- RSTTRM - Restore Terminal Characteristics
+
+
+;RSTTRM - Restore the terminal characteristics
+;Call:	PUSHJ	P,RSTTRM
+;	* Return *
+;Uses:	T1-3
+
+RSTTRM:	MOVSI	T1,-TRMSIZ	;Set up an AOBJN counter
+RSTTR0:	MOVE	T2,TRMSAV(T1)	;Get the bit to set
+	MOVEM	T2,TRM+2	;Save for the TRMOP. UUO
+	HRRZ	T2,TRMTAB(T1)	;Get the first function
+	MOVEI	T2,.TOSET(T2)	;Set up as a set function
+	MOVEM	T2,TRM		;Save for the TRMOP. UUO
+	MOVE	T3,[3,,TRM]
+	TRMOP.	T3,		;Set the bit
+	 JRST	E$$TTF		;No - go inform the user
+	AOBJN	T1,RSTTR0	;Jump if more to do
+	POPJ	P,		;Return
+	SUBTTL	DDB Scanning Routines -- FNDSTR - Find a Structure Name
+
+
+;FNDSTR - Find a structure name (SIXBIT)
+;Call:	MOVE	P2,<The DDB address>
+;	PUSHJ	P,FNDSTR
+;	 * Non-skip return - Can't find the structure name *
+;	* Skip return - The structure name is in T1 *
+;Uses:	T1
+
+FNDSTR:	PUSHJ	P,GETUNI	;Get the pointer to the unit		[266]
+	 POPJ	P,		;Error return				[266]
+	HRRZ	T1,UNISTR(T1)	;Get the pointer to the structure
+	JUMPE	T1,.POPJ	;Error return
+	PUSH	P,T2		;Save a couple				[266]
+	PUSH	P,T3		;  of registers				[266]
+	MOVEI	T2,STRNAM	;Get the highest loc we want		[266]
+	MOVEI	T3,STRPAG	;Get the mapping if not in SPY seg	[266]
+	PUSHJ	P,GETBLK	;Go map the block			[266]
+	 JRST	FNDS90		;Error, just return			[266]
+	MOVE	T1,STRNAM(T1)	;Got it, get the structure name		[266]
+	AOS	-2(P)		;Cause a skip return			[266]
+
+FNDS90:	POP	P,T3		;Restore the				[266]
+	POP	P,T2		; saved registers			[266]
+	POPJ	P,		;And return				[266]
+	MOVE	T1,HI+STRNAM(T1);Get the structure name
+	JRST	.POPJ1		;Go do a skip return
+	SUBTTL	DDB Scanning Routines -- GETLDB - Map a LDB Page into Core
+
+
+;GETLDB - Map a LDB page into core
+;Call:	MOVE	T4,<The LDB address to be mapped in>
+;	PUSHJ	P,GETLDB
+;	* Return - The LDB in mapped into core *
+;Uses:	T3
+
+GETLDB:	MOVE	T3,T4		;Convert the LDB
+	LSH	T3,-^D9		; address into a
+	HRLM	T3,LDBBLK+1	; page address
+	ADDX	T3,1		;Account for the second
+	HRLM	T3,LDBBLK+2	; page of the LDB
+	MOVE	T3,[.PAGSP,,DELLDB]  ;Delete the old
+	PAGE.	T3,		     ; LDB pages
+	 JFCL			;Assume first time here
+	MOVE	T3,[.PAGSP,,LDBBLK]  ;Map in the new
+	PAGE.	T3,		     ; LDB pages
+	 JRST	E$$UMP		;Unable to map in the LDB pages
+	TRZ	T4,777000	;Fake the pointer to point
+	TRO	T4,LDB-HI	;  to the mapped pages
+	POPJ	P,		;Return
+	SUBTTL	DDB Scanning Routines -- MAPSTR - Map a STR given its Pointer
+
+;MAPSTR - Map a STR given the pointer
+;Call:	MOVE	P4,<STR pointer>
+;	PUSHJ	P,MAPSTR
+;	 * Non-skip return - no STR
+;	* Skip-return - P4 contains STR pointer, mapped
+;Uses P4
+
+MAPSTR:	JUMPE	P4,.POPJ		;Return now if no STR pointer	[266]
+	PUSH	P,T1			;Got one, maybe.  Save		[266]
+	PUSH	P,T2			; a few registers		[266]
+	PUSH	P,T3			;  ...				[266]
+	MOVE	T1,P4			;Copy the STR pointer		[266]
+	MOVEI	T2,STRJOB		;Get the highest address we want [266]
+	MOVEI	T3,STRPAG		;Get the mapping		[266]
+	PUSHJ	P,GETBLK		;Map the STR pointer		[266]
+	 SKIPA				;Too bad if we failed		[266]
+	AOS	-3(P)			;Ok, cause skip return		[266]
+	MOVE	P4,T1			;Get the new STR pointer	[266]
+	POP	P,T3			;Then,				[266]
+	POP	P,T2			; restore			[266]
+	POP	P,T1			; the registers			[266]
+	POPJ	P,			;And return			[266]
+	SUBTTL	DDB Scanning Routines -- GETUNI - Get a UNI from the DDB Pointer
+
+;GETUNI - Map a UNI given a DDB pointer
+;Call:	MOVE	P2,<DDB pointer>
+;	PUSHJ	P,GETUNI
+;	 * Non-skip return - no UNI
+;	* Skip-return - T1 contains the UNI pointer, mapped
+;Uses T1
+
+GETUNI:	HRRZ	T1,@DEVUNI		;Get the UNI pointer		[266]
+	JUMPE	T1,.POPJ		;Return if nothing there	[266]
+	PUSH	P,T2			;Save some			[266]
+	PUSH	P,T3			; registers			[266]
+	MOVEI	T2,UNISTR		;Get the highest loc we want	[266]
+	MOVEI	T3,UNIPAG		;Get the page to map it into	[266]
+	PUSHJ	P,GETBLK		;Go get the block		[266]
+	 SKIPA				;Oh well, we tried		[266]
+	AOS	-2(P)			;Got it, cause a skip		[266]
+	POP	P,T3			;Restore the 			[266]
+	POP	P,T2			; saved registers		[266]
+	POPJ	P,			;And return			[266]
+	SUBTTL	DDB Scanning Routines -- GETBLK - Map a Data Structure
+
+;GETBLK - Map a data structure given the exec virtual address
+;Call:	MOVE	T1,<exec virtual address of structure to be mapped>
+;	MOVE	T2,<highest offset in the structure we're interested in>
+;	MOVE	T3,<Page number to map the structure into>
+;	PUSHJ	P,GETBLK
+;	 * Non-skip return - Can't map the block
+;	* Skip return - T1 contains the data pointer
+;Uses T1-T3
+
+GETBLK:	PUSH	P,T4			;Save a temp register		[266]
+	PUSH	P,T1			;Save the block pointer		[266]
+	ADD	T2,T1			;Compute the ending address	[266]
+	CAML	T2,MEMSIZ		;Already mapped in SPY segment?	[266]
+	JRST	GETB01			;No, map it normally		[266]
+	ADDI	T1,HI			;Yes, relocate the pointer	[266]
+	JRST	GETB80			;Then give success return	[266]
+
+; Here if we're going to have to map the page(s)
+
+GETB01:	MOVE	T1,(P)			;Get the address back		[266]
+	ANDI	T1,^O777		;Get rid of the page number	[266]
+	DPB	T3,[POINT 9,T1,26]	;Store the new page number	[266]
+	EXCH	T1,(P)			;Put relocated address on the stack [266]
+	LSHC	T1,-^D9			;Convert addresses to page numbers [266]
+	TLZ	T2,^O777000		;Mask off junk			[266]
+	TXO	T3,PA.GAF		;Turn on the delete page bit	[266]
+
+; Loop here mapping all necessary pages:
+
+GETB02:	MOVEM	T3,PAGBLK+1		;Store the page to be unmapped	[266]
+	MOVE	T4,[.PAGSP,,PAGBLK]	;Point to the PAGE. arg nblock	[266]
+	PAGE.	T4,			;First, make sure the page is unmapped [266]
+	 MOVE	T4,[.PAGSP,,PAGBLK]	;Ignore errors, but reset th arg [266]
+	HRLM	T1,PAGBLK+1		;Store the source page number	[266]
+	PAGE.	T4,			;Map the new page		[266]
+	  JRST	GETB90			;Error?  Punt			[266]
+	ADDI	T3,1			;Point to our next page		[266]
+	CAME	T1,T2			;Have we done enough yet?	[266]
+	 AOJA	T1,GETB02		;No, do another one		[266]
+	MOVE	T1,(P)			;Yes, get the pointer back	[266]
+
+; Here if success:
+
+GETB80:	AOS	-2(P)			;Make a skip return happen	[266]
+
+; Here if not necessarily success:
+
+GETB90:	POP	P,(P)			;Clean up the stack		[266]
+	POP	P,T4			;Restore scratch register	[266]
+	POPJ	P,			;And return			[266]
+;Uses:	T1-5, BP, C and CC
+	SUBTTL	DDB Scanning Routines -- NXTDDB - Get the Next DDB in Chain
+
+
+;NXTDDB - Get the address of the next DDB in the chain
+;Call:	MOVE	P2,<The address of the old DDB>
+;	PUSHJ	P,NXTDDB
+;	 * Non-skip return - The end of the DDB chain was reached *
+;	* Skip return - P2 contains the address of the next DDB *
+;Uses:	T1-3
+
+NXTDDB:	JUMPE	P2,NXTDD1	;No current DDB - map the UPT, etc	[275]
+	MOVE	T1,JOB		;Get the job number back
+	HRRZ	T2,@GETUPM	;Get the job's UPMP
+	CAME	T2,CURUPM	;Skip if the same as last time
+	JRST	NXTDD2		;Do it the hard way
+	HLRZ	T2,DEVSER(P2)	;Get the link to the next DDB
+	JUMPE	T2,NXTDD1	;Jump if the end of DDB chain
+	XOR	T2,CURVRT	;Is this DDB on the same
+	TRNE	T2,777000	; page as the last one
+	JRST	NXTDD3		;No, get the new DDB page
+	MOVE	T2,@CURPTR	;Get the physical page
+	CAME	T2,CURPAG	;Skip if the same as last time
+	JRST	NXTDD3		;No, get the new DDB page
+	HLRZ	P2,DEVSER(P2)	;Get the DDB address
+	JRST	NXTDD4		;Go convert to the mapped page
+NXTDD1:	AOS	T1,JOB		;Look at the next job
+	CAMLE	T1,@HIJOB	;Skip if valid job
+	POPJ	P,		;Return (the end of the DDB chain)
+	SETZ	P2,		;Assume the end of the jobs DDB chain
+	HRRZ	T2,@GETUPM	;Get the job's UPMP
+	TXNN	F,F.JOB		;Are we just doing a job display?	[275]
+	JRST	NXTDD2		;No, skip this				[275]
+	CAMGE	T1,JOBNUM	;Yes, have we reached the job number?	[275]
+	JRST	NXTDD1		;No, try the next one			[275]
+	CAME	T1,JOBNUM	;Are we all done with this job?		[275]
+	POPJ	P,		;Yes, all out of DDBs			[275]
+NXTDD2:	JUMPE	T2,NXTDD5	;Jump if no UPMP
+	PUSHJ	P,MAPUP1	;Map the job's UPT			[276]
+	 JRST	E$$UMP		;Unable to map in the UPMP		[276]
+NXTDD3:	SKIPE	P2		;Skip if the DDB for the job		[276]
+	SKIPA	P2,DEVSER(P2)	;Get the link to the next DDB		[276]
+	MOVE	P2,@LSTLOC	;Get the link to the first DDB		[276]
+	HLRZS	P2		;Remove some junk from the link		[276]
+	JUMPE	P2,NXTDD1	;Jump if the end of the DDB chain	[276]
+	MOVEM	P2,CURVRT	;Save for later				[276]
+	PUSHJ	P,MAPFUN	;Map the funny page			[276]
+	 JRST	E$$UMP		;Unable to map in the DDB page
+NXTDD4:	JUMPE	P2,.POPJ	;?? .POPJ ??
+
+.POPJ1:	AOS	(P)		;Set up for a skip return
+.POPJ:	POPJ	P,		;Return
+
+; Here if the job went away or swapped:
+
+NXTDD5:	PUSH	P,P5		;Save the current job number for a min	[275]
+	MOVE	P5,JOB		;Get the job we're looking at		[275]
+	MOVE	T1,@GETSTS	;Get the job's status bits		[275]
+	POP	P,P5		;Restore the job number			[275]
+	TXNE	F,F.PEK		;Are we JOBPEKing?			[275]
+	TXNN	T1,JS.JNA	;Yes, job number assigned?		[275]
+	JRST	NXTDD1		;No, go on to the next job		[275]
+	JUMPN	P2,NXTDD6	;Skip this if not the first DDB		[275]
+	MOVEI	T1,T2		;First time, setup a JOBPEK block	[275]
+	HRLZ	T2,JOB		; to read the job's UPMP pointer	[275]
+	TXO	T2,JK.UPM!1	; to the first DDB in the job's		[275]
+	HRLZ	T3,LSTLOC	; funny space DDB list			[275]
+	HRRI	T3,P2		; Point to our destination		[275]
+	JOBPEK	T1,		;Go read the first DDB address		[275]
+	 JRST	NXTDD1		;Can't.  Just try the next job		[275]
+	SKIPA			;And fall into the following code	[275]
+NXTDD6:	HLLZ	P2,DEVSER(P2)	;Follow the DDB link			[275]
+	JUMPE	P2,NXTDD1	;No more DDBs.  Try the next job	[275]
+	MOVE	T3,P2		;Copy the DDB pointer (left half)	[275]
+	HRRI	T3,PEKDDB	;Point at the storage			[275]
+	HRLZ	T2,JOB		;Get the job number we're reading	[275]
+	TXO	T2,JK.EVA!DDBMAX ;Get flags and length of the peek	[275]
+	MOVEI	T1,T2		;Point at the ARG block			[275]
+	JOBPEK	T1,		;Go try to read the DDB			[275]
+	 JRST	NXTDD1		;Error, try the next job		[275]
+	MOVEI	P2,PEKDDB	;Got it.  Point to it			[275]
+	JRST	.POPJ1		;And return happy			[275]
+	SUBTTL	DDB Scanning Routines -- FUNWRD - Get a Word from Funny Space
+
+;FUNWRD - Get the next word from funny space
+;Call:	MOVEI	P2,<address to fetch from (assumes first page mapped)>
+;	PUSHJ	P,FUNWRD
+;	 * Non-Skip return - can't map the address
+;	* Skip return - funny word in T1
+;Uses T1
+
+FUNWRD:	TRNE	P2,777		;Just start a new page?			[276]
+	JRST	FUNW01		;No, go on				[276]
+	PUSHJ	P,MAPFUN	;Yes, go map the page			[276]
+	 POPJ	P,		;Error, pass it on			[276]
+
+FUNW01:	MOVE	T1,(P2)		;Get the next word			[276]
+	AOJA	P2,.POPJ1	;And return happy			[276]
+	SUBTTL	DDB Scanning Routines -- MAPFUN - Map a Job's Funny Space
+
+;MAPFUN - Map a page from a job's funny space
+;Call:	MOVEI	P2,<address to be mapped>
+;	PUSHJ	P,MAPFUN
+;	 * Non-skip return - Can't map the address
+;	* Skip return - Funny page mapped ok
+;Uses T1
+
+MAPFUN:	MOVE	T1,P2		;Copy the address			[276]
+	LSH	T1,-^D9		;Convert it to a page number		[276]
+	TXO	T1,PA.GAF	;Set the delete bit			[276]
+	MOVEM	T1,PAGBLK+1	;Store the the PAGE. arg block		[276]
+	MOVE	T1,[.PAGSP,,PAGBLK] ;Unmap the old copy			[276]
+	PAGE.	T1,		    ; of this funny page		[276]
+	 JFCL			;Punt errors here			[276]
+	HRRZ	T1,PAGBLK+1	;Get the page number back		[276]
+	SUB	T1,FUNFST	;Subtract the base funny page		[276]
+	JUMPL	T1,.POPJ	;Not a funny page? Return error		[276]
+	ADD	T1,FUNPAG	;Add in the funny mapping offset	[276]
+	ADD	T1,UPT		;Add in the UPT base address		[276]
+	MOVEM	T1,CURPTR	;Save for future reference		[276]
+	MOVE	T1,(T1)		;Get the funny page's mapping		[276]
+	MOVEM	T1,CURPAG	;Save also for future reference		[276]
+	HRLM	T1,PAGBLK+1	;Store as the source page number	[276]
+	MOVE	T1,[.PAGSP,,PAGBLK] ;Then, map the			[276]
+	PAGE.	T1,UU.PHY	    ; funny page			[276]
+	 POPJ	P,		;Error, just return			[276]
+	JRST	.POPJ1		;Ok, return happy			[276]
+	SUBTTL	DDB Scanning Routines -- MAPUPT - Map a Job's UPT
+
+;MAPUPT - Map a job's UPT
+;Call:	MOVEI	P5,<job number>
+;	PUSHJ	P,MAPUPT
+;	 * Non-skip return - Can't map page (job swapped possibly)
+;	* Skip return - UPT page mapped ok
+;Uses T1
+
+MAPUPT:	MOVE	T1,P5		;Copy the job number for GETUPM		[276]
+MAPUP1:	HRRZ	T1,@GETUPM	;Get the UPT pointer for this job	[276]
+	JUMPE	T1,.POPJ	;Error if no UPT pointer		[276]
+	CAMN	T1,CURUPM	;Already have this mapped?		[276]
+	JRST	.POPJ1		;Yes, just return happy			[276]
+	HRLM	T1,UPTBLK+1	;Save for the PAGE. UUO			[276]
+	MOVEM	T1,CURUPM	;And save for next time			[276]
+	MOVE	T1,[.PAGSP,,DELUPT] ;Delete the 			[276]
+	PAGE.	T1,		    ; old UPT				[276]
+	 JFCL			;Punt errors here			[276]
+	MOVE	T1,[.PAGSP,,UPTBLK] ;Map in the				[276]
+	PAGE.	T1,UU.PHY	    ; new UPT				[276]
+	 POPJ	P,		;Error, just pass it on			[276]
+	JRST	.POPJ1		;Success, return that way		[276]
+	SUBTTL	DDB Test Routines -- TSTPRG - Test for Program
+
+
+;TSTPRG - Test if a program was is being run
+;Call:	MOVE	P2,<The DDB address>
+;	MOVE	P3,<The ACC address>
+;	MOVE	P5,<The PPB address>
+;	JRST	TSTPRG
+;	* Returns to DDBLO1 if it valid else returns to DDBLOP *
+;Uses:	T1
+
+TSTPRG:	PUSH	P,P5		;Preserve P5
+	LDB	P5,JOBPTR	;Get the job number
+	TXNE	F,F.GOD		;Skip if not GOD
+	JRST	TSTPR0		;No need to test this stuff
+	MOVE	T1,@GETPPN	;Get the PPN in use
+	XOR	T1,PPN		;Compare the PPN's
+	TDNE	T1,PPNMSK	;Skip if a match
+	JRST	TSTPR1		;Go try the next DDB
+TSTPR0:	SKIPN	P5,@GETPDB	;Get the address of the PDB
+	JRST	TSTPR1		;Jump if no PDB
+	MOVE	T1,@GETRDI	;Get the program's directory
+	XOR	T1,DIR		;Compare the directory
+	TDNE	T1,DIRMSK	;Skip if a match
+	JRST	TSTPR1		;Go try the next DDB
+	MOVE	T1,@GETRFN	;Get the program's name
+	XOR	T1,FIL		;Compare the file name
+	TDNE	T1,FILMSK	;Skip if a match
+	JRST	TSTPR1		;Go try the next ddb
+	MOVE	T1,@GETRDV	;Get the porgram's device
+	XOR	T1,DEV		;Compare the device
+	TDNE	T1,DEVMSK	;Skip if a match
+	JRST	TSTPR1		;Go try the next DDB
+	POP	P,P5		;Restore P5
+	JRST	DDBLO1		;Go output this DDB
+TSTPR1:	POP	P,P5		;Restore P5
+	JRST	DDBLOP		;Go try the next DDB
+	SUBTTL	DDB Test Routines -- TSTNOT - Test for NOT Logged-In
+
+
+;TSTNOT - Test if a DDB fits a not logged in specification
+;Call:	MOVE	P2,<The DDB address>
+;	MOVE	P3,<The ACC address>
+;	MOVE	P5,<The PPB address>
+;	JRST	TSTNOT
+;	* Returns to DDBLO1 if it valid else returns to DDBLOP *
+;Uses:	T1 and T5
+
+TSTNOT:	LDB	T5,JOBPTR	;Get the job number
+	MOVE	T1,@GETPP	;Get the PPN in use
+	XOR	T1,DIR		;Compare this PPN
+	TDNN	T1,DIRMSK	;Skip if not a match
+	JRST	DDBLOP		;No - go try next DDB
+	JRST	DDBLO1		;Yea - go output this DDB
+	SUBTTL	DDB Test Routines -- TSTLOG - Test for Logged-In
+
+
+;TSTLOG - Test if a DDB fits a logged in specification
+;Call:	MOVE	P2,<The DDB address>
+;	MOVE	P3,<The ACC address>
+;	MOVE	P5,<The PPB address>
+;	JRST	TSTLOG
+;	* Returns to DDBLO1 if it valid else returns to DDBLOP *
+;Uses:	T1 and T5
+
+TSTLOG:	LDB	T5,JOBPTR	;Get the job number
+TSTLO0:	MOVE	T1,@GETPP	;Get the PPN in use
+	XOR	T1,DIR		;Compare this PPN
+	TDNE	T1,DIRMSK	;Skip if a match
+	JRST	DDBLOP		;No - go try next DDB
+	JRST	DDBLO1		;Yea - go output this DDB
+	SUBTTL	DDB Test Routines -- TSTFIL - Test for a File Specification
+
+
+;TSTFIL - Test if a DDB fits a file specification
+;Call:	MOVE	F,<The flags>
+;	MOVE	P2,<The DDB address>
+;	MOVE	P3,<The ACC address>
+;	MOVE	P5,<The PPB address>
+;	JRST	TSTFIL
+;	* Returns to DDBLO1 if it valid else returns to DDBLOP *
+;Uses:	T1
+
+TSTFIL:	TXNE	F,F.SUP		;Skip if not super I/O
+	JRST	DDBLOP		;Don't output super I/O DDB's
+	MOVE	T1,HI+PPBNAM(P5);Get the PPN of the file
+	XOR	T1,DIR		;Compare this PPN
+	TDNE	T1,DIRMSK	;Skip if a match
+	JRST	DDBLOP		;No - go try next DDB then
+	PUSHJ	P,FNDSTR	;Go find the structure name
+	 JRST	DDBLOP		;No - go try next DDB then
+	XOR	T1,DEV		;Compare this device
+	TDNE	T1,DEVMSK	;Skip if a match
+	JRST	DDBLOP		;No - go try next DDB then
+	MOVE	T1,DEVFIL(P2)	;Get the file name
+	XOR	T1,FIL		;Compare this file name
+	TDNE	T1,FILMSK	;Skip if a match
+	JRST	DDBLOP		;No - go try next DDB then
+	HLLZ	T1,DEVEXT(P2)	;Get the extension
+	XOR	T1,EXT		;Compare this extension
+	TLNE	T1,(T1)		;Skip if a match
+	JRST	DDBLOP		;No - go try next DDB
+	JRST	DDBLO1		;Yea - go output this DDB
+	SUBTTL	DDB Test Routines -- TSTJOB - Test for a Job
+
+
+;TSTJOB - Test if a DDB is from a given job
+;Call:	MOVE	P2,<The DDB address>
+;	MOVE	P3,<The ACC address>
+;	MOVE	P5,<The PPB address>
+;	JRST	TSTJOB
+;	* Returns to DDBLO1 if it valid else returns to DDBLOP *
+;Uses:	T1 and T5
+
+TSTJOB:	LDB	T5,JOBPTR	;Get the job number
+	CAME	T5,JOBNUM	;Skip if a right job number
+	JRST	DDBLOP		;Go try the next job number
+	TXNE	F,F.GOD		;Skip if not GOD
+	JRST	DDBLO1		;Go output the DDB
+	JRST	TSTLO0		;Go test the PPN of this user
+	SUBTTL	Display Routines -- TRMCLR - Clear the Screen
+
+
+;TRMCLR - Clear the screen
+;Call:	MOVEI	P1,<The terminal class>
+;	PUSHJ	P,TRMCLR
+;	* Return *
+;Uses:	T1
+
+TRMCLR:	SETOM	LSTCNT		;Insure Hazeltine hack works		[273]
+	TXNE	P1,TM%CLR	;Can this terminal clear the screen?	[273]
+	JRST	TRMC01		;Yes, go do it				[273]
+	PUSHJ	P,TRMHOM	;No, emulate it with home		[273]
+	PJRST	TRMEOS		;  and clear to end of screen		[273]
+
+TRMC01:	MOVE	T1,CLRTAB(P1)	;Get the character that clears		[273]
+	CAILE	T1,177		;Is it really a character?		[273]
+	PJRST	(T1)		;No, call the routine then		[273]
+	JUMPN	T1,TRMC02	;Go output the char if there is one	[273]
+	TXNE	P1,TM%DUM	;Oh.  Is this a dumb terminal?		[273]
+	OUTSTR	[BYTE (7) .CHCRT,.CHLFD,0] ;Yes, just output a CRLF	[273]
+	POPJ	P,		;Whatever.  Just return			[273]
+
+TRMC02:	SKIPE	PREFIX		;Any prefix to be output?		[273]
+	OUTSTR	PREFIX		;Yes, output it then			[273]
+	OUTCHR	T1		;Output this guy			[273]
+	TXNE	P1,TM%FIL	;Do we need to output some fill?	[273]
+	OUTSTR	FILL		;Yes, output some			[273]
+	POPJ	P,		;Return					[273]
+	SUBTTL	Display Routines -- TRMEOS - Clear to End of Screen
+
+
+;TRMEOS - Clear to end of the screen
+;Call:	MOVEI	P1,<The terminal class>
+;	PUSHJ	P,TRMEOS
+;	* Return *
+;Uses:	T1-2
+
+TRMEOS:	SKIPN	T1,EOSTAB(P1)	;Anything to output?			[273]
+	POPJ	P,		;No, just a no-op then			[273]
+	CAILE	T1,177		;Is it really a routine address?	[273]
+	PJRST	(T1)		;Yes, go do it instead			[273]
+	SKIPE	PREFIX		;Any prefix to be output?		[273]
+	OUTSTR	PREFIX		;Yes, output it then			[273]
+	OUTCHR	T1		;And output the magic char		[273]
+	TXNE	P1,TM%FIL	;Do we need to output some fill?	[273]
+	OUTSTR	FILL		;Yes, do it				[273]
+	POPJ	P,		;And return				[273]
+
+AD3EOS:	MOVE	T1,TRMLIN	;Get the screen size			[273]
+	TXNN	F,F.TTL		;Skip the title is being output
+	MOVEI	T1,-TTLLNS(T1)	;Get the size of the title		[267,273]
+	SUBI	T1,1		;Account for the status line		[273]
+	SUB	T1,CURCNT	;Get the number of blank lines		[273]
+	JUMPLE	T1,.POPJ	;Return if no blanks lines needed
+AD3EO1:	OUTCHR	[.CHLFD]	;Output a line-feed
+	SOJG	T1,AD3EO1	;Loop back if more lines to output
+	POPJ	P,		;Return
+
+HZ1EOS:	MOVE	T1,CURCNT	;Get the number of lines displayed
+	EXCH	T1,LSTCNT	;Save for the next scan
+	SUB	T1,LSTCNT	;Get the number lines to delete
+	AOJLE	T1,.POPJ	;Return if no lines to clear
+HZ1ES0:	OUTSTR	[BYTE (7) 176,23,.CHDEL,.CHDEL,0]	;		[273]
+	OUTSTR	FILL		;Output some fill			[273]
+	SOJE	T1,.POPJ	;Jump if no more lines to delete
+	JRST	HZ1ES0		;Loop back until finished
+	SUBTTL	Display Routines -- TRMEOL - Clear to End of Line
+
+
+;TRMEOL - Clear to end of the line
+;Call:	MOVEI	P1,<The terminal class>
+;	PUSHJ	P,TRMEOL
+;	* Return *
+;Uses:	No ACs
+
+TRMEOL:	SKIPN	T1,EOLTAB(P1)	;Anything to clear?			[273]
+	POPJ	P,		;No, just return now			[273]
+	CAIL	T1,177		;Is it a character?			[273]
+	JRST	(T1)		;No.  Dispatch to the routine		[273]
+	SKIPE	PREFIX		;Any prefix to output?			[273]
+	OUTSTR	PREFIX		;Yes, output it				[273]
+	OUTCHR	T1		;Output the character			[273]
+	POPJ	P,		;And return				[273]
+	SUBTTL	Display Routines -- TRMHOM - Home the Screen
+
+
+;TRMHOM - Home the screen
+;Call:	MOVEI	P1,<The terminal class>
+;	PUSHJ	P,TRMCLR
+;	* Return *
+;Uses:	T1
+
+TRMHOM:	SKIPN	T1,HOMTAB(P1)	;Get the character which homes		[273]
+	POPJ	P,		;None?  Just return I guess		[273]
+	CAILE	T1,177		;Is it a char or a routine?		[273]
+	PJRST	(T1)		;A routine.  Call it			[273]
+	SKIPE	PREFIX		;A character.  Any prefix?		[273]
+	OUTSTR	PREFIX		;Yes, output it				[273]
+	OUTCHR	T1		;Then send the home character		[273]
+	TXNE	P1,TM%FIL	;Are we filling?			[273]
+	OUTSTR	FILL		;Yes, output some fill then		[273]
+	POPJ	P,		;And return
+
+FILL:	BYTE(7) .CHDEL,.CHDEL,.CHDEL,.CHDEL,.CHDEL	;		[273]
+	BYTE(7) .CHDEL,.CHDEL,.CHDEL,.CHDEL,0	;			[273]
+	SUBTTL	The Error Message Routines
+
+
+E$$DRM:	OUTSTR	[ASCIZ ~
+?DDBDRM DDBDPY isn't set up to run on this monitor
+~]
+	JRST	CMDAB1		;Go do a monitor return
+
+
+E$$NPS:	OUTSTR	[ASCIZ ~
+?DDBNPS No privileges to SPY on the monitor
+~]
+	JRST	CMDAB1		;Go do a monitor return
+
+
+E$$UMP:	PUSHJ	P,@TRMCLR(P1)	;Go clear the screen
+	OUTSTR	[ASCIZ ~
+%DDBUMP	Unable to map in a DDB or LDB page (Job is swapped out)
+[DDBCON Continuing]
+~]
+	PUSHJ	P,@TRMHOM(P1)	;Home cursor				[263]
+	MOVEI	T1,2		;Wait	 				[263]
+	SLEEP	T1,		; awhile				[263]
+	JRST	DDBMAN		;Reset PDL and try again		[263]
+
+
+E$$TTF:	OUTSTR	[ASCIZ ~
+?DDBTTF A TRMNO. or TRMOP. UUO failed
+~]
+	JRST	CMDAB1		;Go do a monitor return
+
+
+E$$CIT:	OUTSTR	[ASCIZ ~
+?DDBCIT Can't INIT the terminal
+~]
+	JRST	CMDAB1		;Go do a monitor return
+
+
+E$$CRS:	OUTSTR	[ASCIZ ~
+?DDBCRS DDBDPY can't be run as a subjob
+~]
+	JRST	CMDAB1		;Go do a monitor return
+
+
+IFN FTPRIV,<
+E$$NPR:	OUTSTR	[ASCIZ ~
+?DDBNPR No privileges to run DDBDPY
+~]
+	JRST	CMDAB1		;Go do a monitor return >
+
+E$$OPP:	OUTSTR	[ASCIZ ~
+?DDBOPP	Program overlaps per process pages
+~]
+	JRST	CMDAB1		;Do a monitor return
+	SUBTTL	Data/Storage -- High Segment
+
+
+STLBUF:	ASCIZ	~JB M     PPN                FILE              NXT   WRT   ALC   OTH~
+PTHBUF:	ASCIZ	~JB M     PPN          FILE       UNIT   BLK   NXT   WRT   ALC   OTH~
+HLPBUF:	.HLPTX	\MONVER,\DDBVER,\DDBEDT  ;The help text
+
+STSPTR:	POINT	3,HI+ACCSTS(P3),32	;Pointer to the file status
+STSTAB:	SIXBIT	~ R~	;0 - Read		** The file status modes **
+	SIXBIT	~ U~	;1 - Update
+	SIXBIT	~ S~	;2 - Supersede
+	SIXBIT	~ *~	;3 - Fake for super I/O
+	SIXBIT	~ C~	;4 - Create
+
+
+MODTAB:	SIXBIT	~A~	;0 - ASCII		** The I/O modes **
+	SIXBIT	~AL~	;1 - ASCII line
+	SIXBIT	~P~	;2 - Packed image
+	SIXBIT	~BT~	;3 - Byte
+	SIXBIT	~A8~	;4 - Eight bit ASCII				[302]
+	SIXBIT	~5~	;5 - Undefined
+	SIXBIT	~6~	;6 - Undefined
+	SIXBIT	~7~	;7 - Undefined
+	SIXBIT	~I~	;10 - Image mode
+	SIXBIT	~11~	;11 - Undefined
+	SIXBIT	~12~	;12 - Undefined
+	SIXBIT	~IB~	;13 - Image binary
+	SIXBIT	~B~	;14 - Binary
+	SIXBIT	~SD~	;15 - Scope dump
+	SIXBIT	~DR~	;16 - Dump by record
+	SIXBIT	~D~	;17 - Dump
+
+
+EVWTAB:	SIXBIT	~TK~	;Tape kontroller wait	** The event wait states **
+	SIXBIT	~TR~	;Tape rewind wait
+	SIXBIT	~LB~	;Label processing wait
+	SIXBIT	~ND~	;Network device wait
+	SIXBIT	~NT~	;Network terminal connect wait
+	SIXBIT	~NS~	;Network station control wait
+	SIXBIT	~DT~	;DTE I/O wait					[266]
+	SIXBIT	~KD~	;KDP I/O wait					[266]
+	SIXBIT	~IP~	;IPCF system process receive wait
+	SIXBIT	~FI~	;Front end device input wait
+	SIXBIT	~FO~	;Front end device output wait
+	SIXBIT	~D6~	;DN60 device wait
+	SIXBIT	~DN~	;DECnet connect/I/O wait			[266]
+	SIXBIT	~DM~	;DMR I/O wait					[266]
+	SIXBIT	~CI~	;Distributed terminal input			[266]
+	SIXBIT	~CO~	;Distributed terminal output			[266]
+	SIXBIT	~NI~	;Ethernet function wait				[266]
+EVWSIZ==.-EVWTAB
+DEFINE	.DSP ($NAM,$FLG,$WID,$LEN,$PFX,$CLS,$LBL),<
+	<SIXBIT	~$NAM~> >
+
+DSPNAM:	.DSPTB			;** Generate the display name table **
+DSPSIZ==.-DSPNAM
+DEFINE	.DSP ($NAM,$FLG,$WID,$LEN,$PFX,$CLS,$LBL,%PFX),<
+IFG <$WID+1-LINLEN>,<LINLEN==$WID+1>
+IFG <$LEN-MAXLIN>,<MAXLIN==$LEN>
+IFNB <$LBL>,<$LBL:>
+%PFX=='$PFX'PFX-PFXTAB
+	EXP	$FLG!INSVL.(%PFX,TM%PFX)!INSVL.($LEN,TM%LEN)!INSVL.($WID,TM%WID)!CL.'$CLS'>
+
+DSPNUM:	.DSPTB			;** Generate the display size table **
+LINSIZ==<LINLEN+4>/5		;Compute max line size			[273]
+IFG <LINSIZ*<MAXLIN-1>-BUFSIZ>,<
+  BUFSIZ==LINSIZ*<MAXLIN-1>>	;Compute the buffer size		[273]
+
+; Generate the class tables:
+
+DEFINE	.CLS ($CLS,$CLR,$HOM,$EOS,$EOL),<
+CL.'$CLS==NXTCLS
+NXTCLS==NXTCLS+1
+	EXP	$CLR >		;					[273]
+
+NXTCLS==0			;Init the class counter			[273]
+
+CLRTAB:	.DSPCL			;** Generate the clear screen table **	[273]
+MAXCLS==NXTCLS			;Get the maximum class number		[273]
+
+DEFINE	.CLS ($CLS,$CLR,$HOM,$EOS,$EOL),<EXP	$HOM>	;		[273]
+
+HOMTAB:	.DSPCL			;** Generate the home screen table **	[273]
+
+DEFINE	.CLS ($CLS,$CLR,$HOM,$EOS,$EOL),<EXP	$EOS>	;		[273]
+
+EOSTAB:	.DSPCL			;** Generate the clear to end of screen ** [273]
+
+DEFINE	.CLS ($CLS,$CLR,$HOM,$EOS,$EOL),<EXP	$EOL>	;		[273]
+
+EOLTAB:	.DSPCL			;** Generate the clear to end of line ** [273]
+
+PFXTAB:			;Beginning of prefix types			[273]
+NULPFX:	EXP	0		;No prefix				[273]
+ESCPFX:	BYTE (7) .CHESC		;Traditional escape prefix		[273]
+CSIPFX:	BYTE (7) .CHESC,"["	;ANSI CSI prefix			[273]
+ALTPFX:	BYTE (7) 176		;Old style prefix			[273]
+	SUBTTL	Data/Storage -- Low Segment
+
+	RELOC	0		;Put the data in the low segment	[274]
+
+PDL:	BLOCK	PDLSIZ	;The push down list
+IFN FTDEBUG,<
+PATCH:	BLOCK	PATSIZ	;A patch area if debugging >
+TEMP:	BLOCK	1	;A temporary storage location
+LSTLOC:	BLOCK	1	;Offset for .UPLST
+INCHR:	BLOCK	1	;Contains an instruction to be executed when
+			; another character is wanted on input
+ADRDSK:	BLOCK	1	;Address of the first disk DDB
+MAXEDN:	BLOCK	1	;The maximum number of ERSATZ device
+MYPPN:	BLOCK	1	;My project programmer number
+JOBMAX:	BLOCK	1	;The maximum number of jobs
+CURJOB:	BLOCK	1	;My job number
+JIFFIE:	BLOCK	1	;The number of jiffies in one second
+JIFMIN:	BLOCK	1	;The number of jiffies in one minute
+JIFHOR:	BLOCK	1	;The number of jiffies in one hour
+PTYMIN:	BLOCK	1	;The number of the first PTY
+CURDAT:	BLOCK	1	;The current date
+TOTTIM:	BLOCK	1	;The total runtime
+DELTIM:	BLOCK	1	;The delta runtime
+DSKRED:	BLOCK	1	;The number of disk reads
+DSKWRT:	BLOCK	1	;The number of disk writes
+PAGNUM:	BLOCK	1	;Current page to output
+PAGSIZ:	BLOCK	1	;The number of DDB's on one screen
+PAGFST:	BLOCK	1	;The first DDB to output on the page
+PAGLST:	BLOCK	1	;The last DDB to output on the page
+CURCNT:	BLOCK	1	;The number of lines output this scan
+LINWID:	BLOCK	1	;This terminal's line width			[273]
+TRMLIN:	BLOCK	1	;The number of lines on this terminal's screen	[273]
+PREFIX:	BLOCK	1	;ASCIZ prefix string				[273]
+TRMNAM:	BLOCK	1	;SIXBIT terminal type name			[273]
+LSTCNT:	BLOCK	1	;The number of lines output on the last scan
+DDBCNT:	BLOCK	1	;The number of DDB's found on this scan
+JOB:	BLOCK	1	;The current job we're looking at for DDB's
+HIJOB:	BLOCK	1	;The highest job in use on the system
+CURUPM:	BLOCK	1	;The current UPMP for the job (physical address)
+CURPTR:	BLOCK	1	;The pointer to the current funny page
+CURPAG:	BLOCK	1	;The current page of funny page
+CURVRT:	BLOCK	1	;The current virtual page of SPY'ed DDB
+JOBTTL:	BLOCK	1	;The current job title line type		[272]
+TTLBUF:	BLOCK	LINSIZ*TTLLNS  ;The title buffer			[267]
+WHTBUF:	BLOCK	WHTSIZ	;The command string buffer
+IFN FTSLEEP,<
+SLPCNT:	BLOCK	1	;Sleep time adjustment counter >
+HIBTIM:	HB.RTL!HB.RWJ	;HIBER time and wake bits
+FUNFST:	BLOCK	1	;Page number of the first funny space page	[266]
+FUNLST:	BLOCK	1	;Page number of the last funny spage page	[266]
+FUNPAG:	BLOCK	1	;Offset into UPT for funny space page mapping for exec [266]
+UPT:	BLOCK	1	;Exec virtual address (and ours) of the UPT	[266]
+MEMSIZ:	BLOCK	1	;The size of the monitor's low segment		[266]
+PEKDDB:	BLOCK	DDBMAX	;A JOBPEKed DDB					[275]
+.USLNM:	BLOCK	1	;UPT address for the logical names table	[276]
+ROUTIN:	BLOCK	1	;The routine to be used is stored here
+JOBNUM:
+PPN:
+NOD:	BLOCK	1	;The file specification go here
+PPNMSK:
+NODMSK:	BLOCK	1
+DEV:	BLOCK	1
+DEVMSK:	BLOCK	1
+FIL:	BLOCK	1
+FILMSK:	BLOCK	1
+EXT:	BLOCK	1
+DIR:	BLOCK	1
+DIRMSK:	BLOCK	1
+BLTEND==.-1
+
+XROUTI:	BLOCK	1	;The routine to be used is stored here
+XPPN:
+XNOD:	BLOCK	1	;The temporary file specification go here
+XPPNMS:
+XNODMS:	BLOCK	1
+XDEV:	BLOCK	1
+XDEVMS:	BLOCK	1
+XFIL:	BLOCK	1
+XFILMS:	BLOCK	1
+XEXT:	BLOCK	1
+XDIR:	BLOCK	1
+XDIRMS:	BLOCK	1
+XBLTEND==.-1
+
+IROUTI:	TSTFIL		;The routine to be used is stored here
+IPPN:
+INOD:	'      '	;The initial file specification go here
+IPPNMS:
+INODMS:	-1		; 'ALL:*.*[PRJ,*]
+IDEV:	'ALL   '
+IDEVMS:	0
+IFIL:	'*     '
+IFILMS:	0
+IEXT:	'*  ',,0
+IDIR:	0
+IDIRMS:	0
+TRMTAB:	1,,.TONFC	;Set the no free carriage returns
+	0,,.TOALT	;Clear the altmode setting
+	0,,.TOBLK	;Set the blank line setting
+TRMSIZ==.-TRMTAB
+TRMSAV:	BLOCK	TRMSIZ	;Save the TTY status here
+TRM:	BLOCK	1	;The TRMOP. data area
+	.UXTRM
+	BLOCK	1
+
+
+INTBLK:	4,,CMDABT	;Go abort the job on a Control-C
+	ER.ICC
+	BLOCK	2
+
+; Assign some dynamically mapped pages:
+
+	LSTPAG==FSTPAG	;Init the page counter				[266]
+	.ASPAG	EDN,2	;The Ersatz Device Name pages			[266]
+	.ASPAG	LDB,2	;Pages for mapping the Line Data Block		[266]
+	.ASPAG	UNI,2	;Pages for mapping UDBs				[266]
+	.ASPAG	STR,2	;Pages for mapping STRs				[266]
+	.ASPAG	PFF,0	;First free page (must be below funny space)	[266]
+
+; An argument block for PAGE. UUOs.
+
+PAGBLK:	^D1		;One argument page only				[266]
+	EDNPAG		;A place to stick page numbers			[266]
+
+EDNBLK:	^D2		;Length (create EDN pages)
+	EDNPAG		;Page
+	EDNPAG+1	; numbers
+
+LDBBLK:	^D2		;Length (create LDB pages)
+	LDBPAG		;Page
+	LDBPAG+1	; numbers
+
+UPTBLK:	^D1		;Length (create UPT page)
+	0		;Page number					[266]
+
+
+DELEDN:	^D2		;Length (delete EDN pages)
+	PA.GAF+EDNPAG	;Page
+	PA.GAF+EDNPAG+1	; numbers
+
+DELLDB:	^D2		;Length (delete LDB pages)
+	PA.GAF+LDBPAG	;Page
+	PA.GAF+LDBPAG+1	; numbers
+
+DELUPT:	^D1		;Length (delete UPT page)
+	PA.GAF		;Page number					[266]
+DEFINE	GT ($TBL,$IDX,$FTX)<
+	IFN $FTX,<
+		BYTE	(9)$TBL(5)0(4)$IDX(18)0 >
+>
+
+GETSLF:	GT ,T1,1		;The GETTAB table pointer
+GETPDB:	GT ,P5,1		;The PDB pointer
+GETSFD:	GT ,P5,1		;The JBTSFD pointer (to find paths)	[272]
+GETDAT:	GT ,,1			;Get address of the date
+GETSPB:	GT ,,1			;The address of the where to find the first PPB
+GETSTR:	GT ,,1			;The address of the where to find the first STR
+GETEDN:	GT ,,1			;The address of the ERSATZ device table
+
+GETTBL:			;The GETTAB tables to be set up
+
+GETSTS:	GT .GTSTS,P5,1		;The status of a job
+GETADR:	GT .GTADR,P5,1		;The relocation and protection
+GETPP:	GT .GTPPN,T5,1		;The project-programmer number
+GETPPN:	GT .GTPPN,P5,1		;The project-programmer number
+GETPRG:	GT .GTPRG,P5,1		;The program name
+GETTIM:	GT .GTTIM,P3,1		;The current runtime
+GETKCT:	GT .GTKCT,P3,1		;The Kilo-Core-Ticks
+GETPRV:	GT .GTPRV,P5,1		;The job privileges
+GETSWP:	GT .GTSWP,P5,1		;The swapping data
+GETTTY:	GT .GTTTY,P5,1		;The TTY pointer
+GETSGN:	GT .GTSGN,P5,1		;The segment number
+GETRCT:	GT .GTRCT,P5,1		;The disk read count
+GETWCT:	GT .GTWCT,P5,1		;The disk write count
+GETWSN:	GT .GTWSN,T1,1		;The run states
+GETSPL:	GT .GTSPL,P5,1		;The spool bits
+GETRTD:	GT .GTRTD,P5,1		;The real time status word
+GETLIM:	GT .GTLIM,P5,1		;The limits word
+GETUPM:	GT .GTUPM,T1,1		;The UPMP pointer
+GETVRT:	GT .GTVRT,P5,1		;The virtual flags
+GETST2:	GT .GTST2,P5,1		;The second status word
+GETJLT:	GT .GTJLT,P5,1		;The logged-in time
+GETRDV:	GT .GTRDV,P5,1		;The device of the program
+GETRDI:	GT .GTRDI,P5,1		;The directory of the program
+GETRFN:	GT .GTRFN,P5,1		;The file name of the program
+GETVKS:	GT .GTVKS,P3,1		;The VM Kilo-Core-Ticks
+GETUUC:	GT .GTUUC,P3,1		;The UUO count
+IFGE MONVER-703,<		;New GETTABs!!!				[266]
+GETIMI:	GT .GTIMI,P5,1		;The incore image size of the job/segment [266] >
+
+GETSIZ==.-GETTBL	;Define the size of the GETTAB table
+
+; Some indirect pointers to be filled in from GETTABs
+
+; First, stuff we find in DDBs:						[266]
+
+JOBPTR:	POINT	9,(P2),35	;Pointer to the job number		[266]
+CTXPTR:	POINT	9,(P2),26	;Pointer to the context number		[301]
+DEVUNI:	(P2)			;The link to the unit data block	[266]
+DEVSFD:	(P2)			;The link to the father SFD (RH)	[266]
+DEVBLK:	(P2)			;The logical block in the unit to read	[266]
+DEVACC:	(P2)			;The link to the access block (RH)	[266]
+DEVSPN:	(P2)			;The entered spooled name		[266]
+
+; Terminal DDB instead of disk DDB:					[266]
+
+DDBLDB:	(P2)			;The link to the line data block (LDB)	[266]
+
+; Some LDB stuff:
+
+LDBDCH:	HI(T4)			;LDB characteristics word		[266]
+
+; Some STR fields:
+
+STRSYS:	(P4)			;<LH> is link to next STR		[266]
+LGOBLK:	SIXBIT	~SYS~	;Device - for the "K" command
+	SIXBIT	~LOGOUT~;Filename
+	EXP	0	;Extension
+	EXP	0	;Privileges
+	EXP	0	;PPN
+	EXP	0	;Core
+
+
+LINBUF:	BLOCK	BUFSIZ	;The line buffer
+	SUBTTL	The End
+
+
+	END	DDBDPY		;The end of 'DDBDPY'

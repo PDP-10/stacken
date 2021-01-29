@@ -1,0 +1,574 @@
+	TITLE	SOSSCN - Scanner
+;		--------------
+; 
+;  This is the scanner and get-next-character routines.
+; 
+
+	SEARCH	SOSTCS
+	$INIT
+
+	SUBTTL	SCAN
+
+SCAN::	TRZ	FL,TERMF!NUMF!IDF!TERMFF ;Reset flags
+	SKIPE	CS,SAVCHR	; Check to see if we left one last time
+	JRST	SL1		; Yes, it must be a delimiter
+	SKIPN	C,SAVC		; Back up a character?
+	JRST	SL10		; No
+	PUSHJ	P,GNCHB		; Yes, get bits
+	TLNN	FL2,INPARS	; Handle special if in parse
+	JRST	SL11		; Not in initial parse
+	SETZM	SAVC
+	SETZM	SAVCHR
+	POPJ	P,		; Return if space delim
+SL10:	PUSHJ	P,GNCH		; Get a chr
+SL11:	SETZM	SAVC
+	JUMPE	CS,SL10		; Check for tab, space, and ignore
+	JUMPL	CS,SL1		; Special character?
+	MOVE	T3,[POINT 6,ACCUM] ; Set to save ident
+	SETZM	ACCUM
+	TLNE	CS,SNUMF_16	; Check for number
+	JRST	SNUM1		; And go racing off to number routine
+SL2P:	TRO	FL,IDF		; It is an ident
+SL2:	TLNE	T3,770000	; Have we stored enough?
+	IDPB	CS,T3		; No, store another (rh of chr table has sixbit)
+	PUSHJ	P,GNCH		; Continue
+	JUMPG	CS,SL2		; Check for another number or letter
+SOK1:	MOVEM	CS,SAVCHR	; Save the character (must be a special chr)
+	TLNE	FL2,INPARS
+	MOVEM	C,SAVC		; Save char if parse
+	MOVEI	C,0		; Zero in c for numbers and idnets
+	POPJ	P,
+
+SL1:	HRRZ	C,CS		; For special characters, return rh of ctable
+	TLNE	CS,TERM_16	; Check for terminator
+	TRO	FL,TERMF	; And set flag
+	ANDI	C,377		; Get rid of extra bits
+	CAIN	C,14		;A <FF>?
+	 TROA	FL,TERMFF	;YES--FLAG AND SKIPA
+	  CAIA			;NO
+	   PUSHJ P,DOFF##	;AND HANDLE <FF>
+	SETZM	SAVCHR		; Zero savchr for later
+	CAIE	C,"."		; Check for .
+	JRST	CHKPND		; Check for #
+	MOVE	T1,CLN		; Set up for current line and page
+	MOVE	T2,CPGL
+	JRST	SETNMF		; Set NUMF and return
+
+CHKPND:	CAIE	C,"#"		; Is it # (means last value of LOLN)
+	JRST	CHKPCT		; No, check for %
+	DMOVE	T1,LSLOLN	; Fetch saved value
+	JRST	SETNMF		; Set NUMF and return
+
+CHKPCT:	CAIE	C,"%"		; Is it %
+	POPJ	P,		; No, just return
+	DMOVE	T1,CURINS	; Get last place inserted
+SETNMF:	TRO	FL,NUMF		; Call it a number
+	MOVEM	T2,FRCPAG	; Set forced page
+	POPJ	P,
+
+SNUM1:	SETZB	T1,T2		; Set number accums to 0
+SN1A:	TLNE	T1,(<177B7>)	; Check for 5 chars
+	JRST	SL2P		; 5 already -- must be an IDENT
+	IDPB	CS,T3		; Store for filesname or switches
+	LSH	T1,7		; Accumulate ASCII in T1
+	IOR	T1,C
+	IMULI	T2,^D10		; Decimal in T2
+	ADDI	T2,-"0"(C)
+	PUSHJ	P,GNCH		; Get next and continue
+	JUMPLE	CS,SOK2		; Check for end of number
+	TLNN	CS,SNUMF_16	; Check for number
+	JRST	SL2P		; Must be an ident
+	JRST	SN1A		; Continue scanning number
+
+SOK2:	TRO	FL,NUMF		; It was a number
+	LSH	T1,1		; Convert to line number
+	IOR	T1,LNZERO##
+	JRST	SOK1		; Save delim and return
+	SUBTTL	GET THE NEXT CHARACTER
+; 
+
+GNCH::	SKIPN	C,LIMBO		; Use saved char if any
+	PUSHJ	P,CHINM##	;Else get fresh char
+	SETZM	LIMBO		; And clear limbo
+	CAIN	C,33		; Convert ESC to 200 - do not
+	MOVEI	C,200		;  confuse with left curly bracket
+	CAIN	C,"'"		; Yes: should we use alt chr set?
+	SKIPN	QMDFLG		; Should we treat ' specially?
+	JRST	GNCHB		; No:
+GNCHA:	PUSHJ	P,CHINM##	;Get next char
+	JUMPE	C,GNCHA		; Skip nulls
+	SKIPE	CTBL(C)		; No change for null,space,tab,cret
+	MOVS	C,CTBL(C)	; Get alternate chr from chr table
+	ANDI	C,177		; Only the chr bits
+GNCHB:	JUMPE	C,GNCH		; Ignore nulls
+	MOVE	CS,CTBL(C)	; Get character table bits
+	TLNE	CS,LETF_16	; Check to see if a letter
+	TDC	C,CASEBT	; Use upper/lower info
+	POPJ	P,		; And return char in C, bits in CS
+	SUBTTL	TTYCH - TERMINAL INPUT
+
+; Routine to get the next character from the terminal buffer
+
+TTYCH::	SOSG	TIBUF+2		; Decrement count and skip if more
+	PUSHJ	P,INPTTY	; Get more chars via the sears special
+	ILDB	C,TIBUF+1	; Load a character
+	CAIN	C,12		; If a line feed
+	TLZE	FL,L1.NCR
+	CAIA
+	OUTCHR	[15]
+	CAIN	C,15		; Skip if not CR
+	TLOA	FL,L1.NCR	; Flag that we saw one
+	TLZ	FL,L1.NCR
+IFN CKPSW,<
+	PJRST	CKPCHR##	; Write in checkpoint file and return
+>
+	POPJ	P,		; Then return
+	SUBTTL	INPTTY - THE REASONABLE SCNSER
+; 
+;	The following code implements an interface to the monitor
+;	that allows us to backspace terminals in a resonable way
+;	while preserving the input handling for the remainder
+;	of the SOS system.
+; 
+INPTTY::
+IFE KIONLY,<
+	PUSH	P,T1		; Save this register...
+	PUSH	P,T2		; and T2 for RDLIN
+	PUSH	P,T3		; Better a slow program that runs
+	PUSH	P,T4		; Better a slower program that runs
+>;  End of IFN KIONLY
+IFN KIONLY,<
+	ADJSP	P,4
+	DMOVEM	T1,-3(P)	; Save T1 & T2
+	DMOVEM	T3,-1(P)	; and T3 & T4
+>
+	  ; 
+INP0:	MOVE	T1,[POINT 7,TBUF]	; TTY buffer pointer
+	MOVEM	T1,TIBUF+1		; Initialize it
+	SETZM	TIBUF+2		; Force count to zero
+INP1:	PUSHJ	P,CHKWBS	; Any wordspacing left to do?
+	  CAIA
+	JRST	RUBOUT		; Go handle
+	SOSG	CTIBUF+2	; Any more characters in buffer
+	PUSHJ	P,GET		; Go get another buffer full
+	ILDB	C,CTIBUF+1	; Pick out a nice juicy character
+	  ; 
+INP1X:	PUSHJ	P,CHKALT	; Go take care of strange altmodes
+	PUSHJ	P,CHKCTW	; Check for wordspacer
+	JUMPE	C,INP1		; Ignore nulls
+	CAIE	C,"G"-100	; Is this a bell?
+	TLZ	FL2,BELLSN	; No, make sure this is clear
+	TLNE	FL2,BKSPF	; Should we treat backspace as rubout?
+	CAIE	C,"H"-100	; Yes, is it one?
+	CAIN	C,177		; No -- Check for rubout
+	JRST	RUBOUT
+	CAIN	C,"U"-100	; Check for ^U
+	JRST	KLINE		; Kill last line
+IFN %UAHPQ,<			;; Only needed for JACCT
+	CAIN	C,"C"-100	; Check of ^C
+	PUSHJ	P,FAKINT##
+>; End of %UAHPQ conditional
+	CAIN	C,"R"-100	; Is it ^R?
+	JRST	CTLR		; Reissue line then
+	  ; 
+INPNSP:	IDPB	C,TIBUF+1	; Add character to the buffer
+	AOS	T1,TIBUF+2	; And increment the count
+	CAILE	T1,LINSIZ	; Make sure not too large
+	JRST	[RERROR	LTL	; Explain the problem
+		 CLRBFI		; Clean up the line
+		 PUSHJ  P,RPRMPT; Re-prompt so he knows what to do
+		 JRST	INP1]	; Kill line and try again
+	CAIL	C,40		; Check for control
+	JRST	INP1		; All breaks are below 40, continue
+	CAIN	C,33		; Check for altmode
+	JRST	INPALT		; Altmode processing
+	CAIN	C,"G"-100	; Is it a bell?
+	JRST	CHKBEL		; Yes, go fix
+	CAIL	C,12		; Other controls below twelve dont break
+	CAILE	C,14		; Same for those above 14
+	JRST	INP1		; Just continue with others
+	  ; 
+INPR:	MOVE	T1,[POINT 7,TBUF]	; Reinitialize pointer
+	MOVEM	T1,TIBUF+1		; To TTY input buffer
+IFE KIONLY,<
+	POP	P,T4		; Restore temporary registers
+	POP	P,T3		; 
+	POP	P,T2		; 
+	POP	P,T1		; 
+>
+IFN KIONLY,<
+	DMOVE	T1,-3(P)
+	DMOVE	T3,-1(P)
+	ADJSP	P,-4
+>
+	POPJ	P,		; and return
+	SUBTTL -- Control-W Support
+
+;  This code contains two routines.  CHKWBS checks for a
+;  control-W sequence in progress and dummies up a rubout if
+;  necessary.  CHKCTW check for a control-W character, converts
+;  it to a rubout, and sets WFLG.
+
+CHKCTW:	CAIE	C,"W"-100	; Is this a word backspace
+	POPJ	P,		; No, return
+	SETOM	WFLG		; Set ^W flag
+	SKIPE	DPYFLG		; On a display?
+	SETOM	ERSCTW		; Flag to erase the ^W on the screen
+	PUSHJ	P,CHKWBS	; Check this character
+	  MOVEI	C,177		; Return a rubout
+	POPJ	P,		; Rubout already in C
+
+
+CHKWBS:	SKIPLE	WFLG		; Waiting for ^W
+	POPJ	P,		; Return immediately if not doing this
+	SKIPN	TIBUF+.BFCTR	; Must be done if no more characters
+	JRST	CHKWB3		; Clear flag and return
+	LDB	C,TIBUF+.BFPTR	; Peek at last character
+	SKIPN	T3,CTBL(C)	; Get the bits
+	JRST	CHKWB1		; If a blank
+	SETZM	WFLG		; Note first non-blank seen
+	JUMPG	T3,CHKWB2	; Delete this alphanumeric character
+	TRNN	FL2,QSEPF	; Are %$. alpha?
+	TRNN	T3,NSEPF	; Is this an optional alpha?
+	JRST	CHKWBX		; No, return
+CHKWB1:	SKIPN	WFLG		; If already found a non-blank
+	JRST	CHKWBX		; Yes
+CHKWB2:	MOVEI	C,177		; Fake a rubout character
+	JRST	CPOPJ1##	; Good return
+
+CHKWB3:	AOSN	ERSCTW		; Waiting for eraser?
+	PUSHJ	P,ERAWWW	;YES--ERASE THE ^W
+CHKWBX:	AOS	WFLG		; No longer spacing
+	POPJ	P,		; Return fail
+
+	SUBTTL	Rubout Processing
+
+
+;	Rubout processing is handled here, with a cursor displacement
+;	being computed by adding up the printing widths of each charac-
+;	ter that is part of the current line with and without the
+;	character which is to be deleted.  If the new line is shorter
+;	the cursor is moved back with ^H characters, if it is longer
+;	it is moved forward with spaces.
+; 
+RUBOUT:
+	TRNE	FL,NECHO	;ARE WE ECHOING?
+	  JRST	RUBSUP		; No, so do silent rubout
+	SKIPN	DPYFLG		; On a display?
+	JRST	RUBTTY		; No, echo badness in backslashes
+	MOVE	T2,[POINT 7,TBUF] ; Start of buffer
+	LDB	T4,PMTSZP##	; Get prompt size
+	CAIN	C,"H"-100	; Check for backspace
+	PUSHJ	P,CTLHFX	; Undo damage
+	SETZM	WRPCNT##	; Clear wraparound count
+	SOSG	T3,TIBUF+2	; Skip if none in buffer
+	JRST	RUB2
+RUB1:	ILDB	C,T2		; Get character
+	JSP	T1,RBC		; Adjust print size
+	SOJG	T3,RUB1		; Continue
+; 
+RUB2:	JUMPL	T3,INP0		; If no characters in buffer
+	PUSH	P,T4		; Save partial sum
+	MOVEM	T2,TIBUF+1	; Place decremented pointer in header
+	ILDB	C,T2		; Get character deleted
+	JSP	T1,RBC		; Get line width with it
+	POP	P,T3		; Restore line size to be
+	SKIPLE	TIBUF+2		; Any data in buffer left?
+	JUMPE	T3,REITER	; If yes, just crossed a wraparound
+	JUMPE	T4,[SKIPL ERSCTW
+		    SOS WRPCNT
+		    JRST REITER]; Re-iterate shortened previous line(s)
+	AOSE	ERSCTW		; Need to erase ^W?
+	JRST	NOTCTW		; If no
+	MOVEI	C,2(T4)		; Size with ^W printed
+	CAMLE	C,LINEW		; See if wrapped
+	AOS	WRPCNT
+	CAML	C,LINEW		; See if at end of line
+	JRST	REITER		; Type the hard way
+	PUSHJ	P,ERAWWW	;ERASE "^W"
+NOTCTW:	SUB	T4,T3		; Compute displacement
+	PUSH	P,T4		; Save count a moment
+	JUMPE	T4,RUB2B	; If no displacement
+	JUMPL	T4,RUB3 	; If negative--implies fill needed
+	MOVE	C,BACCHR##	;BACKSPACER
+RUB2A:	PUSHJ	P,OCHRD##	; Output a backspace
+	SOJG	T4,.-1		; Until displacement is zero
+RUB2B:	MOVEI	C," "
+	MOVE	T4,(P)		; Get count back
+	CAILE	T4,2		; Skip if not forced by a tab
+	TDZA	T4,T4		; Just spaces there anyway
+	PUSHJ	P,OCHRD		; A blank erases the displayed character
+	SOJG	T4,.-1		; Output space to clear screen
+	MOVE	C,BACCHR##	;And another backspace puts the cursor
+	POP	P,T4		; Restore count again
+	CAILE	T4,2		; Skip if not force by a tab
+	TDZA	T4,T4		; Didn't need to clear screen, skip move
+	PUSHJ	P,FOCHRD##	; in the right place again.
+	SOJG	T4,.-1		; Move cursor back where it belongs
+	PUSHJ	P,FORCE##	; Now output it all
+	JRST	INP1		; Then return
+
+; Here on a RUBOUT for a non-display terminal.  Echo deletion starting
+; with a backslash, then the first character deleted.  Accept characters
+; in character mode until a non-rubout is seen.  Then close the erasure
+; with a second backslash and echo the break character.
+
+RUBTTY:	PUSHJ	P,BAKINP	; Back up one character in input stream
+	  JRST	KLINER		; Beginning of line.  Reprompt
+	OUTCHR	["\"]		; First backslash
+	PUSHJ	P,FOCHRD##	; Then erases character
+	OFFECHO			; No more echo till done
+	JRST	RUBTT3		;
+
+RUBTT1:	PUSHJ	P,GETRCH	; One character in rubout stream
+	  JRST	[ONECHO		; Restore echo
+		 OCRLF
+		 PUSHJ P,RETYPE##
+		 JRST INP1]	; And reprompt
+	PUSHJ	P,CHKCTW	; Check for control-W
+	TLNE	FL2,BKSPF	; Treat backspace as rubout?
+	CAIE	C,"H"-100	; Yes, backspace?
+	CAIN	C,177		; or rubout?
+	JRST	RUBTT2		; Yes, echo next
+	OUTCHR	["\"]		; Second backslash
+	CAIE	C,"U"-100	; Control-U?
+	PUSHJ	P,FOCHRD##	; No, echo character
+	CAIN	C,15		; Did we get a carriage return?
+	OUTCHR	[12]		; Line feed was not echoed either
+	ONECHO			; Echo again
+	JRST	INP1X		; Process this character
+
+RUBTT2:	PUSHJ	P,BAKINP	; Get next character to be erased
+	  JRST	ONKLIN		; Restore echo and reprompt
+	PUSHJ	P,FOCHRD##	; Echo character deleted
+RUBTT3:	PUSHJ	P,CHKWBS	; Still in control-W?
+	  JRST	RUBTT1		; Get next input
+	JRST	RUBTT2		; Get next
+
+ONKLIN:	ONECHO			; Restore echo
+	OUTCHR	["\"]		; Give one more backslash
+KLINER:	OCRLF			; Type CRLF
+	JRST	KLPRMT		; Give prompt and continue
+
+;Routine to get a character in a rubout stream
+;*** This subroutine will non-skip if the user types control-C, CONTINUE
+; This action takes place because the control-C handler notices that
+; the PC is at GETRPC and decrements the return address on the push down
+; list.  See code at CNCINR.
+
+ZZ==CNCINR##	; Reference here so GLOB and CREF readers know this
+		; is related.
+
+GETRCH:	SOSG	CTIBUF+2	; Any waiting in the buffer?
+	JRST	GETRC1		; No, get handle specially
+	ILDB	C,CTIBUF+1	; Fetch character
+	JRST	GETRC2
+
+GETRC1:	SETZM	CTIBUF+2	; Reset to zero (might go negative)
+GETRPC::INCHRW	C		; Wait for next typein
+GETRC2:	JUMPE	C,GETRCH	; Skip nulls
+	JRST	CPOPJ1##	; And return
+
+
+
+; Here to rubout when echoing is off
+
+RUBSUP:	PUSHJ	P,BAKINP	; Backup input pointer
+	  JRST	INP1		; Ignore beginning of buffer return
+	JRST	INP1		; And good return also
+
+;Routine to remove a character from the input stream
+
+BAKINP:	SKIPG	TIBUF+.BFCTR	; Any data in buffer
+	POPJ	P,		; No, give non-skip return
+	SOS	TIBUF+.BFCTR	; Decrement data count
+	MOVE	T1,TIBUF+.BFPTR	; Get data pointer
+	LDB	C,T1		; Last character inserted into buffer
+	ADD	T1,[7B5]	; Back up pointer
+	TLNE	T1,(1B0)	; Word overflow?
+	SUB	T1,[^D35B5+1]	; Yes, fix pointer
+	MOVEM	T1,TIBUF+.BFPTR	; Save new pointer
+	JRST	CPOPJ1##	; And return
+;Routine to adjust for pre-echoed backspace character
+
+CTLHFX:	MOVEI	C," "		; This usually works
+	SKIPE	TIBUF+2		; If no typed character on the screen
+	PJRST	FOCHRD##	; Space over ^H
+	SKIPN	T1,PMTSTR	; Prompt string
+	POPJ	P,		; If none
+	HRRZ	T1,PMTSTR	; Address of string
+	HRLI	T1,(POINT 7,)	; Make a pointer
+	ILDB	C,T1		; Get a character
+CTLH1:	ILDB	CS,T1		; And another
+	JUMPE	CS,FOCHRD##	; Type character and return
+	MOVE	C,CS		; Copy
+	JRST	CTLH1
+; 
+RUB3:	OUTCHR	[" "]		; Use a blank to fill in the space 
+	POP	P,(P)		; Pop garbage of the stack
+	JRST	INP1		; Continue input operation
+; 
+;	Here to reissue lines already typed
+;	Used when backspacing crosses a free CRLF and for ^R.
+; 
+CTLR:	SKIPN	VT52FL
+	OCRLF
+	PUSHJ	P,TTYKLN
+	MOVE	T2,TIBUF+1	; Fetch pointer
+	SETZ	C,
+	IDPB	C,T2		; Terminate ASCIZ string
+	JRST	CPY
+
+REITER:	SETZB	T4,ERSCTW	; Make a zero
+	DPB	T4,T2		; Clear deleted character
+	PUSHJ	P,UPCRSR##	; Move cursor up if wanted
+	SKIPN	VT52FL		; Don't type CRLF on display
+	OCRLF
+	SKIPE	VT52FL		; But do clean up the line
+	XCT	TMFCTE		; Clear rest of screen
+	PUSHJ	P,RPRMPT##	; Re-issue current prompt
+CPY:	MOVEI	T1,TBUF		; Re-iterate the buffer
+	PUSHJ	P,TYPSTR##	; Type the string
+	JRST	INP1		; And input the next character
+
+ERAWWW:	OUTCHR	BACCHR##	;BACK UP TWICE
+	OUTCHR	BACCHR##	;..
+	OUTSTR	[BYTE (7) " "," "];THEN 2 SPACES
+	OUTCHR	BACCHR##	;BACK UP AGAIN TWICE
+	OUTCHR	BACCHR##	;..
+	POPJ	P,		;AND RETURN
+	SUBTTL	RBC -- Routine to compute display width of a character
+
+;  This routine computes the print width of a character
+; 
+;  Note, this routine is called with a JSP on T1 because of the
+;  frequency with which it is called.
+
+RBC::	CAIL	C,40		; Check for printing characters
+	AOJA	T4,RBC2		; All above 40 have width 1
+	CAIN	C,33		; Is it an altmode?
+	AOJA	T4,RBC2		; Display width is 1
+	CAMN	C,BACCHR##	;BACKSPACE?
+	SOJA	T4,RBC1		; This is quite special
+	CAIN	C,7		; Bell?
+	JRST	RBC2		; Yes -- Print width is zero
+	CAIE	C,11		; Tab?
+	JRST	[ADD T4,CTLWTH##	
+		JRST RBC2]	; Add in width for controls
+	ADDI	T4,10		; Nominal tab width
+	TRZ	T4,7		; But must be a multiple of eight
+	CAMGE	T4,LINEW##	; Over the line boundary
+	JRST	(T1)		; No, then return
+	AOS	WRPCNT##	; Count of times we wrapped around
+	CAMN	T4,LINEW##	; At line boundary?
+	TRZA	T4,777777	; Clear count and skip
+	MOVEI	T4,10		; First tab stop after beginning of line
+	JRST	(T1)		; Return
+
+RBC1:	JUMPGE	T4,(T1)		; Still positive?  Then return.
+	SETZ	T4,		; Backed against the left side of screen
+	JRST	(T1)		; Return
+; 
+RBC2:	CAMGE	T4,LINEW##	; Forced on to next line
+	JRST	(T1)
+	AOS	WRPCNT		; Count number of lines
+	MOVEI	T4,0		; Must be at start of next line
+	JRST	(T1)		; Return
+; 
+; Subroutine to check to see if user has TTY ALTMODE set,
+; and to convert strange codes to 033 (ESCAPE) if he does.
+
+CHKALT::SKIPE	TTALTF##	; If TTY ALMODE
+	POPJ	P,		; TTY NO ALTMODE, just return
+	CAIE	C,175		; Most ancient altmode
+	CAIN	C,176		; Or the other obsolete code
+	MOVEI	C,33		; Get mapped into ESCAPE
+	POPJ	P,		; Then return
+
+	SUBTTL	More input routines KLINE and INPALT, CHKBEL
+; Here to kill a line.  Get here if character was a control-U (^U)
+
+KLINE:	SKIPN	VT52FL		; On a display?
+	OUTSTR	[BYTE (7) "^","U",15,12,0] ; No, type "^U"
+KLPRMT:	PUSHJ	P,TTYKLN	; Get to front of line
+	JRST	INP0		; Get next character
+
+TTYKLN:	SKIPN	VT52FL
+	PJRST	RPRMPT##
+	MOVE	T2,[POINT 7,TBUF] ; Point to TTY input buffer line
+	LDB	T4,PMTSZP##	; Prompt size pointer
+	SETZM	WRPCNT##	; Clear wraparound count
+	SKIPN	T3,TIBUF+2	; Skip if none in buffer
+	JRST	KLINE2
+KLINE1:	ILDB	C,T2		; Get character
+	JSP	T1,RBC		; Adjust print size
+	SOJG	T3,KLINE1	; Continue
+	MOVEI	C,"U"		; 1 space character
+	JSP	T1,RBC		; Size it
+	JSP	T1,RBC		; (Need room for ^ and U or R)
+	PUSHJ	P,FIXWPC##	; Fix wrap count
+KLINE2:	PUSHJ	P,UPCRSR	; Advance upward
+	XCT	TMFCTE		; Clear rest of screen
+	PJRST	RPRMPT##
+
+
+INPALT:	TLNE	FL2,INSF	; Are we in insert mode?
+	JRST	INPR		; Must return to end insert
+	TLNE	FL2,L2.NAB	; Suppress $ as break?
+	JRST	INP1		; Yes, continue scanning
+	MOVE	T2,TIBUF+2	; First character on line
+	CAIG	T2,1		;...is a command and must be returned
+	JRST	INPR		; So return it
+	MOVE	T1,[POINT 7,TBUF]	; We must scan over blanks to
+				; see if $ is first non-blank char.
+ALT1:	ILDB	C,T1		; Get a character
+	CAIE	C," "		; Skip over blanks...
+	CAIN	C,"I"-100	; and tabs
+	JRST	ALT1		; Stream for more
+	CAIE	C,33		; Is first non-blank and altmode?
+	JRST	INP1		; Nope, treat $ as regular character
+	JRST	INPR		; Yes, treat $ as a break character
+
+; Here for BELL character.  This is a break if two in a row.
+
+CHKBEL:	TLNE	FL2,BELLF	; Bell checking enabled?
+	TLCN	FL2,BELLSN	; Yes, flag we saw one
+	JRST	INP1		; Not a break
+	CLRBFI			; Yes, clear input buffer
+	PJRST	CRLFCM##	; Type CRLF, then get next command
+	SUBTTL	GET - GET A BUFFER OF CHARACTERS
+
+;  The following routine gets a buffer of characters from the terminal.
+;  This is needed to handle ^Z, i.e., TTY end of file.  A ^Z simply
+;  causes the terminal to be reopened, ie., it is ignored.
+; 
+GET::	IN	TTY,		; ask the monitor for a bunch
+	POPJ	P,		; everything's fine, return
+	CLOSE	TTY,		;^Z, simply close the TTY and...
+	JRST	GET		; do it again friend!
+
+
+;Routine to get a single character in character mode.  Call GETONE
+;to ensure that ^C trapping can detect that the terminal is in
+;TI state so it can reprompt if appropriate.
+
+GETONE::INCHRW	T1		; Get character in character mode
+	ANDI	T1,177		; Isolate low order 7 bits
+	POPJ	P,		; and return
+	SUBTTL	CTTBFI - CLEAR THE TERMINAL INPUT BUFFER
+
+;  Routine to clear both the monitor TTY input buffer and the
+;  internal, intermediate buffer.
+; 
+CTTBFI::PUSH	P,ALTP		; Save a register
+	SETZM	SAVCHR		; Clear saved character
+	SETZM	SAVC		; Clear typeahead
+	SETZM	LIMBO		; In all places
+	SETZM	TIBUF+2		; Clear the count
+	SETZM	CTIBUF+2
+	MOVE	ALTP,[POINT 7,TBUF]	; Reset the byte...
+	MOVEM	ALTP,TIBUF+1		; pointer
+	TTCALL	11,		; A real CLRBFI too!
+	JRST	APOPJ##
+
+	END

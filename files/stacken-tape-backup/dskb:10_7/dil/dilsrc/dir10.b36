@@ -1,0 +1,427 @@
+MODULE DIR10(
+             IDENT='10',
+             ENTRY(
+                    RL$PARSE,               ! Parse a local filespec
+                    RL$MERGE,               ! Merge local filespecs
+                    RL$DIRECTORY,           ! Initiate directory search local 
+                    RL$SEARCH,              ! Search (wildcard) local 
+                    RL$RENAME,              ! Rename local file(s) 
+                    RL$ERASE                ! Delete local file(s)
+                  )
+             )=
+BEGIN
+!  COPYRIGHT (C) DIGITAL EQUIPMENT CORPORATION 1986.
+!  ALL RIGHTS RESERVED.
+!  
+!  THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED  AND
+!  COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE AND WITH
+!  THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS  SOFTWARE  OR
+!  ANY  OTHER  COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE
+!  AVAILABLE TO ANY OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE
+!  SOFTWARE IS HEREBY TRANSFERRED.
+!  
+!  THE INFORMATION IN THIS SOFTWARE IS  SUBJECT  TO  CHANGE  WITHOUT
+!  NOTICE  AND  SHOULD  NOT  BE CONSTRUED AS A COMMITMENT BY DIGITAL
+!  EQUIPMENT CORPORATION.
+!  
+!  DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF
+!  ITS SOFTWARE ON EQUIPMENT THAT IS NOT SUPPLIED BY DIGITAL.
+
+!++
+! FACILITY:  DAP
+!
+! ABSTRACT:  Routines to transfer records or blocks of file data.
+!
+!
+! ENVIRONMENT:  RMS-10, BLISSNET-10, XPORT-10, Non-Transportable code.
+!
+! AUTHOR:	Andrew Nourse, CREATION DATE:  14-Sep-82
+!
+! Edit (%O'1', '12-Apr-84', 'Sandy Clemens')
+! %( Add the TOPS-10 DAP sources for DIL V2.  Use the standard DIL
+!    edit history format.
+! )%
+! 
+! Edit (%O'2', '23-May-84', 'Sandy Clemens')
+!  %( Add a CRLF to the end of a bunch of files because without it, if
+!     you copy the file to another system with FTS, you will lose the
+!     last line of the file!  FILES:  DAPBLK.10-REQ, DAPERR.BLI,
+!     DIRLST.10-BLI, DIR10.10-B36, DAPT10.10-B36.
+! )%
+!
+! Edit (%O'5', '5-Oct-84', 'Sandy Clemens')
+!  %( Add new format of COPYRIGHT notice.  FILES:  ALL )%
+!
+! 10    - Start TOPS-10 support [Doug Rayner]
+! 07    - Set NAM$V_FNB_WILDCARD if any wildcard bit set in RL$MERGE
+! 06    - First file on next filespec was not being processed correctly
+! 05    - Use RMS BSZ instead of FDB BSZ if it is an RMS file
+! 04    - Fix wildcard delete and rename
+! 03    - Put in ENTRY points
+! 02    - Supress device we get from JFN always if remote file
+! 01	- Separate system-dependant functions of DIRECT into this module
+!--
+!
+! INCLUDE FILES:
+!
+
+!LIBRARY 'BLI:XPORT';
+ LIBRARY 'RMS';
+ LIBRARY 'BLISSNET';
+ LIBRARY 'CONDIT';
+ LIBRARY 'DAP';
+
+!
+! Table of Contents
+!
+
+FORWARD ROUTINE
+RL$PARSE,               ! Parse a local filespec
+RL$MERGE,               ! Merge local filespecs
+RL$DIRECTORY,           ! Initiate directory search local 
+RL$SEARCH,              ! Search (wildcard) local 
+RL$RENAME,              ! Rename local file(s) 
+RL$ERASE;               ! Delete local file(s)
+
+!
+! Feature Tests
+!
+
+COMPILETIME MULTIPLE_FILESPECS=1;
+
+!
+! Externals
+!
+
+EXTERNAL ROUTINE
+    S$JFN_STR,
+    DAP$HANDLE,
+    R$NULL,
+    R$$MERGE;
+%IF MULTIPLE_FILESPECS
+%THEN
+EXTERNAL ROUTINE RL$NEXTFILESPEC
+%FI;
+
+
+
+
+!
+! EQUATED SYMBOLS:
+!
+
+LITERAL
+       FILE_NAME_LENGTH=40;
+
+
+!
+! OWN STORAGE:
+!
+
+
+
+GLOBAL ROUTINE RL$PARSE(FAB: REF $FAB_DECL, ERR)=
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!       Decompose a local filespec & merge in related filespec
+!
+! FORMAL PARAMETERS:
+!
+!       FAB: A FAB as defined by RMS
+!       ERR: Address of error routine
+!
+! COMPLETION CODES:
+!
+!	Standard RMS completion codes
+!
+!--
+    BEGIN
+    RL$MERGE(FAB[$],
+             MERGE$M_EXPANDED+MERGE$M_RLF+MERGE$M_POINT,
+             .ERR)
+    END;       ! RL$PARSE
+
+GLOBAL ROUTINE RL$MERGE (FAB: REF $FAB_DECL, FLAGS: BITVECTOR, ERR) = 
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!       Merge the related file spec with the filespec
+!       to get the resultant file spec
+!
+! FORMAL PARAMETERS:
+!
+!	FAB: Address of FAB, which may have NAM block attached
+!       FLAGS: Merge bits, defined in RMSUSR
+!
+! COMPLETION CODES:
+!
+!	RMS codes
+!
+! SIDE EFFECTS:
+!
+!	GTJFN will have been done on the filespec
+!       The JFN will be in FAB[FAB$H_JFN]
+!
+!--
+    BEGIN
+    MAP FAB: REF $FAB_DECL;
+    BIND NAM=.FAB[FAB$A_NAM]: $NAM_DECL;
+    BIND ROUTINE $$ERRRTN=.ERR: RMS_ERCAL;
+    LOCAL DESC: $STR_DESCRIPTOR(CLASS=BOUNDED);
+    LOCAL RESULT;
+    LOCAL NEXT;                             ! Offset to next filespec
+
+    IF .FAB[FAB$V_FOP_OFP]
+    THEN NEXT=0                             ! No multiple output filespecs
+    ELSE NEXT=.NAM[NAM$H_WCC_NEXT];         ! Input multpile filespecs OK
+
+    IF .FAB[FAB$V_FOP_CIF] THEN FLAGS[MERGE$V_CIF]=1; ! Set Create-if if in FAB
+    IF .FAB[FAB$V_FOP_OFP] THEN FLAGS[MERGE$V_CREATE]=1; ! Set create if in FAB
+    IF .FLAGS[MERGE$V_EXPANDED] EQL 0 THEN FLAGS[MERGE$V_RLF]=1;
+                                    ! Use related filespec always if resultant
+
+  IF .FAB[FAB$V_REMOTE] THEN RETURN 0;    ! Never do this for remote file
+
+
+    R$$MERGE(NAM[$],.FLAGS);   ! Merge in related filespec
+
+    FAB[FAB$H_STS]=RMS$_SUC             ! Win
+    END;                                ! RL$MERGE
+
+GLOBAL ROUTINE RL$DIRECTORY (FAB,ERR) =	! Get next file 
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!       'Open' a local directory for listing
+!
+! FORMAL PARAMETERS:
+!
+!       FAB: A FAB as defined by RMS -- FNA contains wildcard spec
+!       ERR: Address of error routine
+!
+! COMPLETION CODES:
+!
+!	Standard RMS codes
+!--
+
+    BEGIN
+    MAP FAB: REF $FAB_DECL;
+    BIND ROUTINE $$ERRRTN=.ERR: RMS_ERCAL;
+
+    BIND NAM=.FAB[FAB$A_NAM]: $NAM_DECL;   ! Name block
+    LOCAL FABSAV: VOLATILE;
+    LOCAL ERRSAV: VOLATILE;
+    ENABLE DAP$HANDLE(FABSAV,ERRSAV);   ! Setup Condition handler
+
+    ERRSAV=.ERR;
+    FABSAV=.FAB;                   ! Handler will need this
+
+    RL$MERGE(FAB[$],MERGE$M_EXPANDED+MERGE$M_RLF+MERGE$M_POINT,.ERR)
+
+    END;			!End of RL$DIRECTORY
+GLOBAL ROUTINE RL$SEARCH (FAB,ERR) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!       Get directory info for a local file
+!
+! FORMAL PARAMETERS:
+!
+!       FAB: A FAB as defined by RMS -- FNA contains wildcard spec
+!       ERR: Address of error routine
+!
+! COMPLETION CODES:
+!
+!	Standard RMS status codes
+!--
+
+    BEGIN
+    MAP FAB: REF $FAB_DECL;
+    LOCAL DESC: $STR_DESCRIPTOR();
+    BIND NAM=.FAB[FAB$A_NAM]: $NAM_DECL;
+    BIND ROUTINE $$ERRRTN=.ERR: RMS_ERCAL;
+    BIND TYP=.FAB[FAB$A_TYP]: $TYP_DECL;
+    LOCAL CLASS;
+
+    IF TYP NEQ 0                    ! If we have a datatype block,
+    THEN CLASS=.TYP[TYP$H_CLASS]    ! get the datatype class from it
+    ELSE CLASS=0;
+
+    IF NAM EQL 0 THEN (FAB[FAB$H_STS]=RMS$_NAM;    ! Must have a NAM block
+                       $$ERROR(GET,FAB[$]));       ! or can't do this
+
+    ! Set up descriptor for expanded string
+    $STR_DESC_INIT(DESC=DESC,STRING=(.NAM[NAM$H_RSS],.NAM[NAM$A_RSA]));
+
+
+
+!
+! Now get the information for the file
+!
+
+         BEGIN
+         LOCAL FAC,
+               FNA,
+               JFN,
+               RFM,
+               MRS,
+               FOP;
+         FAC=.FAB[FAB$H_FAC];       ! Save FAC
+         FOP=.FAB[FAB$H_FOP];       ! and FOP
+         JFN=.FAB[FAB$H_JFN];       ! And JFN
+         FNA=.FAB[FAB$A_FNA];       ! And file name pointer
+         RFM=.FAB[FAB$Z_RFM];       ! And Record Format
+         MRS=.FAB[FAB$H_MRS];       ! And max record size
+
+         NAM[NAM$H_RSL]=S$JFN_STR(.FAB[FAB$H_JFN],DESC,0); ! Get name
+
+         IF .FAB[FAB$V_FAC_BIO] EQL 0
+         THEN
+             BEGIN
+             FAB[FAB$H_FAC]=FAB$M_FAC_NIL;      ! No access
+             FAB[FAB$V_FOP_DRJ]=0;      ! Do not keep JFN
+             FAB[FAB$H_JFN]=0;          ! do not use this JFN
+             FAB[FAB$A_FNA]=.NAM[NAM$A_RSA];    ! Use resultant name
+
+             $OPEN(FAB=FAB[$]);         ! Open file to get attrs
+             IF .FAB[FAB$H_STS] EQL RMS$_SUC
+             THEN  $CLOSE(FAB=FAB[$]);  ! Close it again
+
+             FAB[FAB$H_FAC]=.FAC;   ! Restore these to what user gave us
+             FAB[FAB$H_FOP]=.FOP;   ! 
+             FAB[FAB$H_JFN]=.JFN;   !
+             FAB[FAB$A_FNA]=.FNA;   ! 
+             END;
+
+
+         END;
+
+
+    NAM[NAM$H_WCC_COUNT]=.NAM[NAM$H_WCC_COUNT]+1; ! Incr wildcard count
+
+    IF .FAB[FAB$H_STS] EQL RMS$_SUC
+    THEN RL$MERGE(FAB[$],MERGE$M_RLF,.ERR)      ! Get resultant filespec, etc.
+    ELSE $$ERROR(OPEN,FAB[$]);                  ! Call error routine if error
+    .FAB[FAB$H_STS]                             ! Return status
+    END;			!End of RL$SEARCH
+GLOBAL ROUTINE RL$RENAME (SFAB,DFAB,ERR) =	! Rename a file or files
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!       Rename a local file or files
+!
+! FORMAL PARAMETERS:
+!
+!       SFAB: A FAB as defined by RMS
+!       DFAB: A FAB as defined by RMS
+!       ERR: Address of error routine
+!
+! COMPLETION CODES:
+!
+!	RMS-20 codes
+!
+! SIDE EFFECTS:
+!
+!	The JFN (if any) may have changed
+!--
+
+    BEGIN
+    MAP SFAB: REF $FAB_DECL;
+    MAP DFAB: REF $FAB_DECL;
+    BIND SNAM=.SFAB[FAB$A_NAM]: $NAM_DECL;
+    BIND DNAM=.DFAB[FAB$A_NAM]: $NAM_DECL;
+
+    BIND ROUTINE $$ERRRTN=.ERR: RMS_ERCAL;
+
+    RL$DIRECTORY(SFAB[$],.ERR);        ! Get JFN, etc    
+
+    WHILE (RL$SEARCH(SFAB[$],R$NULL) NEQ RMS$_NMF)       ! Find next file
+    DO
+        BEGIN
+        LOCAL RESULT;
+        END;
+
+    IF .SFAB[FAB$H_STS] EQL RMS$_NMF     ! If we did all the files
+    THEN SFAB[FAB$H_STS]=RMS$_SUC;       ! then that's normal
+
+
+    .SFAB[FAB$H_STS]                     ! Return status
+    END;                                 !End of RL$RENAME
+
+GLOBAL ROUTINE RL$ERASE (SFAB,ERR) =	! Delete a file or files
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!       Delete a local file or files
+!
+! FORMAL PARAMETERS:
+!
+!       SFAB: A FAB as defined by RMS
+!       ERR: Address of error routine
+!
+! COMPLETION CODES:
+!
+!	RMS codes
+!
+! SIDE EFFECTS:
+!
+!--
+
+    BEGIN
+    MAP SFAB: REF $FAB_DECL;
+    BIND ROUTINE $$ERRRTN=.ERR: RMS_ERCAL;      ! Error routine
+    BIND SNAM=.SFAB[FAB$A_NAM]: $NAM_DECL;
+
+    ! Caller can set this bit before the call to disable local files.
+    IF .SFAB[FAB$V_REMOTE]       ! Must it be remote?
+    THEN
+        BEGIN
+        SFAB[FAB$H_STS]=RMS$_SUP;
+        $$ERROR(OPEN,SFAB[$]);   ! Yes. complain
+        END;
+
+    RL$DIRECTORY(SFAB[$],.ERR);        ! Get JFN, etc    
+
+    WHILE (RL$SEARCH(SFAB[$],R$NULL) NEQ RMS$_NMF)       ! Find next file
+    DO
+        BEGIN
+        LOCAL TFAB: $FAB_DECL;          ![4] Make temp FAB
+
+        $FAB_INIT(FAB=TFAB, FNA=.SNAM[NAM$A_RSA]); ![4] init to resultant name
+
+        IF .SFAB[FAB$Z_ORG] NEQ FAB$K_ORG_DIRECTORY
+        THEN
+            BEGIN
+            $ERASE(FAB=TFAB[$]);            ![4] Erase it
+            SFAB[FAB$H_STS]=.TFAB[FAB$H_STS]; ![4] Keep status
+
+            IF .TFAB[FAB$H_STS] NEQ RMS$_SUC
+            THEN
+                BEGIN
+                SFAB[FAB$H_STV]=.TFAB[FAB$H_STV];   ![4] Keep secondary status
+                $$ERROR(ERASE,SFAB[$])      ![4] process error
+                END;
+            END;
+        END;
+
+    SFAB[FAB$H_JFN]=0;                   ! This JFN is bye-bye.
+
+    IF .SFAB[FAB$H_STS] EQL RMS$_NMF     ! If we did all the files
+    THEN SFAB[FAB$H_STS]=RMS$_SUC;       ! then that's normal
+
+    .SFAB[FAB$H_STS]                     ! Return status
+    END;                                 !End of RL$ERASE
+
+
+GLOBAL BIND ROUTINE RMS$MERGE=RL$MERGE;
+GLOBAL BIND ROUTINE RMS$DIRECTORY=RL$DIRECTORY;
+GLOBAL BIND ROUTINE RMS$SEARCH=RL$SEARCH;
+
+
+END
+ELUDOM ! End of module

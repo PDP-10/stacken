@@ -1,0 +1,6 @@
+MUD.EXE=[*,*]/Execute/Log:All
+MUD.?PM=[*,*]/Program:mud/Xonly/All
+MUD.DBA=[*,*]/Program:mud/Xonly/All
+MUD.*=[*,*]/Program:mud/xonly/read
+*.DBA=[*,*]/Program:mud/Xonly/read
+LETTER.BOX=[*,*]/Program:mud/Xonly/read

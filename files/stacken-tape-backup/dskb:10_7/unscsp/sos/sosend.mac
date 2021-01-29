@@ -1,0 +1,1771 @@
+	TITLE	SOSEND -- END OF EDIT CODE
+;               ----------------
+
+; This module contains the following
+; 
+;	1. End of edit code
+;	2. The RPG loader (RUN)
+;	3. General purpose stuff (ASCIAD etc)
+; 
+
+	SEARCH	SOSTCS,sossym,UUOSYM
+	$INIT
+	SUBTTL	The W command and Auto-save routine
+
+; Here for the W Command
+
+SVCOD::	PUSHJ	P,SVCOD0	; Do the save
+	  JRST	COMND##		; Error or 'no changes'
+	MOVEI	T1,ALTFNM
+	MOVEM	T1,OUTLEB	; Setup for TOFNAM
+	PUSHJ	P,TOFNAM	; Type [filespec]
+	JRST	COMND##		; Return to command level
+
+; Here for Auto-Save
+
+ASVCOD::TLO	FL2,AUTOF	; Set to do auto-save
+	OUTSTR	[ASCIZ "[Saving]
+"]
+	PUSHJ	P,SVCOD0	; Do the save
+	  JFCL
+	PUSHJ	P,RSTSVC	; Reset save counters
+	PJRST	CHKCCI##	; Check for ^C^C and return
+
+SVCOD0:	TRNE	FL,READOF	; Illegal if /R
+	NERROR	IRO		; %Illegal when Readonly
+	PUSHJ	P,NSCAN		; Get name and switches
+	  NERROR BFS		; Bad filespec
+	SKIPN	QUITSW		; WQ
+	SKIPE	EDSW		;  or WD
+	NERROR	ILC		; is illegal
+	SKIPE	ERSW		; And so is WR
+	NERROR	ILC
+	SKIPE	EWNFNF		; Filename given?
+	JRST	SVCOD1		; Yes, must do save then
+	PUSHJ	P,FXCCNT	; No, fix CHGCNT
+	MOVE	T1,TOTCHG	; Get total change count
+	SKIPN	CHGCNT		; Any this pass?
+	TDNE	T1,[377777,,-1]	; or since last save
+	JRST	SVCOD1		; Yes, non-null save
+	OUTSTR	[ASCIZ/[No changes]
+/]
+	POPJ	P,
+				CONT. 
+SVCOD1:	PUSHJ	P,SETRFL##	; Protect against wild re-entering
+	MOVSI	T1,400000	; Flag changes at some time
+	SKIPN	EWNFNF		; New file name given on command?
+	MOVEM	T1,TOTCHG	;  no, indicate for end code
+	SKIPE	EWNFNF		; New file
+	SKIPN	CHGCNT		;  and changes already?
+	SETOM	CHGCNT		; Don't lose track of real changes
+	PUSHJ	P,OCOMPL##	; Complete this pass
+	SKIPN	AUXFIL		; Are we reading a temporary?
+	CLOSE	IN,		; No, close the input
+	PUSHJ	P,CLRTEC##	; Clear TECOF if set
+	CHKREN	COMND##		; Did he want to quit?
+	PUSHJ	P,ENBIN1##	; Special intercept
+	MOVE	T1,SAVSVL	; Save list for W command
+	JSP	T5,PUSHL##	; Save variables
+	MOVE	T1,PNTNMO	; Get output block
+	MOVEM	T1,PNTNMI	; Point to it as input file
+	MOVE	T1,CHNTAB+OUT	; Current output channel
+	MOVEM	T1,CHNTAB+IN	; We need to read it
+	MOVE	T1,CHNTAB+ALTDV	; Alternate device
+	MOVEM	T1,CHNTAB+OUT	; is what we'll use to write
+	PUSHJ	P,SETBKP	; Set up backup file, if needed
+	  JRST	SVERR
+	MOVEI	T1,ALTFNM	; Point to this output block
+	MOVEM	T1,PNTNMO	; So protection routines can find it
+	MOVEI	T1,.RBBIG	; Length for lookup block
+	TRNE	FL,WNEWFL	; New file name?
+	TRO	T1,RB.NSE	; Yes, set for non-superseding ENTER
+SVCOD2:	MOVEM	T1,ALTFNM	; Set it up
+	PUSHJ	P,GETEST	; Get the estimated size
+	MOVEM	T1,ALTFNM+.RBEST; Setup the estimated size
+	MOVE	T1,[OUTNAM,,ALTFNM+.RBNAM]
+	BLT	T1,ALTFNM+.RBEXT; Setup the file name
+	HRRI	T1,APATH	; Place to store
+	HRL	T1,OUTPTH	; Where path is now
+	HRRZM	T1,ALTFNM+.RBPPN ; Setup in LOOKUP block
+	BLT	T1,APATH+.PTMAX-1 ; Copy the path
+	SETZM	ALTFNM+.RBALC	; Keep the whole file
+	SKIPN	T1,TMPDEV	; See if a temp device was given
+	PUSHJ	P,GINSTR##	; Input structure name
+	MOVEM	T1,.OPDEV+ALDEVI; Stash the new device
+	MOVEI	T2,@PNTNMI	; Input file pointer
+	MOVE	T1,.RBVER(T2)	; Get the file version number
+	MOVEM	T1,ALTFNM+.RBVER; Save it
+	PUSHJ	P,SETTFP##	; Setup temp file protection
+	PUSHJ	P,GETOFP##	; Output file protection
+	MOVEM	T1,ALTFNM+.RBPRV; Setup the protection
+				CONT.
+	OPNDSK	OUT,@CHNTAB+OUT	; Open the channel
+	  JRST	SVERR		; Can't, give up
+	SETSTS	OUT,.IOASC	; Enter file in ASCII mode
+	XENTER	OUT,ALTFNM	; Enter the file
+	  JRST [HRRZ	T1,ALTFNM+.RBEXT; Get the error code
+		CAIE	T1,ERAEF%	; Already existing file?
+		JRST	SVERR		; No, real error
+		MOVEI	T1,ALTFNM
+		MOVE	T2,ALDEVI+.OPDEV
+		PUSHJ	P,FAEQRY	; Ask him
+		PUSHJ	P,CONFRM	; Ask him
+		  JRST	SVERR		; He said no
+		MOVEI	T1,.RBBIG	; Length without RB.NSE
+		JRST	SVCOD2]		; He said yes
+	PUSHJ	P,CPYFIL	; Copy the file
+	RELEAS	OUT,		; All done
+	MOVE	T1,SAVSVL	; Point to save list for W command
+	JSP	T5,POPL		; Restore saved variables
+	SKIPE	EWNFNF		; Was this a special file name?
+	JRST	SVCOD3		; Yes, just go finish up
+	SKIPE	T1,UNSEQF	; Did we read UNSQIF for the save?
+	MOVEM	T1,UNSQIF	; No, setup current file format
+	PUSHJ	P,GETOFP##	; Get protection as written
+	MOVEM	T1,SVPBTS	; And save it for next time
+	TRNN	FL,WNEWFL	; Is this a new file
+	JRST	SVCOD3		; No, don't need to fix ORGNAM
+	DMOVE	T1,NEWNAM	; Fetch output name
+	DMOVEM	T1,ORGNAM	; Set up as new name
+	MOVE	T1,ALTFNM+.RBDEV ; New device
+	PUSHJ	P,GENSTR##	; Clean it up
+	MOVEM	T1,ORGDEV	; Save as orginal
+	CLEARM	<NEWNAM,NEWEXT,NEWDEV> ; Clear new file name
+	HRLZI	T1,APATH	; Point to new path
+	HRRI	T1,IPATH	; and to old
+	BLT	T1,IPATH+.PTMAX-1 ; Zap!!
+	JRST	SVCOD3		;  and finish up
+; Here on an error doing the save
+
+SVERR:	RELEAS	OUT,
+	AOS	CHGCNT		; Call this a change
+	AOS	CHGCNT		; (save set it to -1)
+	MOVE	T1,SAVSVL
+	JSP	T5,POPL##	; Restore saved variables
+	SOS	(P)		; Set error return
+; 
+;  Here to finish up by reseting flags, counts, etc.
+; 
+SVCOD3:	PUSHJ	P,ENBINT##	; Normal intercept
+	MOVEI	T1,1		; Use page 1
+	TLNN	FL2,AUTOF	; Auto-save?
+	MOVEM	T1,DPG		; Set desired page
+	PUSHJ	P,RSTSVC	; Reset the counters
+	TLZE	FL2,AUTOF	; Auto save?
+	SKIPA	SINDEX,HILN	; Point to next line
+	MOVE	SINDEX,LNZERO##	; Else look for start
+	PUSHJ	P,FIND##	; Re-find the line
+	JRST	CPOPJ1##	;  and give good return
+
+; This is the list of variables that are saved during a W command
+
+WSVLST:	XWD	CHNTAB+IN,CHNTAB+OUT
+	XWD	PNTNMI,PNTNMO
+	XWD	REMSIZ,OUTSIZ
+
+WSVLEN==.-WSVLST		; Length
+
+SAVSVL:	XWD	-WSVLEN,WSVLST
+
+;RSTSVC -- Routine to reset the save counters
+
+RSTSVC::SKIPE	T1,SISAVN	; Save counter value
+	MOVEM	T1,ISAVEN
+	SKIPE	T1,SSAVEN	; For /SAVE:n
+	MOVEM	T1,SAVEN	; Restart that too
+	POPJ	P,		; And return
+	SUBTTL	CO-EDIT FUNCTIONS
+
+; Here when the user type CX:filespec or CX (no arguments)
+
+CXCMD::	SKIPE	ISCOP		; Are we in copy search mode?
+	NERROR	ILC		; Yes, then do not allow this
+	PUSHJ	P,SCAN##
+	CAIE	C,":"		; Colon is a good delimiter
+	CAIN	C,"="		; and = is good too
+	CAIA
+	JRST	CXCMD1
+	SKIPG	CXFMNE		; Did we abort the first file?
+	SKIPE	CXFPDP		; Is he already doing this?
+	NERROR	TMC		; %Too many co-files
+	PUSHJ	P,SCAN##	; Prime the scanner for READNM
+	MOVEI	T3,ERPPN-1	; Place to read the filename
+	MOVEI	T1,APATH	; Place to read the path (if any)
+	MOVEM	T1,ERPPN	; (set it up)
+	PUSHJ	P,READNM##	; Read in the filespec
+	  NERROR BFS
+	PUSHJ	P,CKTRMF##	; Make sure no junk at end of line
+	MOVE	T1,TMPDEV	; Parsed device name
+	MOVEM	T1,ERDEV	; Set it up for DORST
+	MOVE	T1,.JBFF##	; First free location
+	MOVEI	T2,LSGLEN+4000(T1) ; Amount of core to get
+	CORE	T2,		; Get some core
+	  NERROR NEC		; Not enough, tell him he loses
+	MOVE	T1,[2,,[ASCIZ/1*/]]
+	MOVEM	T1,CMDPMT	; New command prompt
+	MOVE	T1,CXFSVL	; List of things to save
+	JSP	T5,PUSHL	; Save some AC's
+	MOVEM	P,CXFPDP	; Save the PDL pointer
+	HRLI	T1,DATABL	; First word of low segment
+	HRR	T1,.JBFF##	; To first free
+	MOVEI	T2,LSGLEN(T1)	; To last word of low segment
+	MOVEM	T1,CXFPTR	; Save BLT pointer for return
+	BLT	T1,-1(T2)	; Save everything
+	MOVEM	T2,TTYBE##	; So SOSINI doesn't clobber old stuff
+	MOVE	P,[IOWD PDLSIZ,PDL]
+	HRLZI	T1,(Z CXOUT,0)	; Alternate OUT channel
+	HLLM	T1,CHNTAB+OUT	; Set it up in the channel table
+	HRLZI	T1,(Z CXIN,0)	; Alternate IN channel
+	HLLM	T1,CHNTAB+IN	; Set it up in the channel table
+	MOVSI	T3,'SS1'
+	PUSHJ	P,JOBNUM##	; Make a new temp file name
+	MOVEM	T3,EDNAM	; Set it up
+	SETOM	ERSW		; Make like changing files
+	SOS	ERSW		; Use -2 for CX command
+	SETZM	CXFMNE		; Allowed to exit
+	MOVE	T1,[2,,[ASCIZ/2*/]]
+	MOVEM	T1,CMDPMT	; New prompt
+	JRST	DORST		; And switch to CX file
+
+; Here from SOSERR when a fatal error is found in the first file
+
+CXFERR::SETOM	CXFMNE		; Flag there has been an error
+	MOVNS	CXFMNE		; (+1 value)
+	JSP	ALTP,CXFER1	; And get back to co-file
+	JRST	CRLFCM##	; CRLF then next command
+
+; Here for CX command and no arguments
+
+CXCMD1:	PUSHJ	P,CKTRMF##	; No arguments allowed
+	JSP	ALTP,CXFXCH	; Swap files
+	JRST	CRLFCM##	; CRLF, then next command
+
+
+; Here from SOSINI when we failed trying to start a co-edit
+; Checks value of ERSW to determine whether return message should
+; be issued.
+
+CXERTN::AOSGE	ERSW		; From ER in co-file?
+	SETOM	CXSUPF		; No, from a CX command.  Suppress msg.
+CXFRTN::JSP	ALTP,CXFRT0	; Exchange files
+	JRST	CRLFCM##	; CRLF, then next command
+
+
+; Routine to exchange the co-files.
+; Call with 
+;	JSP	ALTP,CXFXCH
+;	<returns here, in other file>
+
+CXSXCH::SETOM	CXSUPF		; Silent exchange
+CXFXCH:	SKIPL	CXFPDP		; Must be another file
+	NERROR	ILC		; Nope
+CXFER1:	MOVE	T1,CXFSVL	; Stuff to save
+	JSP	T5,PUSHL	; Save it
+	MOVEM	P,CXFPDP	; Save the pointer for next pass
+	MOVE	T4,SVJFF2	; Get core size
+	MOVSI	T1,MLSGLN##	; -(length of low segment)
+	HRRZ	T2,CXFPTR	; Address of the save
+	HRLI	T2,(POINT 36,)	; Make a 36 bit byte pointer
+CXCMD2:	ILDB	T3,T2		; Fetch a saved word
+	EXCH	T3,DATABL(T1)	; Exchange it into the low segment
+	MOVEM	T3,(T2)		; And save this word
+	AOBJN	T1,CXCMD2	; Loop over whole segment
+	MOVEM	T4,SVJFF2	; Make sure we don't lose other file
+	MOVE	P,CXFPDP	; Restore the push-down pointer
+	SKIPG	CXFMNE		; Error flag set?
+	SETCMM	CXFMNE		; No, keep track of which file
+	SKIPG	CXFMNE		; Error exit from first co-file?
+	JRST	CXFRT1
+	SETCMM	CXFPDP		; Yes, mark co-file as bad
+	MOVE	T1,STDPMT	; Standard prompt
+	MOVEM	T1,CMDPMT	; Set it up again
+	JRST	CXFRT1		; No, do standard return
+; Routine to exit from a co-file
+; Call with
+;	JSP	ALTP,CXFRTN
+;	<return here in co-file>
+
+
+CXFRT0::MOVS	T1,CXFPTR	; Set to recover
+	MOVEI	T2,LSGLEN(T1)	; Length for the BLT
+	BLT	T1,-1(T2)	; Restore the old data area
+	MOVE	P,CXFPDP	; Restore the push down list pointer
+	SETZM	CXFPDP		; Note not co-editing now
+	MOVE	T1,STDPMT	; Standard prompt
+	MOVEM	T1,CMDPMT	; Save for next command
+	MOVE	T1,CXFCOR	; Get core size
+	MOVEM	T1,SVJFF2	; Allow shrinkage
+
+; Common code for return and exchange co-files to restore variables
+; and type the return message if desired.
+
+CXFRT1:	MOVE	T1,CXFSVL	; Point to save list
+	JSP	T5,POPL		; Restore other AC's
+	AOSN	CXSUPF		; Suppress message (error from SOSINI)
+	JRST	(ALTP)		; Yes
+	TRNN	FL,READOF
+	OUTSTR	[ASCIZ/Now editing /]
+	TRNE	FL,READOF
+	OUTSTR	[ASCIZ/Now examining /]
+	PUSHJ	P,GVNAM##	; Type the filename
+	JRST	(ALTP)		; Return
+
+
+CXFSAV:	XWD	FL,FL2
+	XWD	PNTR,LPNTR
+CXFSLN==.-CXFSAV
+CXFSVL:	XWD	-CXFSLN,CXFSAV
+
+; Routine to output 'Co-' if appropriate
+
+PRCOFM::SKIPE	CXFPDP		; Co-editing?
+	OUTSTR	[ASCIZ/Co-/]	; Remind him
+	POPJ	P,		; 
+	SUBTTL	The E and G commands
+
+; Here for the G Command
+
+GEND::	TLOA	FL,GCOM		; Go
+
+; Here for the E Command family
+; 
+ENDIT::	TLZ	FL,GCOM		; Normal type End
+	PUSHJ	P,SETRFL##	; Prevent interruption
+	TLNN	FL,SRCOP	; In a copy?
+	SKIPL	CXFMNE		; No, then is this a co-edit?
+	CAIA
+	NERROR	MEC		; Yes, got to say CX first
+	TLZ	FL2,BELLF	; Disable <BELL><BELL>
+	SETZM	NORNM##
+	PUSHJ	P,NSCAN		; Get a name
+	  NERROR BFS		; Skips if no errors
+	SKIPE	EDSW		; ED exit?
+	TRNE	FL,WNEWFL!READOF ; Must be new file or read only
+	CAIA
+	NERROR	ILC		; Not true, zonk!!
+	SKIPN	DELETF		; Is he enabled for ED switch?
+	SKIPN	EDSW		; Or did not ask to delete
+	JRST	DELOK
+	OUTSTR	[ASCIZ/%Delete input file /]
+	PUSHJ	P,CONFRM	; Ask him
+	  JRST	COMND		; No, get next comand
+DELOK:	TLNE	FL,SRCOP
+	JRST	DSCOP##		; Finish up the copy command
+	PUSHJ	P,FXCCNT	; Fix change count
+	SETSTS	TTY,1		; Allow typeahead to next program
+	OUTCHR	[0]		; In normal (not IO.SEM) mode
+	TRNE	FL,READOF	; If read only
+	JRST	DELIN0		; Check for ED
+	SKIPGE	QUITSW
+	JRST	QUIT		; He said quit
+; 
+; Here to use same old filename
+; 
+	SKIPE	CHGCNT		; If no changes this pass
+	PJRST	ENDNFL		; ...there were changes
+	MOVE	T1,TOTCHG	; See if any changes since last save
+	TDNN	T1,[377777,,-1]	; Well?
+	JRST	NOCHG0		; No changes since last save
+;
+; Here when changes since the last save or startup, but no changes
+; this pass.  See if we are already a good temp file.
+
+	SKIPN	AUXFIL		; Do we have a good temp file
+	PJRST	ENDNFL		; No, must finish writing this one
+;
+; SOSBUF will enter here if it can't open another temporary file
+;
+SWPXIT::PUSHJ	P,XCHCHN##	; Swap channels
+	MOVEI	T1,@PNTNMO	; Point to output block
+	MOVE	T1,.RBSIZ(T1)	; Get the written size
+	MOVEM	T1,OUTSIZ	; Set up for REWOUP
+	MOVE	LPNTR,BUFLOW	; Nothing in low part
+	MOVE	PNTR,BUFLAS	; Nothing in high part either
+	PJRST	ENDNF1		; And write the file
+
+; Here if no changes since the last save or startup.
+
+NOCHG0:	JUMPGE	T1,NOCHG	; If no changes ever.  Go tell him.
+	SKIPE	BAKF1		; Do we have a backup yet
+	PUSHJ	P,SETBKP	; Yes, ensure we wanted it
+	  JFCL			; Write protected.  Of no concern now.
+	DELETE	OUT,		; Delete output temporary
+	  JFCL			; Huh?
+	SETZM	OUTLEB		; Clear this for TOFNAM
+	JRST	ENDX		; and finish up
+
+;Here to QUIT after typing either [Edit aborted] or [No changes] as
+;appropriate.  Exit to QUIT1 to quit silently.
+
+QUIT::	SKIPN	TELFLG
+	JRST	QUIT1		; /NOTELL?  Yes, exit silently
+	SKIPN	CHGCNT
+	SKIPE	TOTCHG
+	JRST	QUITSC		; If some changes
+
+NOCHG:	TRNN	FL,READOF	; Skip message if readonly
+	OUTSTR	[ASCIZ/[No changes]
+/]
+	JRST	QUIT1
+
+QUITSC:	TRNN	FL,READOF	; Skip message if readonly
+	OUTSTR	[ASCIZ/[Edit aborted]
+/]
+QUIT1:	SKIPE	OPNOUF		; Output file open?
+	DELETE	OUT,		; Yes, delete tmp file
+	  JFCL			; Don't care
+	JRST	ENDEND		; Delete auxilliary file and exit
+; Subroutine to adjust CHGCNT for any format changes in the file
+; Call with
+;	PUSHJ	P,FXCCNT
+;	<always return here>
+; 
+; Increments CHGCNT by one for each format change.
+; Uses T1, T2, and T3.
+
+FXCCNT:	TRNN	FL,NEWFL	;Is this a brand new file?
+	TRNE	FL,WNEWFL	; New file?
+	AOS	TOTCHG		; Yes, that's a change
+IFN CRYPSW,<
+	MOVE	T1,ICODE	; Input encryption code
+	CAME	T1,OCODE##	; Skip if same
+	AOS	TOTCHG		; Different--call it a change
+>
+	SKIPL	UNSQIF		; Input sequenced?
+	TDZA	T2,T2		; Yes, flag it
+	SETO	T2,		; No, flag that
+	SKIPL	T1,UNSEQF	;Output to be unseqenced?
+	TDZA	T3,T3		; No
+	SETO	T3,		; Yes
+	CAME	T1,[-2]		;SEE IF SPECIAL UNSEQUENCE
+	CAME	T3,T2		; Are both file that same mode?
+	AOS	TOTCHG		; No, call it a change
+	PUSHJ	P,GETOFP##	; Desired protection
+	SKIPE	PRTCOD		; Set by switch or command?
+	CAMN	T1,SVPBTS	; and different from output file?
+	CAIA
+	AOS	TOTCHG		; No, call it a change
+	POPJ	P,		; Return
+; Here to complete current output and determine whether to copy
+; or rename the file.
+
+ENDNFL:	PUSHJ	P,OCOMP1	; Finish writing out this pass
+				; but don't rewind the output file yet
+	SKIPN	AUXFIL		; Reading from a temporary?
+	CLOSE	IN,		; No, close the input
+; 
+; Here when file is completely copied, the filename has been parsed
+; and left in OUTPTH and all switches are setup.  Come back here
+; with after parsing new filename on error recovery.
+; 
+ENDNF1:	CHKREN	COMND		; Have we re-entered?
+	PUSHJ	P,ENBIN1##	; Special intercept
+	PUSHJ	P,SETBKP	; Setup .BAK or .OLD file as needed
+	  JRST	OFIU		; Get another file name
+ENDN2:	PUSHJ	P,GOUSTR##	; Get output STR name
+	SKIPL	UNSEQF		; Unsequence forces copy
+	CAME	T1,TMPDEV	; Different from user device?
+	SETOM	NORNM		; Better copy it then
+; 
+; Here to setup output file name
+; 
+	HRLI	T1,OUTPTH	; Where file name is now
+	MOVE	T2,PNTNMI	; Good place to put it
+	HRRI	T1,.RBPPN(T2)	; Point to PPN word
+	BLT	T1,.RBEXT(T2)	; Copy desired name into @PNTNMI
+	PUSH	P,PNTNMO	; Save pointer to output block
+	MOVEM	T2,PNTNMO	; And point to rename block
+	PUSHJ	P,SETTFP##	; Fake temp file protection
+	PUSHJ	P,GETOFP##	; Output file protection
+	POP	P,PNTNMO	; Then restore lookup block
+	MOVEI	T2,@PNTNMI	; Point back to rename block
+	MOVEM	T1,.RBPRV(T2)	; Set them up
+	SETZM	.RBALC(T2)	; Keep whole file
+	SETZM	.RBSPL(T2)	; Clear spooled name now
+				CONT.
+; 
+; Here to check to see if we must delete the input file
+; 
+DELIN0:	SKIPN	EDSW		; Delete input file?
+	TRNN	FL,WNEWFL!READOF ; Or supersede mode?
+	JRST	DELINF		; Yes,
+	JRST	NODELI		; No, save it
+
+DELINF:	HRLI	T1,ORGPTH	; Point to orginal path
+	HRRI	T1,ALTFNM+.RBPPN; And scratch block
+	BLT	T1,ALTFNM+.RBEXT; Copy the specification
+	MOVE	T1,ORGDEV	; Get orginal device
+	MOVEM	T1,ALDEVI+.OPDEV; Set it up
+	OPNDSK	ALTDV,ALDEVI	; Open device
+	  JRST	NODELI		; Charge on
+	MOVEI	T1,.RBDEV	; Long lookup?
+	MOVEM	T1,ALTFNM+.RBCNT; Set it up
+	XLOOKP	ALTDV,ALTFNM	; Find the file
+	  JRST	NODELI		; Charge on
+	  JRST	NODELI		; Charge on
+	PUSHJ	P,FIXPRV	; Fix protection if 2xx
+	PUSHJ	P,SAVNAM	; Set it up
+	SETOM	UUONOM		; Prevent error message typeout
+	RENAME	ALTDV,ALTFNM	; Rename the file
+	  JRST	[DELETE ALTDV,
+		   JRST DELERR
+		 JRST   NOSAVT]
+	TRO	FL2,R2.TSC	; Note that it exists
+NOSAVT:	SKIPN	EDSW		; Delete request?
+	JRST	NODELI		; No, not a real delete
+	MOVE	T1,ORGEXT	; Restore extension
+	MOVEM	T1,ALTFNM+.RBEXT ;
+	OUTSTR	[ASCIZ\[Deleted \]
+	MOVEI	T1,ALTFNM##	; Point to file block
+	PUSHJ	P,TYPFNM##	; Type the filespec
+	OUTSTR	[ASCIZ/]
+/]				; Close it off
+	JRST	NODELI		; Continue
+; 
+; See if we copy or rename the file now
+; 
+DELERR:	OUTSTR	[ASCIZ/%Can't delete input file
+/]
+NODELI:	TRNE	FL,READOF	; Read only?
+	JRST	QUIT1		; Yes, just quit now
+	SKIPE	NORNM		; No rename flag set?
+	JRST	ENDCPY		; Yes, must copy the file
+	MOVEI	T1,@PNTNMI	; Point to input file block
+	MOVEM	T1,OUTLEB	; Save for /TELL
+	MOVEI	T1,@PNTNMO	; Point to output file block
+	MOVE	T1,XRBMWL(T1)	; Get maximum written length
+	CAMG	T1,OUTSIZ	; Longer than data length?
+	JRST	NOTRNC		; No, skip truncation
+				; Continued on the next page...
+	SUBTTL	TRNCAT -- Code to Shorten an Overlength Temporary File
+
+; Continued from the previous page
+; 
+; Here to make the output file the right length
+; 
+TRNCAT:	PUSHJ	P,REWOUP##	; Open output file for update
+	MOVE	ALTP,PNTNMI	; Point to a lookup block
+	PUSHJ	P,GOUSTR##	; Get output structure
+	PUSHJ	P,CLSTSZ	; Get the disk cluster size
+	LSH	T1,B2WLSH	; Convert to words
+	MOVE	T2,OUTSIZ	; Number of data words in output file
+	MOVEM	T2,XRBMWL(ALTP)	; In case we come through here again
+	IDIVI	T2,(T1)		; Compute length of the tail
+	JUMPE	T2,ENDCPY	; If all blocks to be deallocated
+	LSH	T1,W2BLSH	; Convert cluster size to blocks
+	IMULI	T2,(T1)		; Get prefix length in blocks
+	MOVEM	T2,.RBALC(ALTP)	; Set .RBALC to truncate the tail
+	MOVEM	T2,.RBEST(ALTP)	; Also set the estimate
+	SKIPE	T3		; To its precise
+	AOS	.RBEST(ALTP)	; value, now that we know
+	USETI	OUT,1(T2)	; Position to read in the tail
+	MOVN	T1,T3		; Length of the tail
+	HRLZS	T1		; Left half of IOWD
+	HRR	T1,BUFFIR	; Point to main buffer
+	SETZ	T2,		; Terminate IO list
+	PUSH	P,T1		; Save the IOWD
+	INUUO	OUT,T1		; Read in the tail
+	  CAIA			; No errors
+	  JRST	TRNCR1		; Egad!!
+	RENAME	OUT,(ALTP)	; Rename and truncate the file
+	  JRST	TRNCR1		; Egad!
+	MOVEI	T1,5		; Short lookup block length
+	MOVEM	T1,.RBCNT(ALTP)	; avoids extra RIB-read by monitor
+	XLOOKP	OUT,(ALTP)	; Find the file again
+	  JFCL
+	  EXIT			; Die
+	MOVEI	T1,.RBBIG	; Restore standard
+	MOVEM	T1,.RBCNT(ALTP)	; Lookup length
+	SETZM	.RBALC(ALTP)	; Clear this now
+	ENTER	OUT,(ALTP)	; Enter the file again
+	  JRST	TRNCR1		; Protected or something
+	USETI	OUT,-1		; Position to end
+	POP	P,T1
+	SETZ	T2,		; Setup IO list again
+	OUTUUO	OUT,T1		; Rewrite the tail
+	JRST	ENDX		; File has been renamed
+	OUTSTR	[ASCII/?Tail of file cannot be written
+/]				; Just continue to save the rest
+				; Continued onto the next page...
+; Continued from the previous page.
+
+	HRRZS	BAKF		; He may want it now after all
+	SKIPA
+TRNCR1:	ADJSP	P,-1		; Fix stack
+TRNCER:	SETOM	NORNM		; Force copy next time
+	MOVE	T3,ALTP		; Point to ENTER block
+	JRST	NOTRC2
+; 
+; Here if no truncation was required (file never shrank), or
+; if truncation was performed.  All that remains is to rename the
+; file.
+
+NOTRNC:	MOVE	T3,PNTNMI	; Point to file
+	MOVE	T4,.RBEXT(T3)	; Save the extension
+	MOVE	T1,OUTSIZ	; Get written size
+	ADDI	T1,BLKSIZ-1	; Round up
+	LSH	T1,W2BLSH	; Convert to blocks
+	MOVEM	T1,.RBEST(T3)	; And save (mostly for BACKUP)
+	RENAME	OUT,@PNTNMI	; Rename the file
+	  CAIA
+	PJRST	ENDX		; Fall into ENDEND section
+NOTRC2:	HRRZ	T1,.RBEXT(T3)	; Fetch error code
+	MOVEM	T4,.RBEXT(T3)	; Restore extension
+	CAIE	T1,ERAEF%	; See if file already exits
+	JRST	OFIU1		; Different problem
+	MOVEI	T1,(T3)		; 
+	PUSHJ	P,FAEQRY
+	PUSHJ	P,CONFRM	; Ask him
+	  JRST	OFIU1		; He said don't
+	PUSHJ	P,GOUSTR	; Output structure name
+	MOVEM	T1,ALDEVI+.OPDEV; Set up device
+	OPNDSK	ALTDV,ALDEVI	; Open the file
+	  JRST	OFIU1
+	HRLZ	T1,PNTNMI	; Point to file name
+	HRRI	T1,ALTFNM	; Point to scratch block
+	AOBJN	T1,.+1		; Skip .RBCNT field
+	BLT	T1,ALTFNM+.RBPRV; Set to lookup the old file
+	MOVEI	T1,.RBSIZ	; Short lookup block length
+	MOVEM	T1,ALTFNM+.RBCNT; Set up the length
+	XLOOKP	ALTDV,ALTFNM	; Find
+	  JRST	OFIU1		; Can't
+	  JRST	OFIU1		; (This should never happen)
+	DELETE	ALTDV,		; Delete the file
+	  JRST	OFIU		; File write protected
+	JRST	NOTRNC		; Try again
+	SUBTTL	ENDCPY -- Code to initiate Ending File Copy
+
+; Here if we have to copy the file.
+
+ENDCPY:	SKIPE	AUXFIL		; Two temp files open?
+	DELETE	IN,		; Yes, old input not needed now
+	  CAIA			; ??
+	SETZM	AUXFIL		; Note that we deleted it
+	PUSHJ	P,REWOUP##	; Rewind the output file so we can read
+	PUSHJ	P,XCHCHN##	; Exchange channels
+	PUSH	P,CHNTAB+OUT
+	SKIPN	T1,TMPDEV	; Device
+	MOVSI	T1,'DSK'	; DSK will do if zero
+	MOVEM	T1,ALDEVI+.OPDEV; Setup the device
+	MOVE	T1,CHNTAB+ALTDV	; Alternate channel pointer
+	MOVEM	T1,CHNTAB+OUT	; Use this for output
+	OPNDSK	OUT,ALDEVI	; OPEN output device
+	  JRST	CPYERR		; Egad! Ask the user for help
+	XLOOKP	OUT,@PNTNMO	; See if the file already exists
+	  JRST	CPYERR		; Something is wrong with
+	  JRST	ENDCP1		; No, looks like we're safe
+	MOVEI	T1,@PNTNMO	; Point to block
+	PUSHJ	P,FAEQRY	; Ask him
+	PUSHJ	P,CONFRM	; Ask him
+	  JRST	CPYERR		; Go get another name
+	DELETE	OUT,		; Delete the unwanted file
+	  CLOSE	OUT,		; Try supersede, then
+ENDCP1:	MOVEI	T2,@PNTNMO	; Point to block
+	MOVEM	T2,OUTLEB	; Save for /TELL
+	HLLZS	.RBEXT(T2)	; Fix this
+	PUSHJ	P,SETTFP##	; Make sure this is correct
+	PUSHJ	P,GETOFP##	; Output file protection
+	MOVEI	T2,@PNTNMO	; Point back to enter block
+	MOVEM	T1,.RBPRV(T2)	; Set them up correctly
+	SETZM	.RBALC(T2)	; and allocated size
+	PUSHJ	P,GETEST	; Get the estimated output file size
+	MOVEM	T1,.RBEST(T2)	; And save the estimated size
+	SETSTS	OUT,.IOASC	; ASCII mode
+	XENTER	OUT,@PNTNMO	; Enter the requested output file
+	  JRST	CPYER1		; Darn, ask user for help
+	PUSHJ	P,CPYFIL	; No, copy the file
+	DELETE	IN,		; Delete the input temporary
+	  JFCL
+	POP	P,CHNTAB+OUT
+	PUSHJ	P,XCHCHN##
+	JRST	ENDX		; Done, go finish up the edit
+	SUBTTL	ENDCPY -- Error Recovery
+
+;  Here on errors attempting to perform an ending copy.
+;  
+;  Come to CPYER1 only on an  ENTER  failure.   On  ENTER  failure,
+;  check  for  insufficient  room to desequence the file first.  If
+;  that is the problem, see if the user would like to keep his file
+;  with sequence numbers before asking him for a new structure.
+
+CPYER1:	SETSTS	OUT,.IODMP
+	MOVEI	T2,@PNTNMO	; Point to ENTER block
+	HRRZ	T1,.RBEXT(T2)	; Fetch the error code from it
+	CAIE	T1,ERNRM%	; No room or quota exceeded?
+	JRST	CPYER2		; No, some other problem
+	PUSHJ	P,GINSTR##	; Input structure
+	PUSH	P,T1		; Save it
+	SKIPGE	UNSEQF		; Unsequenced?
+	CAME	T1,TMPDEV	; and writing to same device
+	JRST	CPYER2		; No, his new structure is full.
+	OUTSTR	[ASCIZ'%No room for desequencing.  Keep line numbers? ']
+	PUSHJ	P,CONFRM	; Ask him if this is okay
+	  JRST	CPYERR		; He said no, get another filespec
+	SETZM	UNSEQF		; He said yes, note it
+	SETZM	NORNM		; Allow ending rename
+	POP	P,CHNTAB+OUT	; Restore output block pointer
+	PUSHJ	P,XCHCHN##	; Restore channel assignments
+	JRST	ENDNF1		; And try again
+
+
+;  Here on miscellaneous errors attempting a final copy.
+
+CPYER2:	OUTSTR	WPRMSG		; "File write protected"
+CPYERR:	POP	P,CHNTAB+OUT
+	PUSHJ	P,XCHCHN##
+	JRST	OFIU1		; Get another file spec
+	SUBTTL	Final Exit from SOS
+; 
+; Here to deleted auxilliary file and finish up
+; 
+ENDX:	PUSHJ	P,TOFNAM	; Type [filespec]
+ENDEND:	SKIPE	AUXFIL		; Auxilliary file in use?
+	DELETE	IN,		; Yes, delete input file
+	  JFCL			; Don't care
+	TRZN	FL2,R2.TSC	; Save his file for him?
+	JRST	NOSAVD		; No, don't delete it then
+	MOVE	T1,ORGDEV	; Get original device
+	MOVEM	T1,ALDEVI+.OPDEV ;Save in open block
+	OPNDSK	ALTDV,ALDEVI	; Open it
+	  JRST	NOSAVD		; Can't?
+	PUSHJ	P,SAVNAM	; Setup the name again
+	MOVE	T4,ORGPTH	; Point to orignal path
+	MOVEM	T4,ALTFNM+.RBPPN ; Set it up
+	XLOOKP	ALTDV,ALTFNM	; Find the file
+	  JRST	NOSAVD
+	  JRST	NOSAVD
+	PUSHJ	P,FIXPRV	; Fix privilege if 2xx
+	DELETE	ALTDV		; Delete it
+	  JFCL			; ???
+NOSAVD:	RELEASE	OUT,0
+	RELEASE	IN,0
+	PUSHJ	P,CHKCCI##	; Did he want to get out?
+	SKIPE	ERSW		; Doing a restart after this?
+	JRST	DORST		; Go set it up
+	SKIPGE	CXFPDP		; Co-editing?
+	JRST	CXFRTN		; Yes, return to other file
+IFN CRYPSW,<
+	MOVE	T1,OCODE##	; Get output code
+	MOVEM	T1,ICODE	; Make it input...
+				; This is necessary if we are doing a
+				; /CCL save 
+>
+				CONT.
+IFN %UACCL,<			; Here if we support CCL
+	SKIPN	QUITSW		; Quitting?
+	SKIPN	CCLFLG##	; If user wants CCL
+	JRST	CCLOK		; No, don't write the file
+	SKIPE	T1,OUTLEB	; Get last lookup block location
+	JRST	SETDEV
+	MOVE	T1,ORGDEV	; Get device name
+	MOVEM	T1,SVINDV##
+	MOVEM	T1,SVOUDV##	; Save parse names
+	DMOVE	T1,ORGNAM	; Original name and extension
+	DMOVEM	T1,NAMEI+.RBNAM
+	DMOVEM	T1,NAMEO+.RBNAM	; Save as new file names
+	MOVE	T1,[IPATH,,OPATH]
+	BLT	T1,OPATH+.PTMAX-1 ; Copy output path from IPATH
+	JRST	SETDV1
+
+SETDEV:	PUSHJ	P,GENST0##	; Extract device from lookup block
+	MOVEM	T1,SVINDV##	; Save it
+	MOVEM	T1,SVOUDV##	; Save it too
+	MOVE	T1,[OUTPTH,,NAMEI+.RBPPN]
+	BLT	T1,NAMEI+.RBEXT
+	MOVE	T1,[OUTPTH,,NAMEO+.RBPPN]
+	BLT	T1,NAMEO+.RBEXT
+	MOVE	T1,OUTLEB	; Location of output block
+	HRLZ	T2,.RBPPN(T1)	; Location of the path block
+	HRRI	T2,IPATH	; Set to copy
+	BLT	T2,IPATH+.PTMAX-1
+	HRLZ	T2,.RBPPN(T1)	; Location of output path
+	HRRI	T2,OPATH
+	BLT	T2,OPATH+.PTMAX-1
+SETDV1:	TLZ	FL,TECOF	; Clear junk in FL
+	TRZ	FL,BOF!EOF!NEWFL!BGSN!WNEWFL
+	MOVEM	FL,SVFL##	; Save it
+	MOVEM	FL2,SVFL2##	; Second one too
+	INIT	ALTDV,16
+	SIXBIT/DSK/
+	0,,0
+	  JRST	CCLOK		; Couldn't find the disk
+	MOVSI	T3,'ESF'	; Edit save file
+	PUSHJ	P,JOBNUM##	; Mush with job number
+	MOVSI	T4,'TMP'	; It's a temp file
+	DMOVEM	T3,ALTFNM##+.RBNAM
+	MOVE	T1,MYPPN	; My PPN
+	MOVEM	T1,ALTFNM+.RBPPN; Write it there
+	MOVSI	T1,077000	; Standard protection for .TMP files
+	MOVEM	T1,ALTFNM+.RBPRV; Set it up
+	MOVEI	T1,4
+	MOVEM	T1,ALTFNM+.RBCNT; Set up enter block length
+	ENTER	ALTDV,ALTFNM	; Try to enter the file
+	  JRST	CCLOK		; Can't--tell user and quit
+	OUTPUT	ALTDV,ESFIOW##	; Write the file
+	RELEAS	ALTDV,		; Close it so it stays around
+
+CCLOK:				; Here when done with CCL
+>
+IFN CKPSW,<
+	PUSHJ	P,CKPCLS##	; Delete the checkpoint file now
+>
+	TLNE	FL,GCOM
+	JRST	CREFIT
+	SETZM	.JBREN##
+BYEBYE::EXIT	1,
+	JRST	SOS##
+
+	SUBTTL	TOFNAM -- Type Output File Name
+
+;Subroutine to type the output filename in brackets
+;Call with file name in OUTNAM and OUTEXT and enter block pointed by
+;OUTLEB.  Checks TELFLG.
+;	PUSHJ	P,TOFNAM
+;	  <return here>
+
+TOFNAM:	SKIPN	TELFLG##	; Tell filename on output
+	POPJ	P,
+	MOVEI	T3,OCHR##	; Setup output routine
+	PUSHJ	P,PRTLBK##	; Print a left bracket
+	SKIPN	T1,OUTLEB	; Point to last LOOKUP/ENTER block
+	SKIPA	T1,ORGDEV	; use ORGDEV is zero
+	PUSHJ	P,GENST0##	; Get device from .RBDEV(T1)
+	PUSHJ	P,GVDST1##	; Give STR name
+	MOVE	T4,ONMPTR##	; Point to OUTNAM
+	MOVE	T5,OEXPTR##	; and OUTEXT
+	PUSHJ	P,GVNAM0##	; Print file name and extension
+	SKIPN	T1,OUTLEB	; In output block
+	SKIPA	T1,ORGPTH	; Else use the orginal path
+	MOVE	T1,.RBPPN(T1)
+	PUSHJ	P,GVDPTH##	; Give out if not mine
+	PUSHJ	P,PRTRBK##	; Type a right bracket
+	PJRST	FOCRLF##	; Type CRLF and return
+	SUBTTL	DORST -- Do Restart.  Restart on new file for ER or CX.
+
+; Here to prepare for restart with a new file name
+
+DORST:	PUSHJ	P,XCHCHN##	; Echange channel assignments
+	SKIPN	T1,ERDEV	; Get specified device
+	MOVSI	T1,'DSK'	; Didn't say, use DSK
+	SKIPE	ERDEV		; Did he give a device?
+	AOS	STRCNT##	; Yes, should type it back then
+	MOVEM	T1,PNAMI+DEV	; for input
+	MOVEM	T1,PNAMO+DEV	; and output
+	MOVE	T1,[APATH,,IPATH]
+	BLT	T1,IPATH+.PTMAX-1
+	MOVE	T1,[APATH,,OPATH]
+	BLT	T1,OPATH+.PTMAX-1
+	MOVE	T4,PNTNMI	; Point to input block
+	DMOVE	T1,ERFNAM##	; ER file name and extension
+	DMOVEM	T1,.RBNAM(T4)
+	HRLI	T4,-<.RBBIG-.RBEXT> ; Number of words not preset
+	SETZM	.RBEXT+1(T4)	; Clear a word
+	AOBJN	T4,.-1		; Loop over rest of lookup block
+	CLEARM	<NEWNAM,NEWEXT,NEWDEV,UNSQIF>	; Clear filenames, mode
+	MOVE	T1,TMPCOD	; Get parse code
+	MOVEM	T1,ICODE	; Save here
+	MOVEM	T1,OCODE	; and here
+	CLEARM	<CCLENT##,SAVC>	; We weren't called by someone else
+	TRZ	FL,READOF	; Default is to edit
+	SKIPE	RSW		; Did he say read-only
+	TRO	FL,READOF	; Yes:  remember that
+	SETZM	BAKF1		; Don't have a backup yet
+ENDGO:	TLZ	FL,TECOF
+	TRZ	FL,BOF!EOF!NEWFL!BGSN!WNEWFL
+	MOVE	T1,TTYBE##	; Get TTY buffer end
+	MOVEM	T1,.JBFF##	; Set as first free like a RESET UUO
+	JRST	STRTUP##	; Go edit new file
+	SUBTTL	Routine to create a .BAK or .OLD file
+
+;Call with
+;	PUSHJ	P,SETBKP
+;	  <here if file write protected>
+;	<created, already there or not wanted>
+
+
+SETBKP:	SKIPE	T1,BAKF		; No backup of any kind?
+	SETO	T1,		; Normalize all to -1
+	EQV	T1,BAKF1	; Same state as file backup status?
+	JUMPN	T1,CPOPJ1##	; Yes, no work to do
+	TRNE	FL,NEWFL!WNEWFL	; Is this a new file
+	JRST	CPOPJ1##
+	MOVE	T1,ORGDEV	; From source device
+	MOVEM	T1,ALDEVI+.OPDEV; Set up alternate device
+	OPNDSK	ALTDV,ALDEVI	; Open alternate device
+	  POPJ	P,		; Lose -- no monitor free core, maybe
+	HRLZI	T3,ORGPTH
+	HRRI	T3,ALTFNM+.RBPPN; Point to next block
+	BLT	T3,ALTFNM+.RBEXT
+	PUSHJ	P,SETBEX	; Setup extension
+	  TLOA	T1,(<'Q'>B5)	; He wants Qxx
+	MOVSI	T1,'BAK'	; He wants a BAK extension
+	MOVEM	T1,ALTFNM+.RBEXT; 
+	MOVEI	T1,4
+	MOVEM	T1,ALTFNM+.RBCNT
+	XLOOKP	ALTDV,ALTFNM	; Lookup the file
+	  JRST	STBKP1		; Something is wrong
+	  JRST	STBKP1		; ...
+	PUSHJ	P,FIXPRV	; Fix if 2xx
+	DELETE	ALTDV,		; Delete the old backup file
+	  JRST	[OUTSTR [ASCIZ/%Could not delete old backup file
+/]
+		 JRST	CPOPJ1##]
+				CONT.
+STBKP1:	MOVE	T1,ORGEXT
+	MOVEM	T1,ALTFNM+.RBEXT
+	XLOOKP	ALTDV,ALTFNM	; Lookup original file
+	  POPJ	P,		; File dissapeared?
+	  POPJ	P,		; or something
+	SKIPG	BAKF		; /OLD?
+	JRST	STBKP3		; No
+	PUSHJ	P,FIXPRV	; Fix if 2xx
+	PUSHJ	P,SETBEX	; Setup extension
+	  TLOA	T1,(<'Z'>B5)
+	MOVSI	T1,'OLD'	; OLD extension
+	HLLM	T1,ALTFNM+.RBEXT; Set it up
+	SETOM	UUONOM		; Suppress error message output
+	PUSH	P,ALTFNM+.RBEXT	; Save high part of date
+	RENAME	ALTDV,ALTFNM	; Rename the file
+	  JRST	STBKP2		; Must already exist
+	SETOM	BAKF1		; Already have a backup file this edit
+STBKP2:	POP	P,ALTFNM+.RBEXT	; Restore high part of date
+STBKP3:	SKIPE	BAKF1		; Backup file already?
+	JRST	STBKP4		; Yes, release channel and return
+	PUSHJ	P,FIXPRV	; Fix protection if 2xx
+	PUSHJ	P,SETBEX	; Get set to generate extension
+	  TLOA	T1,(<'Q'>B5)
+	MOVSI	T1,'BAK'	; Setup
+	HLLM	T1,ALTFNM+.RBEXT; extension for .BAK file
+	RENAME	ALTDV,ALTFNM	; Rename to .BAK
+	  SOSA	(P)		; Failed -- note bad return
+	SETOM	BAKF1		; Flag that we have one
+STBKP4:	RELEASE	ALTDV,		; Finish off ALTDV channel
+	JRST	CPOPJ1##	; Return
+; SETBEX -- Routine to determine whether to use Qxx or BAK extension.
+;
+; Call with ORGEXT containing the original extension
+;	PUSHJ	P,SETBEX
+;	  <here for .Qxx>
+;	<here for .BAK>
+; T1 is setup on return with the extension with the first character
+; cleared.
+
+SETBEX:	HLLZ	T1,ORGEXT	; Original extension
+	TLZ	T1,(77B5)	; Clear first character
+	SKIPE	QZBAKF		; Is this what is wanted
+	POPJ	P,		; No
+	JRST	CPOPJ1##
+; FIXPRV -- Subroutine to fix protection of files protected against
+;	   Deletion but not Supersede.  E.G. 2xx, x2x or xx2
+;	   depending upon where the file is.
+; Call with ALTFNM setup, file open on ALTDV, temp file protection
+;		in output lookup block (@PNTNMO)
+;	PUSHJ	P,FIXPRV
+;	<return here>
+; Uses T1-T3, leaves file open on ALTDV and ALTFNM setup
+
+FIXPRV:	PUSH	P,ALTFNM+.RBEXT	; Save date things
+	PUSH	P,ALTFNM+.RBPRV	; And protection
+	MOVEI	T1,@PNTNMO	; Point to the output file
+	LDB	T1,[POINT 9,.RBPRV(T1),8] ; Protection of temp file
+	LDB	T2,[POINT 9,ALTFNM+.RBPRV,8] ; And of input file
+	PUSHJ	P,RLVPRV	; Git relevant protection code
+	TRNN	FL,WNEWFL!READOF ; These aren't psuedo supersedes
+	CAIE	T2,2		; 2 is special (allow supersede)
+	JRST	FIXPV1		; No special action required
+	MOVEI	T2,100		; A low protection
+	DPB	T2,[POINT 9,ALTFNM+.RBPRV,8] ; Set it up
+	RENAME	ALTDV,ALTFNM	; Rename the file so we can delete it
+	  JRST	FIXPV1
+	XLOOKP	ALTDV,ALTFNM	; Find the file again
+	  JRST	FIXPV1
+	  JRST	FIXPV1
+FIXPV1:	POP	P,ALTFNM+.RBPRV
+	POP	P,ALTFNM+.RBEXT
+	POPJ	P,
+
+
+; RLVPRV -- Routine to return the relevant part of a protection code
+; Call with
+;	MOVE	T1,Temp file protection
+;	MOVE	T2,Protection from which field will be isolated
+; 	PUSHJ	P,RLVPRV
+;	<return here with 3 bits in T2>
+; T1 is preserved
+
+RLVPRV::CAIN	T1,077		; If programmer number match
+	LSH	T2,-6		; Use programmer number field
+	CAIN	T1,107		; If project number match
+	LSH	T2,-3		; Use project privilege field
+	ANDI	T2,7		; Isolate selected field
+	POPJ	P,		; Relevant bits in T2
+
+
+; SAVNAM -- Subroutine to setup very temporary file name
+
+SAVNAM:	DMOVE	T1,ORGNAM	 ; Name of the file and extension
+	TLZ	T2,770000	 ; Clear first character
+	TLO	T2,'X  '	 ; Change to an X
+	CAMN	T2,ORGEXT	 ; Same as before
+	TLO	T2,(1B5)	 ; Yes, try Y?? instead
+	MOVEM	T1,ALTFNM+.RBNAM ; Save it
+	HLLM	T2,ALTFNM+.RBEXT ; And the extension
+	POPJ	P,		 ; Return
+	SUBTTL	NSCAN -- Parse filename for E command
+;		-------------------------------------
+
+
+NSCAN::	CLEARM	<ERSW,ERFNAM,UNSEQF,BAKF,EDSW,TMPDEV,ERDEV,EWNFNF>
+	CLEARM	<QUITSW,TMPCOD,RSW>
+	TRZ	FL,WNEWFL	; Haven't parsed new name yet
+	TLNE	FL2,AUTOF	; Doing an auto-save?
+	JRST NSCANW		; Yes--no argument to look for
+NSCANA:	PUSHJ	P,GNCH##	; Get another character
+	CAIE	C,"="		; Treat equals and...
+	CAIN	C,":"		; Colons the same.  Is it one?
+	JRST	NSCAN2		; Yes: go look for file name
+	TRZ	C,40		; Clear lower case
+	MOVSI	T1,-ENDTLN	; Length of End Switch Table
+	SKIPN	NEWCMD		;SEE IF /COMPATIBLE
+	  MOVSI	T1,-ENDCLN	;YES--USE DIFFERENT OPTIONS
+NSCANB:	HLR	T2,ENDTBL(T1)	; Get switch name
+	SKIPN	NEWCMD		;SEE IF /COMPATIBLE
+	  HLR	T2,ENDCBL(T1)	;YES--USE DIFFERENT OPTIONS
+	TRZ	T2,777000	; Clear value so compare can win
+	CAIN	C,(T2)		; Is this what he typed?
+	JRST	NSCANC		; Yes, go set switch
+	AOBJN	T1,NSCANB	; Loop over whole table
+	JRST	NSCANN		; Must not be a switch
+
+; Here to set a switch value
+
+NSCANC:	HRRZ	T3,ENDTBL(T1)	; Get switch location
+	SKIPN	NEWCMD		;SEE IF /COMPATIBLE
+	  HRRZ	T3,ENDCBL(T1)	;YES--USE DIFFERENT OPTIONS
+	HLLZ	T2,ENDTBL(T1)	; and value
+	SKIPN	NEWCMD		;SEE IF /COMPATIBLE
+	  HLLZ	T2,ENDCBL(T1)	;YES--USE DIFFERENT OPTIONS
+	ASH	T2,-^D27	; Right justify and sign extend
+	SKIPE	(T3)		; Any conflicts?
+	NERROR	ILC
+	MOVEM	T2,(T3)		; Store value
+	JRST	NSCANA		; Look for more
+				CONT.
+
+; Here to parse a filename
+
+NSCAN2:	PUSHJ	P,SCAN##	; Prime scanner for READNM
+	SKIPE	ERSW##		; An Exit-Restart
+	JRST	EXRST		; Yes -- special processing
+	TRNE	FL,READOF	; Read only?
+	NERROR	IRO
+	SKIPE	QUITSW##	; Quitting?
+	NERROR	FIQ
+RSCAN:	MOVEI	T3,OUTPTH-1	; Place to put filename
+	MOVEI	T1,APATH	; Place to store path
+	MOVEM	T1,OUTPTH	; Leave it set up
+	PUSHJ	P,SETNM1##	; Parse the file name
+	  NERROR ILC		; Bad command
+	TRO	FL,WNEWFL	; Indicate new filename
+	SETOM	EWNFNF		; Indicate parsed new filename
+	PJRST	SETUNS		; Setup unsequence flag and return
+; Here to setup for ER command
+
+EXRST:	MOVEI	T3,ERPPN##-1	; Place to stash next file
+	MOVEI	T1,APATH	; Place to save the path
+	MOVEM	T1,ERPPN	; Save the pointer for READNM
+	PUSHJ	P,READNM##	; Go parse the file spec
+	  NERROR BFS
+	SKIPE	SSW		; S-switch is illegal
+	NERROR	ISW
+	MOVE	T1,TMPDEV	; Get the device
+	MOVEM	T1,ERDEV	; Save it
+	SETZM	TMPDEV		; Clear parse device name
+ 	JRST	NSCAN3		; Join processing
+
+
+; Here if no filename was given
+
+NSCANN:	MOVEM	C,SAVC		; Back up scanner
+	PUSHJ	P,SCAN##
+NSCAN3:	PUSHJ	P,CKTRMF##	; Teminated?
+
+; Here to setup new filespec arguments if given
+
+NSCANW:	SKIPN	T1,BAKF		; Did he type something
+	MOVE	T1,.BAKF	; No, get permanent switch
+	CAIN	T1,2		; 2 is special flag at end for zero
+	SETZ	T1,
+	MOVEM	T1,BAKF		; Use permanent
+	PUSHJ	P,SETUNS	; Set sequencing
+	  NERROR ILC		; Inconsistent switch
+	PUSHJ	P,SETONM	; Setup output name area
+	JRST	CPOPJ1##	; Give good return
+
+
+; Subroutine to set the unsequence flag from E switches
+
+SETUNS:	SKIPN	T1,UNSEQF	; Did he give this one
+	MOVE	T1,.UNSQF	; No, use permanent value
+	CAIE	T1,2		; Special value of XSEQ at end?
+	CAIN	T1,0		; Zero means use UNSQIF
+	JRST	[SKIPL	PMIFLG	;SOS ADD PAGE MARK?
+		  SKIPA	T1,UNSQIF	;NO--USE STATE OF INPUT FILE
+		   MOVNI T1,2		;YES--FLAG TO STRIP THEM
+		 JRST	.+1]		;AND CONTINUE
+	MOVEM	T1,UNSEQF	;SET UP FOR END CODE
+	CAMN	T1,[-2]		;SPECIAL TEXT MODE?
+	 SETOM	UNPAGF		;YES--REMOVE PAGE MARKS TOO
+	JUMPGE	T1,CPOPJ1##	; Sequenced is always legal
+	PUSHJ	P,NOTBSC##	; Illegal in basic mode
+	JRST	CPOPJ1##	; Okay return
+				CONT.
+
+; Subroutine to setup the output name area.
+; 
+SETONM::MOVSI	T1,NEWPTH##	; Assume new name
+	SKIPE	NEWNAM		; New name?
+	TROA	FL,WNEWFL	; Yes, so indicate
+	MOVSI	T1,ORGPTH	; Else point to ORGPTH instead
+	HRRI	T1,OUTPTH	; Setup pointer to output spec
+	BLT	T1,OUTEXT	; Copy output specification
+	SKIPN	T1,NEWDEV	; New device?
+	MOVE	T1,ORGDEV	; Original device
+	MOVEM	T1,TMPDEV	; Yes set it up
+	SKIPN	ERFNAM		; Already have an ER name?
+	SKIPN	ERSW		; Is this an ER?
+	POPJ	P,
+	DMOVE	T1,OUTNAM	; Get the file name
+	DMOVEM	T1,ERFNAM	; Set up for ER restart
+	HRLZ	T1,OUTPTH	; Point to the path
+	HRRI	T1,APATH	; Place where DORST will look for it
+	BLT	T1,APATH+.PTMAX-1
+	POPJ	P,		; Stash path and return
+	SUBTTL	Error recovery for ending code
+
+; Here on rename failure.  File was probably write protected, since
+; the filespec is still in NAMEO we simply close OUT and try again
+; after the user gives us a different file name to try.
+
+OFIU:	OUTSTR	WPRMSG		; Say file write protected
+OFIU1::	CLRBFI			; Get another file
+	PUSHJ	P,ENBINT##	; Standard intercept
+	SETOM	ENDFLG		; Note we are ending
+	OUTSTR	[ASCIZ /File: /]
+	SETZM	SAVCHR		; Get a new name.  Reset scan
+	PUSHJ	P,SCAN##	; Prime the scanner
+	PUSHJ	P,RSCAN
+	  NERROR BFS		; Bad filespec (will come back to OFIU1)
+	SETZM	ENDFLG		; Back to normal (in case of ER)
+	PUSHJ	P,ENBIN1##	; Reset the intecept
+	JRST	ENDN2		; Try the exit again
+
+WPRMSG:	ASCIZ/
+%File write protected.  Try another name
+/
+
+
+FAEQRY::OUTSTR	[ASCIZ/%File /]
+	PUSHJ	P,TYPFNM##	; Type file name
+	OUTSTR	[ASCIZ/ already exists, supersede?  /]
+	POPJ	P,
+	SUBTTL	Routine to copy a file
+
+; Call with CHNTAB+IN and CHNTAB+OUT set up with valid devices
+; and LOOKUP done for IN, ENTER done for OUT.
+
+;	PUSHJ P,CPYFIL
+;	  error return
+;	  good return
+
+CPYFIL:	SETSTS	OUT,17		; Make sure mode is correct
+	SKIPN	OUTSIZ		; Anything to copy?
+	POPJ	P,		; No, skip it
+IFN CRYPSW,<
+	MOVE	T1,OCODE	; Same now
+	MOVEM	T1,ICODE
+>
+	SKIPGE	UNSEQF		; Unsequenced?
+	PJRST	CFUNSQ		; Do unsequenced copy then
+	PUSHJ	P,IREAD##	; Start up the buffer
+	PUSHJ	P,OCOMP1##	; Complete all IO
+	CLOSE	OUT,
+	POPJ	P,
+	SUBTTL	Routine to Copy and Unsequence a File
+
+; Call with NAMEI, NAMEO, INDEVI and ODEVI setup
+; This routine uses C,CS,T1-T5, ALTP and the main buffer area.
+;	PUSHJ P,CFUNSQ
+;	return here
+
+
+CFUNSQ:	SETSTS	IN,14		; Set for ASCII mode
+	SETSTS	OUT,14		; Change to ASCII mode
+	USETI	IN,1		; Make sure we read...
+	USETO	OUT,1		; and write from beginning
+	MOVEI	T1,@PNTNMI	; Input file
+	MOVE	LPNTR,.RBSIZ(T1); Size thereof
+	MOVE	T2,CHNTAB+IN
+	HRR	T1,.OPBUF(T2)	; Location of buffer header
+	MOVSI	T3,(<POINT 36,,35>)
+	MOVSI	T4,(1B0)
+	MOVEM	T3,.BFPTR(T1)
+	MOVEM	T4,.BFADR(T1)
+	SETZM	.BFCTR(T1)
+	MOVE	T2,CHNTAB+OUT
+	HLR	T1,.OPBUF(T2)
+	MOVEM	T3,.BFPTR(T1)
+	MOVEM	T4,.BFADR(T1)
+	SETZM	.BFCTR(T1)
+IFN CRYPSW,<
+	SETOM	IBUF+3		; Initialize block count
+	SETOM	OBUF+3		; For input and output
+	SOS	OBUF+3		; Fudge for dummy output
+>
+	CLEARM	<IBUF+.BFCTR,OBUF+.BFCTR>
+	MOVE	T2,BUFLIM	; Highest word in buffer space
+	SUB	T2,BUFFIR	; Size of the buffer
+	IDIVI	T2,203		; Compute number of buffers that fit
+	IDIVI	T2,2		; Number for each side
+	ADDI	T3,(T2)		; Number for input side (since larger)
+	PUSH	P,.JBFF##	; Save this for later
+	MOVE	T1,BUFFIR	; First loc in buffer
+	MOVEM	T1,.JBFF##	; Set this for monitor
+	INBUF	IN,(T2)		; Set up output buffers
+	OUTBUF	OUT,(T3)	; Then input buffers
+	POP	P,.JBFF##
+				CONT.
+	SETZ	CS,		; Clear output register and source count
+	MOVEI	T5,USCPY0	; Initialize return address for PUTWD1
+USCPY0:	MOVEI	C,5		; Initialize output count
+	TDZA	T1,T1		; Clear output register
+USCPY2:	LSH	T2,7		; Skip the null character
+USCPY1:	SOJL	CS,USCGET	; If source word empty go reload it
+	TLNN	T2,774000	; This input character a null?
+	JRST	USCPY2		; Yes, go find another
+	LSHC	T1,7		; Move character into output register
+	SOJG	C,USCPY1	; If more room in output register
+	  ; 
+	LSH	T1,1		; Left justify the word
+	JRST	PUTWD1		; No, get another buffer
+
+; Here to get another word of input
+
+USCGET:	JSP	ALTP,GETWD2	; Get a word
+	  JRST	USCEOF		; That's all there is
+USCPY5:	MOVEI	CS,5		; Set source register character count
+	TRNN	T2,1		; Sequence bit set?
+	JRST	USCPY1		; No, continue
+	CAMN	T2,PGMK		;PAGE MARK?
+	 SKIPL	UNPAGF		;YES--WE WANT THEM?
+	  CAIA			;
+	   JRST	USCPAG		;HANDLE REMOVED PAGE MARK
+	JSP	ALTP,GETWD2	; Get next word
+	  JRST	USCEOF		; Shouldn't ever happen, but...
+	LSH	T2,7		; Skip over the tab
+	SOJA	CS,USCPY1	; Decrement source count and return
+				CONT.
+
+; Here on EOF from input file
+
+USCEOF:	JUMPE	T1,USCEF3	; If output register empty
+	LSH	T1,1		; Leap over line number bit
+USCEF1:	TLNE	T1,774000	; Left justified?
+	JRST	USCEF2		; Yes, done
+	LSH	T1,7		; Move over one
+	JRST	USCEF1		; Check for done
+USCEF2:	JSP	T5,PUTWD1	; Output this last word
+USCEF3:	PUSH	P,OBUF+.BFPTR
+	MOVE	T1,CHNTAB+OUT
+	HLRZ	T1,.OPBUF(T1)	; Point to buffer header
+	POP	P,.BFPTR(T1)
+	PUSHJ	P,OUTDO		; Finish off the last buffer
+	SETZM	SSW		; Reset switch
+	CLOSE	OUT,		; Make sure that file remains
+	SETSTS	IN,.IODMP
+	SETSTS	OUT,.IODMP	; Reset modes back to default
+	POPJ	P,
+
+USCPAG:	JSP	ALTP,GETWD2	;EAT THE PAGE MARK (2ND HALF)
+	 JRST	USCEOF		;EOF?
+	CAME	T2,PGMKW2	;WHAT WE EXPECT?
+	 NERROR	ICN		;NO--I'M CONFUSED!
+	JSP	ALTP,GETWD2	;GET NEXT WORD
+	 JRST	USCEOF		;EOF?
+	JRST	USCPY5		;AND GO USE IT
+; Here to get a word from the input file to T2
+; Call with:
+;	JSP	ALTP,GETWD2
+;	  <EOF return>
+;	<good return>
+; Result is in T2
+
+GETWD2:	SOJL	LPNTR,(ALTP)	; If reached end of written data
+GETWD1:	SOSGE	IBUF+.BFCTR	; Data in buffer
+	JRST	GETWD0		; No, try to get more
+	ILDB	T2,IBUF+.BFPTR	; Fetch the next byte
+	JUMPN	T2,1(ALTP)	; Return it if non-null
+	JRST	GETWD2		; Else try for another
+
+GETWD0:	INUUO	IN,		; Read more data
+	CAIA
+	  JRST	(ALTP)		; That's all there is
+	PUSHJ	P,SIBPWC##	; Setup byte pointer/word count
+	JRST	GETWD1		; And get next word
+
+
+; Subroutine to output the word in T1
+; Call with
+;	JSP	T5,PUTWD1
+; Modifies no AC's
+
+PUTWD1:	SOSG	OBUF+.BFCTR	; See if room
+	PUSHJ	P,OUTDO		; Do some output
+	IDPB	T1,OBUF+.BFPTR	; Store word in buffer
+	JRST	(T5)		; Return
+
+
+; Subroutine to dump the current buffer
+
+OUTDO:
+IFN CRYPSW,<
+	PUSHJ	P,CRPBFO##	; Encrypt the block if desired
+>
+	OUTUUO	OUT,
+	PJRST	SOBPWC##	; Setup OBUF and return
+	ERROR	DDE		; Device output error
+	SUBTTL	 Dispatch table for E command
+
+DEFINE X($S,$V,$SW),<BYTE (9)$V,"$S"(18)$SW##>
+
+ENDTBL:	X	U,777,UNSEQF
+	X	S,1,UNSEQF
+	X	X,2,UNSEQF
+	X	C,776,UNSEQF	;ADD C OPTION
+	X	O,1,BAKF
+	X	N,2,BAKF
+	X	B,777,BAKF
+	X	R,777,ERSW
+	X	D,777,EDSW
+	X	Q,777,QUITSW
+
+ENDTLN==.-ENDTBL
+
+;HERE IS TABLE OF EXIT OPTIONS TO BE COMPATIBLE WITH VERSION 21/23
+;IE S=UNSEQUENCE N=NO BACKUP T=TEXT (CONTINIOUS)
+
+ENDCBL:	X	U,777,UNSEQF
+	X	S,777,UNSEQF		;LIKE 23D "U"
+	X	T,776,UNSEQF		;STRIP PAGE MARKS TOO
+	X	C,776,UNSEQF		
+	X	X,2,UNSEQF
+	X	O,1,BAKF
+	X	N,2,BAKF
+	X	B,2,BAKF		;LIKE 23D "N"
+	X	R,777,ERSW
+	X	D,777,EDSW
+	X	Q,777,QUITSW
+
+ENDCLN==.-ENDCBL
+	SUBTTL	THE RPG LOADER
+
+CREFIT::OCRLF			; Tell him save was ok
+	MOVSI	T1,'SYS'	; Default device
+	MOVE	T2,[SIXBIT/COMPIL/] ; and name
+	SKIPE	RPGR+1		; Any set yet?
+	JRST	CREFI1		; Yes, go run
+	DMOVEM	T1,RPGR		; No, stash default
+CREFI1:	MOVE	T1,[1,,RPGR]
+	RUN	T1,		; Off she goes
+	HALT	.		; This shouldn't happen
+
+
+; Routine to estimate the size of the output file
+; Call with OUTSIZ setup, returns estimate in blocks in AC T1.
+
+GETEST:	MOVE	T1,OUTSIZ	; Size of output file
+	SKIPL	UNSEQF		; Unsequenced?
+	JRST	GETES1		; No
+	IMULI	T1,3		; Unsequenced files are
+	LSH	T1,-2		; 3/4 the size, on the average
+GETES1:	ADDI	T1,BLKSIZ-1	; Round up
+	LSH	T1,W2BLSH	; Convert to blocks
+	POPJ	P,
+	SUBTTL	GENERAL PURPOSE ROUTINES
+
+
+RDLIN::	SETZM	LIBUF+1		; Read in a line. first zero input buffer
+	MOVE	T1,[XWD LIBUF+1,LIBUF+2]
+	BLT	T1,LIBUF+MXWPL+1
+	SETZM	FFFLAG		; Special form feed flag
+	MOVE	T1,[POINT 7,LIBUF+1]	; Set up pointer
+	MOVEI	T2,5*MXWPL-2	; Set for available space
+	MOVEI	C,11		; Start with a tab
+	JRST	RDL5
+
+RDL1:	PUSHJ	P,GNCH		; Get another character
+	CAIN	C,15		; Ignore returns
+	JRST	RDL1
+	CAIE	C,14		; Is it a formfeed?
+	JRST	RDL2		; No
+	MOVEI	C,12		; Convert it to linefeed
+	SETOM	FFFLAG		; And set the formfeed flag
+	CAIN	T2,5*MXWPL-3	; Is the line empty?
+	JRST	RDL7		; Go do empty line stuff
+RDL2:	CAIN	C,12		; Line feed is the only proper end
+	JRST	RDL6
+RDL3:	CAIE	C,200		; Altmode is a special case
+	JRST	RDL5		; Not altmode
+	SKIPN	AUTALT##	; Special mode?
+RDL4:	SOSA	ALTSN##		; NO -- Set terminator flag and skip
+	TRO	FL2,ENTALT	; Yes set ENTer ALTer mode flag
+	CAIN	T2,5*MXWPL-3
+	JRST	RDL7		; Go do empty line stuff
+	JRST	RDL6		; Do end of line stuff
+
+RDL5:	IDPB	C,T1		; Put it in the buffer
+	SOJGE	T2,RDL1		; Check for overflow and continue
+	RERROR	LTL		; Line is too long
+	POPJ	P,		; Non-skip return
+
+RDL6:	MOVEI	C,15		; Put in a cr-lf
+	IDPB	C,T1
+	MOVEI	C,12
+	IDPB	C,T1
+	HRRZS	T1		; Now get the size
+	SUBI	T1,LIBUF-1
+	JRST	CPOPJ1##
+				CONT.
+
+; Here on an empty line
+; 
+RDL7:	TRZ	FL2,ENTALT	; May cause trouble next time
+	CAIN	C,200		; Was it a real altmode?
+	SETOM	ALTSN		; Set flag
+	POPJ	P,		; Give empty line signal
+	SUBTTL	CLSTSZ -- Return the cluster size of a file structure
+
+; Call with FS name in T1
+; PUSHJ	P,CLSTSZ
+; return here with cluster size in T1
+; 
+; Returns 10 if DSKCHR UUO fails
+
+CLSTSZ::MOVE	T3,P		; Save PDL pointer
+	ADJSP	P,6
+	MOVEM	T1,1(T3)	; FS name
+	HRLI	T1,6		; Length of argument block
+	HRRI	T1,1(T3)	; Point to FS name
+	DSKCHR	T1,		; Ask monitor about the FS
+	  CAIA			; No DSKCHR UUO
+	SKIPA	T1,6(T3)	; Fetch the answer
+	MOVSI	T1,(12B8)	; Default answer
+	ASH	T1,-^D27	; Right justify result
+	MOVE	P,T3
+	POPJ	P,		; Return it
+	SUBTTL	OUTSN and ASCIAD
+
+; OUTSN -- Routine to print the sequence number in T1
+
+OUTSN::	MOVEM	T1,SQBUF	; Put it in space followed by a tab
+	AOSN	SUPSNF		; Suppress it this time
+	POPJ	P,		; Yes, just return
+	MOVE	T1,[8,,SQBUF]
+	TLNE	FL2,LNUMF	; But don't do it if suppressing numbers
+	PJRST	PROMPT##
+	SETZM	PMTSTR		; Clear prompt string
+	POPJ P,
+
+; ASCIAD -- Routine to add two ASCII line numbers
+; Call with
+;	MOVE	T1,line number
+;	MOVE	T2,line number (both in ASCII)
+;	PUSHJ	P,ASCIAD
+;	<Return here with ASCII sum in T1>
+; Destroys T2
+
+ASCIAD::AND T2,K2A		; Convert to numbers
+	IOR T1,LNZERO		; Make sure this is in digit form
+	ADD T1,K1A		; Get each digit in range for carry
+	ADD T2,T1		; Sum
+	AND T2,K3A		; Get rid of 100 bits if there
+	MOVE T1,LNZERO		; Find out which ones need subtracting
+	AND T1,T2
+	ASH T1,-3		; Convieniently they need 6 subtracted
+	SUBM T2,T1		; So do it
+	IOR T1,LNZERO		; And reconvert to digits
+	POPJ P,			; Return, sum is in T1
+	SUBTTL	ASCAV -- ASCII Averaging routine
+
+
+; ASCAV -- Routine to average two ASCII numbers
+; Call with
+;	MOVE	T1,first number
+;	MOVE	T2,second number
+;	PUSHJ	P,ASCAV
+;	<here with average in T2>
+; Destroys T1, T3
+
+ASCAV::	AND	T2,K2A
+	IOR	T1,LNZERO##	; This routine averages 2 ascii numers
+	LSH	T1,-1
+	ADD	T1,K7A		; It works mostly by majic
+	LSH	T2,-1
+	ADD	T2,T1
+	AND	T2,K6A
+	MOVE	T1,T2
+	ANDCM	T1,K3A
+	AND	T2,K3A
+	MOVE	T3,T2
+	LSH	T3,-3
+	AND	T3,K2A
+	AND	T2,K5A
+	SUB	T2,T3
+	LSH	T1,-4
+	ADD	T2,T1
+	LSH	T1,-2
+	ADD	T2,T1
+	IOR	T2,LNZERO##
+	POPJ	P,
+
+K1A:	BYTE (7) 106,106,106,106,106
+K2A:	BYTE (7) 17,17,17,17,17
+K3A:	BYTE (7) 77,77,77,77,77
+K5A:	BYTE (7) 7,7,7,7,7
+K6A:	BYTE (1) 1 (7) 77,77,77,77,77
+K7A:	BYTE (1) 0 (7) 106,106,106,106,106
+;GETDIF--Routine to compute increment as difference of
+;
+;  two lines / # of lines to insert
+; Call:
+; 	MOVE	T1,<Result of FIND>
+; 	MOVE	T2,<Line typed(desired)>
+; 	MOVE	T3,<# of lines to insert>
+; 	PUSHJ	P,GETDIF
+; 	  <Error return (ie no room)>
+; 	<OK return>
+; 	  C(T2) := Computed increment
+; 	  C(T1) := Where to start inserting
+
+GETDF1::PUSH	P,T3		; Save arguments
+	PUSH	P,T2		;
+	PUSH	P,T1
+	MOVEI	T1,^D100000	; Largest plus 1
+	PJRST	NONXT		; Join GETDIF
+
+GETDIF::PUSH	P,T3		; Save args
+	PUSH	P,T2
+	PUSH	P,T1		; Save result of FIND
+	CAMN	T1,T2		; ALready have next if not equal
+	PUSHJ	P,FINDN		; Look for next line
+NOFND:	SKIPE	T3,T1		; None if EOF
+	CAMN	T1,PGMK		;  or page mark
+	JRST	[MOVEI T1,^D100000
+		 JRST NONXT]	; Use highest + 1
+	PUSHJ	P,NUMCON	; Next line # in T1
+NONXT:	PUSH	P,T1		; Save it
+	MOVE	T3,-2(P)	; Get what was typed
+	CAME	T3,-1(P)	; Does it exist?
+	CAMN	T3,LNZERO##	; or was it zero?
+	SOS	0(P)		; Yes - allow for it
+	PUSHJ	P,NUMCON##	; Convert arg
+	MOVE	T2,T1		; Move result to T2
+	POP	P,T1		; Restore <next>
+	SUB	T1,T2		; Get difference
+	IDIV	T1,-2(P)	; (<NEXT>-<CURR>)/N
+	JUMPE	T1,GOTZER	; Don't fit if zero
+	CAIGE	T1,3		; If 1 or 2 its the best
+	JRST	GOTIT
+	MOVE	T2,[-6,,[DEC 2,5,10,20,50,100,100001]]
+	CAML	T1,1(T2)	; Look for item gtr T1
+	AOBJN	T2,.-1
+	JUMPGE	T2,GOTZER	; Can't happen
+	MOVE	T1,0(T2)	; Get aesthetic increment
+GOTIT:	PUSHJ	P,ASCON##	; Convert to incr form
+	MOVE	T2,T3		; Get into correct AC
+	POP	P,T1		; Get back current line number
+	MOVEM	T2,-1(P)	; Store computed increment
+	CAMN	T1,0(P)		; Is there a conflict?
+	JRST	GETADD		; Yes, invent a unique number
+	EXCH	T1,0(P)		; Get typed place
+	CAME	T1,LNZERO##	; Does he want zero?
+	JRST	[EXCH T1,0(P)
+		 JRST GETRET]
+GETADD:	PUSHJ	P,ASCIAD	; Else add incr to it
+	MOVEM	T1,0(P)		;   and use it
+GETRET:	POP	P,T1		; Starting line #
+	POP	P,T2		; Increment
+	JRST	CPOPJ1		; Give good return
+
+GOTZER:	ADJSP	P,-3		; Adjust push down list
+	POPJ	P,		; Error return
+;Routine to guess at a good place to insert if current line exists
+;Call:
+;	MOVE	T1,<Current position>
+;	MOVE	T2,<Increment to use>
+;	PUSHJ	P,FIXLIN
+;	<Loc of high bound>
+;	  <Error return>
+;	<OK return>		;New number in T2
+
+FIXLIN::AOS	T4,0(P)		;Skip over arg
+	PUSHJ	P,ASCIAD	;Add
+	PUSH	P,T1		;Save result
+	MOVE	T1,LNZERO##	; Get a copy of line zero
+	CAMN	T1,@-1(T4)	; Trying to insert at beginning
+	SKIPA	T1,0(PNTR)	; Get current line instead
+	PUSHJ	P,FINDN##	; No, get the next one
+	POP	P,T2
+	CAMG	T2,@-1(T4)	;Is there a war problem
+	JRST	FIXBAD		;Yes, we must try to compute one
+	JUMPE	T1,CPOPJ1	;End of file, any inc is OK
+	CAME	T1,PGMK		;Also OK if a page mark
+	CAMGE	T2,T1		;Or in correct order
+	JRST	CPOPJ1
+FIXBAD:	CAME	T1,PGMK
+	SKIPN	T1
+	MOVE	T1,LNOVER##	;One over the top of the world
+	MOVE	T2,@-1(T4)	;Get current
+	PUSHJ	P,ASCAV		;Find average
+	CAME	T2,@-1(T4)	;There may have only been a dif of 1
+	AOS	0(P)		;Skip return
+	POPJ	P,
+
+; Subroutine to confirm a questionable action with the user
+; 
+
+
+INSIST::OUTSTR	[ASCIZ "
+?You must type either "]
+CONFRM::MOVE	T1,[11,,[ASCIZ "(Y or N):  "]]
+	PUSHJ	P,PROMPT##
+	CLRBFI
+	PUSHJ	P,SCAN		; Scan for type in
+	MOVS	T1,ACCUM	; Get result
+	CAIE	T1,'Y  '	; Is it yes?
+	JRST	CONFRN		; No
+	PUSHJ	P,SCAN
+	TRNN	FL,TERMF	; Did it end right?
+	JRST	INSIST		; No, ask again
+	JRST	CPOPJ1##	; Yes, indicate okay
+
+CONFRN:	CAIE	T1,'N  '	; Did he indicate No
+	JRST	INSIST		; No, loses
+	PUSHJ	P,SCAN
+	TRNN	FL,TERMF	; Must end correctly
+	JRST	INSIST
+	POPJ	P,
+; Routine to tell the monitor about our TTY parameters, and to
+; set our copy of TTY characteristics from the Monitors tables.
+; Call this routine after every set command that changes TTY
+; characteristics, and after every REENTER or CONTINUE.
+
+
+SETTTY::PUSHJ	P,SAVR##	; Save T3-T5
+	PUSH	P,T1		; And T1
+	PJOB	T4,
+	TRMNO.	T4,
+	  SETZ	T4,
+	MOVEM	T4,MYUDX	; And save for later
+	MOVEI	T3,1005		; Function code for tty tabs
+	MOVE	T1,[2,,T3]	; Argument pointer for TRMOP.
+	TRMOP.	T1,		; Get the TAB setting
+	 MOVEI	T1,0		; Assume no tabs
+	MOVEM	T1,TABINI	; Save initial setting
+	MOVEM	T1,TABCUR	; and current setting
+;
+	MOVEI	T3,1012		; Function code for tty width
+	MOVE	T1,[2,,T3]	; Argument pointer for trmop.
+	TRMOP.	T1,		; Get the width
+	SKIPA			; Ignore this
+	MOVEM	T1,LINEW	; Save for backspace processing
+	  ; 
+	MOVEI	T3,1026
+	MOVE	T1,[2,,T3]
+	TRMOP.	T1,		; Get xx TTY ALTMODE setting
+	  MOVEI	T1,1		; Assume NO ALTMODE
+	MOVEM	T1,TTALTF##	; Save for reference
+	MOVEI	T3,2035		; CRLF function
+	MOVE	T5,CRLFSW	; And its value
+	MOVE	T1,[3,,T3]	; Argument pointer
+	TRMOP.	T1,		; Do it
+	  JFCL			; Must be old monitor
+	MOVEI	T3,.TODIS	;READ DISPLAY STATUS
+	MOVE	T1,[2,,T3]	;POINT TO ARGS
+	TRMOP.	T1,		;READ IT
+	 MOVEI	T1,0		;FAILED--CLEAR
+	SETZM	DPYFLG		;CLEAR DPY FLAG
+	TRNE	T1,1		;SEE IF DISPLAY
+	 SETOM	DPYFLG		;YES--FLAG /DPY
+	MOVEI	T3,.TOTRM	;READ TERMINAL TYPE
+	MOVE	T1,[2,,T3]	;POINT TO ARGS
+	TRMOP.	T1,		;FROM MONITOR
+	 MOVEI	T1,0		;FAILED
+	MOVEM	T1,TERMNM	;SAVE NAME
+	CAMN	T1,[SIXBIT/INFOTO/];THESE ARE SPECIAL
+	 SKIPA	T1,[32]		;REQUIRE ^Z BACKSPACE
+	  MOVEI	T1,10		;NORMAL REQUIRE ^H
+	MOVEM	T1,BACCHR##	;SET
+	MOVEI	T3,.TOTSP	;READ TRANSMIT SPEED
+	MOVE	T1,[2,,T3]	;POINT TO ARG
+	TRMOP.	T1,		;READ IT
+	  MOVEI	T1,0		;UNKNOWN
+	MOVE	T1,SPETAB(T1)	;GET SPEED
+	MOVEM	T1,TSPEED	;AND SAVE
+	MOVEI	T3,.TONFC	;READ FREE CRLF SETTING
+	MOVE	T1,[2,,T3]	;POINT TO ARGS
+	TRMOP.	T1,		;READ VALUE
+	 MOVEI	T1,0		;CLEAR IF FAILED
+	MOVEM	T1,NFCSW	;STORE CRLF VALUE
+	JRST	T1POPJ##
+
+SPETAB:	DEC	0,50,75,110,134,150,200,300,600,1200,1800,2400,4800,9600,0,0  ;
+
+SETTAB::CAMN	T1,TABCUR	; See if different than current setting
+	 POPJ	P,		; No--Save a UUO
+	MOVEM	T1,TABCUR	; Yes--Save as current setting
+	MOVE	T3,TABCUR	; Get desired setting
+	MOVEI	T1,2005		; Get set function
+	MOVE	T2,MYUDX	; Include UDX
+	MOVE	T4,[3,,T1]	; Argument pointer
+	TRMOP.	T4,		; Set the TABS
+	 JFCL			; Oh well
+	POPJ	P,		; And return
+
+; Routines to place or remove SOS user in High Priority Queue 1.
+; 
+; Note:  This routine should be used wtih care, since the 
+;	scheduler's discretion is poor when handling HPQ jobs.
+; Call with
+;	PUSHJ	P,HPQON
+;	(always returns here)
+; 
+; and
+; 
+;	PUSHJ	P,HPQOFF
+;	(always returns here)
+; 
+IFN %UAHPQ,<
+HPQOFF::TLZN	FL2,HPQF	; Note leaving HPQ
+	POPJ	P,		; Don't issure UUO, weren't in HPQ
+	CLEAR	T1,
+	JRST	SETHPQ		; Go enter queue
+
+HPQON::	TLOE	FL2,HPQF	; Note entering HPQ
+	POPJ	P,		; Already in HPQ, just return
+	MOVEI	T1,1		; Suitable HPQ for SOS
+	  ; 
+SETHPQ:	HPQ	T1,		; Put him there
+	  JFCL	0		; We tried; it'll still run
+	POPJ	P,
+>
+
+	XLIST
+	LIT
+	LIST
+
+	RELOC	0
+
+NFCSW::	BLOCK	1
+
+	END

@@ -1,0 +1,374 @@
+	UNIVERSAL SOSTCS EDIT HISTORY
+
+;;Macro used in each module to invoke the edit history comments for each
+;; edit installed in that module
+;
+;	ZZZ==-1
+;	IRP N,<
+;	IFNDEF	ED.'N<IF1,<PRINTX %Unknown edit number 'N>>
+;	IFDEF	ED.'N,<ED.'N
+;			ED$'N==1
+;			ZZZ==ZZZ+1>;;END IFDEF ED.'N
+;	IF2,<IFNDEF ...'N,<PRINTX %No reference to edit number 'N>>
+;	>;;END IRP
+;
+;	IF1,<IFG ZZZ,<PRINTX [Assembling in Tufts Edits 'N]>
+;		IFE ZZZ,<PRINTX [Assembling in Tufts Edit 'N]>>
+;
+;	PAGE
+;
+;>;END EDIT MACRO
+;
+;;Macro used in each module at each location of the edit so that the
+;;CREF will note the locations.
+;
+;	IRP N,<
+;	IFNDEF ED$'N<IF1<PRINTX %Edit 'N is not in the Edit History>>
+;	IFDEF ED$'N<...'N==:1>
+;	>;END IRP
+;
+;
+;DEFINE ...NAM(N),<...'N>
+;
+;;Macro used internally to simplify the HISTORY macro
+;
+;DEFINE .EDIT(N,TEXT),<
+;
+;DEFINE ED.'N,<
+;TEXT
+;SALL
+;>;END ED.'N MACRO
+;
+;ED.'N
+;
+;>;END .EDIT MACRO
+;	SUBTTL	MAJOR FUNCTIONALITY EDITS
+;
+;DEFINE HISTORY,<
+;
+;.EDIT 1,<
+;;1	Create compatibility mode with SOS version 21
+;>
+;
+;.EDIT 2,<
+;;2	Read and set the backspace character from TRMOP. UUO. Dont
+;;	assume it always to be ^H (INFOTONs are different)
+;>
+;
+;.EDIT 3,<
+;;3	Add /BAUD to prevent alter mod fast update, but allow the other
+;;	nice features of "smart" terminals on slower speed lines.
+;>
+;
+;.EDIT 4,<
+;;4	Add exit continious option to strip sequence numbers and page
+;;	marks. Also, smarten up inserting page marks because of too
+;;	many lines/page on unsequenced input.
+;>
+;
+;.EDIT 5,<
+;;5	Allow <FF> terminator on commands, and do the correct clear
+;;	screen function for terminals (VT52's) that cant do it themselves
+;>
+;
+;.EDiT 6,<
+;;6	Clear ^O before promting so user known when printing is done
+;>
+;
+;.EDIT 7,<
+;;7	Add range specifiers BF =^/^, :EF = */*, and EF = ^/^:*/*
+;;	to make life easier (and like SOS 23)
+;>
+;
+;.EDIT 10,<
+;;10	Fix .ASSIGN TTY DSK; open physical TTY to prevent loops
+;>
+;
+;.EDIT 11,<
+;;11	Fix ?ill mem ref or such with push/pop of T1 in ^C exit routine
+;>
+;
+;.EDIT 12,<
+;;12	Allow a repeat count on a command file if it fits in one disk 
+;;	block. This make iterations easier without disk thrashing.
+;>
+;
+;.EDIT 13,<
+;;13	Change name of help file to .MAN from .HLP. Its really too long
+;;	for a help file!
+;>
+;
+;.EDIT 14,<
+;;14	Allow F/S options to be specified in any order
+;>
+;
+;.EDIT 15,<
+;;15	^E pattern matching extensions for F/S searches
+;>
+;
+;.EDIT 16,<
+;;16	New F/S options (Delete, Mark, printout)
+;>
+;
+;.EDIT 17,<
+;;17	Add support for XSOS and monitor set default editor experimental
+;;	bits. (try to keep the sources the same, but check the bit for
+;;	differing functionality)
+;>
+;
+;.EDIT 20,<
+;;20	Fix CCL switch, and properly release channel so the DDB doesnt
+;;	hang around wasting space.  Also, prevent garbage on initial
+;;	command scanning errors if %UACCL turned off.
+;>
+;
+;.EDIT 21,<
+;;21	Setup a few different defaults in SOSINI
+;;	ie /REFDLY /BAUD and /START/STEP (defaults to 1 if readonly)
+;>
+;
+;.EDIT 22,<
+;;22	Allow protection specification of <nnn> on all file specs
+;>
+;
+;.EDIT 23,<
+;;23	Add I/n to add text starting on a new page (like SOS 23)
+;>
+;
+;.EDIT 24,<
+;;24	Add fast print for smart terminals with cursor addressing
+;>
+;
+;.EDIT 25,<
+;;25	Support all Tufts terminal types (see edit 24)
+;;	Improve terminal specifiers with improved terminal type macro
+;;	to make adding new terminals very easy.
+;>
+;
+;.EDIT 26,<
+;;26	Add /PROGRAM (/UC) and /TEXT (/NOUC) switches like some doc says
+;>
+;
+;REPEAT 0,<	;Fixed in U of A SOS 23D(444)
+;.EDIT 27,<
+;;27	Fix infinate wrap around problems when step.GT.start
+;>
+;>;END REPEAT 0
+;
+;.EDIT 30,<
+;;30	Allow the user to create a completely null file. Some try it
+;;	instead of .COPY =NUL:file
+;>
+;
+;.EDIT 31,<
+;;31	Fix SOS being too smart about protection codes and FILDAE
+;>
+;
+;.EDIT 32,<
+;;32	Add a powerful MACRO capability. More about this later
+;>
+;
+;.EDIT 33,<
+;;33	Add /INITIALIZE to do default readin of an indirect command
+;;	file. This may be specified in SWITCH.INI or while in SOS.
+;;	It takes effect immediately
+;>
+;
+;.EDIT 34,<
+;;34	Fix missing %No such line(s) message with V class commands
+;;	when no lines were in fact found
+;>
+;
+;.EDIT 35,<
+;;35	Rewrite error macro to not include CRLF and to have table
+;;	XWD [ASCIZ/expert msg/],[ASCIZ/novice msg/]. This saved
+;;	171(8) locations in the high seg
+;>
+;
+;.EDIT	36,<
+;;36	Improve question option in Search; allow Y and N and make a
+;;	help option.
+;>
+;
+;.EDIT 37,<
+;;37	Dont allow .+n or .-n to give first/last line if the line does
+;;	not exist. Instead, give %NLN message. Redefine L1.PTP to be
+;;	L1.MCM to allow *+1 in MARK command to win (ie not do above
+;;	actions.)
+;>
+;
+;.EDIT 40,<
+;;40	Add the =RULER command to type out RULER number ruler
+;>
+;
+;.EDIT 41,<
+;;41	Fix scanning for certain ranges in O command so $ and EF work.
+;>
+;
+;.EDIT 42,<
+;;42	Fix ^G^G giving ?ill mem ref when initial parse fails and returns
+;;	to "File:" prompt with BELLF flag set. Cure: Clear it
+;>
+;
+;.EDIT 43,<
+;;43	Make SOS do less UUO's. In specific, remember echo status so we
+;;	dont have to SETSTS every command, and check with STATZ in
+;;	rubout processing. Also, remember GETLCH settings, again so as
+;;	not to have to reset it every command.
+;;>
+;
+;.EDIT 44,<
+;;44	Fix losing TTY TAB when user ^C's out of alter mode.
+;;	and also restore it correctly if he types CONTINUE
+;;	Also fix ^C reenter from alter mode leaving echo off.
+;>
+;
+;.EDIT 45,<
+;;45	Add /UNDERLINE switch to not turn xxx<CR>yyy into a new line.
+;;	However, I'm not sure everything likes a line like that!
+;>
+;
+;.EDIT	46,<
+;;46	Change buffer algorithms and defaults. In specific, use default
+;;	algorithm if readonly (dont use 10 blocks), check that cluster
+;;	size is .LE. WINMAX (some have cluster sizes of 200 or more!)
+;;	Allow bigger /WINDOW (dont require .LE. 100000) change
+;;	WINMAX to 60000(8).
+;>
+;
+;.EDIT 47,<
+;;47	Give a better (stronger) message for M option in ^C dialogue
+;>
+;
+;.EDIT 48,<
+;;48	Force /X to suppress line numbers all the time, not just if the
+;;	file didnt have them to start.
+;>
+;
+;.EDIT 49,<
+;;49	Use the orginal logged in PPN rather than the current PPN to
+;;	read SWITCH.INI. The idea is that if we pivot, we do not want
+;;	the options read from the pivoted PPN, but our first logged in PPN.
+;>
+;
+;.EDIT 50,<
+;;50	Add /[no]XINSERT (default =NOXINSERT) to control inserting NEW
+;;	lines when the range of lines for an X command terminates and
+;;	the current increment allows for insertion of new lines.
+;>
+;
+;.EDIT 51,<
+;;51	Fix N command in alter mode not to destory HILN in the range,
+;;	as otherwise alter finishs after first N command, even if range
+;;	is not completed.
+;>
+;
+;>;END OF HISTORY MACRO
+;
+;
+;	HISTORY
+;	SUBTTL	Minor version changes
+
+COMMENT	\
+
+Edit	Date		Comment
+
+1-33	1979		Add edits 1-33 (dates lost)
+
+34	25-SEP-79	Install edit 34
+35	25-SEP-79	Install edit 35
+36	27-SEP-79	Have I/n print new page number
+			and check for correct terminator
+37	27-SEP-79	Fix PEF not printing first Page 1 title
+40	27-SEP-79	Allow BF to position to beginning of file
+			like B command does, but its consistent with
+			BF range specifier
+41	27-SEP-79	Add edit 36
+42	27-SEP-79	Add edit 37
+43	30-Sep-79	Add edit 40
+44	19-Oct-79	Change to use new terminal type and display TRMOP.s
+			(now that 7.00 finally has features Tufts had!)
+45	31-Oct-79	Reassemble to do PAGE. UUO, and change MACRO
+			routines to allocate pages for macro text
+46	31-Oct-79	Force /START:1/STEP:1 in readonly mode even
+			if he gave those switches (probably SWITCH.INI)
+47	7-Nov-79	Now, with 7.00 default /DISPLAY always, and be
+			sure to get INFOTONs right. Also, dont do cursor
+			addressing in SOSLST if the terminal needs CRLF.
+50	9-Nov-79	Add edit 41 (fixes O command). Also do smart
+			things in OUTLIN if terminal has tabs.
+51	10-Nov-79	Expand ^E stuff to allow ^EVL, ^EVU, ^EVV on
+			output strings to return the case converted result
+			if the input match string (Also, allow ^EnVU, etc
+			to return the case converted n'th match string.
+52	11-Nov-79	Add edits 42 and 43
+53	13-Nov-79	Add edit 44 (fixes ^C from alter and tabs)
+54	15-Nov-79	Improve edit 25 with better terminal type macro
+55	16-Nov-79	Merge with new U of A SOS 23D(444)
+56	27-Nov-79	Fix position computation if the line wrapped
+			around the screen so print shows the line correctly.
+57	20-Dec-79	Change check for experimental editor by testing
+			program name for XSOS, not the monitor bit
+60	 2-Jan-80	Allow "" inside /DEFINE to quote a quote in the
+			DEFINE text, if user uses quoted form.
+			Read correct .INI file if /INITIALIZE (not always
+			XSOS.INI)
+61	 5-Jan-80	When writing macro file (OM command), turn quote
+			into "" to avoid quote problems when we read it
+			it in later. Also, clear repeat count correctly for
+			nested macros.
+62	 9-Jan-80	Add edit 45 (/UNDERLINE) **NOTE** Incomplete!!
+
+63	 1-Feb-80	Change OM command to write out macros correctly
+			if nested macros and /MACRO on.
+64	 7-Mar-80	Add edit 46 (better window handling)
+65	13-Mar-80	Support VT61 terminals too
+66	 9-Apr-80	Add edits 47,48. Patch so TSG SOS always looks
+			like XSOS.
+67	 4-Aug-80	Look for SWITCH.INI in logged in PPN, and not
+			the pivoted PPN. (Edit 49)
+70	11-Sep-80	Fix bug in cursor output that thought VT52 could
+			direct cursor address to column 95. It can only
+			go to 80.
+71	31-Oct-80	Improve edit 44. Change things to use TRMOP rather
+			than GETLCH/SETLCH for TTY TAB setting. This also
+			fixes (gets around) monitor bug with GETLCH echoing
+			a defered line too soon. (with TTY DEFER set)
+72	 6-Dec-80	Change XSOS alter mode commands a little. Make
+			"D" be immediate action, and add "K" to take
+			a unit specifier (like "D" used to)
+			Change =COLUMN to =RULER. Add edit 50 to control
+			inserts of new lines in X mode.
+73	 7-Dec-80	Add edit 51 to fix N command in alter mode.
+74	30-Dec-80	Merge with SOSX 23D(445)
+75	31-Dec-80	Merge alter modes into the same SOS. The switch
+			/[no]NEWALTER toggles. NEWALTER is default for
+			XSOS, NONEWALTER for SOS.
+76	28-Jan-81	Change /COMPATIBLE into /OLDCOMMAND (default) and
+			/NEWCOMMAND. Improve HELP scanner to allow
+			E/NEWCOMMAND and E/OLDCOMMAND to list different
+			parts of manual.
+77	19-Feb-81	Fix ?Ill mem ref when editing large files due
+			to wrong ac used by TCS#46
+\
+
+SOSEDT==77		;KEEP THIS IN LINE WITH ABOVE EDITS
+SOSWHO==0		;CUSTOMER VERSION
+SOSVER==23		;MAJOR VERSION 23
+SOSMIN==5		;MINOR VERSION (BASED ON SOS 23D(430) FROM UA)
+	SUBTTL	$INIT MACRO
+
+DEFINE $INIT(FLAG),<
+	SEARCH	SOSSYM
+	SALL
+IFB <FLAG>,<EXDATA>
+IFNB <FLAG>,<
+	TWOSEG
+	RELOC	400000
+>
+>;END DEFINE $INIT
+	SUBTTL	Internal GETTAB for Original Logged-in PPN
+	.GTLPN=:-10	;Sigh
+
+	END
+

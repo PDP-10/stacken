@@ -1,0 +1,152 @@
+	TITLE	XPNPSI	- BLISSNET-10 PSI assist routines
+
+; THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+; OR COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE.
+;
+; COPYRIGHT  (C)  DIGITAL  EQUIPMENT  CORPORATION 1986.
+; ALL RIGHTS RESERVED.
+
+
+	ENTRY	XPN$DPSI
+
+	SEARCH	UUOSYM
+
+	T1=1
+	T2=2
+	T3=3
+	T4=4
+
+	P=17
+
+	BLKMAX=20		;Max routine addr storage
+
+; This module contains the routines needed by BLISSNET-10 to use
+; the PSI interface to TOPS-10.  It is necessary because it is impossible
+; to save AC's at interrupt level in a BLISS routine.
+
+; Start using the DIL standard edit history format.
+; Facility: Blissnet
+; Edit (%O'2', '12-Apr-84', 'Sandy Clemens')
+;  %( Add the TOPS-10 BLISSnet sources for DIL V2.  )%
+;
+; Edit (%O'6', '5-Oct-84', 'Sandy Clemens')
+;  %( Add new format of COPYRIGHT notice.  FILES:  ALL )%
+
+; TOPS-10 PSI initialization
+;
+;	Notes: COBOL-10 V12B and FORTRAN-10 V7.0 do not use PSI
+;
+;	Hopefully, no users do either.  We must have it, but it is
+;	very hard to share between non-cooperating routines.  In
+;	7.01 they added a new PSI UUO (PISAV.) to get the PSI vector
+;	address if it was already set up.  This is useful, but not
+;	totally sufficient.  Which offset can we use?  We could look
+;	for a free one (four words of zeros), but that may be
+;	allocated to some other uninitialized routine.  We could put
+;	ourselves into the interrupt chain on the first interrupt
+;	block (each interrupt comes to us, we see it if is for us
+;	(DECnet), if not, pass it to the previous owner of this
+;	interrupt block).  But someone might overwrite that block,
+;	then we stop getting interrupts!  So, until we can solve this
+;	dilema, we will initialize the PSI system, and use it all
+;	by ourselves!
+
+
+
+; Module XPN$DPSI
+;
+; This module is called with the address of the routine the caller would
+; like called on a DECnet interrupt.  This linkage is for BLISS, but could
+; easily be done by MACRO as well.  This routine will initialize PSI and
+; set up to received DECnet interrupts.  On each interrup the list of routines
+; requesting notification will be called in turn with the PSI status word on
+; the stack.  This routine will then do a WAKE UUO on this job in case we were
+; hibernating, and dismiss the interrupt.
+;
+; If the caller specifies a zero address for its routine, we will not call it,
+; but will issue the WAKE and dismiss the interrupt.
+
+XPN$DPSI:
+	DMOVEM	T1,T1T2			;Save AC's
+	DMOVEM	T3,T3T4
+	SKIPN	START			;Indicate that we have begun
+	PUSHJ	P,PSIINI		;Need to start up PSI
+	SKIPN	T2,-1(P)		;Routine
+	  JRST	DPSI1			;Only wants a WAKE
+	MOVE	T1,LSTLEN		;Get current LIST len
+	CAIL	T1,BLKMAX		;LIST full?
+	  JRST	TOOMNY			;That is bad
+	ADDI	T1,1			;Next free word
+	MOVEM	T2,LIST-1(T1)		;Save the routine address
+	AOS	LSTLEN			;Remember new length
+DPSI1:	DMOVE	T1,T1T2			;Restore AC's
+	DMOVE	T3,T3T4
+	POPJ	P,			;Return to caller
+
+; INT
+;
+; Process interrupts.
+
+; This routine is called whenever an interrupt is seen on
+
+INT:	MOVEM	16,ACBLK+16		;Save AC16
+	MOVEI	16,ACBLK		;BLT pointer
+	BLT	16,ACBLK+15		;Save all but stack pointer
+	SKIPN	LSTLEN			;Any routines to call?
+	  JRST	INT2			;No, skip that part then
+	MOVN	T1,LSTLEN		;Number or routines to call
+	HRLZS	T1			;Make AOBJN pointer
+	PUSH	P,T1			;Save this pointer over CALL
+	PUSH	P,VECTOR+.PSVIS		;Save status word on stack
+INT1:	MOVEM	T1,-1(P)		;Save current pointer
+	PUSHJ	P,@LIST(T1)		;Call routine
+	MOVE	T1,-1(P)		;Get back pointer
+	AOBJN	T1,INT1			;Loop
+	POP	P,(P)			;Clear the stack
+	POP	P,(P)
+INT2:	SETO	T1,			;Set to wake us
+	WAKE	T1,			;Wake us
+	  JFCL				;Not normally seen
+	MOVE	16,[XWD ACBLK,0]	;Set up BLT pointer
+	BLT	16,16			;Restore AC's
+	DEBRK.				;Dismiss the interrupt
+
+
+
+
+PSIINI:	SETOM	START			;We have been here now
+	MOVE	T1,[XWD	1,T2]		;Get first word (flags)
+	PISAV.	T1,			;Of PSI database
+	  JFCL				;Block to short
+	TLNE	T2,(PS.SON)		;Was it already in use?
+	  JRST	PSIERR			;Yes, have to quit
+	MOVEI	T1,VECTOR		;Address of vector
+	PIINI.	T1,			;Initialize PSI
+	  JRST	PSIERR			;Not good
+	MOVE	T2,[EXP .PCNSP]		;Reason code DECnet
+	SETZB	T3,T4			;Vector offset 0, prio=0, no I/O
+	MOVE	T1,[EXP PS.FON!PS.FCP!PS.FAC!T2] ;Flags, address of args
+	PISYS.	T1,
+	  JRST	PSIERR			;Fatal
+	POPJ	P,			;All initialized
+
+PSIERR:	OUTSTR	[ASCIZ/
+?XPNCIP Can not initialize the PSI interrupt system.
+/]
+	EXIT	1,
+	JRST	.-1
+TOOMNY:	OUTSTR	[ASCIZ/
+?XPNTMY Too many calls to XPN$DPSI.
+/]
+	EXIT	1,
+	JRST	.-1
+
+ACBLK:	BLOCK	17			;Place to save AC's on INT
+VECTOR:	EXP	INT			;Interrupt vector, new PC
+	BLOCK	3
+START:	EXP	0			;Init flag
+LSTLEN:	EXP	0			;LIST length
+LIST:	BLOCK	BLKMAX			;List of routines to call on INT
+T1T2:	BLOCK	2			;Save T1, T2
+T3T4:	BLOCK	2			;Save T3, T4
+	END

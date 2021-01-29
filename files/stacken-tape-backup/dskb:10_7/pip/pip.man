@@ -1,0 +1,2820 @@
+
+
+
+                     TABLE OF CONTENTS
+                     -----------------
+
+
+SECTION 1  INTRODUCTION
+
+1.1      INTRODUCTION
+
+1.1.1    CONTROLLING PIP INDIRECTLY
+
+1.2      WRITING CONVENTIONS
+
+
+
+
+SECTION 2  PIP COMMAND STRING AND ITS BASIC ELEMENTS
+
+2.1      COMMAND STRING
+
+2.1.1    COMMAND FORMAT
+
+2.1.2    FILE SPECIFICATION
+
+2.1.3    COMMAND STRING DELIMITERS
+
+2.2      DEVICE NAMES
+
+2.2.1    PHYSICAL DEVICE NAMES
+
+2.2.2    LOGICAL DEVICE NAMES
+
+2.3      FILENAMES
+
+2.3.1    NAMING FILES WITH OCTAL CONSTANTS
+
+2.3.2    WILDCARD CHARACTERS
+
+2.3.2.1  THE ASTERISK SYMBOL
+
+2.3.2.2  THE QUESTION MARK SYMBOL
+
+2.3.2.3  COMBINING * AND ? WILDCARD SYMBOLS
+
+2.4      PROJECT-PROGRAMMER NUMBER AND FULL PATH
+
+         SPECIFICATION
+
+2.4.1    PROJECT-PROGRAMMER NUMBER (PPN) DEFAULT AND
+
+         CURRENT COMMAND STRING POSITIONS
+
+2.5      FILE ACCESS PROTECTION CODES
+
+2.5.1    PROTECTION CODE VALUES
+
+                                                      Page 2
+
+
+SECTION 3  STANDARD PIP SWITCHES
+
+3.1      OPTIONAL PIP FUNCTIONS
+
+3.1.1    ADDING SWITCHES TO PIP COMMANDS
+
+3.2      BASIC TRANSFER FUNCTION
+
+3.2.1    X-SWITCH, COPY FILES WITHOUT COMBINING
+
+3.2.1.1  NON-DIRECTORY TO DIRECTORY COPY OPERATIONS
+
+3.2.1.2  ASSIGNING LOGICAL NAMES TO DECTAPES
+
+3.2.2    DX-SWITCH, COPY ALL BUT SPECIFIED FILES
+
+3.2.3    TRANSFER WITHOUT X-SWITCH (COMBINE FILES)
+
+3.2.4    U-SWITCH, COPY DECTAPE BLOCKS 0, 1 AND 2
+
+3.3.1    A-SWITCH, INTEGRAL OUTPUT LINES
+
+3.3.2    C-SWITCH, DELETE TRAILING SPACES AND CONVERT
+
+         MULTIPLE SPACES TO TABS
+
+3.3.3    E-SWITCH, IGNORE SEQUENCE NUMBERS
+
+3.3.4    N-SWITCH, DELETE SEQUENCE NUMBER
+
+3.3.5    S-SWITCH, INSERT SEQUENCE NUMBERS
+
+3.3.6    O-SWITCH, INSERT SEQUENCE NUMBERS AND INCREMENTS
+
+         BY 1.
+
+3.3.7    P-SWITCH, PREPARE FORTRAN OUTPUT FOR LINE PRINTER
+
+         LISTING
+
+3.3.8    T-SWITCH, DELETE TRAILING SPACES
+
+3.3.9    W-SWITCH, CONVERTS TABS TO SPACES
+
+3.3.10   V-SWITCH, MATCH ANGLE BRACKETS
+
+3.3.11   Y-SWITCH, COPY DECTAPE FILES ONTO PAPER TAPE
+
+3.4      SET DATA MODE, SWITCHES B, H AND I
+
+3.5      FILE DIRECTORY SWITCHES
+
+3.5.1    L-SWITCH, PRINT SOURCE DEVICE DIRECTORY
+
+                                                      Page 3
+
+
+3.5.2    F-SWITCH, PRINT LIMITED SOURCE DIRECTORY
+
+3.5.3    R-SWITCH, RENAME SOURCE FILES
+
+3.5.3.1  CHANGE SOURCE UFD PROTECTION CODE USING THE RENAME
+
+         (R) FUNCTION
+
+3.5.4    D-SWITCH, DELETE FILES
+
+3.5.5    Z-SWITCH, ZERO DIRECTORY
+
+3.5.6    Q-SWITCH, PRINT SUMMARY OF PIP FUNCTIONS
+
+
+
+
+SECTION 4  SPECIAL PIP FUNCTIONS
+
+4.1      SPECIAL PIP FUNCTIONS
+
+4.2      MAGNETIC TAPE SWITCHES
+
+4.2.1    SWITCHES FOR SETTING DENSITY AND PARITY PARAMETERS
+
+4.2.2    SWITCH FOR POSITIONING MAGNETIC TAPE
+
+4.2.2.1  BACKSPACE TO START OF CURRENT FILE
+
+4.2.2.2  ADVANCE TO END OF CURRENT FILE
+
+4.3      G-SWITCH, ERROR RECOVERY
+
+4.4      J-SWITCH, CARD PUNCH
+
+
+
+
+SECTION 5  PIP ERROR REPORTING AND ERROR MESSAGES
+
+5.1      ERROR MESSAGES
+
+5.2      I/O ERROR MESSAGES
+
+5.3      FILE REFERENCE ERRORS
+
+5.4      PIP COMMAND ERRORS
+
+5.5      Y-SWITCH ERRORS
+
+5.6      GENERAL ERROR MESSAGES
+
+5.7      TMPCOR ERROR MESSAGES
+
+                                                      Page 4
+
+
+                                                   SECTION 1
+
+                                                INTRODUCTION
+
+1.1  INTRODUCTION 
+
+PIP (Peripheral Interchange Program) transfers files between
+standard  I/O  devices  and  can  be  used to perform simple
+editing and magnetic tape control  operations  during  those
+transfer operations.
+
+To call PIP into core(1) from the monitor  level,  the  user
+types the command
+
+          .R PIP<CR>
+
+When PIP is  loaded  and  ready  for  input  it  prints  the
+character  *  at  the  console.  The user may then enter the
+command string needed to perform the desired operations.  On
+completion  of  the  operation  or operations requested in a
+command string, PIP again prints the character * to indicate
+that it is ready for the next command string input.  To exit
+from PIP, the user types a Control C (^C) command.
+
+
+
+1.1.1  Controlling PIP Indirectly
+
+PIP is normally  controlled  by  commands  entered  via  the
+console  keyboard.  PIP, however, is also capable of reading
+commands from a prepared file and executing  these  commands
+as if they had been just entered via the input console.  PIP
+command files which  are  to  be  processed  indirectly  are
+identified  by  the  addition  of the symbol @ to the file's
+filename  extension.   For  example  the  filename  FOO.CCL@
+identifies the file FOO.CCL as an indirect command file.
+
+An indirect PIP command file consists of  one  or  more  PIP
+commands structured as described in Section 2.
+
+Once PIP is in core, the user passes control of  PIP  to  an
+indirect  command file by entering the file's filename.  For
+example the input command sequence
+
+          .R PIP<CR>
+          *FOO.CCL@<CR>
+
+
+
+---------------
+(1) The PIP program operates in 3K pure core plus a  minimum
+of 1K of impure core in all DECsystem-10 systems.
+                                                      Page 5
+
+
+loads PIP and initiates the execution of  the  indirect  PIP
+command file FOO.CCL.
+
+
+
+1.2  WRITING CONVENTIONS
+
+The following symbols and abbreviations are used  throughout
+this manual:
+
+          Symbol or
+          Abbreviations  Meaning
+          -------------  -------
+
+          dev:           Any  logical  or  physical   device
+                         name,  the  colon  must be included
+                         when it is used as part  of  a  PIP
+                         command.
+
+          file.ext       Any    filename    and     filename
+                         extension.
+
+          [proj,prog]    Project-programmer numbers,  square
+                         brackets must be included when used
+                         in a PIP command string.
+
+                            NOTE
+
+                         To Obtain a :          Type:
+
+                         a.  [  left bracket   SHIFT K
+
+                         b.  ]  right bracket  SHIFT M
+
+          ^ch            A  control  character  obtained  by
+                         depressing  the  CTRL  key and then
+                         the selected  character  key  (.e.g
+                         ^Z).
+
+          =              An equals character is used in  the
+                         PIP  command string to separate the
+                         destination  and   source   command
+                         sections.
+
+          *              PIP's response to a command  string
+                         to  indicate  that  it is ready for
+                         the next input string.
+
+          .              The monitor's response to a command
+                         string to indicate that it is ready
+                         for the next input string.
+
+          <CR>           The symbol used  to  indicate  that
+                         the  user should depress the RETURN
+                         key.  This key is normally used  to
+                                                      Page 6
+
+
+                         terminate every command.
+
+          -----          Underscoring   indicates   computer
+                         typeout.
+
+          n              A number.
+
+          ^              An  uparrow  symbol;   this  symbol
+                         indicates  the  use  of  a CTRL key
+                         entry.   The  uparrow  is  used  in
+                         conjunction        with       other
+                         character-enabled keys  to  produce
+                         special  control entries (e.g.  ^C)
+                         and is used in sets  or  delimiters
+                         in PIP command strings.
+                                                      Page 7
+
+
+                                                   SECTION 2
+
+                   PIP COMMAND STRING AND ITS BASIC ELEMENTS
+
+
+2.1  COMMAND STRING
+
+PIP command strings may be of any length;   both  upper  and
+lower  case  characters  may  be  used.   PIP  commands  are
+normally terminated and the requested operation is initiated
+by a RETURN keyboard entry (i.e., <CR>).  However, any other
+paper-motion character (i.e.  line  feed,  vertical  tab  or
+form feed) may also be used as command terminator.
+
+
+
+2.1.1  Command Format
+
+All PIP commands which involve the interchange (transfer) of
+data must have the following format:
+
+          DESTINATION=SOURCE <Terminator>
+
+where:
+
+     a.  the DESTINATION portion of  the  command  describes
+         the  device  and  file(s)  which are to receive the
+         transferred data.  This portion of  a  command  may
+         consist  of  one  device name (1) , one device name
+         and a file specification (2) or  (3)  just  a  file
+         specification.
+
+     b.  The equals sign is a required delimiter in all  PIP
+         commands.
+
+     c.  The SOURCE side of the command describes the device
+         from  which  the  transferred  data is to be taken.
+         This portion of a command may contain one  or  more
+         device names and one or more file specifications.
+
+     d.  A Terminator is required to end each  PIP  command.
+         A  RETURN  entry  (symbolized  as <CR>) is normally
+         used, however, any other paper-motion  command  may
+         be used as a terminator.  PIP commands which do not
+         require the transfer of information may be  written
+         using the form
+
+                   DESTINATION=Terminator
+
+         The equals delimiter and  a  terminator  are  still
+         required  in  commands  formatted  in  this  manner
+         despite the fact that only the destination  portion
+         of the command is used.
+
+         1.  Device names are system-acceptable designations
+                                                      Page 8
+
+
+             assigned   to   each   type   of   DECsystem-10
+             peripheral  input,  output  or  storage  device
+             (refer to paragraph 2.2).
+
+         2.  A  File  Specification  contains   data   which
+             identifies  the  file  or files involved in the
+             requested PIP function.  Device  names  may  be
+             included in file specifications.
+
+
+
+2.1.2  File Specification
+
+A file specification contains all of the information  needed
+to  identify  a  file  involved  in  a PIP function.  It may
+consist of:
+
+     1.  a device name
+
+     2.  a filename
+
+     3.  a project,programmer number pair
+
+     4.  a protection code which is to be assigned to either
+         a specified file or a User File Directory (UFD).
+
+The format of a PIP command containing all possible items of
+a file specification is
+
+dev:name.ext[proj,prog]<nnn>=dev:name.ext[proj,prog]<CR>
+
+where:
+
+     1.  DEV  is  either  a  physical  device  name   (e.g.,
+         DSK,DTA1,  etc.) or a logical device name (refer to
+         paragraph 2.2).
+
+     2.  NAME is a 1 to 6 character identification which  is
+         either to be assigned to a new file (NAME is on the
+         destination  side  of   the   command)   or   which
+         identifies  an existing file (NAME is on the source
+         side of the command).  (Refer to paragraph 2.3  for
+         a description of filenames.)
+
+     3.  .EXT is a 3-character  extension  assigned  to  the
+         name of a file either by the user or by the system.
+         (Refer  to  paragraph  2.3  for  a  description  of
+         filename extensions.)
+
+     4.  [PROJ,PROG] is a user  identification  number  pair
+         (e.g.,  [10,777]).   (Refer  to paragraph 2.4 for a
+         description      of       user       identification
+         project,programmer  numbers  and  their  use in PIP
+         commands.)
+                                                      Page 9
+
+
+     5.  <NNN> is a 3-digit protection code which is  to  be
+         assigned to either one or more destination files or
+         to a specified User File Directory(1).   (Refer  to
+         paragraph  2.5  for  a  description  of  protection
+         codes.)
+
+The manner in which each of the possible elements of a  file
+specification  may  be  used  in  either  the destination or
+source portions  of  a  PIP  command  is  described  in  the
+following table.
+
+Element      Destination             Source
+-------      -----------             ------
+
+dev.         Name of device onto     Name of device on which
+             which the specified     the specified file
+             file is to be written.  resides.
+
+name         Name to be assigned to  Name of the file to be
+             the copied file         copied.
+
+.ext         User-specified file-    Current filename ex-
+             name extension.         tension.
+
+[proj,prog]  Identification of the   Identification of the
+             disk storage area       disk storage area
+             which is to receive     which contains the
+             the file to be trans-   file to be copied.
+             ferred.
+
+                            NOTE
+
+The project,programmer number must include a full  directory
+path   specification   whenever   sub-file  directories  are
+involved,   for   example   [proj,prog,SFDA,..SFDn].    (See
+paragraph 2.4 for more details.)
+
+<nnn>        Protection code to be   NOT PERMITTED IN
+             assigned to either a    SOURCE PORTION OF
+             copied file or a        PIP COMMANDS.
+             specified UFD.
+
+File specifications may be delimited by:
+
+     1.  an equals character (=) if the specification is  on
+         the  destination  side  of the command string (e.g.
+         dev:name.ext=...<CR>).
+
+
+---------------
+(1) A User File Directory (UFD) is contained by  the  system
+for  each  user  permitted  access  to  it.  A user's UFD is
+identified by his project,programmer number and it  contains
+the  names  of all files belonging to the user together with
+pointers to the actual location of each file.
+                                                     Page 10
+
+
+     2.  a comma (,) if the specification is on  the  source
+         side  of  the command string and is one of a series
+         of file specifications.  For example
+
+         dev:=dev1:name.ext,dev2:name.ext,...name.ext<CR>
+
+     3.  a RETURN <CR> entry if it is the last item  on  the
+         source side of a command.  For example
+
+         dev:=dev1:name.ext,dev2:name.ext,...devn:name.ext<CR
+         >
+
+
+
+2.1.3  Command String Delimiters
+
+The delimiters which may be used to separate the elements of
+a PIP command string are described in the following table.
+
+               PIP COMMAND STRING DELIMITERS
+
+Delimiter                    Use and Description
+---------                    -------------------
+
+  :                 The colon must  follow  a  device  name.
+                    The example
+                         dev:=dev:name.ext<CR>
+                    illustrates  the  use   of   the   colon
+                    delimiter.
+
+  [ ]               Brackets must be  used  to  enclose  the
+                    user   project  and  programmer  numbers
+                    (e.g.  [40,633].
+
+  < >               Angle brackets must be used to enclose a
+                    protection code (e.g. <057>) which is to
+                    be assigned to either a file or  a  user
+                    file directory (UFD).
+
+  ,                 Commas are used to separate user project
+                    and   programmer   numbers,   and   file
+                    specification groups.  For example
+
+                    dev:[40,633]=dev:name.ext,name.ext<CR>
+
+  ^^                Logical  name  to  be  assigned  as   an
+                    identifier   to   a   DECtape  unit  are
+                    enclosed within a set of up-arrows (e.g.
+                    ^MACFLS^).
+
+  =                 The equals character  must  be  used  to
+                    separate   the  destination  and  source
+                    portions of a PIP command.
+
+  ()                Parentheses are used to enclose magnetic
+                                                     Page 11
+
+
+                    tape  options PIP control switches and a
+                    series of standard  non-conflicting  PIP
+                    function switches.
+
+                    dev:name.ext(sw1sw2..swn)=...<CR>
+
+  .                 A  period  delimiter  must  be  used  in
+                    filenames,  to  separate  the  name  and
+                    extension (e.g., name.ext).
+
+
+
+2.2  DEVICE NAMES
+
+Both physical or logical device names may  be  used  in  PIP
+commands.   The user must remember that a logical name takes
+precedence over a physical name when both are  used  in  the
+same command.
+
+
+
+2.2.1  Physical Device Names
+
+Each standard DECsystem-10 peripheral device is  assigned  a
+specific  physical  device  name consisting of a 3-character
+generic name plus a unit number (0 to 999).  A list  of  the
+generic physical device names is given below:
+
+                     Peripheral Devices
+
+            Device            Generic Physical Device Name
+            ------            ----------------------------
+
+          Card Punch                    CDP
+          Card Reader                   CDR
+          Console TTY                   CTY
+          DECtape                       DTA
+          Disk                          DSK
+            Packs                       DPx
+            Fixed-Head                  FHx
+          Display                       DIS
+          Line Printer                  LPT
+          Magnetic Tape                 MTA
+          Operator Terminal             OPR
+          Paper-tape Punch              PTP
+          Paper-tape Reader             PTR
+          Plotter                       PLT
+          Note:  Angle brackets are used to enclose file.
+          Pseudo-TTY                    PTY
+          System Library                SYS
+          Terminal                      TTY
+
+
+
+2.2.2  Logical Device Names
+                                                     Page 12
+
+
+A logical device name is a user-assigned  designation  which
+is  employed  in  the preparation of a program in place of a
+specific physical device name.  The use  of  Logical  device
+names  permits the programmer to write programs which do not
+specify one particular device but may use, at run time,  any
+available device which can perform the required function.
+
+Logical  device  names  may  consist  of  from  one  to  six
+alphanumeric characters of the user's choice.
+
+
+
+2.3  FILENAMES
+
+Filenames are file identifiers assigned either by the system
+(for  system  programs)  or  by  the  user.   A filename may
+consist of a name field and an extension field  but  only  a
+name  field is required.  Whenever both fields are used in a
+filename, it has the form name.ext.  A period  delimiter  is
+required  between  the fields of a filename when both fields
+are used.  Filename fields are defined as:
+
+     1.  Name Field.  Names of files may consist of from one
+         to  six  alphanumeric characters;  in user-assigned
+         names the characters may be arbitrarily selected by
+         the  user.   Names  generated  by  the user must be
+         unique at least within the User File  Directory  in
+         which the file is located.
+
+     2.  Extension Field.  Filename extensions  may  consist
+         of up to three alphanumeric characters.  Extensions
+         are normally used  to  specify  the  type  of  data
+         contained  by  the  file identified by the filename
+         field.  Filename extensions which are recognized by
+         the  system and the type of data each specifies are
+         given in  Appendix  A.   In  filenames,  users  may
+         specify a standard extension (one recognized by the
+         system), one which he has devised or none  at  all.
+         If  no extension is given in a filename, the system
+         may add one to the filename during PIP operations.
+
+PIP  utilizes  the  filename  extension  given  in  a   file
+specification  to  determine  whether  the  file  is  to  be
+transferred in a  binary  or  ASCII  mode.   If  it  is  all
+possible,  PIP will transfer files in a binary mode since it
+is the fastest.
+
+In dealing with  filename  extensions - where  the  transfer
+mode  is  not  specified  by  a  data  mode switch (refer to
+paragraph  3.4) - PIP  first  scans  an  internal  list   of
+standard  binary  extensions  to  see if a match can be made
+with the given filename extension.  If  a  match  cannot  be
+found,  PIP  then  inspects  the  file specification for the
+presence of commas which represent files to be input from  a
+non-directory device (refer to paragraph 3.2.1.1).
+                                                     Page 13
+
+
+If commas are found, PIP examines  the  device  involved  to
+determine if a binary transfer can be made.
+
+If PIP's tests for a binary transfer give negative  results,
+PIP then transfers the file involved in the ASCII mode.
+
+
+
+2.3.1  Naming Files With Octal Constants
+
+Octal constants may be used as either a part of or all of  a
+filename.   In  either  of  the  foregoing  cases, the first
+constant of each group of octal constants which appear in  a
+filename  must  be  preceded  the symbol #.  For example the
+filenames:
+
+     1.  #124ABC.ext     (part of a filename)
+
+     2.  #12AB#34.ext    (intermixed with other characters)
+
+     3.  #124670.#123    (whole octal filename)
+
+are all acceptable to PIP.
+
+The symbol # is not regarded by PIP as part of the  filename
+but  is  used  only  as  a  flag to PIP to indicate an octal
+constant.
+
+Names comprised of octal  constants  are  left-justified  by
+PIP.   The  following  are  examples  of  the  use  of octal
+filenames:
+
+          DTA01:#124670.BIN=DSK:#100000.BIN<CR> 
+
+
+
+2.3.2  Wildcard Characters
+
+The two symbols * and ? may be used  in  PIP  to  represent,
+respectively,   null  fields  and  null  characters.   These
+symbols are referred to as wildcard characters;   their  use
+is described in the following paragraphs.
+
+
+
+2.3.2.1  THE ASTERISK SYMBOL.- the asterisk symbol * may  be
+used to replace a filename:
+
+     1.  name field (e.g.  *.ext),
+
+     2.  extension field (e.g.  name.*),
+
+     3.  both filename fields (e.g., *.*).
+
+For example the  filename  FILEA.MAC,  which  specifies  the
+                                                     Page 14
+
+
+MACRO  source  language  file named FILEA, may be altered by
+the use of the asterisk in the following manner:
+
+     1.  *.MAC specifies any file with the extension .MAC,
+
+     2.  FILEA.* specifies any file with the name FILEA
+
+                 and
+
+     3.  *.* specifies any file.
+
+
+
+2.3.2.2  THE QUESTION MARK SYMBOL.-  the character ?  may be
+used  to  indicate  a null character in PIP command strings.
+The main use of ?  is to replace characters of a filename to
+mask  out  any or all of the characters of a name, extension
+or both the name and extension fields of a  filename.   When
+PIP  processes  a  filename which includes ?  characters, it
+ignores the wildcard characters.   This  masking  capability
+enables  the  user  to  specify, with one command, groups of
+files whose filenames  have  common  characters  identically
+positioned within their filenames.  For example, assume that
+the device DTA1 contains  the  files  TEST1.BIN,  TEST2.BIN,
+TEST3.BIN  and TEST4.BIN;  the user may specify all of these
+files with one file specification:
+
+          DTA1:TEST?.BIN
+
+
+
+2.3.2.3  COMBINING * AND ?  WILDCARD SYMBOLS.- the symbols *
+and  ?  may  be  combined  in  filenames to specify specific
+groups of files which have common characteristics in  either
+or both of their name or extension fields.
+
+For example the filename
+
+          ABC???.*
+
+specifies any file having the character  group  ABC  as  the
+first  three  characters  of  their  filename.   Again,  the
+filename
+
+          *.??A
+
+specifies any file having an extension  which  ends  in  the
+character A.
+
+
+
+2.4  PROJECT,PROGRAMMER NUMBER AND FULL PATH SPECIFICATION
+
+User Project,programmer numbers (PPN) are  included  in  PIP
+commands  to specify either the user file storage area (UFD)
+                                                     Page 15
+
+
+that  the  transferred  file(s)  is  to  be   written   into
+(destination)  or  the  area from which the file(s) is to be
+read (source).
+
+The use of the PPN enables "privileged"  users   - when  the
+protection  code  scheme permits - to read from and to write
+into a users file storage area other than his own.
+
+When a PPN is not specified in a PIP  command,  PIP  assumes
+either  an  established  default  PPN or the PPN of the user
+currently logged in at the terminal from which  the  command
+was issued.
+
+A PPN consists of two sequential octal numbers separated  by
+a comma and - in PIP commands - enclosed by square brackets.
+For example:
+
+          [124,777]
+
+specifies project 124 and programmer number 777.
+
+                         NOTE
+
+     to obtain a:          Type:
+
+     a.  [ left bracket     SHIFT K
+
+     b.  ] right bracket    SHIFT M
+
+Whenever a file (source or destination) exists or is  to  be
+set  up  as  an  element  of  a  multi-level  arrangement of
+sub-file directories (SFD's) within a user's file  directory
+(UFD) area, the PPN specifying the location of the file must
+include a full directory path description as well as the UFD
+identifying numbers.
+
+A directory path description must start with  the  UFD  PPN;
+it  must  then name the SFD, within each successive level of
+storage, which carries a forward pointer to either the  file
+or  the SFD containing the next pointer of the chain leading
+to the file.  For example the file specification
+
+          FILE.EXT [1,2,A,B,C]
+
+states that file FILE.EXT is located in  SFD  "C"  which  is
+pointed  to by SFD "B", which is pointed to from SFD "A" and
+that the initial pointer and all of the SFD's are  contained
+within UFD 1,2.
+
+A complete description of how  SFD's  are  set  up  and  how
+directory paths are established is given in the DECsystem-10
+Monitor Calls manual.
+                                                     Page 16
+
+
+2.4.1  Project-Programmer Number (PPN) Default  and  Current
+       Command String Positions.
+
+The position in which the PPN appears  in  the  PIP  command
+string  determines  if  it is viewed by PIP as a default PPN
+for subsequent commands or whether it applies  only  to  the
+current command.
+
+Positioning the PPN before the filename  in  a  PIP  command
+specifies  that  the given PPN is to be considered a default
+PPN.  The format for a default project-programmer number is:
+
+          dev:[proj,prog]name.ext=...<CR>
+
+PPN's positioned immediately after the filename.ext in a PIP
+command  specifies  that  the  PPN  given is for the current
+command only.  When specified in this manner, the given  PPN
+overrides  any default PPN previously specified.  The format
+for specifying the PPN for the current command is:
+
+          dev:name.ext[proj,prog]=...<CR>
+
+Both a default PPN and a PPN for the current command may  be
+established in the same file specification.  For example the
+form
+
+          dev:[proj,prog]name.ext[proj,prog]=...<CR>
+
+is valid in a PIP command.
+
+
+
+2.5  FILE ACCESS PROTECTION CODES
+
+Three-digit protection codes which  specify  the  degree  of
+access  that  each of three possible types of users may gain
+to a file may be specified in the destination side of a  PIP
+command  string.   File  access protection codes are written
+within angle brackets and must contain three digit positions
+(e.g.    <nnn>).    Each  digit  within  a  protection  code
+specifies the type of access a specific  type  of  user  may
+have  to  the  file  or  files  involved.   Considering  the
+protection code <n1n2n3> the digits  give  the  file  access
+code for the following types of users:
+
+     a.  n1 = File OWNER,
+
+     b.  n2 = project MEMBER,
+                 and
+     c.  n3 = OTHER system users.
+
+The user types are defined as follows:
+
+     1.  FILE OWNERS, Users who are logged in under either:
+                                                     Page 17
+
+
+              a.  the same project number as that of the UFD
+                  which contains the file;
+
+                             or
+
+              b.  the same project and programmer number  as
+                  associated with the UFD which contains the
+                  file.
+
+         The decision as to which of the above items defines
+         an OWNER is made at Monitor Generation time.
+
+     2.  PROJECT MEMBER, Users who are logged in  under  the
+         same  project  number  as that which identifies the
+         UFD containing the file.
+
+     3.  OTHER USERS, any user of the system  whose  project
+         and programmer number do not match those of the UFD
+         containing the file in question.
+
+File access protection codes  are  placed  in  PIP  commands
+after  the  destination  filename of the file involved.  For
+example, the command
+
+          *DTA01:FILEA.BIN<nnn>=DSK:SOURCE.BIN<CR>
+
+copies the contents of file SOURCE.BIN onto DTA01 under  the
+name FILEA.BIN with an assigned file protection code of nnn.
+
+
+
+2.5.1  Digit Numeric Protection Code Values
+
+Each of the digits in a 3-digit file protection code may  be
+assigned  an encoded numeric value ranging from 0 to 7.  The
+meaning of each octal value is:
+
+Code Value               Permitted Operations
+     ----------           --------------------
+
+     7         No access privileges. File may be looked
+               up if the UFD permits.
+
+     6         Execute only.
+
+     5         Read, execute.
+
+     4         Append, read, execute.
+
+     3         Update, append, read, execute.
+
+     2         Write, update, append, read, execute.
+
+     1         Rename, write, update, append, read,
+               execute.
+                                                     Page 18
+
+
+     0         Change protection, rename, write, update,
+               append, read, execute.
+
+Files are afforded the greatest protection by the code value
+7;   the  least  protection by 0.  It is always possible for
+the  owner  of  a  file  to  change  the  access  protection
+associated with that file even if the owner-protection field
+is not set to 0;  thus, the values 0 and  1  are  equivalent
+for the owner.
+
+                                                     Page 19
+
+
+                                                   SECTION 3
+                                       STANDARD PIP SWITCHES
+
+
+3.1  OPTIONAL PIP FUNCTIONS
+
+PIP provides the user with a  group  of  optional  functions
+which  may be executed during the performance of the primary
+PIP transfer function.
+
+Each optional function  is  assigned  a  one  or  two-letter
+identifier which, when added as a "switch" to a PIP command,
+initiates the execution of the identified function.
+
+For the purposes of this manual, the PIP optional  functions
+are  divided into Standard and Special groups.  The Standard
+group of  options  described  in  this  Section  consist  of
+switches which:
+
+     1.  determine which files are transferred;
+
+     2.  edits all the data contained by each source (input)
+         file;
+
+     3.  defines the mode of transfer;
+
+     4.  manipulates  the  directory  of  a   directory-type
+         device.
+
+All optional functions which deal with non-directory devices
+and  which  perform  functions other than those listed above
+are considered Special and are described in Section 4.
+
+
+
+3.1.1  Adding Switches To PIP Commands
+
+Option switches added to PIP commands must be preceded by  a
+slash  (i.e.   /sw);   for  example  the  optional  function
+identified by the letter X is added to a PIP command:
+
+          *DTA1:DESTFL.BIN/X=DSK:FILEA.BIN,FILEB.BIN<CR>
+
+When more than one switch is to be added to a command,  they
+may  be  listed either separated by slashes (e.g.  /B/X....)
+or enclosed in parentheses (e.g.  (BX)).  For example either
+will initiate the same operation.
+
+          *DTA1:DESTFL.BIN/B/X=DSK:FILEA.BIN,FILEB.BIN<CR>
+
+                             OR
+
+          *DTA1:DESTFL.BIN(BX)=DSK:FILEA.BIN,FILEB.BIN<CR>
+                                                     Page 20
+
+
+3.2  BASIC TRANSFER FUNCTION
+
+The basic function performed by PIP is the interchange (i.e.
+read/write   transfer)  of  files  or  data  blocks  between
+devices.  There are two types of transfer operations:
+
+     1.  An optional X-switch transfer in which  the  source
+         files  or  blocks are transferred as separate files
+         to the destination device.
+
+     2.  A no-option type  in  which  all  files  or  blocks
+         transferred  from  the  source  device are combined
+         (i.e.  concatenated) into  a  single  file  on  the
+         destination device
+
+
+
+3.2.1  X-Switch Copy Files Without Combining
+
+The use of the X-switch enables the user to  move  (copy)  a
+group  of  source  files  onto  the  destination  device  as
+individual files.  The following are  examples  of  how  the
+X-switch is used in PIP:
+
+     1.  To transfer all the user's disk files to a DECtape,
+         type:
+
+              DTA1:/X_DSK:*.*<CR>
+
+         Assuming that there are three files on  the  user's
+         disk  area  named  FILEA,  FILEB,  FILEC.REL, these
+         files will  be  transferred  to  DTA1  and  may  be
+         referenced on DTA1 by those names.
+
+         One significant difference between the disk and all
+         other  devices  is file protection.  If the disk is
+         the source device, PIP will by-pass those protected
+         files  to  which  the current user is not permitted
+         access suitable message, is issued by  PIP  if  the
+         rest   of   the   command  string  is  successfully
+         executed.  Similar processing  is  described  later
+         for  the  L,  Z  and  D switches.  If none of these
+         switches is given, a requested DSK  file  which  is
+         protected will cause termination of the request.
+
+     2.  To transfer all the files from card reader to disk,
+         type:
+
+              DSK:/X_CDR:*<CR>
+
+         When transferring files from the card  reader  with
+         the  *  command,  the  input  files  must either be
+         wholly ASCII or wholly binary.
+
+     3.  To transfer two specific files from  user  [11,7]'s
+                                                     Page 21
+
+
+         disk area to a DECtape, type:
+
+              DTA2:/X_DSK:[11,7]FILEA.REL,FILEA.MAC<CR>
+
+     4.  To  copy  files  from   a   paper   tape   onto   a
+         directory-type device, the user may employ either:
+
+         a.  A copy command in which the number of files  to
+             be  read  are  specified  by adding a series of
+             commas to the command after the  source  device
+             name  (i.e.   PTR,,...,).  The number of commas
+             required is always  one  less  than  the  total
+             number of files to be transferred.  For example
+             the command:
+
+                  DSK:/X_PTR:,,,<CR>
+
+             specifies that five (5) files are to be  copied
+             from paper tape and written, individually, into
+             the current user's disk area.
+
+         b.  A copy command in which all the files contained
+             by  a  paper  tape  are  to  be  copied  onto a
+             specified device.  For example, the command
+
+                  DSK:/X_PTR:*<CR>
+
+             specifies that all files contained on the paper
+             tape  loaded  as  PTR are to be copied into the
+             current user's disk area.  Whenever  a  command
+             of  this  type  is  used,  the last file on the
+             paper tape must be followed by two  consecutive
+             end-of-file codes.
+
+Whenever the X-switch is used and is not  combined  with  an
+editing  option,  PIP  maintains  the  structure of any file
+involved as it appeared  on  the  source  device.   X-switch
+operations are copy operations and are referred to as such.
+
+
+
+3.2.1.1  NON-DIRECTORY  TO  DIRECTORY  COPY  OPERATIONS.- In
+copying   files   from   a   non-directory   device  onto  a
+director-type device, PIP must perform special operations in
+naming the destination files.  For example a special case of
+source and destination filenames arises in the command:
+
+          DTA2:FNME.EXT/X=MTA0:*<CR>
+
+Here, every file is to be copied from a non-directory device
+(MTA0)  to a directory device (DTA2) without combining files
+(/X).   Only  one  destination  filename  is  given   (i.e.,
+FNME.EXT) but the source device (MTA0) may contain more than
+one file.
+                                                     Page 22
+
+
+It is necessary for PIP to generate a  unique  filename  for
+each  copied  file.  PIP generates filenames by developing a
+6-character name field in which the first  three  characters
+are either:
+
+     1.  the first three characters of a  given  destination
+         filename,
+
+                             or
+
+     2.  the characters "XXX" if no destination filename  is
+         given in the command.
+
+The second portion of the PIP-generated name field  consists
+of  the  decimal numbers 001 through 999 which are added, in
+sequence, to each filename  developed  during  the  /X  copy
+operation.
+
+For filename extensions, PIP uses either the extension of  a
+given destination filename or a null field if no filename is
+given in the command.
+
+For example, assuming that three files are present on  MTA0,
+the command:
+
+          DTA2:FNME.EXT/X=MTA0:*<CR>
+
+transfers the files to DTA2 and  establishes  the  following
+names in the DECtape directory for the files copied:
+
+     1.  FNM001.EXT,
+
+     2.  FNM002.EXT,
+
+     3.  FNM003.EXT.
+
+If, in the above example, the command given did not  include
+a destination filename (i.e.  DTA2:/X=MTA0:*<CR>) the copied
+files would have been named:
+
+     1.  XXX001
+
+     2.  XXX002
+
+     3.  XXX003.  
+
+The use of the 3-digit decimal number  for  the  last  three
+characters  of the filename name gives the user 999 possible
+input files from non-directory devices.  If PIP  finds  more
+than  999  files  on the source device it will terminate the
+transfer operation after the 999th file is copied  and  will
+issue the error message
+
+          ?TERMINATE/X,MAX OF 999 FILES PROCESSED.
+                                                     Page 23
+
+
+Any error messages referring to individual  files  named  by
+PIP   (either  input  or  output)  will  use  the  generated
+filename.
+
+
+
+3.2.1.2  ASSIGNING LOGICAL NAMES TO DECTAPES.- DECtapes  may
+be   assigned   an   identifier   during   copy  operations.
+Identifiers are from 1 to  6  alphanumeric  character  names
+which  are  added  to  the DECtape's directory (128th word).
+DECtape identifiers may be read by  PIP,  FILEX  and  DIRECT
+programs;  the monitor does not read identifiers.  A DECtape
+identifier is assigned by adding the selected name to a  PIP
+command  when  the  DECtape  to  be  named is mounted on the
+specified destination device.
+
+The format required for a DECtape identifier is
+
+          ^name^
+
+A  DECtape  identifier  is  inserted  into  a  PIP   command
+following the given destination device name:
+
+          dev:^name^=source file specification(s)
+
+For example, the command
+
+          *DTA3:^MYFILE^/X=DTA1:*.*
+
+specifies that the DECtape  on  device  DTA3  be  given  the
+identifier  "MYFILE"  and  receive  copies  of all the files
+contained by the tape on device DTA1.
+
+
+
+3.2.2  DX-Switch, Copy All But Specified Files
+
+When the DX switch is added to a PIP command it  causes  all
+the  files  to  be  copied  from  the  source  device to the
+destination device except those files which are named in the
+command  string.   If the source device is DSK, a maximum of
+10   source-file   specifications   are    allowed.     Only
+directory-type  devices  are  allowed as source devices;  no
+check is made on the existence of the files which are not to
+be  copied.   Only  one  source  device  is  permitted;  for
+example the command
+
+          DTA1:(ZDX)=DSK:*.LST,*.SAV,CREF.CRF<CR>
+
+zeroes out the directory of DTA1 and transfers to DTA1, from
+the  disk,  all  files  except  CREF.CRF  and all files with
+either the extension .LST or .SAV.
+                                                     Page 24
+
+
+3.2.3  Transfer Without X-Switch (Combine Files)
+
+When the X-switch is not included in a PIP command all files
+or  blocks  transferred  from the source device are combined
+into a single file on the destination device.  For example:
+
+     1.  To combine three paper tape files into one, type
+
+              PTP:=PTR:,,<CR>
+
+     2.  To combine two files on DECtape into one on another
+         DECtape, type
+
+              DTA3:FILCOM=DTA2:FILA,FILB<CR>
+
+     3.  To combine files from two DECtapes into one on  the
+         user's disk area, type
+
+              DSK:DSKFIL=DTA2:ONE,DTA4:TWO.MAC<CR>
+
+     4.  To combine all the files on MTA0 into one  file  on
+         the user's disk area, type
+
+              DSK:TAPE.MAC=MTA0:*<CR>
+
+         (This assumes that MTA0 is positioned at  the  Load
+         Point).
+
+
+
+3.2.4  U-Switch, Copy DECtape Blocks 0, 1 And 2
+
+The  U-switch  is  used   during   DECtape-to-DECtape   copy
+operation  to  specify  that Blocks 0, 1 and 2 of the source
+tape are to be copied onto the destination tape.
+
+This switch is commonly used to  transfer  TENDMP  from  one
+tape to another.  For example the command
+
+          DTA1:/U=DTA5<CR>
+
+transfers blocks 0 through 2 of DTA5 to DTA1.
+
+
+
+3.3.1  A-Switch, Integral Output Lines
+
+The use of the A-switch (/A) in a PIP command specifies that
+each  output  buffer  is  to  contain  an integral number of
+lines;  no lines are to be  split  between  output  buffers.
+Line blocking is required for FORTRAN ASCII input.
+
+
+
+3.3.2  C-Switch, Delete Trailing Spaces And Convert Multiple
+                                                     Page 25
+
+
+       Spaces To Tabs
+
+The addition of a C-switch (/C)  to  a  PIP  command  causes
+groups  of  multiple  trailing  spaces in the material being
+copied to be replaced by one or more TAB codes.
+
+The conversion of  the  trailing  spaces  to  TAB  codes  is
+performed  in  relation  to  the  standard  line  TAB "stop"
+positions located at 8-character  intervals  throughout  the
+line.   Only those groups of multiple spaces which precede a
+TAB "stop" will produce a TAB code.  For example:
+
+     1.  [space][stop]--will not produce a TAB code.
+
+     2.  [space][space][stop]--will produce [TAB].
+
+     3.  [space][space][stop][space][space]--  will  produce
+         [TAB][TAB].
+
+
+
+3.3.3  E-Switch, Ignore Sequence Numbers
+
+This switch, normally used when a card reader is the  source
+device,  causes  characters 73 through 80 of each input line
+to be replaced by spaces.
+
+
+
+3.3.4  N-Switch, Delete Sequence Number
+
+This switch causes line sequence numbers to be deleted  from
+any ASCII file being transferred.  Line sequence numbers are
+recognized as any word in the file in  which  bit  35  is  a
+binary  and  follows  a  carriage return, vertical tab, form
+feed or start-of-file identification.
+
+
+
+3.3.5  S-Switch, Insert Sequence Numbers
+
+This switch causes a line sequence number to be computed and
+inserted  as  the  output  buffer at the start of each line.
+Sequence numbers are indicated by a 1 in bit 35  of  a  word
+following   a   carriage  return,  a  tab  or  start-of-file
+indicator.
+
+Sequence numbers  assigned  by  PIP  take  the  form  nnnnn,
+starting at 00010 and ranging through 99990 in increments of
+10.  Approximately one-third of each output buffer  is  left
+blank to facilitate editing operations on the file.
+
+
+
+3.3.6  O-Switch, Insert Sequence Numbers And Increment By 1
+                                                     Page 26
+
+
+This switch causes the same operations to  be  performed  as
+those  for  switch  S,  (see 3.3.5) except that the assigned
+sequence numbers are incremented by 1  instead  of  10  (DTA
+only).
+
+
+
+3.3.7  P-Switch, Prepare FORTRAN  Output  For  Line  Printer
+       Listing.
+
+This switch causes PIP to take output generated by a FORTRAN
+program,  which  was  output on a device other than the line
+printer (LPT), for which it was intended, and  performs  the
+carriage  control  character interpretations needed when the
+data is sent to the LPT.  The first character in each  input
+line is interpreted by PIP according to the following table.
+
+     FORTRAN Carriage Control Character Interpretation
+
+Carriage Control
+Character Produced  ASCII Character(s)  Line Printer Action
+by FORTRAN Program       Substituted
+------------------------------------------------------------
+
+        space                            Skips to next  line
+                                         (single space) with
+                                         a  FORM FEED  after
+                                         every 60 lines.
+
+        *                023             Skips to next  line
+                                         with no FORM FEED.
+
+        +                015             Precede line with a
+                                         carriage     return
+                                         only         (i.e.,
+                                         over-print previous
+                                         line).
+
+        ,(comma)         021             Skips    to    next
+                                         1/30th of page.
+
+        -                015,012,012     Skips 2 lines.
+
+        .                022             Skips    to    next
+                                         1/20th of page.
+
+        /                024             Skips to next 1/6th
+                                         of page.
+
+        0                015,012         Skips    1     line
+                                         (double space).
+
+        1                014             Skips  to  top   of
+                                         next   page   (page
+                                         eject).
+                                                     Page 27
+
+
+        2                020             Skips to  next  1/2
+                                         page.
+
+        3                013             Skips to  next  1/3
+                                         page (also vertical
+                                         tab).
+
+
+
+3.3.7.1  COPY FORTRAN BINARY FILES.- The binary mode  switch
+(/B)  may be combined with /P in a PIP command to enable the
+user to obtain a copy of a FORTRAN binary file.  The  format
+for a FORTRAN binary file copy command is
+
+          dev:name.ext/B/X=dev:name.ext,....<CR>
+
+
+
+3.3.8  T-Switch Delete Trailing Spaces
+
+This switch causes all trailing spaces to  be  deleted  from
+the  file being transferred.  If a transfer line consists of
+nothing  but  spaces,  then  a  single  space  and  a   line
+terminator will be retained in the copied file.
+
+
+
+3.3.9  W-Switch Converts Tabs To Spaces
+
+The addition of a W-switch (/W) to a PIP command causes each
+TAB  code  contained  by  the  material  being  copied to be
+converted to one or more sequential spaces.
+
+The number of spaces produced when a TAB code  is  converted
+is  determined by the position of the TAB in relation to the
+standard  line  TAB  "stops".   Each  line  has  TAB   stops
+positioned at 8-character intervals throughout the length of
+the line.  When a TAB is converted in a /W switch operation,
+only enough spaces are produced to reach the next sequential
+line  TAB  stop   position.    For   example,   the   series
+[stop]ABCD[TAB]  is  converted  to  [stop]ABCDspspspsp[stop]
+where sp=space.
+
+
+
+3.3.10  V-Switch, Match Angle Brackets
+
+This switch is not a true edit  switch,  because  the  input
+file  is  not  edited.   The use of this switch generates an
+output  file  which  contains  the  results  of   cumulative
+matching  of angle brackets located in the input file.  If a
+line in the input  file  contains  brackets  which  are  not
+needed to match earlier brackets and which match each other,
+no output occurs.  In all other cases where brackets  occur,
+a  cumulative  total  and  the line currently considered are
+                                                     Page 28
+
+
+printed.  The symbol > scores a negative count;  the  symbol
+< scores a positive count.  A typical use for this switch is
+to check  source  input  to  the  MACRO-10  Assembler;   for
+example, assuming that the file A contains:
+
+                    ONE<<>
+                    TWO<
+                    THREE>
+                    FOUR<>>
+                    FIVE<>
+                    SIX>
+The  request       LPT:=DTA2:A/V<CR>  results  in  the  Line
+Printer output:
+
+                    1 ONE<<>
+                    2 TWO<
+                    1 THREE>
+                    0 FOUR<>>
+                   -1 SIX>
+
+From this general example, the  most  likely  conclusion  is
+that there is either a < missing or an extra > in this file.
+Line five (i.e.   FIVE  <>)  was  not  printed  because  the
+brackets which it contained were matched.
+
+
+
+3.3.11  Y-Switch, DECtape To Paper Tape
+
+The Y-switch enables the  user  to  transfer  DECtape  files
+having  the  filename  extension  .RMT,  .RTB  or  .SAV onto
+save-formatted RIM10 or RIM10B paper tapes.   The  type  and
+contents  of  the  paper  tape  produced  in a Y-transfer is
+determined by the source file filename  extension;   if  the
+extension is:
+
+     1.  .RMT,-  A  RIM10  paper  tape   (with   terminating
+         transfer word) is produced;
+
+     2.  .RTB,- A RIM10B paper tape  (with  RIM  loader  and
+         terminating transfer word) is produced;
+
+     3.  .SAV,-  A  RIM10B  paper  tape  is  produced  (with
+         neither RIM loader nor terminating transfer word).
+
+For example, the command
+
+          PTP:/Y=DTA2:TESTI.RTB<CR>
+
+will punch a RIM10B tape as  described  in  item  1  of  the
+foregoing description from DECtape file TESTI.RTB.
+
+Switches D and  X  may  be  used  in  conjunction  with  the
+Y-switch.
+                                                     Page 29
+
+
+It is assumed that .RTB, .RMT and .SAV files are all in  the
+standard  "save"  file format.  In particular, it is assumed
+that no block of an .RMT saved  file  overlaps  a  preceding
+one.
+
+                            NOTE
+
+Optional switch Y is obtained by setting RIMSW=1 at assembly
+time (See source file PIP.CTL.)
+
+The functions  performed  by  PIP  during  /Y  transfers  in
+response  to  each  possible  type  of  source file filename
+extension are:
+
+     1.  An .RTB file causes PIP to:
+
+         a.  Punch a RIM loader.
+
+         b.  Punch an I/O word (-n,x) at the start  of  each
+             data  block.   The  variable n is the number of
+             data words punched in each block  and  has  the
+             octal value 17, or less.  The variable x is the
+             starting address-1 for  loading  the  following
+             data.   Successive values of x are derived from
+             the pointer words in the DECtape  blocks.   The
+             first value of x is the value of the right side
+             of the first pointer word in the DECtape file.
+
+         c.  The  complete  DECtape  file  is   punched   as
+             described in item b.
+
+         d.  The final block punched is followed by a  block
+             containing  a transfer word.  If the right half
+             of .JBSA contains 0 then a halt is punched.  If
+             the  right  half  of  .JBSA contains a non-zero
+             value, a jump to that address is punched.
+
+     2.  A .SAV file is treated  in  the  same  way  as  one
+         having  an .RTB extension except that no RIM loader
+         and no transfer word are punched.
+
+     3.  An .RTM file  initiates  PIP  functions  which  are
+         similar to those described for .RTB files but which
+         have the following differences:
+
+         a.  Only one IOWD is produced, (-n,x)  where  (n-1)
+             data words and a transfer instruction follow.
+
+         b.  The first of the (n-1) data words punched  from
+             the saved file is the first word of the logical
+             block which contains location .JBDA (i.e.   the
+             first  location  after  the  end  of the JOBDAT
+             area).
+
+         c.  The variable x is  then  set  to  the  starting
+                                                     Page 30
+
+
+             address  (address-1)  of  the  first  data word
+             found.   The  effective   program   length   is
+             determined  by  the  relationship  n=(.JBFF)-x.
+             Data is now transferred from (x+1) until  (n-1)
+             words have been punched.
+
+         d.  Zero fill is used if a pointer word in a source
+             block   indicates   noncontinuous   data.   The
+             transfer word, calculated as described for .RTB
+             files terminates the output file.
+
+
+
+3.4  SET DATA MODE, SWITCHES B, H AND I
+
+The addition of optional data mode switches to a PIP command
+specifies  the  mode  in  which the file(s) involved must be
+transferred.
+
+Data modes are device dependent;  complete  descriptions  of
+their  use  and effect on different devices are given in the
+DECsystem-10 Monitor Calls manual.
+
+If both input and output devices can do binary  I/O  and  no
+editing  switches are in force, all files are transferred in
+binary mode (36-bit  bytes).   If  an  editing  switch  that
+requires  PIP to do character processing is used, ASCII mode
+is used.  The data mode switches are:
+
+     1.  /B - Initializes the input and  output  devices  in
+         binary mode.
+
+                            NOTE
+
+         Since  PIP  recognizes  the  following  as   binary
+         extensions,   /B   is   not   required  when  these
+         extensions are used in the PIP command:
+
+         Binary Extensions Recognized By PIP
+
+              .BIN     .QUC     .SYS
+              .CKP     .QUD     .UFD
+              .DAF     .QUE     .SHR
+              .DAT     .QUF     .HGH
+              .DCR     .REL     .LOW
+              .INI     .SFD     .SAV
+              .CHN     .DMP
+
+     2.  /H - Initializes the input and  output  devices  in
+         image binary mode.
+
+     3.  /I - Initializes the input and  output  devices  in
+         image mode.
+                                                     Page 31
+
+
+3.5  FILE DIRECTORY SWITCHES
+
+Optional PIP  switches  whose  functions  affect  user  file
+directories are described in paragraphs 3.5.1 through 3.5.6.
+
+
+
+3.5.1  L-Switch, List Source Device Directory
+
+This switch enables the user to  obtain  a  listing  of  the
+source  device  directory.   The  type of output device used
+affects the directory listing as follows:
+
+     1.  If the output device is TTY, the directory  listing
+         formats for directory-type devices are:
+
+         a.  For DTA source (e.g., TTY:=DTA4:/L<CR>)
+
+             n FREE BLOCKS LEFT
+             filename.ext no. of blocks creation date
+                     .
+                     .
+                     .
+                     .
+
+         b.  For DSK source (e.g., TTY:=DSK:/L<CR>)
+
+             DIRECTORY [proj,prog] (CURRENT  TIME)  (TODAY'S
+             DATE)      where     [proj,prog]     is     the
+             project-programmer  number  of  the   requested
+             directory
+
+             filename.ext<protection>no.  of blocks creation
+             date
+                     .
+                     .
+                     .
+                     .
+             Total Blks n
+
+Asterisk  or  question  mark  wildcard  symbols  (refer   to
+paragraph  2.3.2.2)  may  be  used  in  either the specified
+filename or extension fields to cause only  those  files  in
+the  disk directory of a particular filename or extension to
+be listed.  Thus, the  command  TTY:/L=DSK:*.REL<CR>  causes
+only  those  files  with extension .REL to be printed in the
+directory listing.
+
+     2.  If the output is not TTY, the directory listing  is
+         printed in one of the following formats:
+
+         a.  For DTA, source format is as in paragraph 1.(a)
+
+         b.  For DSK, source format is as in paragraph 1.(b)
+             but  includes all retrieval information as well
+                                                     Page 32
+
+
+             as the creation time and access date.   If  any
+             disk  file is protected, as much information as
+             possible is given about it.
+
+
+
+3.5.2  F-Switch, List Limited Source Directory
+
+This switch performs, essentially, the same function as  the
+L-switch;  however, only the filenames and extensions of the
+files in the specified disk or DECtape directory are listed.
+
+Only DSK:  and DTAn:  are permitted as source device;  If no
+source device is given, DSK:  is assumed.
+
+For example, the command
+
+          TTY:/F=<CR>
+
+lists the directory of the user's disk  area  as  described.
+The /F switch may work in cases where /L will not
+
+
+
+3.5.3  R-Switch, Rename Source Files
+
+The use of this switch causes PIP to rename the source  file
+to  the  name  given as the destination file name.  Only one
+source file specification may be given.  If more than one is
+given, the error message PIP COMMAND ERROR is printed and no
+action is taken.  The destination file descriptor  can  take
+the following forms (protection can always be specified):
+
+     1.  Filename.extension
+
+     2.  Filename.*
+
+     3.  *.Extension
+
+     4.  *.*<protection>
+
+     5.  Filename
+
+     6.  ???.ext
+
+     7.  ???.???
+
+     8.  *.???
+
+     9.  ???.*
+In fact,  <protection>  may  always  be  specified  but  the
+request  *.* (4) has no effect without it.  If no protection
+is specified, the current file protection is not altered.
+
+During a rename operation, if PIP finds that the filename to
+                                                     Page 33
+
+
+be  changed exists on more than one file structure, PIP will
+output, the following message to the user's terminal:
+
+          ?AMBIGUOUS[file structure list] [filename.ext]
+
+The following are examples of  the  proper  use  of  the  /R
+switch:
+
+     1.  DSK:MONI.F4/R=MONI.MAC<CR>
+
+         Rename the file MONI.MAC as MONI.F4.
+
+     2.  DSK:MONI.F4/R_MONI.*<CR>
+
+         Rename all files named MONI to MONI.F4.
+
+     3.  DSK:MON2.*/R=MONA.*<CR>
+
+         Rename all files of name MONA and any extension  to
+         retain the extensions but take the new name, MON2.
+
+     4.  DSK:*.EXT/R=*.MAC<CR>
+
+         Rename all files of extension MAC to  retain  their
+         own names but take the extension EXT.
+
+     5.  DSK:*.*<077>/R=*.SAV<CR>
+
+         Give all files  of  extension  SAV  the  protection
+         <077>.
+
+     6.  DTA1:MON2/R=MONA.REL<CR>
+
+         Rename the file MONA.REL to have the name MON2  and
+         the null extension.
+
+
+
+3.5.3.1  CHANGE SOURCE UFD PROTECTION CODE USING THE  RENAME
+(R)  FUNCTION.- The 3-digit protection code assigned to User
+File Directories may be changed using  the  PIP  rename  (/R
+switch)  facility  depending  on  the privilege afforded the
+user.
+
+The PIP command format required to change a  UFD  protection
+code is as follows:
+
+          *[proj,prog].UFD<nnn>/R=[proj,prog].UFD<CR>
+
+where:
+
+     1.  <nnn> represents the desired (new) protection code;
+
+     2.  the [proj,prog] numbers are the same on both  sides
+         of the equals symbol;
+                                                     Page 34
+
+
+     3.  the user indicates to PIP that the protection  code
+         of the current UFD is to be changed by specifying a
+         0 filename with an extension of .UFD (e.g.  0.UFD).
+
+For UFD privileges, users are divided into  the  same  three
+categories  as  for  files  (see  2.5).  Each category (i.e.
+digit) is assigned any of the following codes:
+
+Permitted Codes           Permitted Operations
+---------------           --------------------
+
+          4             Allow LOOKUPs in UFD.
+          2             Allow CREATEs in UFD.
+          1             Allow the UFD to be read as a file.
+
+
+
+
+3.5.4  D-Switch, Delete Files
+
+This switch causes PIP to delete one or more specified files
+from  the  device  given  in the destination side of the PIP
+command.  Only one device  may  be  specified  in  a  delete
+command;   it  is  assumed  that  the source and destination
+device are the same.
+
+For example the following command
+
+          DSK:/D=FILEA, FILEB, FILEC.MAC,*.REL<CR>
+
+causes PIP to delete from the user's disk area files  FILEA,
+FILEB, FILEC.MAC and all files having the extensions .REL.
+
+If a non-existent file is specified in a delete command, PIP
+prints  the  error  message  (o)  file  was  not  found  and
+continues to process deletions  of  the  existing  specified
+files.  If an existing file is found to be protected it will
+be skipped and a message to that effect is  printed.   If  a
+user  has  the  correct  privileges he can delete files from
+other users' areas.
+
+                            NOTE
+
+An  attempt  to  delete  files  from  a  DECtape   that   is
+write-locked  results  in  the error message DEVICE dev.name
+OPR operator station no.  ACTION REQUESTED being printed  at
+the   user's   terminal.    When   a   system  operator  has
+write-enabled the DECtape unit involved, he will  start  the
+requested  action  and  cause the message CONT BY OPER to be
+printed at the user's terminal.
+
+On completion of a disk  delete  operation,  PIP  lists  the
+names of the files deleted and the number of blocks freed by
+the deletion.
+                                                     Page 35
+
+
+For example, assume that a file 3 blocks in length and named
+FILEA.MAC  exists  in  the current UFD:  the command for its
+deletion and the subsequent messages printed  by  PIP  would
+appear as:
+
+          *DSK:/D=FILEA.MAC <CR>   (USER COMMAND)
+
+          FILES DELETED:           (PIP RESPONSE)
+
+          FILEA.MAC                (PIP RESPONSE)
+
+          3 BLOCKS FREED           (PIP RESPONSE)
+
+          *
+
+
+
+3.5.5  Z-Switch, Zero Directory
+
+The use of this switch causes PIP to zero out the  directory
+of  the destination's device;  a source device does not have
+to be specified in  the  command.   A  Z-switch  request  is
+implemented  before  any  other  operation specified on this
+command string in which it occurs.  Thus, .blank 1
+          DTA2:CARDS/Z=CDR:<CR>
+
+zeroes out the directory of  DTA2  before  transferring  one
+file from CDR onto DTA2.  The command,
+
+          DTA2:/Z=<CR>
+
+zeroes out the directory of DTA2.
+
+If the destination device is the disk, an attempt is made to
+delete  all the files whose names are found in the directory
+specified.  If protection codes  prohibit  the  deletion  of
+some  of the files, the request will terminate after as many
+files as possible have  been  deleted,  and  an  informative
+message  will  be  given.   The  user should then change the
+protection of the protected files and repeat his request  if
+he wants all files deleted.  For example the command
+
+          DSK:FLOUT/Z=DTA2:CARY<CR>
+
+zeroes out the directory of the user's disk area,  transfers
+file  CARY  from  DTA2  to the disk, and names the disk file
+FLOUT.
+
+
+
+3.5.6  Q-Switch, Print Summary Of PIP Functions
+
+This switch causes PIP to print on a  specified  device  the
+system   device   file   PIP.HLP.   This  file  contains  an
+alphabetical list of all PIP switches  and  functions.   For
+                                                     Page 36
+
+
+example, the command
+
+          LPT:/Q=<CR>
+
+causes the following  summary  to  be  listed  on  the  line
+printer:
+
+    PIP       SWITCHES (ALPHABETIC ORDER) SUMMARY
+    ---       -----------------------------------
+
+     A        LINE BLOCKING
+     B        BINARY PROCESSING (MODE)
+     C        SUPPRESS  TRAILING  SPACES,  CONVERT  MULTIPLE
+              SPACES TO TABS
+     D        DELETE FILE
+     E        TREAT (CARD) COLUMNS 73-80 AS SPACES
+     F        LIST DISK OR DTA DIRECTORY (FILENAMES AND EXT.
+              ONLY)
+     G        IGNORE I/O ERRORS
+     H        IMAGE BINARY PROCESSING (MODE)
+     I        IMAGE PROCESSING (MODE)
+     L        LIST DIRECTORY
+     M        SEE MTA SWITCHES BELOW
+     N        DELETE SEQUENCE NUMBERS
+     O        SAME AS /S SWITCH, EXCEPT INCREMENT IS BY 1
+     P        FORTRAN OUTPUT  CONVERSION  ASSUMED.   CONVERT
+              FORMAT  CONTROL  CHARACTERS  FOR  LPT LISTING.
+              /B/P COPY FORTRAN BINARY
+     Q        PRINT (THIS) LIST OF SWITCHES AND MEANINGS
+     R        RENAME FILE
+     S        RESEQUENCE, OR ADD SEQUENCE NUMBERS  TO  FILE;
+              INCREMENT IS BY 10
+     T        SUPPRESS TRAILING SPACES ONLY
+     U        COPY BLOCK 0 (DTA)
+     V        MATCH PARENTHESES (<>)
+     W        CONVERT TABS TO MULTIPLE SPACES
+     X        COPY SPECIFIED FILES
+     *Y       RIM, DTA TO PIP IF
+              SOURCE EXTENSION IS:  DESTINATION FORMAT IS:
+              RTB                   RIM LOADER, RIM 10B FILE
+                                    XFER
+              SAV                   AS RTB-RIM 10B FILE ONLY
+              RMT                   RIM10
+     Z        ZERO OUT DIRECTORY
+
+     MTA SWITCHES:
+     ENCLOSE IN PARENTHESES ().
+     M FOLLOWED BY 8 MEANS SELECT 800 B.P.I.  DENSITY
+                   5              556 B.P.I.  DENSITY
+                   2              200 B.P.I.  DENSITY
+                   E              EVEN PARITY
+                   A              ADVANCE MTA 1 FILE
+                   D              ADVANCE MTA 1 RECORD
+                   B              BACKSPACE MTA 1 FILE
+                   P              BACKSPACE MTA 1 RECORD
+                                                     Page 37
+
+
+                   W              REWIND MTA
+                   T              SKIP TO LOGICAL EOT
+                   U              REWIND AND UNLOAD MTA
+                   F              MARK EOF
+
+         (M#NA), (M#NB),  (M#ND),  (M#NP)  MEAN  ADVANCE  OR
+         BACKSPACE MTAn FILES, OR RECORDS.
+
+         THIS IS AN  OPTIONAL  SWITCH  OBTAINED  BY  SETTING
+         RIMSW=1 AT ASSEMBLY TIME.
+                                                     Page 38
+
+
+                                                   SECTION 4
+
+                                        SPECIAL PIP SWITCHES
+
+
+4.1  SPECIAL PIP FUNCTIONS
+
+This section contains descriptions of optional PIP functions
+used  in  Magnetic  tape,  error  recovery  and  card  punch
+operations.
+
+
+
+4.2  MAGNETIC TAPE SWITCHES
+
+When magnetic tape is used in a file transfer, PIP  can  set
+the tape parity and density parameters and position the tape
+reels.  PIP magnetic tape switches apply to  one  particular
+magnetic tape unit or file specifications.
+
+The optional PIP Magnetic tape (MTA)  switches  are  written
+enclosed  in parentheses;  the letter M is used as the first
+character of all optional switches  or  series  of  switches
+(e.g.  (Msw) or (Msw1sw2..).
+
+MTA  switches  must   appear   within   the   command   file
+specifications  of  the particular file to which they refer.
+Thus, MTA switches refer to a particular device and,  except
+for  density  and  parity  selections,  to a particular file
+specification of that device.
+
+
+
+4.2.1  Switches For Setting Density And Parity Parameters
+
+The default monitor density of 800 bits-per-word  (bpi)  and
+odd  parity are assumed unless one of the following switches
+is included in the PIP command file specifications:
+
+          Switch      Meaning
+          ------      -------
+
+           (M8)     800 bpi density (default value)
+           (M5)     556 bpi density
+           (M2)     200 bpi density
+           (ME)     Even parity (odd parity is default)
+
+The following command string causes PIP to transfer  a  file
+from MTA1 to MTA2 at 200 bpi, with even parity (and in ASCII
+line mode).
+
+          MTA2:(M2E)=MTA1:(ME2)<CR> 
+                                                     Page 39
+
+
+4.2.2  Switches For Positioning Magnetic Tape
+
+The following switches are used in PIP command  strings  for
+magnetic tape handling:
+
+          Switch    Function Performed
+          ------    ------------------
+
+           (MA)     Advance tape reel one file.
+           (MB)     Backspace tape reel one file.
+           (MD)     Advance tape reel one record.
+           (MP)     Backspace tape reel one record.
+           (MW)     Rewind tape reel.
+           (MT)     Skip to logical End-of-Tape.
+           (MU)     Rewind and unload.
+           (MF)     Mark End-of-File.
+
+In PIP MTA commands, the source device need  not  be  given.
+For example, to rewind MTA1:, type
+
+          MTA1:(MW)=<CR>
+
+If a source device  is  specified  in  the  command  string,
+information   transfer   will  occur,  except  when  PIP  is
+requested to rewind and unload a magnetic tape.
+
+Several magnetic tape functions may be specified in a single
+command  string.   Density  or  parity,  when  changed, will
+appear in the file specification.  In the following example,
+density is set to 200 bpi, parity is even, the tape is to be
+rewound and the first, third, fourth and fifth files on that
+reel are to be printed on the line printer.
+
+          LPT:=MTA1:(M2EW),(MA),,<CR>
+
+If multiple backspace, advance file or record movements  are
+needed,  the number of movements required is specified by #n
+(interpreted as  decimal).   All  positioning  switches  are
+implemented  before  any  related  file  transfers are made;
+thus MTA1:(M#3A)=PTR:  will  advance  MTA1  by  three  files
+before transferring a paper tape file to it.
+
+     1.  If a backspace file (M#nB) request is given,  after
+         completion  of  "n+1"  backspace  files one advance
+         file request is made unless the  tape  is  at  Load
+         Point.   In  this  way the tape is always initially
+         positioned at the beginning of a  file.   Thus  the
+         command:
+
+              MTA0:(MB)=<CR>
+
+         will backspace MTA0 to the start  of  the  previous
+         file.
+
+     2.  If the Load Point is  reached  before  a  backspace
+                                                     Page 40
+
+
+         file  or  record  request  is  completed,  an error
+         diagnostic will terminate the run and the following
+         error message is printed
+
+         ?LOAD POINT BEFORE END OF BACKSPACE REQUEST!
+
+     3.  Only  one  MTA  movement  per  file  descriptor  is
+         allowed in a command string.  Thus:
+
+                   MTA0:(MT#2B)=...<CR>
+
+         is illegal since it requests two distinct types  of
+         MTA movement.
+
+
+
+4.2.2.1  BACKSPACE   TO   START   OF   CURRENT   FILE-   THE
+SPECIFICATION OF 0 AS THE VALUE OF N IN A MULTIPLE BACKSPACE
+COMMAND (E.G.  M#0B) CAUSES THE TAPE TO BE BACKSPACED TO THE
+START OF THE CURRENT FILE.
+
+
+
+4.2.2.2  ADVANCE TO END OF CURRENT FILE-  The  specification
+of  0  as the value of n in a multiple advance command (e.g.
+M#0A) causes the tape to be moved to a point just before the
+EOF marking of the current file.
+
+                            NOTE
+
+The advance and backspace record requests are available as a
+convenience   for  the  knowledgeable  user  and  should  be
+approached with caution.  Always remember that PIP typically
+has  multiple  input  and  output  buffers  and the physical
+position of the tape need not  correspond  to  the  physical
+position of the record currently being processed.
+
+
+
+4.3  G-SWITCH, ERROR RECOVERY
+
+IF THE ERROR RECOVERY SWITCH /G  IS  PRESENT  IN  A  COMMAND
+STRING, A SPECIFIC SET OF I/O ERRORS WILL BE ACKNOWLEDGED BY
+ERROR MESSAGES.  THE I/O ERRORS AFFECTED BY THE PRESENCE  OR
+ABSENCE OF /G ARE LISTED IN SECTION 5, PARAGRAPH 5.2, ITEM 3
+OF THE ERROR MESSAGES, AND ARE FLAGGED BY AN  ASTERISK  (*).
+PROCESSING  WILL CONTINUE AFTER THE ERROR MESSAGE IS PRINTED
+AS THOUGH NO ERROR HAD  OCCURRED.   THUS,  MOST  I/O  errors
+occurring  within a file may be overridden.  However, if the
+same error condition occurs in each buffer of the file,  the
+error  message  is repeated for each buffer until either the
+end of file occurs or the  error  condition  disappears.   A
+disk  directory is used as an input file if it is read to be
+either listed or searched and is therefore subject to  these
+errors.   A  DECtape  directory  is obtained as a core image
+                                                     Page 41
+
+
+from the monitor;  therefore, it is not subject to the input
+errors  which  may be diagnosed by PIP.  However, I/O errors
+can occur for DECtape directories and are diagnosed  at  the
+monitor  level when a directory is read or written.  This is
+typically on a LOOKUP or RELEAS request.  If the G-switch is
+not  used,  any I/O error will close the current output file
+and,  after  printing  a  suitable  message,  terminate  the
+current request to PIP.  
+
+
+
+4.4  J-SWITCH, CARD PUNCH
+
+THE J-SWITCH CAUSES CARDS TO BE PUNCHED IN  029  MODE.   THE
+OUTPUT  DEVICE  SPECIFIED  BY THE COMMAND STRING MUST BE THE
+CARD PUNCH (CDP).
+                                                     Page 42
+
+
+                                                   SECTION 5
+
+                      PIP ERROR REPORTING AND ERROR MESSAGES
+
+
+5.1  ERROR MESSAGES
+
+This section describes the various types of error conditions
+and error messages that can occur during PIP operations.
+
+The special treatment of recoverable  error  messages  which
+prevent  the  current  job being prematurely terminated when
+running under the Batch Processor is also described.
+
+When an error message terminates a PIP run, both  the  input
+and output devices are released.  This means that all files,
+fully or partly created, are available  on  the  destination
+device.
+
+                            NOTE
+
+All error messages preceded by a question mark (?) indicates
+a fatal (non-recoverable) error.
+
+
+
+5.2  I/O ERROR MESSAGES
+
+I/O error messages are opened  with  a  description  of  the
+relevant device and file;  for example,
+
+     1.  INPUT        DEVICE DTA3:FILE FILNAM.EXT...
+
+     2.  OUTPUT        DEVICE DTA3:FILE FILNAM.EXT...
+
+     3.  DISK DIRECTORY READ...
+
+               Device            Message
+               ------            -------
+
+               DTA,DSK,MTA    WRITE (LOCK) ERROR
+               *CDR           7-9 PUNCH MISSING
+               *OTHER         BINARY DATA INCOMPLETE
+               *ALL DEVICES   DEVICE ERROR
+               *ALL DEVICES   CHECKSUM OR PARITY ERROR
+               DTA            BLOCK OR BLOCK NUMBER
+                              TOO LARGE
+               *OTHER         INPUT BUFFER OVERFLOW
+               *MTA           PHYSICAL EOT
+
+
+
+---------------
+*Recoverable error if a /G switch is  used,  read  paragraph
+4.3 for a descriptor of /G.
+                                                     Page 43
+
+
+Thus, for the command DTA4:CON.REL=DTA3:CON.REL, if DTA4  is
+write locked, PIP prints the error message:
+
+          ?OUTPUT DEVICE DTA4:FILE CON.REL WRITE(LOCK)ERROR
+
+Other messages for devices are:
+
+          1.  DEVICE dev DOES NOT EXIST (DEVCHR request)
+
+          2.  DEVICE dev NOT AVAILABLE (INIT request)
+
+
+
+5.3  FILE REFERENCE ERRORS
+
+The following error messages  may  occur  during  a  LOOKUP,
+RENAME or ENTER request on disk.
+
+          message:? (filename.ext)   then   one    of    the
+          following:
+          ---------------------------------------------------
+
+          (0) FILE WAS NOT FOUND!
+          (1) NO DIRECTORY FOR PROJECT-PROGRAMMER NUMBER!
+          (2) PROTECTION FAILURE!
+          (3) FILE WAS BEING MODIFIED!
+          (4) RENAME FILE NAME ALREADY EXISTS!
+          (5) ILLEGAL SEQUENCE OF UUOS!
+          (6) BAD UFD OR BAD RIB!
+          (7) NOT A SAV FILE!
+          (10)NOT ENOUGH CORE
+          (11)DEVICE NOT AVAILABLE!
+          (12)NO SUCH DEVICE!
+          (13)NOT TWO RELOC REG. CAPABILITY!
+          (14)NO ROOM OR QUOTA EXCEEDED!
+          (15)WRITE LOCK ERROR!
+          (16)NOT ENOUGH MONITOR TABLE SPACE!
+          (17)PARTIAL ALLOCATION ONLY!
+          (20)BLOCK NOT FREE ON ALLOCATION!
+          (21)CAN'T SUPERSEDE (ENTER) AN EXISTING DIRECTORY!
+          (22)CAN'T DELETE (RENAME) A NON-EMPTY DIRECTORY!
+          (23)SFD NOT FOUND!
+          (24)SEARCH LIST EMPTY!
+          (25)SFD NESTED TOO DEEPLY!
+          (26)NO-CREATE ON FOR SPECIFIED SFD PATH!
+
+if the error code (V)  is  greater  than  26(8),  the  error
+message:
+
+          ?(V) LOOKUP,ENTER, OR RENAME ERROR!
+
+is printed.
+
+Error values are used by the UUO's LOOKUP, ENTER and RENAME.
+Refer  to the DECsystem-10 Monitor Calls manual for complete
+                                                     Page 44
+
+
+descriptions of these UUO's.
+
+The following error messages may be given on a reject to  an
+ENTER request on DECtape:
+
+     1.  The error message printed if there is no  room  for
+         an entry in a DECtape directory is
+
+              ?DIRECTORY FULL!
+
+     2.  The error message printed if  a  zero  filename  is
+         given for a DECtape output file is
+
+              ILLEGAL FILE NAME!
+
+The following message is given if a filename is not found in
+a directory search of disk or DECtape
+
+          NO FILE NAMED filename.ext
+
+
+
+5.4  PIP COMMAND ERRORS
+
+The following error  messages  are  output  by  PIP  on  the
+detection of errors in the user command string:
+
+     1.  ?PIP COMMAND ERROR!
+
+         Some of the possible causes of this type  of  error
+         are:
+
+         a.  An illegal format for a command string,
+
+         b.  A non-existent switch was requested,
+
+         c.  Filename other than * or *.* was  given  for  a
+             non-directory (source) device.
+
+     2.  ?INCORRECT PROJECT-PROGRAMMER NUMBER!
+
+         The project-programmer number must be in  the  form
+         [number,  number], where 0<number<777777(8), a full
+         path  specification  must  be  made  if  SFD's  are
+         involved.
+
+     3.  ?SFD LIST TOO LONG!
+
+         Too many SFD's were listed in  the  full  directory
+         path.   A maximum of five levels (not including the
+         UFD)   is   permitted   in   a    directory    path
+         specifications.
+
+     4.  ?ILLEGAL PROTECTION!
+                                                     Page 45
+
+
+         The protection number must be in the form <number>,
+         where:  0<=number<=777(8).
+
+     5.  ?NO BLOCK 0 COPY
+
+         The /U  switch  was  specified,  but  PIP  was  not
+         assembled to allow this.
+
+     6.  ?TOO MANY REQUESTS FOR...(magnetic tape)
+
+         Conflicting density  and/or  parity  requests  were
+         given.
+
+
+
+5.5  Y-SWITCH ERRORS
+
+The following error message occur only when the Y-switch  is
+included in the PIP command string:
+
+     1.  ?DTA TO PTP ONLY!
+
+         Only  DECtape  input  and  paper  tape  output  are
+         permitted.
+
+     2.  ?/Y SWITCH NOT AVAILABLE THIS ASSEMBLY!
+
+         The /Y  switch  was  specified,  but  PIP  was  not
+         assembled to allow this.
+
+     3.  FILE filename.ext ILLEGAL EXTENSION!
+
+         The extensions of the filenames given must be .RMT,
+         .RTB or .SAV.
+
+     4.  Filename.ext ILLEGAL FORMAT!
+
+         The reasons  for  getting  the  diagnostic  ILLEGAL
+         FORMAT ARE:
+
+         a.  a zero length file was found,
+
+         b.  required   job   data   information   was   not
+             available,
+
+         c.  a block overlapped a previous block (RIM 10),
+
+         d.  an EOF was found when data was expected,
+
+         e.  a pointer word expected but not  found  in  the
+             source file.
+
+
+
+5.6  GENERAL ERROR MESSAGES
+                                                     Page 46
+
+
+The following is a list of the PIP error messages which  are
+not included in any of the preceding categories:
+
+     1.  ?DISK OR DECTAPE INPUT REQUIRED!
+
+         This message is printed when a non-directory source
+         device  is  specified  for  a  PIP  function  which
+         requires a directory-type source device.
+
+     2.  filename.ext ILLEGAL FILE NAME!
+
+         This message is output if a  request  to  rename  a
+         file to an already existing filename is made.
+
+     3.  Errors found during /X, /Z, /D, and  /R  operations
+         result  in  Error  messages  which  pertain  to the
+         specific error found.   Error  messages  for  these
+         operations are printed only if no other fatal error
+         occurs before the command string is processed.   If
+         another  error  does  occur,  its  diagnostic takes
+         precedence  over  the  diagnostics  for  the  above
+         switch functions.
+
+     4.  ?4K NEEDED!
+
+         4K not currently available but is needed (for  disk
+         system).
+
+     5.  ?DECTAPE I/O ONLY!
+
+         The I/O device for a block 0 copy (/U switch)  must
+         be a DECtape.
+
+     6.  ?TERMINATE /X.MAX.  OF 999 FILES PROCESSED!
+
+         PIP, during a /X copy function from a non-directory
+         device,  has  processed  999  files.   This  is the
+         maximum number of files which such a /X request can
+         handle.
+
+     7.  ?TOO MANY INPUT DEVICES!
+
+         This error is for the /D and /DX  functions;   only
+         one input device is allowed when these switches are
+         used.  If more than one device is specified in a /D
+         command and the first device given is DSK, the disk
+         files are deleted when this diagnostic is given.
+
+     8.  NO FILE NAMED PIP.HLP!
+
+         The data file requested by a PIP  Q-switch  is  not
+         available on the system device.
+
+     9.  LINE TOO LONG!
+                                                     Page 47
+
+
+         During file transfer a line  containing  more  than
+         180 characters was detected.  This occurs only when
+         a  non-directory-to-directory  device  transfer  is
+         made or when switches entailing line processing are
+         given.
+
+    10.  ?LOAD POINT BEFORE END OF BACKSPACE REQUEST!
+
+         This diagnostic  occurs  only  if  either  the  MTA
+         (M#nB) or (M#nP) switch is used.  If the Load Point
+         is sensed before "n"  backspace  files  or  records
+         function  is completed, an error is assumed to have
+         been made by the user.
+
+
+
+5.7  TMPCOR ERROR MESSAGES
+
+If the temporary storage  facilities  provided  by  the  UUO
+TMPCOR  are  used  or  are  attempted  to be used during PIP
+operations, the following error messages may occur:
+
+     1.  ?TMPCOR NOT AVAILABLE!
+
+     2.  ?NOT ENOUGH ROOM IN TMPCOR!
+
+     3.  ?COMMAND NOT YET SUPPORTED FOR TMPCOR!
+
+     4.  nn TMPCOR WORDS FREE
+
+         Number of word locations free in the TMPCOR storage
+         area.
+
+Refer  to  the  DECsystem-10  Monitor  Calls  manual  for  a
+description of the UUO TMPCOR.
+                                                     Page 48
+
+
+                                                  APPENDIX A
+
+                                STANDARD FILENAME EXTENSIONS
+
+
+                         Table A-1
+                    Filename Extensions
+
+Filename
+Extension  Type of File  Meaning
+
+   AID     Source        Source file in AID language
+
+   ALG     Source        Source file in ALGOL language
+
+   ALP     ASCII         Printer forms alignment
+
+   BAC     Object        Output from the BASIC Compiler
+
+   BAK     Source        Backup file from TECO or LINED
+
+   BAS     Source        Source file in BASIC language
+
+   BIN     Object        Binary file
+
+   BLB     ASCII         Blurb file
+
+   BLI     Source        Source file in BLISS language
+
+   BNC     ASCII         BINCOM output
+
+   BUG     Object        Saved to show a program error
+
+   CAL     Object        CAL data and program files
+
+   CBL     Source        Source file in COBOL language
+
+   CCL     ASCII         Alternate  convention  for  command
+                         file  (@  construction for programs
+                         other than COMPIL)
+
+   CCO     ASCII         Listing  of  modifications  to  non
+                         resident software
+
+   CKP     Binary        Checkpoint core image file  created
+                         by COBOL operating system
+
+   CHN     Object        CHAIN file
+
+   CMD     ASCII         Command file for indirect  commands
+                         (@ construction for COMPIL)
+
+   CMP     ASCII         Complaint file by GRIPE
+
+   COR     ASCII         Correction file for SOUP
+                                                     Page 49
+
+
+   CRF     ASCII         CREF (cross-reference) input file
+
+   CTL     ASCII         MP batch control file
+
+   DAE     Binary        Default  output  for   DAEMON-taken
+                         core dumps
+
+   DAT     ASCII,Binary  Data (FORTRAN) file
+
+   DCR     Binary        Core image save (DCORE)
+
+   DDT     ASCII         Input file to FILDDT
+
+   DIR     ASCII         Directory  from  FILE  command   or
+                         DIRECT program
+
+   DMP     PDP-6         PDP-6 format for a file created  by
+                         a SAVE command
+
+   DOC     ASCII         Listing  of  modifications  to  the
+                         most recent version of the software
+
+   ERR     ASCII         Error message file
+
+   F4      Source        Source file in FORTRAN language
+
+   FLO     ASCII         English language flowchart
+
+   FRM     ASCII         Form
+
+   FUD     ASCII         FUDGE2 listing output
+
+   HGH     Object        Nonsharable  high  segment   of   a
+                         two-segment program
+
+   HLP     ASCII         Help   files   containing    switch
+                         explanations, etc.
+
+   INI     ASCII,Binary  Initialization file
+
+   LOG     ASCII         MP batch log file
+
+   LOW     Object        Low  segment   of   a   two-segment
+                         program
+
+   LSD     ASCII         Default output for DUMP program
+
+   LSQ     ASCII         Queue listing
+
+   LST     ASCII         Listing data
+
+   MAC     Source        Source file in MACRO language
+
+   MAN     ASCII         Manual (documentation) file
+                                                     Page 50
+
+
+   MAP     ASCII         Loader map file
+
+   MEM     ASCII         Memorandum file
+
+   MSB     Object        Music compiler binary output
+
+   MUS     Source        Music compiler input
+
+   OLD     Source        Backup source program
+
+   OPR     ASCII         Installation      and      assembly
+                         instructions
+
+   OVR     Object        COBOL overlay file
+
+   PAL     Source        Source  file  in  PAL   10   (PDP-8
+                         assembler)
+
+   PBT     ASCII         P-batch control file
+
+   PLG     ASCII         P-batch log file
+
+   QUC     Binary        Queue change request file
+
+   QUD     ASCII,Binary  Queued data file
+
+   QUE     Binary        Queue request file
+
+   QUF     Binary        Master queue and request file
+
+   REL     Object        Relocatable binary file
+
+   RIM     Object        RIM loader file
+
+   RMT     Object        Read-in  mode  (RIM)  format   file
+                         (PIP)
+
+   RNC     ASCII         RUNOFF input for producing  a  .CCO
+                         file
+
+   RND     ASCII         RUNOFF input for producing  a  .DOC
+                         file
+
+   RNO     ASCII         Programming    specifications    in
+                         RUNOFF input
+
+   RNP     ASCII         RUNOFF input for producing  a  .OPR
+                         file
+
+   RSP     ASCII         Script response time log file
+
+   RTB     Object        Read-in mode (RIM10B)  format  file
+                         (PIP)
+
+   SAV     Object        Low  segment  from  a   one-segment
+                                                     Page 51
+
+
+                         program
+
+   SCP     ASCII         SCRIPT control file
+
+   SFD     Binary        Sub-file   directory    (restricted
+                         usage)
+
+   SHR     Object        Sharable high  segment  file  of  a
+                         two-segment program
+
+   SNO     Source        Source file in SNOBOL language
+
+   SNP     ASCII         Snapshot of disk by DSKLST
+
+   SRC     ASCII         SRCCOM output
+
+   SVE     Object        .SAVed  file  from  a  single  user
+                         monitor
+
+   SYS     Binary        Special system files
+
+   TEC     ASCII         TECO macro
+
+   TMP     ASCII,Binary  Temporary files
+
+   TXT     ASCII         Text file
+
+   UFD     Binary        User  file  directory   (restricted
+                         usage)
+
+   UPD     ASCII         Updates flagged in margin (SRCCOM)
+
+   WCH     ASCII         SCRIPT monitor (WATCH) file
+
+   XPN     Object        Expanded save file (FILEX)
+                                                     Page 52
+
+
+                           INDEX
+
+
+
+A-Switch . . . . . . . . . . . 24
+ADVANCE TO END OF CURRENT FILE  40
+ASSIGNING DECTAPES LOGICAL NAMES  23
+ASTERISK . . . . . . . . . . . 13
+
+B, H AND I . . . . . . . . . . 30
+BACKSPACE TO START OF CURRENT FILE  40
+BASIC TRANSFER FUNCTION  . . . 20
+
+C-Switch . . . . . . . . . . . 24
+Call PIP . . . . . . . . . . . 4
+Command Format . . . . . . . . 7
+
+D-Switch . . . . . . . . . . . 34
+Delimiters . . . . . . . . . . 10
+Digit Numeric Protection Code Values  17
+DX-Switch  . . . . . . . . . . 23
+
+E-Switch . . . . . . . . . . . 25
+ERROR MESSAGES . . . . . . . . 42
+Exit . . . . . . . . . . . . . 4
+
+F-Switch . . . . . . . . . . . 32
+FILE ACCESS PROTECTION CODES . 16
+FILE DIRECTORY SWITCHES  . . . 31
+FILE OWNERS  . . . . . . . . . 16
+FILE REFERENCE ERRORS  . . . . 43
+FILENAMES  . . . . . . . . . . 12
+
+GENERAL ERROR MESSAGES . . . . 45
+
+I/O ERROR MESSAGES . . . . . . 42
+
+L-Switch . . . . . . . . . . . 31
+Logical  . . . . . . . . . . . 11
+Logical Device Names . . . . . 11
+
+MAGNETIC TAPE SWITCHES . . . . 38
+MTA  . . . . . . . . . . . . . 38
+
+N-Switch . . . . . . . . . . . 25
+NON-DIRECTORY COPY . . . . . . 21
+
+O-Switch . . . . . . . . . . . 25
+Octal Constants  . . . . . . . 13
+Optional functions . . . . . . 19
+OPTIONAL PIP FUNCTIONS . . . . 19
+OTHER USERS  . . . . . . . . . 17
+
+P-Switch . . . . . . . . . . . 26
+Physical . . . . . . . . . . . 11
+                                                     Page 53
+
+
+Physical Device Names  . . . . 11
+PIP  . . . . . . . . . . . . . 4
+PIP COMMAND ERRORS . . . . . . 44
+Positioning Magnetic Tape  . . 39
+Positioning Project-Programmer  16
+PROJECT MEMBER . . . . . . . . 17
+PROJECT-PROGRAMMER NUMBER  . . 14
+
+Q-Switch . . . . . . . . . . . 35
+
+R-Switch . . . . . . . . . . . 32
+
+S-Switch . . . . . . . . . . . 25
+Setting Density And Parity Parameters  38
+Special  . . . . . . . . . . . 19
+SPECIAL PIP FUNCTIONS  . . . . 38
+SPECIFYING UFD PROTECTION CODES  33
+Standard . . . . . . . . . . . 19
+SWITCH/G . . . . . . . . . . . 40
+SWITCH/J . . . . . . . . . . . 41
+Symbol (#) . . . . . . . . . . 13
+
+T-Switch . . . . . . . . . . . 27
+
+U-Switch . . . . . . . . . . . 24
+
+V-Switch,  . . . . . . . . . . 27
+
+W-Switch . . . . . . . . . . . 27
+Wildcard Characters  . . . . . 13
+
+X-Switch . . . . . . . . . . . 20
+
+Y-Switch . . . . . . . . . . . 28
+
+Z-Switch . . . . . . . . . . . 35
+

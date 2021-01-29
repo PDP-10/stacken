@@ -1,0 +1,1661 @@
+MODULE PROTOCOLS (				!Interpret messages.
+		IDENT = '002020',
+		LANGUAGE (BLISS16, BLISS36)
+		) =
+BEGIN
+!
+!			  COPYRIGHT (c) 1977, 1978 BY
+!	      DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND  COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH  LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR  ANY  OTHER
+! COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE  WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS  A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: MCBDA - MCB Crash Dump Analyzer
+!
+! ABSTRACT:
+!
+!
+! ENVIRONMENT:
+!
+! AUTHOR: ALAN D. PECKHAM	, CREATION DATE: 6-JUL-79
+!
+! MODIFIED BY:
+!
+! 	, : VERSION
+! 01	-
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    ANYMSG : NOVALUE,				!Check message and interpret.
+    CRC : NOVALUE,				!Include given character in CRC calculation.
+    DDCMP : NOVALUE,				!Display DDCMP message header.
+    GET1,
+    GET2,
+    GETEX,
+    NSP : NOVALUE,				!Display NSP message header.
+    NSP_PROCESS : NOVALUE;			!Display NSP process name field.
+
+!
+! INCLUDE FILES:
+!
+
+LIBRARY 'MDACOM';				!MDA common definitions.
+
+!
+! MACROS:
+!
+
+MACRO
+    DISPLAY (MESSAGE) =
+	    %IF %NULL (%REMAINING)
+		%THEN PUTLN (0, CH$ASCIZ ('	', MESSAGE))
+		%ELSE PUTLN (0, CH$ASCIZ ('	', MESSAGE), %REMAINING)
+		%FI %,
+    WARN (MESSAGE) =
+	    (EXTERNAL ROUTINE SKIP : NOVALUE; %IF %NULL (%REMAINING)
+		%THEN PUTLN (1, CH$ASCIZ (WARNING, MESSAGE))
+		%ELSE PUTLN (1, CH$ASCIZ (WARNING, MESSAGE), %REMAINING)
+		%FI; SKIP (1)) %,
+    ABORT (MESSAGE) =
+	    RETURN (%IF %NULL (%REMAINING)
+		%THEN PUTLN (1, CH$ASCIZ (WARNING, MESSAGE))
+		%ELSE PUTLN (1, CH$ASCIZ (WARNING, MESSAGE), %REMAINING)
+		%FI ; LENGTH = 0) %;
+
+!
+! EQUATED SYMBOLS:
+!
+!
+! OWN STORAGE:
+!
+
+OWN
+    CRC_TOTAL,
+    LENGTH,
+    NEXT_BYTE;
+
+!
+! EXTERNAL REFERENCES:
+!
+
+EXTERNAL ROUTINE
+    BITLS : NOVALUE,				!IDENTIFY BITS AND EDIT INTO ASCII
+    BYTSM : NOVALUE,				!IDENTIFY AND EDIT BYTE INTO ASCII
+    GETBYT,					!Get a byte from the dump.
+    GETWRD,					!Get a word from the dump.
+    MAPAPR : NOVALUE,				!Set up a mapping bias.
+    VMADMP : NOVALUE;				!Dump virtual memory.
+
+GLOBAL ROUTINE ANYMSG (BUFFER_BIAS, BUFFER_ADDRESS, BUFFER_LENGTH) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LABEL
+	CHECK_DDCMP,
+	CHECK_NSP;
+
+    LOCAL
+	SAVE_ADR,
+	VAL;
+
+    MAPAPR (6, .BUFFER_BIAS);
+    NEXT_BYTE = .BUFFER_ADDRESS;
+    LENGTH = .BUFFER_LENGTH;
+    !
+    ! Check for DDCMP header. Interpret and bypass if there.
+    !
+
+    IF .LENGTH NEQ 0
+    THEN
+CHECK_DDCMP :
+	BEGIN
+	SAVE_ADR = .NEXT_BYTE;
+	VAL = GET1 (0);
+
+	SELECTONE .VAL OF
+	    SET
+
+	    [%O'005'] :
+		BEGIN
+
+		SELECTONE GET1 (0) OF
+		    SET
+
+		    [1 TO 3, 6, 7] :
+			0;
+
+		    [OTHERWISE] :
+			LEAVE CHECK_DDCMP WITH NEXT_BYTE = .SAVE_ADR;
+		    TES;
+
+		END;
+
+	    [%O'201', %O'220'] :
+		0;
+
+	    [OTHERWISE] :
+		LEAVE CHECK_DDCMP WITH NEXT_BYTE = .SAVE_ADR;
+	    TES;
+
+	NEXT_BYTE = .SAVE_ADR;
+	DDCMP ();
+	END;
+
+    !
+    ! Check for NSP header. Interpret and bypass if there.
+    !
+
+    IF .LENGTH NEQ 0
+    THEN
+CHECK_NSP :
+	BEGIN
+	SAVE_ADR = .NEXT_BYTE;
+	VAL = GET1 (0);
+
+	IF (.VAL AND %B'10000001') NEQ %B'00000000' THEN LEAVE CHECK_NSP WITH NEXT_BYTE = .SAVE_ADR;
+
+	IF .VAL<1, 1>
+	THEN
+	    BEGIN
+
+	    IF (.VAL AND %B'11110011') NEQ %B'01000010' THEN LEAVE CHECK_NSP WITH NEXT_BYTE = .SAVE_ADR;
+
+	    IF ((VAL = GET1 (0)) EQL 0) OR (.VAL GTR 6) THEN LEAVE CHECK_NSP WITH NEXT_BYTE = .SAVE_ADR;
+
+	    DO
+		GET1 (0)
+	    WHILE (VAL = .VAL - 1) GTR 0;
+
+	    IF ((VAL = GET1 (0)) EQL 0) OR (.VAL GTR 6) THEN LEAVE CHECK_NSP WITH NEXT_BYTE = .SAVE_ADR;
+
+	    END
+	ELSE
+	    BEGIN
+
+	    CASE .VAL<2, 2> FROM 0 TO 3 OF
+		SET
+
+		[0] :
+		    BEGIN
+
+		    IF .VAL<4, 1> AND .VAL<6, 1> THEN LEAVE CHECK_NSP WITH NEXT_BYTE = .SAVE_ADR;
+
+		    IF (GET1 (0) + GET1 (0)) EQL 0 THEN LEAVE CHECK_NSP WITH NEXT_BYTE = .SAVE_ADR;
+
+		    END;
+
+		[1] :
+		    BEGIN
+
+		    IF .VAL<5, 2> NEQ 0 THEN LEAVE CHECK_NSP WITH NEXT_BYTE = .SAVE_ADR;
+
+		    END;
+
+		[2] :
+		    BEGIN
+
+		    SELECTONE .VAL<4, 3> OF
+			SET
+
+			[0 TO 5] :
+			    0;
+
+			[OTHERWISE] :
+			    LEAVE CHECK_NSP WITH NEXT_BYTE = .SAVE_ADR;
+			TES;
+
+		    END;
+
+		[INRANGE, OUTRANGE] :
+		    LEAVE CHECK_NSP WITH NEXT_BYTE = .SAVE_ADR;
+		TES;
+
+	    END;
+
+	NEXT_BYTE = .SAVE_ADR;
+	NSP ();
+	END;
+
+    !
+    ! Display any remaining data.
+    !
+
+    IF .LENGTH NEQ 0 THEN VMADMP (.NEXT_BYTE, .NEXT_BYTE, .NEXT_BYTE + .LENGTH);
+
+    END;					!End of ANYMSG
+
+ROUTINE CRC (CHAR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    BIND
+	CTBL0 = UPLIT (%O'0', %O'140301', %O'140601', %O'500', %O'141401', %O'700',
+		%O'200',%O'141101',%O'143001',%O'3300',%O'3600',%O'143501',
+		%O'2400',%O'142701',%O'142201',%O'2100'): VECTOR [16],
+	CTBL1 = UPLIT (%O'0', %O'146001', %O'154001', %O'12000', %O'170001',
+		%O'36000',%O'24000',%O'162001',%O'120001',%O'66000',%O'74000',
+		%O'132001',%O'50000',%O'116001',%O'104001',%O'42000')
+		: VECTOR [16];
+
+    LOCAL
+	TEMP;
+
+    TEMP = .CHAR XOR .CRC_TOTAL;
+    CRC_TOTAL = (.CTBL1 [.TEMP<4, 4>] XOR .CTBL0 [.TEMP<0, 4>]) XOR .CRC_TOTAL<8, 8>;
+    END;					!End of CRC
+ROUTINE DDCMP : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	VAL;
+
+    CRC_TOTAL = 0;
+    DISPLAY ('DDCMP PROTOCOL');
+
+    SELECTONE (VAL = GET1 (CRC)) OF
+	SET
+
+	[%O'005'] :
+	    !
+	    ! Control message
+	    !
+	    BEGIN
+
+	    LOCAL
+		TYPE,
+		SUBTYPE,
+		FLAGS,
+		RCVR,
+		SNDR,
+		ADDR;
+
+	    TYPE = GET1 (CRC);
+	    SUBTYPE = GET1 (CRC);
+	    FLAGS = .SUBTYPE<6, 2>;
+	    SUBTYPE = .SUBTYPE<0, 6>;
+	    RCVR = GET1 (CRC);
+	    SNDR = GET1 (CRC);
+	    ADDR = GET1 (CRC);
+
+	    CASE .TYPE FROM 1 TO 7 OF
+		SET
+
+		[1] :
+		    !
+		    ! ACK
+		    !
+		    BEGIN
+
+		    BIND
+			ACKSUB = SUBTYPE,
+			ACKTYPE = TYPE,
+			FILL = SNDR,
+			RESP = RCVR;
+
+		    IF .ACKSUB NEQ 0 THEN WARN ('ILLEGAL ACK SUBTYPE: %O', .ACKSUB);
+
+		    IF .FILL NEQ 0 THEN WARN ('ACK HAS NON-ZERO FILL BYTE: %O', .FILL);
+
+		    DISPLAY ('  ACK FOR STATION %O, MESSAGE %O RECEIVED', .ADDR, .RESP);
+		    END;
+
+		[2] :
+		    !
+		    ! NAK
+		    !
+		    BEGIN
+
+		    BIND
+			FILL = SNDR,
+			NAKTYPE = TYPE,
+			REASON = SUBTYPE,
+			RESP = RCVR;
+
+		    IF .FILL NEQ 0 THEN WARN ('NAK HAS NON-ZERO FILL BYTE: %O', .FILL);
+
+		    DISPLAY ('  NAK FOR STATION %O, MESSAGE %O RECEIVED', .ADDR, .RESP);
+
+		    SELECTONE .REASON OF
+			SET
+
+			[1] :
+			    DISPLAY ('  HEADER BLOCK CHECK');
+
+			[2] :
+			    DISPLAY ('  DATA FIELD BLOCK CHECK');
+
+			[3] :
+			    DISPLAY ('  REP RESPONSE');
+
+			[8] :
+			    DISPLAY ('  BUFFER TEMPORARILY UNAVAILABLE');
+
+			[9] :
+			    DISPLAY ('  RECEIVER OVERRUN');
+
+			[16] :
+			    DISPLAY ('  MESSAGE TOO LONG');
+
+			[17] :
+			    DISPLAY ('  MESSAGE HEADER FORMAT ERROR');
+
+			[OTHERWISE] :
+			    DISPLAY ('  UNKNOWN REASON: %O', .REASON);
+			TES;
+
+		    END;
+
+		[3] :
+		    !
+		    ! REP
+		    !
+		    BEGIN
+
+		    BIND
+			FILL = RCVR,
+			NUM = SNDR,
+			REPSUB = SUBTYPE,
+			REPTYPE = TYPE;
+
+		    IF .REPSUB NEQ 0 THEN WARN ('ILLEGAL REP SUBTYPE: %O', .REPSUB);
+
+		    IF .FILL NEQ 0 THEN WARN ('REP HAS NON-ZERO FILL BYTE: %O', .FILL);
+
+		    DISPLAY ('  REP FOR STATION %O, MESSAGE %O LAST SENT', .ADDR, .NUM);
+		    END;
+
+		[6] :
+		    !
+		    ! START
+		    !
+		    BEGIN
+
+		    BIND
+			FILL1 = RCVR,
+			FILL2 = SNDR,
+			STRTSUB = SUBTYPE,
+			STRTTYPE = TYPE;
+
+		    IF .STRTSUB NEQ 0 THEN WARN ('ILLEGAL START SUBTYPE: %O', .STRTSUB);
+
+		    IF .FLAGS NEQ 3 THEN WARN ('START DOES NOT HAVE QSYNC AND SELECT FLAGS ON: %O', .FLAGS);
+
+		    IF (.FILL1 NEQ 0) OR (.FILL2 NEQ 0)
+		    THEN
+			WARN ('START HAS NON-ZERO FILL BYTE: %O,%O',
+			    .FILL1, .FILL2);
+
+		    DISPLAY ('  START FROM STATION %O', .ADDR);
+		    END;
+
+		[7] :
+		    !
+		    ! STACK
+		    !
+		    BEGIN
+
+		    BIND
+			FILL1 = RCVR,
+			FILL2 = SNDR,
+			STCKSUB = SUBTYPE,
+			STCKTYPE = TYPE;
+
+		    IF .STCKSUB NEQ 0 THEN WARN ('ILLEGAL STACK SUBTYPE: %O', .STCKSUB);
+
+		    IF .FLAGS NEQ 3 THEN WARN ('STACK DOES NOT HAVE QSYNC AND SELECT FLAGS ON: %O', .FLAGS);
+
+		    IF (.FILL1 NEQ 0) OR (.FILL2 NEQ 0)
+		    THEN
+			WARN ('STACK HAS NON-ZERO FILL BYTE: %O,%O',
+			    .FILL1, .FILL2);
+
+		    DISPLAY ('  STACK FROM STATION %O', .ADDR);
+		    END;
+
+		[INRANGE] :
+		    ABORT ('ARCHAIC DDCMP CONTROL MESSAGE SUB-TYPE: %O', .VAL);
+
+		[OUTRANGE] :
+		    ABORT ('ILLEGAL DDCMP CONTROL MESSAGE SUB-TYPE: %O', .VAL);
+		TES;
+
+	    IF .FLAGS<0, 1> THEN DISPLAY ('  THE QSYNC FLAG IS ON');
+
+	    IF .FLAGS<1, 1> THEN DISPLAY ('  THE SELECT FLAG IS ON');
+
+	    LENGTH = 0;
+	    END;
+
+	[%O'201'] :
+	    !
+	    ! Data segment
+	    !
+	    BEGIN
+
+	    LOCAL
+		COUNT,
+		FLAGS,
+		RESP,
+		NUM,
+		ADDR;
+
+	    COUNT = GET2 (CRC);
+	    FLAGS = .COUNT<14, 2>;
+	    COUNT = .COUNT<0, 14>;
+	    RESP = GET1 (CRC);
+	    NUM = GET1 (CRC);
+	    ADDR = GET1 (CRC);
+	    DISPLAY ('  DATA MESSAGE %O FROM STATION %O', .NUM, .ADDR);
+	    DISPLAY ('  LENGTH: %O, ACK OF MESSAGE %O GIVEN', .COUNT, .RESP);
+
+	    IF .FLAGS<0, 1> THEN DISPLAY ('  THE QSYNC FLAG IS ON');
+
+	    IF .FLAGS<1, 1> THEN DISPLAY ('  THE SELECT FLAG IS ON');
+
+	    LENGTH = .COUNT;
+	    END;
+
+	[%O'220'] :
+	    !
+	    ! MOP message
+	    !
+	    BEGIN
+
+	    LOCAL
+		COUNT,
+		FLAGS,
+		FILL1,
+		FILL2,
+		ADDR;
+
+	    COUNT = GET2 (CRC);
+	    FLAGS = .COUNT<14, 2>;
+	    COUNT = .COUNT<0, 14>;
+	    FILL1 = GET1 (CRC);
+	    FILL2 = GET1 (CRC);
+	    ADDR = GET1 (CRC);
+
+	    IF (.FILL1 NEQ 0) OR (.FILL2 NEQ 0)
+	    THEN
+		WARN ('MAINTENANCE MESSAGE HAS NON-ZERO FILL BYTE: %O,%O', .FILL1, .FILL2);
+
+	    IF .FLAGS NEQ 3
+	    THEN
+		WARN ('MAINTENANCE MESSAGE DOES NOT HAVE QSYNC AND SELECT FLAGS ON: %O',
+		    .FLAGS);
+
+	    DISPLAY ('  MAINTENANCE MESSAGE FROM %O, LENGTH %O', .ADDR, .COUNT);
+	    LENGTH = .COUNT;
+	    END;
+
+	[OTHERWISE] :
+	    ABORT ('INVALID DDCMP FRAMING BYTE: %O', .VAL);
+	TES;
+
+    IF .LENGTH NEQ 0
+    THEN
+	BEGIN
+	GET1 (CRC);
+	GET1 (CRC);
+
+	IF .CRC_TOTAL NEQ 0 THEN NEXT_BYTE = .NEXT_BYTE - 2;
+
+	END;
+
+    END;					!End of DDCMP
+ROUTINE GET1 (OPERATE) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	VAL;
+
+    VAL = GETBYT (.NEXT_BYTE);
+    NEXT_BYTE = .NEXT_BYTE + 1;
+
+    IF .OPERATE NEQ 0 THEN (.OPERATE) (.VAL);
+
+    .VAL
+    END;					!End of GET1
+ROUTINE GET2 (OPERATE) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+    GET1 (.OPERATE) + GET1 (.OPERATE)^8
+    END;					!End of GET2
+ROUTINE GETEX (OPERATE) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	VAL;
+
+    VAL = GET1 (.OPERATE);
+
+    IF .VAL<7, 1>
+    THEN
+	BEGIN
+	VAL<7, 8> = GET1 (.OPERATE);
+
+	IF .VAL<14, 1> THEN VAL<14, 2> = GET1 (.OPERATE);
+
+	END;
+
+    .VAL
+    END;					!End of GETEX
+ROUTINE NSP : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	NEXT_BYTE_SAVE,
+	VAL;
+
+    DISPLAY ('NSP PROTOCOL');
+    NEXT_BYTE_SAVE = .NEXT_BYTE;
+    VAL = GET1 (0);
+    !
+    ! Display routing header if there is one
+    !
+
+    IF .VAL<1, 1>
+    THEN
+	BEGIN
+
+	LOCAL
+	    DSTNODE : CH$SEQUENCE (6),
+	    DSTNODE_LENGTH,
+	    SRCNODE : CH$SEQUENCE (6),
+	    SRCNODE_LENGTH;
+
+	BIND
+	    DSTNODE_PTR = CH$PTR (DSTNODE),
+	    SRCNODE_PTR = CH$PTR (SRCNODE);
+
+	!
+	! Check for invalid bits
+	!
+
+	IF (.VAL AND %B'11110011') NEQ %B'01000010' THEN ABORT ('INVALID VALUE FOR RTFLG: %O', .VAL);
+
+	DSTNODE_LENGTH = GET1 (0);
+
+	IF .DSTNODE_LENGTH GTR 6
+	THEN
+	    ABORT ('DESTINATION NODE NAME LENGTH IN ROUTING HEADER TOO LONG (%O)',
+		.DSTNODE_LENGTH);
+
+	BEGIN
+
+	LOCAL
+	    PTR;
+
+	PTR = DSTNODE_PTR;
+
+	INCR INDEX FROM 1 TO .DSTNODE_LENGTH DO
+	    CH$WCHAR_A (GET1 (0), PTR);
+
+	END;
+	SRCNODE_LENGTH = GET1 (0);
+
+	IF .SRCNODE_LENGTH GTR 6
+	THEN
+	    ABORT ('SOURCE NODE NAME LENGTH IN ROUTING HEADER TOO LONG (%O)',
+		.SRCNODE_LENGTH);
+
+	BEGIN
+
+	LOCAL
+	    PTR;
+
+	PTR = SRCNODE_PTR;
+
+	INCR INDEX FROM 1 TO .SRCNODE_LENGTH DO
+	    CH$WCHAR_A (GET1 (0), PTR);
+
+	END;
+	DISPLAY ('  ROUTED FROM "%#E" TO "%#E" AT PRIORITY %O', .SRCNODE_LENGTH, SRCNODE_PTR,
+	    .DSTNODE_LENGTH, DSTNODE_PTR, .VAL<2, 2>);
+	VAL = GET1 (0);
+	END;
+
+    !
+    ! Check for invalid MSGFLG bits
+    !
+
+    IF (.VAL AND %B'10000011') NEQ %B'00000000' THEN ABORT ('INVALID BIT ON IN MSGFLG: %O', .VAL);
+
+    CASE .VAL<2, 2> FROM 0 TO 3 OF
+	SET
+
+	[0] :
+	    !
+	    ! Data message
+	    !
+
+	    CASE .VAL<4, 3> FROM 0 TO 7 OF
+		SET
+
+		[%B'000', %B'010', %B'100', %B'110'] :
+		    !
+		    ! Normal data message
+		    !
+		    BEGIN
+
+		    LOCAL
+			ACKNUM,
+			DSTADDR,
+			SEGNUM,
+			SRCADDR;
+
+		    DSTADDR = GET2 (0);
+		    SRCADDR = GET2 (0);
+		    SEGNUM = GET2 (0);
+
+		    IF .SEGNUM<15, 1>
+		    THEN
+			BEGIN
+			ACKNUM = SEGNUM;
+			SEGNUM = GET2 (0)
+			END
+		    ELSE
+			ACKNUM = 0;
+
+		    DISPLAY ('  DATA MESSAGE # %O FROM %P TO %P', .SEGNUM<0, 12>, .SRCADDR, .DSTADDR);
+
+		    IF .ACKNUM<15, 1>
+		    THEN
+
+			CASE .ACKNUM<12, 3> FROM 0 TO 1 OF
+			    SET
+
+			    [0] :
+				DISPLAY ('  ACK OF DATA SEGMENT # %O', .ACKNUM<0, 12>);
+
+			    [1] :
+				DISPLAY ('  NAK OF DATA SEGMENT # %O', .ACKNUM<0, 12>);
+
+			    [INRANGE, OUTRANGE] :
+				WARN ('INVALID ACK QUALIFIER (%O) FOR SEGMENT # %O', .ACKNUM<12, 3>,
+				    .ACKNUM<0, 12>);
+			    TES;
+
+		    CASE .VAL<5, 2> FROM 0 TO 3 OF
+			SET
+
+			[%B'01'] :
+			    DISPLAY ('  FIRST SEGMENT OF MESSAGE:');
+
+			[%B'00'] :
+			    DISPLAY ('  MIDDLE SEGMENT OF MESSAGE:');
+
+			[%B'10'] :
+			    DISPLAY ('  LAST SEGMENT OF MESSAGE:');
+
+			[%B'11'] :
+			    DISPLAY ('  SOLE SEGMENT OF MESSAGE:');
+
+			[INRANGE, OUTRANGE] :
+			    0;
+			TES;
+
+		    LENGTH = .LENGTH - (.NEXT_BYTE_SAVE - .NEXT_BYTE);
+		    END;
+
+		[%B'011', %B'111'] :
+		    !
+		    ! Interrupt message
+		    !
+		    BEGIN
+
+		    LOCAL
+			ACKNUM,
+			DSTADDR,
+			SEGNUM,
+			SRCADDR;
+
+		    IF .VAL<6, 1> THEN ABORT ('RESERVED BIT ON IN INTERRUPT MESSAGE SUBTYPE: %O', .VAL<4, 3>);
+
+		    DSTADDR = GET2 (0);
+		    SRCADDR = GET2 (0);
+		    SEGNUM = GET2 (0);
+
+		    IF .SEGNUM<15, 1>
+		    THEN
+			BEGIN
+			ACKNUM = SEGNUM;
+			SEGNUM = GET2 (0)
+			END
+		    ELSE
+			ACKNUM = 0;
+
+		    DISPLAY ('  INTERRUPT MESSAGE # %O FROM %P TO %P', .ACKNUM<0, 12>, .SRCADDR, .DSTADDR);
+
+		    IF .ACKNUM<15, 1>
+		    THEN
+
+			CASE .ACKNUM<12, 3> FROM 0 TO 1 OF
+			    SET
+
+			    [0] :
+				DISPLAY ('  ACK OF I/LS SEGMENT # %O', .ACKNUM<0, 12>);
+
+			    [1] :
+				DISPLAY ('  NAK OF I/LS SEGMENT # %O', .ACKNUM<0, 12>);
+
+			    [INRANGE, OUTRANGE] :
+				WARN ('INVALID ACK QUALIFIER (%O) FOR SEGMENT # %O', .ACKNUM<12, 3>,
+				    .ACKNUM<0, 12>);
+			    TES;
+
+		    LENGTH = .LENGTH - (.NEXT_BYTE_SAVE - .NEXT_BYTE);
+		    END;
+
+		[%B'001', %B'101'] :
+		    !
+		    ! Link service message
+		    !
+		    BEGIN
+
+		    LOCAL
+			ACKNUM,
+			DSTADDR,
+			LSFLAGS,
+			SEGNUM,
+			SRCADDR;
+
+		    IF .VAL<6, 1>
+		    THEN
+			ABORT ('RESERVED BIT ON IN LINK SERVICE MESSAGE SUBTYPE: %O',
+			    .VAL<4,
+				3>);
+
+		    DSTADDR = GET2 (0);
+		    SRCADDR = GET2 (0);
+		    SEGNUM = GET2 (0);
+
+		    IF .SEGNUM<15, 1>
+		    THEN
+			BEGIN
+			ACKNUM = SEGNUM;
+			SEGNUM = GET2 (0)
+			END
+		    ELSE
+			ACKNUM = 0;
+
+		    DISPLAY ('  LINK SERVICE MESSAGE # %O FROM %P TO %P', .SEGNUM<0, 12>, .SRCADDR, .DSTADDR);
+
+		    IF .ACKNUM<15, 1>
+		    THEN
+
+			CASE .ACKNUM<12, 3> FROM 0 TO 1 OF
+			    SET
+
+			    [0] :
+				DISPLAY ('  ACK OF I/LS SEGMENT # %O', .ACKNUM<0, 12>);
+
+			    [1] :
+				DISPLAY ('  NAK OF I/LS SEGMENT # %O', .ACKNUM<0, 12>);
+
+			    [INRANGE, OUTRANGE] :
+				WARN ('INVALID ACK QUALIFIER (%O) FOR SEGMENT # %O', .ACKNUM<12, 3>,
+				    .ACKNUM<0, 12>);
+			    TES;
+
+		    LSFLAGS = GET1 (0);
+		    VAL = GET1 (0);
+
+		    IF .LSFLAGS<4, 4> NEQ 0 THEN ABORT ('INVALID BITS ON IN LSFLAGS: %O', .LSFLAGS);
+
+		    CASE .LSFLAGS<0, 2> FROM 0 TO 2 OF
+			SET
+
+			[0] :
+			    0;
+
+			[1] :
+			    DISPLAY ('  STOP DATA REQUESTED');
+
+			[2] :
+			    DISPLAY ('  START DATA REQUESTED');
+
+			[INRANGE, OUTRANGE] :
+			    ABORT ('RESERVED VALUE IN FC MOD FIELD OF LSFLAGS FIELD: %O', .LSFLAGS<0, 2>);
+			TES;
+
+		    CASE .LSFLAGS<2, 2> FROM 0 TO 1 OF
+			SET
+
+			[0] :
+			    DISPLAY ('  DATA SEGMENT/MESSAGE REQUEST COUNT: %O', .VAL);
+
+			[1] :
+			    DISPLAY ('  INTERRUPT REQUEST COUNT: %O', .VAL);
+
+			[INRANGE, OUTRANGE] :
+			    ABORT ('RESERVED VALUE IN FCVAL INT FIELD OF LSFLAGS FIELD: %O', .LSFLAGS<2, 2>);
+			TES;
+
+		    LENGTH = 0;
+		    END;
+
+		[INRANGE, OUTRANGE] :
+		    0;
+		TES;
+
+	[1] :
+	    !
+	    ! Acknowledgement message
+	    !
+	    BEGIN
+
+	    LOCAL
+		ACKNUM,
+		DSTADDR,
+		SRCADDR;
+
+	    IF .VAL<5, 2> NEQ 0 THEN ABORT ('INVALID BIT ON IN MSGFLG SUBTYPE FIELD: %O', .VAL<4, 3>);
+
+	    DSTADDR = GET2 (0);
+	    SRCADDR = GET2 (0);
+	    ACKNUM = GET2 (0);
+
+	    IF NOT .VAL<4, 1>
+	    THEN
+		DISPLAY ('  DATA ACK MESSAGE FROM %P TO %P', .SRCADDR, .DSTADDR)
+	    ELSE
+		DISPLAY ('  I/LS ACK MESSAGE FROM %P TO %P', .SRCADDR, .DSTADDR);
+
+	    IF NOT .ACKNUM<15, 1> THEN WARN ('THE ACKNUM IS NOT FLAGGED: %P', .ACKNUM);
+
+	    CASE .ACKNUM<12, 3> FROM 0 TO 1 OF
+		SET
+
+		[0] :
+		    DISPLAY ('  ACK OF SEGMENT # %O', .ACKNUM<0, 12>);
+
+		[1] :
+		    DISPLAY ('  NAK OF SEGMENT # %O', .ACKNUM<0, 12>);
+
+		[INRANGE, OUTRANGE] :
+		    WARN ('INVALID ACK QUALIFIER (%O) FOR SEGMENT # %O', .ACKNUM<12, 3>, .ACKNUM<0, 12>);
+		TES;
+
+	    LENGTH = 0;
+	    END;
+
+	[2] :
+	    !
+	    ! Control message
+	    !
+	    BEGIN
+
+	    CASE .VAL<4, 3> FROM 0 TO 7 OF
+		SET
+
+		[0] :
+		    !
+		    ! No operation
+		    !
+		    BEGIN
+		    DISPLAY ('  NO-OPERATION TEST DATA:');
+		    !
+		    ! Display the message text
+		    !
+		    VMADMP (0, .NEXT_BYTE, .NEXT_BYTE_SAVE + .LENGTH);
+		    END;
+
+		[1] :
+		    !
+		    ! Connect Initiate
+		    !
+		    BEGIN
+
+		    IF (VAL = GET2 (0)) NEQ 0 THEN ABORT ('CONNECT INITIATE WITH DSTADDR <> 0 (%P)', .VAL);
+
+		    DISPLAY ('  CONNECT INITIATE FROM %P', GET2 (0));
+		    BEGIN
+
+		    LOCAL
+			SERVICES;
+
+		    BIND
+			FLOW_LNG = UPLIT (2, 7, 7, 7) : VECTOR [4],
+			FLOW_PTR = UPLIT (CH$ASCII ('NO'), CH$ASCII ('SEGMENT'),
+	CH$ASCII('MESSAGE'),CH$ASCII('INVALID')): VECTOR [4];
+
+		    SERVICES = GETEX (0);
+
+		    IF (.SERVICES AND %B'11110011') NEQ %B'00000001'
+		    THEN
+			ABORT ('INVALID SERVICES FIELD: %O', .SERVICES);
+
+		    IF .SERVICES<2, 2> EQL 3 THEN WARN ('INVALID FLOW CONTROL OPTIONS: %O', .SERVICES<2, 2>);
+
+		    VAL = GETEX (0);
+
+		    IF (.VAL AND %B'11111100') NEQ %B'00000000' THEN ABORT ('INVALID INFO FIELD: %O', .VAL);
+
+		    IF .VAL<0, 2> NEQ 1 THEN WARN ('INVALID LINK PRIORITY: %O', .VAL<0, 2>);
+
+		    DISPLAY ('  %#A FLOW CONTROL, SEGMENT SIZE: %O', .FLOW_LNG [.SERVICES<2, 2>],
+			.FLOW_PTR [.SERVICES<2, 2>], GET2 (0));
+		    END;
+		    NSP_PROCESS (CH$ASCIZ ('DESTINATION'));
+
+		    IF .LENGTH EQL 0 THEN RETURN;
+
+		    NSP_PROCESS (CH$ASCIZ ('SOURCE'));
+
+		    IF .LENGTH EQL 0 THEN RETURN;
+
+		    BEGIN
+
+		    LOCAL
+			DATA : CH$SEQUENCE (16, 8),
+			DATA_LEN,
+			MENU,
+			PTR;
+
+		    BIND
+			DATA_PTR = CH$PTR (DATA,, 8);
+
+		    MENU = GETEX (0);
+
+		    IF .MENU<2, 5> NEQ 0 THEN ABORT ('RESERVED BITS IN MENU FIELD NON-ZERO: %O', .MENU);
+
+		    IF .MENU<0, 1>
+		    THEN
+			BEGIN
+
+			SELECTONE (DATA_LEN = GET1 (0)) OF
+			    SET
+
+			    [0] :
+				DISPLAY ('  NO REQUESTOR ID');
+
+			    [1 TO 16] :
+				BEGIN
+				PTR = DATA_PTR;
+
+				DECR INDEX FROM .DATA_LEN TO 1 DO
+				    CH$WCHAR_A (GET1 (0), PTR);
+
+				DISPLAY ('  REQUESTOR ID: %#B', .DATA_LEN, DATA_PTR);
+				END;
+
+			    [OTHERWISE] :
+				ABORT ('REQUESTOR ID IS TOO LONG: %O', .DATA_LEN);
+			    TES;
+
+			SELECTONE (DATA_LEN = GET1 (0)) OF
+			    SET
+
+			    [0] :
+				DISPLAY ('  NO PASSWORD');
+
+			    [1 TO 16] :
+				BEGIN
+				PTR = DATA_PTR;
+
+				DECR INDEX FROM .DATA_LEN TO 1 DO
+				    CH$WCHAR_A (GET1 (0), PTR);
+
+				DISPLAY ('  PASSWORD: %#B', .DATA_LEN, DATA_PTR);
+				END;
+
+			    [OTHERWISE] :
+				ABORT ('PASSWORD IS TOO LONG: %O', .DATA_LEN);
+			    TES;
+
+			SELECTONE (DATA_LEN = GET1 (0)) OF
+			    SET
+
+			    [0] :
+				DISPLAY ('  NO ACCOUNT');
+
+			    [1 TO 16] :
+				BEGIN
+				PTR = DATA_PTR;
+
+				DECR INDEX FROM .DATA_LEN TO 1 DO
+				    CH$WCHAR_A (GET1 (0), PTR);
+
+				DISPLAY ('  ACCOUNT: %#B', .DATA_LEN, DATA_PTR);
+				END;
+
+			    [OTHERWISE] :
+				ABORT ('ACCOUNT IS TOO LONG: %O', .DATA_LEN);
+			    TES;
+
+			END;
+
+		    IF .MENU<1, 1>
+		    THEN
+
+			SELECTONE (DATA_LEN = GET1 (0)) OF
+			    SET
+
+			    [0] :
+				DISPLAY ('  NO USER DATA');
+
+			    [1 TO 16] :
+				BEGIN
+				PTR = DATA_PTR;
+
+				DECR INDEX FROM .DATA_LEN TO 1 DO
+				    CH$WCHAR_A (GET1 (0), PTR);
+
+				DISPLAY ('  USER DATA: %#B', .DATA_LEN, DATA_PTR);
+				END;
+
+			    [OTHERWISE] :
+				ABORT ('USER DATA IS TOO LONG: %O', .DATA_LEN);
+			    TES;
+
+		    END;
+		    !
+		    ! ** MORE TO COME **
+		    !
+		    END;
+
+		[2] :
+		    !
+		    ! Connect Confirm
+		    !
+		    BEGIN
+		    BEGIN
+
+		    LOCAL
+			DSTADDR,
+			SRCADDR;
+
+		    DSTADDR = GET2 (0);
+		    SRCADDR = GET2 (0);
+		    DISPLAY ('  CONNECT CONFIRM FROM %P TO %P', .SRCADDR, .DSTADDR);
+		    END;
+		    BEGIN
+
+		    LOCAL
+			SERVICES;
+
+		    BIND
+			FLOW_LNG = UPLIT (2, 7, 7, 7) : VECTOR [4],
+			FLOW_PTR = UPLIT (CH$ASCII ('NO'), CH$ASCII ('SEGMENT'),
+	CH$ASCII('MESSAGE'),CH$ASCII('INVALID')): VECTOR [4];
+
+		    SERVICES = GETEX (0);
+
+		    IF (.SERVICES AND %B'11110011') NEQ %B'00000001'
+		    THEN
+			ABORT ('INVALID SERVICES FIELD: %O', .SERVICES);
+
+		    IF .SERVICES<2, 2> EQL 3 THEN WARN ('INVALID FLOW CONTROL OPTIONS: %O', .SERVICES<2, 2>);
+
+		    VAL = GETEX (0);
+
+		    IF (.VAL AND %B'11111100') NEQ %B'00000000' THEN ABORT ('INVALID INFO FIELD: %O', .VAL);
+
+		    IF .VAL<0, 2> NEQ 1 THEN WARN ('INVALID LINK PRIORITY: %O', .VAL<0, 2>);
+
+		    DISPLAY ('  %#A FLOW CONTROL, SEGMENT SIZE: %O', .FLOW_LNG [.SERVICES<2, 2>],
+			.FLOW_PTR [.SERVICES<2, 2>], GET2 (0));
+		    END;
+		    BEGIN
+
+		    LOCAL
+			DATA_CTL : CH$SEQUENCE (16, 8),
+			DATA_CTL_LEN,
+			PTR;
+
+		    BIND
+			DATA_CTL_PTR = CH$PTR (DATA_CTL,, 8);
+
+		    SELECTONE (DATA_CTL_LEN = GET1 (0)) OF
+			SET
+
+			[0] :
+			    DISPLAY ('  NO USER DATA');
+
+			[1 TO 16] :
+			    BEGIN
+			    PTR = DATA_CTL_PTR;
+
+			    DECR INDEX FROM .DATA_CTL_LEN TO 1 DO
+				CH$WCHAR_A (GET1 (0), PTR);
+
+			    DISPLAY ('  USER DATA: %#B', .DATA_CTL_LEN, DATA_CTL_PTR);
+			    END;
+
+			[OTHERWISE] :
+			    ABORT ('USER DATA IS TOO LONG: %O', .DATA_CTL_LEN);
+			TES;
+
+		    END;
+		    END;
+
+		[3] :
+		    !
+		    ! Disconnect Initiate
+		    !
+		    BEGIN
+
+		    LOCAL
+			DSTADDR,
+			PTR,
+			REASON,
+			SRCADDR,
+			USRDATA : CH$SEQUENCE (16, 8),
+			USRDATA_LEN;
+
+		    BIND
+			USRDATA_PTR = CH$PTR (USRDATA,, 8);
+
+		    DSTADDR = GET2 (0);
+		    SRCADDR = GET2 (0);
+		    REASON = GET2 (0);
+		    DISPLAY ('  DISCONNECT INITIATE FROM %P TO %P', .SRCADDR, .DSTADDR);
+		    DISPLAY ('  DISCONNECT REASON: %O', .REASON);
+
+		    SELECTONE (USRDATA_LEN = GET1 (0)) OF
+			SET
+
+			[0] :
+			    DISPLAY ('  NO USER DATA');
+
+			[1 TO 16] :
+			    BEGIN
+			    PTR = USRDATA_PTR;
+
+			    DECR INDEX FROM .USRDATA_LEN TO 1 DO
+				CH$WCHAR_A (GET1 (0), PTR);
+
+			    DISPLAY ('  USER DATA: %#B', .USRDATA_LEN, USRDATA_PTR);
+			    END;
+
+			[OTHERWISE] :
+			    ABORT ('USER DATA IS TOO LONG: %O', .USRDATA_LEN);
+			TES;
+
+		    END;
+
+		[4] :
+		    !
+		    ! Disconnect Confirm
+		    !
+		    BEGIN
+
+		    LOCAL
+			DSTADDR,
+			REASON,
+			SRCADDR;
+
+		    DSTADDR = GET2 (0);
+		    SRCADDR = GET2 (0);
+		    REASON = GET2 (0);
+		    DISPLAY ('  DISCONNECT CONFIRM FROM %P TO %P', .SRCADDR, .DSTADDR);
+		    DISPLAY ('  DISCONNECT REASON: %O', .REASON);
+		    END;
+
+		[5] :
+		    !
+		    ! Startup
+		    !
+
+		    CASE (VAL = GET1 (0)) FROM 1 TO 2 OF
+			SET
+
+			[1] :
+			    !
+			    ! Node initialization
+			    !
+			    BEGIN
+			    BEGIN
+
+			    LOCAL
+				NODEADDR,
+				NODENAME : CH$SEQUENCE (6, 8),
+				NODENAME_LEN,
+				PTR;
+
+			    BIND
+				NODENAME_PTR = CH$PTR (NODENAME,, 8);
+
+			    NODEADDR = GETEX (0);
+			    NODENAME_LEN = GET1 (0);
+
+			    IF .NODENAME_LEN GTR 6
+			    THEN
+				ABORT ('NODE NAME LENGTH IN NODE INIT MESSAGE TOO LONG (%O)', .NODENAME_LEN);
+
+			    PTR = NODENAME_PTR;
+
+			    DECR INDEX FROM .NODENAME_LEN TO 1 DO
+				CH$WCHAR_A (GET1 (0), PTR);
+
+			    DISPLAY ('  NODE INIT FROM "%#E", NUMBER %O', .NODENAME_LEN, NODENAME_PTR,
+				.NODEADDR);
+			    END;
+			    VAL = GET1 (0);
+
+			    IF .VAL<3, 5> NEQ 0 THEN ABORT ('INVALID BITS ON IN FUNCTIONS FIELD: %O', .VAL);
+
+			    CASE .VAL<0, 3> FROM 0 TO 7 OF
+				SET
+
+				[0] :
+				    0;
+
+				[7] :
+				    DISPLAY ('  INTERCEPT FUNCTIONS SUPPORTED');
+
+				[INRANGE, OUTRANGE] :
+				    ABORT ('RESERVED INT FIELD VALUE IN SUPPORTED FUNCTIONS: %O', .VAL<0, 3>);
+				TES;
+
+			    VAL = GET1 (0);
+
+			    IF .VAL<3, 5> NEQ 0 THEN ABORT ('INVALID BITS ON IN REQUESTS FIELD: %O', .VAL);
+
+			    CASE .VAL<1, 2> FROM 0 TO 3 OF
+				SET
+
+				[0] :
+				    0;
+
+				[3] :
+				    DISPLAY ('  INTERCEPT FUNCTIONS REQUESTED');
+
+				[INRANGE, OUTRANGE] :
+				    ABORT ('INVALID RINT FIELD IN REQUESTED FUNCTIONS: %O', .VAL<1, 2>);
+				TES;
+
+			    IF .VAL<0, 1> THEN DISPLAY ('  NODE VERIFICATION REQUIRED');
+
+			    DISPLAY ('  MAXIMUM BLOCK SIZE: %O, SEGMENT SIZE: %O, LINKS: %M.', GET2 (0),
+				GET2 (0), GET2 (0));
+			    DISPLAY ('  ROUTING VERSION: %O.%O.%O  COMM VERSION: %O.%O.%O', GET1 (0),
+				GET1 (0), GET1 (0), GET1 (0), GET1 (0), GET1 (0));
+			    BEGIN
+
+			    LOCAL
+				PTR,
+				SYSVER : CH$SEQUENCE (32, 8),
+				SYSVER_LENGTH;
+
+			    BIND
+				SYSVER_PTR = CH$PTR (SYSVER,, 8);
+
+			    SYSVER_LENGTH = GET1 (0);
+
+			    IF .SYSVER_LENGTH GTR 32
+			    THEN
+				ABORT ('SYSTEM VERSION LENGTH IN NODE INIT MESSAGE TOO LONG (%O)',
+				    .SYSVER_LENGTH);
+
+			    PTR = SYSVER_PTR;
+
+			    INCR INDEX FROM 0 TO .SYSVER_LENGTH DO
+				CH$WCHAR_A (GET1 (0), PTR);
+
+			    DISPLAY ('  SYSTEM IDENTIFICATION: "%#E"', .SYSVER_LENGTH, SYSVER_PTR);
+			    END;
+			    END;
+
+			[2] :
+			    !
+			    ! Node verification
+			    !
+			    BEGIN
+
+			    LOCAL
+				PASSWORD : CH$SEQUENCE (8, 8),
+				PTR;
+
+			    BIND
+				PASSWORD_PTR = CH$PTR (PASSWORD,, 8);
+
+			    PTR = PASSWORD_PTR;
+
+			    DECR INDEX FROM 8 TO 1 DO
+				CH$WCHAR_A (GET1 (0), PTR);
+
+			    DISPLAY ('  VERFICATION PASSWORD: %8B', PASSWORD_PTR);
+			    END;
+
+			[INRANGE, OUTRANGE] :
+			    ABORT ('INVALID STARTTYPE VALUE: %O', .VAL);
+			TES;
+
+		[INRANGE, OUTRANGE] :
+		    !
+		    ! Reserved
+		    !
+		    ABORT ('RESERVED CONTROL MESSAGE TYPE USED: %O', .VAL<4, 3>);
+		TES;
+
+	    LENGTH = 0;
+	    END;
+
+	[INRANGE, OUTRANGE] :
+	    !
+	    ! Reserved message type
+	    !
+	    ABORT ('RESERVED MESSAGE TYPE USED: %O', .VAL<2, 2>);
+	TES;
+
+    END;					!End of NSPMSG
+ROUTINE NSP_PROCESS (TYPE) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	VAL;
+
+    BIND
+	TYPE_LEN = CH$LEN (.TYPE);
+
+    VAL = GET1 (0);
+
+    SELECTONE .VAL OF
+	SET
+
+	[%B'000000'] :
+	    DISPLAY ('  %#A OBJECT: %O', TYPE_LEN, .TYPE, GET1 (0));
+
+	[%B'000001'] :
+	    BEGIN
+
+	    LOCAL
+		NAME : CH$SEQUENCE (16),
+		NAME_LEN,
+		PTR;
+
+	    BIND
+		NAME_PTR = CH$PTR (NAME);
+
+	    IF (VAL = GET1 (0)) NEQ 0
+	    THEN
+		WARN ('  %#A OBJECT TYPE IS NON-ZERO FOR FORMAT 1: %O', TYPE_LEN,
+		    .TYPE, .VAL);
+
+	    IF (NAME_LEN = GET1 (0)) GTR 16
+	    THEN
+		ABORT ('  %#A PROCESS DESCRIPTOR IS TOO LONG: %O', TYPE_LEN,
+		    .TYPE, .NAME_LEN);
+
+	    PTR = NAME_PTR;
+
+	    DECR INDEX FROM .NAME_LEN TO 1 DO
+		CH$WCHAR_A (GET1 (0), PTR);
+
+	    DISPLAY ('  %#A PROCESS: "%#E"', TYPE_LEN, .TYPE, .NAME_LEN, NAME_PTR);
+	    END;
+
+	[%B'000010'] :
+	    BEGIN
+
+	    LOCAL
+		GRPCODE,
+		NAME : CH$SEQUENCE (12),
+		NAME_LEN,
+		PTR,
+		USRCODE;
+
+	    BIND
+		NAME_PTR = CH$PTR (NAME);
+
+	    IF (VAL = GET1 (0)) NEQ 0
+	    THEN
+		WARN ('  %#A OBJECT TYPE IS NON-ZERO FOR FORMAT 1: %O', TYPE_LEN,
+		    .TYPE, .VAL);
+
+	    GRPCODE = GET2 (0);
+	    USRCODE = GET2 (0);
+
+	    IF (NAME_LEN = GET1 (0)) GTR 12
+	    THEN
+		ABORT ('  %#A PROCESS DESCRIPTOR IS TOO LONG: %O', TYPE_LEN,
+		    .TYPE, .NAME_LEN);
+
+	    PTR = NAME_PTR;
+
+	    DECR INDEX FROM .NAME_LEN TO 1 DO
+		CH$WCHAR_A (GET1 (0), PTR);
+
+	    DISPLAY ('  %#A PROCESS: "[%O,%O]%#E"', TYPE_LEN, .TYPE, .GRPCODE, .USRCODE, .NAME_LEN, NAME_PTR);
+	    END;
+
+	[OTHERWISE] :
+	    ABORT ('INVALID %#A PROCESS NAME FIELD FORMAT TYPE: %O', TYPE_LEN, .TYPE, .VAL);
+	TES;
+
+    END;					!End of NSP_PROCESS
+END						!End of module
+
+ELUDOM

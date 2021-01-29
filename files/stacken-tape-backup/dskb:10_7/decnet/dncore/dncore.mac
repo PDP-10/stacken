@@ -1,0 +1,263 @@
+	TITLE	DNCORE		DECnet-10 core tracking program
+	SUBTTL	Tarl Neustaedter
+	SEARCH	DCN
+	XP $ONLY,I.LUO!I.GTT
+	XP HI$SEG,100000	;Allow us to use hiseg pages as data
+	$INIT	DNC
+
+	VRSN.(0,1,0,2)
+
+;Structure definitions (From D36COM.MAC)
+	CH.BOT==0		;Word 0 in CH block
+	CH.PTR==1		;Pointer to first available block
+	CH.AVL==2		;Number of available blocks
+	CH.NUM==4		;Total number of blocks (left half, 17 bits)
+	CH.SIZ==4		;Size of blocks (right half)
+	CH.LEN==5		;Length of ch blocks
+
+;Page allocations
+
+	XP PAGSIZ,1000		;Page size in words
+	XP CHBPAG,76000		;Address for CH blocks to be mapped into.
+;	XP HI$SEG,100000	;Address of our hiseg.
+	XP MAPPAG,200000	;Address to map data in. blted elsewhere.
+	XP DATPAG,400000	;Address to BLT data to.
+
+;Values
+
+	MAPLEN==40		;Bit map length
+
+$LOSEG
+
+QTYPAG:	BLOCK 1			;Number of pages currently at DATPAG
+BLKNUM:	BLOCK 1			;ordinal of current ch block
+CHBLOK:	BLOCK CH.LEN		;Current CH block.
+BITMAP:	BLOCK MAPLEN+1		;Bitmap to keep track which blocks got lost
+TYPHED:	BLOCK 1			;Header output for addresses flag
+
+$HISEG
+
+START:	$SETUP			;Initialize luuo pack Age
+	GTTAB. P1,[%DNCHB]	;Get pointer to CH blocks
+	MOVEI T3,-1(P1)		;Point to count word
+	ASH T3,9		;Make a page number (in left half)from address.
+	HRRI T3,CHBPAG/PAGSIZ	;CH block pages
+	MOVEI T2,2		;Number of pages to map
+	CALL SPYPAG		;Spy on these pages.
+	MOVEI T1,CHBPAG/PAGSIZ	;Page where CH blocks start in our addressing
+	DPB T1,[POINT 9,P1,26]	;Overwrite monitor page with our page
+	MOVE P2,-1(P1)		;Get number of CH blocks
+;	MOVEI P2,2		;GET NUMBER OF CH BLOCKS
+	SETZM BLKNUM		;Start with block set 0
+NXTCH:	AOS BLKNUM		;Number of CH block we are working on
+	CALL MAPCH		;Check out this CH block
+	ADDI P1,CH.LEN		;Point to next CH block
+	SOJG P2,NXTCH		;Do next CH block
+	MOVEI T3,CHBPAG/PAGSIZ	;CH pages
+	CALL DEL2PG		;Delete these 2 pages.
+	EXIT			;Leave.
+
+;Routine to check out a CH structure.
+;Call
+;	P1/ Points to mapped CH structure.
+;Return
+;	Always
+;This routine will map in the data pointed to by the CH begstr pointed
+;to by P1, and will type out the addresses of the blocks not accounted for.
+
+MAPCH:	PUSHJ P,.SAVE4##	;Saved ACs
+	TSTRG. [ASCIZ \Block \]
+	MOVE T1,BLKNUM		;Get the ordinal of this block
+	TDECW. T1,		;and type it out
+	TCRLF.
+	HRRZ T3,CH.BOT(P1)	;Get starting address of this block of core
+	LDB P4,[POINT 17,CH.NUM(P1),17] ;Get number of blocks
+	HRRZ P3,CH.SIZ(P1)	;Get size of blocks
+	MOVE T2,P4
+	IMUL T2,P3		;amount of memory needed for these blocks
+	MOVE P2,T2		;Save for later
+	ADD T2,T3		;End pointer to use
+	TLNE T2,-1		;Check for overflow
+	 $ERROR COS,<CH block overflows section. Fatal.>
+	LSHC T2,-9		;Convert both quantities to page numbers
+	SUBI T2,-1(T3)		;Determine number of pages to map
+	CAILE T2,<DATPAG-MAPPAG>/PAGSIZ ;Make sure it will fit
+	 $ERROR CFC,<Can't fit this CH block, not enough user space>
+	MOVEM T2,QTYPAG		;Save for later..
+	LDB T3,[POINT 18,CH.BOT(P1),26] ;Get starting page in monitor
+	MOVSS T3		;and put it in left half for page uuo
+	HRRI T3,MAPPAG/PAGSIZ	;starting page in user
+	CALL SPYPAG		;Map in the data structure
+	MOVEI T3,DATPAG/PAGSIZ	;Where we are going to blt the data to
+	MOVE T2,QTYPAG		;Get number of pages to do again.
+	CALL CREPAG		;Create some pages
+	LDB T1,[POINT 9,CH.BOT(P1),35] ;Get offset into first page
+	ADDI T1,MAPPAG		;Point at this word mapped
+	MOVSS T1		;Left half, since it is source
+	HRRI T1,DATPAG		;Where to put it (data page)
+	MOVNS T2		;Number of pages
+	IMULI T2,PAGSIZ		;Make it number of words
+	MOVSI T3,(P1)		;pointer to CH block
+	HRRI T3,CHBLOK		;Pointer to place to save it.
+	SETZ T4,		;Do a minimal sleep, so that we are at
+	SLEEP T4,		; the beginning of a schedular cycle for BLTs
+	BLT T3,CHBLOK+CH.LEN-1	;Copy the entire CH block
+	BLT T1,DATPAG-1(P2)	;Copy the entire data base
+	TCHRI. .CHTAB		;Indent info typed about CH
+	HRRZ T1,CH.SIZ+CHBLOK	;Get size of blocks
+	TDECW. T1,		;type it out
+	TSTRG. [ASCIZ \ word blocks, \]
+	MOVE T1,CH.AVL+CHBLOK	;Number available
+	TDECW. T1,
+	TSTRG. [ASCIZ \ available out of \]
+	LDB T1,[POINT 17,CH.NUM+CHBLOK,17] ;get total number of blocks
+	TDECW. T1,		;and type them out
+	TCRLF.
+
+	MOVEI T3,MAPPAG/PAGSIZ	;Mapped pages
+	CALL DELQPG		;Delete them.
+	CALL CHKDAT		;Check the data base
+	MOVEI T3,DATPAG/PAGSIZ	;Where the data pages are
+	CALL DELQPG		;Delete them
+	RET
+
+
+;Routine to initialize BITMAP to number of bits corresponding to number
+;of blocks described in CHBLOK.
+
+INIBIT:	SETZM BITMAP		;start with a clean map
+	MOVE T1,[BITMAP,,BITMAP+1] ;BLT pointer
+	BLT T1,BITMAP+MAPLEN	;Clear the entire map
+	LDB T1,[POINT 17,CH.NUM+CHBLOK,17] ;Get number of blocks we are to check
+	IDIVI T1,^D36		;Number of words to fill with -1
+	JUMPE T1,INIBI2		;If no whole words, skip this.
+	SETOM BITMAP		;Start off with one word set
+	MOVE T3,[BITMAP,,BITMAP+1] ;BLT pointer
+	CAIE T1,1		;If only one word, don't do blt
+	BLT T3,BITMAP-1(T1)	;Set all the whole words
+INIBI2:	JUMPE T2,INIBI3		;If no part words, skip
+	MOVSI T3,400000		;Top bit of word
+	MOVNS T2		;Negate
+	ASH T3,1(T2)		;Make a mask with that many bits
+	MOVEM T3,BITMAP(T1)	;Save in last word of bit map
+INIBI3:
+	RET
+
+;Routine to clear a single bit in BITMAP.
+;Call
+;	T1/ Bit number to clear
+;Return
+;	RET	If bit wasn't set
+;	RETSKP	If bit was set
+
+CLRBIT:
+	CAIL T1,MAPLEN*^D36	;Make sure bit is in range
+	 $WARN BOR,<Clearing bit out of range>,.TDECW##,T1,.POPJ1##
+	IDIVI T1,^D36		;Convert bit number to word+bit number
+	MOVNS T2		;Make it negative
+	MOVSI T3,400000		;Bit 0 in a word
+	ROT T3,(T2)		;shift bit to correct place in word
+	TDNN T3,BITMAP(T1)	;Make sure bit is set before we clear it
+	 RET
+	ANDCAM T3,BITMAP(T1)	;Clear the bit
+	RETSKP
+CHKDAT:	CALL .SAVE4##		;Save some ACs
+	CALL INIBIT		;Initialize the bit map
+	HRRZ P1,CH.SIZ+CHBLOK	;Get size of blocks
+	MOVE P2,CH.PTR+CHBLOK	;Get pointer to first free block
+CHKDA1:	JUMPE P2,CHKDA3		;If end, exit
+	MOVE P3,P2		;Save in case we want to type it out.
+	SUB P2,CH.BOT+CHBLOK	;Convert to absolute offset
+	MOVE T1,P2		;Copy for bit clearing use
+	IDIV T1,P1		;Convert to ordinal of block
+	SKIPE T2		;make sure it was a good pointer
+	 $WARN BPF,<Bad pointer on free list>,.TXWDW##,P3
+	CALL CLRBIT		;Clear bit for this block
+	 $WARN DFE,<Duplicate free list entry at >,.TXWDW##,P3
+	MOVE P2,DATPAG(P2)	;Get pointer to next block
+	JRST CHKDA1		;and keep on going
+
+CHKDA3:
+	SETOM TYPHED		;Clear header output flag
+	MOVEI P2,MAPLEN		;Number of words in bit map
+CHKDA4:	SKIPN P3,BITMAP(P2)	;Get bit map word
+	 JRST CHKDA9		;Nothing left, try for next one
+CHKDA5:	JFFO P3,.+2		;Find out which is the top bit
+	 JRST CHKDA9		;Finished with this word, go get next
+	CALL TYPLST		;Type out address of lost block
+	LSH P3,1(P4)		;Shift bit out
+	MOVNS P4		;Negate count
+	LSH P3,-1(P4)		;shift back into position
+	JRST CHKDA5		;and try again
+CHKDA9:	SOJGE P2,CHKDA4		;Try for next word
+	SKIPL TYPHED		;if we typed anything out,
+	  TCRLF.		;finish current line
+	RET
+
+;Routine to type out the address of a lost block. Will output a header
+;the first time it is called.
+;Call
+;	P1/ Size of block
+;	P2/ Word number in BITMAP
+;	P4/ Bit within word
+;	CHBLOK+CH.BOT/ Offset in monitor of data base
+;Return
+;	Always
+
+TYPLST:	AOSE T1,TYPHED		;Have we typed out a header?
+	 JRST TYPLS1		;Yes, skip it.
+	TCHRI. .CHTAB		;Indent
+	TSTRG. [ASCIZ \Addresses of blocks in use: \]
+TYPLS1:	TRNN T1,3		;is this a beginning of line?
+	  TCRLF.
+	TCHRI. .CHTAB		;and tab over for next one.
+	MOVE T1,P2		;Word number we are on
+	IMULI T1,^D36		;Convert to bit number
+	ADD T1,P4		;Add in exact bit
+	IMUL T1,P1		;Convert to word
+	ADD T1,CH.BOT+CHBLOK	;Convert to monitor address
+	TXWDW. T1,		;Type out the address
+	RET
+;Routines to delete pages from the user address space.
+;Call
+;	T3/ Starting page to delete
+;	CALL DEL2PG to delete 2 pages,
+;	CALL DELQPG to delete [QTYPAG] pages
+;Return
+;	Unless it fails.
+
+DEL2PG:	SKIPA T2,[EXP -2]	;Number of pages to delete
+DELQPG:	MOVN T2,QTYPAG		;Get number of pages to delete
+	HRLI T3,(PA.GAF)	;Set delete bit
+	MOVE T1,[.PAGCD,,T2]	;Function code
+	PAGE. T1,
+	 $ERROR DPF,<Delete pages failed, code >,.TOCTW##,T1
+	RET
+
+;Routine to spy on monitor pages.
+;Call
+;	T2/ Number of pages to map
+;	T3/ Starting page number in monitor,,starting page number in user
+;Return
+;	If all works.
+
+SPYPAG:	MOVNS T2		;page uuo wants this negative
+	MOVE T1,[.PAGSP,,T2]	;Spy function
+	PAGE. T1,		;Map them in
+	 $ERROR SPF,<SPY pages failed, code >,.TOCTW##,T1
+	RET
+
+;Routine to create new pages
+;Call
+;	T2/ Number of pages to create
+;	T3/ Starting page to create
+;Return
+;	Maybe.
+
+CREPAG:	MOVNS T2		;Page uuo wants this negative
+	MOVE T1,[.PAGCD,,T2]	;Create pages
+	PAGE. T1,		;Create them!
+	 $ERROR CPF,<Create pages failed, code >,.TOCTW##,T1
+	RET
+
+	END START

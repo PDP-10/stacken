@@ -1,0 +1,451 @@
+MODULE MDANML (					!Display the NML data bases
+		IDENT = '001020',
+		LANGUAGE (BLISS16, BLISS36)
+		) =
+BEGIN
+!
+!			  COPYRIGHT (c) 1977, 1978 BY
+!	      DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND  COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH  LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR  ANY  OTHER
+! COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE  WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS  A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: MCBDA - MCB Crash Dump Analyzer
+!
+! ABSTRACT:
+!
+!   Display the NML data bases
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM	, CREATION DATE: 1-Oct-81
+!
+! MODIFIED BY:
+!
+! 	, : VERSION
+! 01	- Creation.
+! 02    - Analyze running condition of NML through the TCB.
+!         Data base analysis:
+!           Current task
+!           Task list
+!           Memory pool
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    NMLMCB : NOVALUE;				!
+
+!
+! INCLUDE FILES:
+!
+
+LIBRARY 'MDACOM';				!MDA common definitions.
+
+LIBRARY 'RSXLIB';				!RSX definitions.
+
+LIBRARY 'MCBLIB';				!MCB definitions.
+
+!
+! MACROS:
+!
+!
+! EQUATED SYMBOLS:
+!
+!
+!
+! OWN STORAGE:
+!
+!
+! EXTERNAL REFERENCES:
+!
+
+EXTERNAL ROUTINE
+    BITLS : NOVALUE,				!IDENTIFY BITS AND EDIT INTO ASCII
+    BYTSM : NOVALUE,				!IDENTIFY AND EDIT BYTE INTO ASCII
+    GETWRD,
+    GETBYT,
+    MAPKNL : NOVALUE,				!Map to kernel space.
+    MAPTSK,					!Map to given task.
+    MAPUSR : novalue,
+    SBTTL : NOVALUE,				!
+    SKIP : novalue,
+    VMADMP : novalue,
+    WINDOW : novalue;
+
+EXTERNAL
+    FLAGS : BITVECTOR [M_MAX_BITS];
+
+GLOBAL ROUTINE NMLMCB : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	ADR;
+
+    SBTTL (CH$ASCIZ ('NML DATA BASE'));
+
+    IF NOT SYMBOL_TABLE ('RSX11S') THEN RETURN;
+
+    !+
+    ! Find NMLMCB's TCB address and map to its task image.
+    !-
+
+    BEGIN
+
+    LOCAL
+	ENTRY_COUNT,
+	TCB_ADDRESS;
+
+    MAPKNL ();
+    ADR = FALSE;
+    ENTRY_COUNT = RSX_MAX_STD;
+    TCB_ADDRESS = SYMBOL ($TSKHD) - FL$OFFSET (T_TCBL);
+
+    WHILE GETWRD ((TCB_ADDRESS = GETWRD (.TCB_ADDRESS + FL$OFFSET (T_TCBL))) + FL$OFFSET (T_TCBL)) NEQ 0 DO
+	BEGIN
+
+	IF (ENTRY_COUNT = .ENTRY_COUNT - 1) LSS 0
+	THEN
+	    RETURN PUTLN (1,
+		    CH$ASCIZ (WARNING,
+			'TCB LIST TOO LONG'));
+
+	IF (GETWRD (.TCB_ADDRESS + FL$OFFSET (T_NAM) + 0) eql RAD50_WORD ('NML'))
+            AND (GETWRD (.TCB_ADDRESS + FL$OFFSET (T_NAM) + 2) EQL RAD50_WORD ('MCB'))
+	THEN
+	    EXITLOOP (ADR = TRUE);
+
+	END;
+
+    IF NOT .ADR THEN RETURN;
+
+    IF FL$SET (GETWRD (.TCB_ADDRESS + FL$OFFSET (T_STAT)), TS_OUT)
+    THEN
+	RETURN (PUTLN (1,
+		CH$ASCIZ (FATAL,
+		    'TASK "NMLMCB" IS NOT IN MEMORY')));
+
+    IF NOT MAPTSK (.TCB_ADDRESS)
+    THEN
+	RETURN (MAPKNL ();
+	    PUTLN (1,
+		CH$ASCIZ (FATAL,
+		    'CANNOT MAP TO TASK "NMLMCB"')));
+
+    IF NOT SYMBOL_TABLE ('RSX11S', 'CEXCOM', 'NML') THEN RETURN;
+
+    MAPKNL ();
+    begin                               ! Display Task information
+
+    local
+        R : vector [9];
+
+    bind
+        PC = R [6],
+        PS = R [7],
+        R0 = R [0],
+        R1 = R [1],
+        R2 = R [2],
+        R3 = R [3],
+        R4 = R [4],
+        R5 = R [5],
+        SP = R [8];
+
+    !
+    ! Find the registers, etc.
+    !
+
+    if (GETWRD (SYMBOL ('$HEADR')) neq 0) and
+       (GETWRD (SYMBOL ('$TKTCB')) eql .TCB_ADDRESS)
+    then
+        begin
+        SP = GETWRD (SYMBOL ('.USRSP'));
+        ADR = SYMBOL ('$STACK');
+        end
+    else
+        begin
+        ADR = GETWRD (GETWRD (.TCB_ADDRESS + FL$OFFSET (T_PCB)) + SYMBOL ('P.HDR'));
+        SP = GETWRD (.ADR);
+        ADR = GETWRD (.ADR + FL$OFFSET (H_GARD));
+        end;
+
+    decr I from 7 to 0 do
+        R [.I] = GETWRD (ADR = .ADR - 2);
+
+    if FL$SET (GETWRD (.TCB_ADDRESS + FL$OFFSET (T_STAT)), TS_EXE)
+    then
+        PUTLN (1, CH$ASCIZ (WARNING, 'THE NMLMCB TASK IS HALTED'));
+
+    !
+    ! Display the registers.
+    !
+
+    PUTLN (2, CH$ASCIZ ('VOLATILE REGISTERS:'));
+    PUTLN (1, CH$ASCIZ ('%4SPC = %P  PS = %P  SP = %P'), .PC, .PS, .SP);
+    PUTLN (1, CH$ASCIZ ('%4SR0 = %P  R1 = %P  R2 = %P  R3 = %P  R4 = %P  R5 = %P'),
+           .R0, .R1, .R2, .R3, .R4, .R5);
+
+    MAPUSR ();
+    PUTLN (2, CH$ASCIZ ('PC CONTEXT:'));
+    WINDOW ((if .PC lssu 80 then 0 else ((.PC - 80) and not 15)), ((.PC + 80) and not 15));
+
+    end;
+
+    !
+    ! Which task is running?
+    !
+
+    if (ADR = GETWRD (SYMBOL ('CURTSK'))) neq 0
+    then
+        begin
+
+        local
+            PTR,
+            TMP,
+            TNAM : CH$SEQUENCE (16);
+
+        PTR = ch$ptr (TNAM);
+        TMP = 0;
+
+        do
+            begin
+
+            local
+                CHR;
+
+            if (CHR = GETBYT (.ADR + SYMBOL ('TB.NAM') + .TMP)) eql 0
+            then exitloop;
+
+            ch$wchar_a (.CHR, PTR);
+            TMP = .TMP + 1;
+            end
+        while .TMP lss 16;
+
+        PUTLN (2, CH$ASCIZ ('CURRENT TASK: %P  NAME: %#A'),
+               .ADR, .TMP, ch$ptr (TNAM));
+        end;
+
+    !
+    ! Display the task list
+    !
+
+    begin
+
+    bind                                ! the list head is
+        MEMBOT = SYMBOL (MEMBOT),       ! not in dynamic memory.
+        TB_TASK_QUEUE = SYMBOL ('TB.QUE');
+
+    ! find the beginning of the task list.
+
+    do (ADR = GETWRD (.ADR + TB_TASK_QUEUE) - TB_TASK_QUEUE) until lss16 (.ADR, MEMBOT);
+
+    PUTLN (2, CH$ASCIZ ('NML TASK LIST:'));
+
+    while gtr16 ((ADR = GETWRD (.ADR + TB_TASK_QUEUE) - TB_TASK_QUEUE), MEMBOT) do
+        begin
+        begin
+
+        local
+            PTR,
+            TMP,
+            TNAM : CH$SEQUENCE (16);
+
+        PTR = ch$ptr (TNAM);
+        ch$fill (%c' ', 16, .PTR);
+        TMP = 0;
+
+        do
+            begin
+
+            local
+                CHR;
+
+            if (CHR = GETBYT (.ADR + SYMBOL ('TB.NAM') + .TMP)) eql 0
+            then exitloop;
+
+            ch$wchar_a (.CHR, PTR);
+            TMP = .TMP + 1;
+            end
+        while .TMP lss 16;
+
+        PUTLN (1, CH$ASCIZ ('  TASK: %16A  ADDRESS: %P'),
+               ch$ptr (TNAM), .ADR);
+        end;
+        PUTLN (0, CH$ASCIZ ('%4SSTART ADDRESS: %P  ABORT ADDRESS: %P'),
+               GETWRD (.ADR + SYMBOL ('TB.STR')), GETWRD (.ADR + SYMBOL ('TB.ABT')));
+        PUTLN (0, CH$ASCIZ ('%4SLAST SP: %P'), GETWRD (.ADR + SYMBOL ('TB.CTX')));
+        end;
+
+    end;
+
+    !
+    ! Display the memory pool
+    !
+
+    begin
+
+    field
+        MB_QUEUE_INFO = [0, 0, 16, 0],
+        MB_INDEX = [3, 0, 16, 0],
+        MB_TAG = [4, 0, 1, 0],
+        MB_SELF = [4, 1, 1, 0],
+        MB_PARENT = [4, 2, 1, 0],
+        MB_TASK = [5, 0, 16, 0],
+        MB_LIMIT = [6, 0, 16, 0],
+        MB_ALLOCATION = [7, 0, 16, 0],
+        MB_DATA = [8, 0, 16, 0];
+
+    literal
+        MB_AVAILABLE = 0,
+        MB_LEFT = 0,
+        MB_LENGTH = 9;
+
+    local
+        ASL_LST,
+        BUDDY_INDEX,
+        SIZE,
+        SIZES;
+
+    SIZE = SYMBOL ('BLKSIZ');
+    BUDDY_INDEX = SYMBOL ('BLKBDY');
+    ASL_LST = SYMBOL ('BLKLST');
+    SIZES = (.BUDDY_INDEX - .SIZE)^-1;
+
+    !
+    ! Go through the memory pool and isolate the blocks
+    !
+
+    begin
+
+    local
+        MEM_ADR,
+        MEM_TOP;
+
+    MEM_ADR = SYMBOL ('MEMBOT');
+    ADR = SYMBOL ('MEMTOP');
+    MEM_TOP = GETWRD (.ADR);
+    PUTLN (2, CH$ASCIZ ('MEMORY POOL FROM %P TO %P, USED TO %P'),
+           .MEM_ADR, .ADR, .MEM_TOP);
+    PUTLN (2, CH$ASCIZ ('MEMORY BLOCKS:'));
+
+    if GEQ16 (.MEM_TOP, .ADR) then MEM_TOP = .ADR;
+
+    while LSS16 (.MEM_ADR, .MEM_TOP) do
+        begin
+
+        bind
+            MBL = CH$ASCII ('L'),
+            MBR = CH$ASCII ('R');
+
+        local
+            CNT;
+
+        CNT = GETWRD (.SIZE + GETBYT (.MEM_ADR + FL$OFFSET (MB_INDEX))^1);
+        ADR = GETWRD (.MEM_ADR + FL$OFFSET (MB_TAG));
+
+        PUTLN (1, (if FL$SET (.ADR, MB_TAG)
+                   then CH$ASCIZ ('  BLOCK ADDRESS: %P  LENGTH: %O  ALLOCATED')
+                   else CH$ASCIZ ('  BLOCK ADDRESS: %P  LENGTH: %O  AVAILABLE')), .MEM_ADR, .CNT);
+!       PUTLN (0, CH$ASCIZ ('%4SSELF: %1A  PARENT: %1A'),
+!              (if FL$SET (.ADR, MB_SELF) then MBR else MBL),
+!              (if FL$SET (.ADR, MB_PARENT) then MBR else MBL));
+
+        if (ADR = GETWRD (.MEM_ADR + FL$OFFSET (MB_TASK))) neq 0
+        then
+            begin
+
+            local
+                PTR,
+                TMP,
+                TNAM : CH$SEQUENCE (16);
+
+            PTR = ch$ptr (TNAM);
+            ch$fill (%c' ', 16, .PTR);
+            TMP = 0;
+
+            do
+                begin
+
+                local
+                    CHR;
+
+                if (CHR = GETBYT (.ADR + SYMBOL ('TB.NAM') + .TMP)) eql 0
+                then exitloop;
+
+                ch$wchar_a (.CHR, PTR);
+                TMP = .TMP + 1;
+                end
+            while .TMP lss 16;
+
+            PUTLN (0, CH$ASCIZ ('%4STASK: %16A  ADDRESS: %P'), ch$ptr (TNAM), .ADR);
+            end
+        else
+
+            if FL$SET (GETWRD (.MEM_ADR + FL$OFFSET (MB_TAG)), MB_TAG)
+            then
+                PUTLN (0, CH$ASCIZ ('%4SSYSTEM BLOCK            ADDRESS: %P'), .ADR);
+
+        PUTLN (0, CH$ASCIZ ('%4SDATA ADDRESS: %P  LENGTH: %O'),
+               (.MEM_ADR + FL$OFFSET (MB_DATA)), GETWRD (.MEM_ADR + FL$OFFSET (MB_ALLOCATION)));
+
+        if .FLAGS [M_CEX_DUMP]
+        then
+            begin
+            SKIP (1);
+            VMADMP (.MEM_ADR, .MEM_ADR, .MEM_ADR + .CNT);
+            end;
+
+        MEM_ADR = .MEM_ADR + .CNT;
+        end;
+
+    end;
+    end;
+    MAPKNL ();
+    END;
+    END;					!Of routine NMLMCB
+
+END						!Of MODULE
+
+ELUDOM

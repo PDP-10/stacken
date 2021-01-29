@@ -1,0 +1,208 @@
+
+MODULE EDDAT (					!Date and time conversion
+		IDENT = '001000',
+		LANGUAGE (BLISS16, BLISS36) %BLISS36 (, ENTRY ($DAT, $TIM))
+		) =
+BEGIN
+!
+!			  COPYRIGHT (c) 1977, 1978 BY
+!	      DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND  COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH  LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR  ANY  OTHER
+! COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE  WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS  A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: SYSTEM LIBRARY
+!
+! ABSTRACT:
+!
+!	This module contains conversion routines to take RSX11M - form
+!	time and date blocks and output ASCII representations.
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM	, CREATION DATE: 8-SEP-78
+!
+! MODIFIED BY:
+!
+! 	, : VERSION
+! 01	-
+!--
+
+!<BLF/PAGE>
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    $DAT,					!Convert date into ASCII.
+    $TIM;					!Convert time into ASCII.
+
+!
+! INCLUDE FILES:
+!
+!
+! MACROS:
+!
+!
+! EQUATED SYMBOLS:
+!
+!
+! OWN STORAGE:
+!
+!
+! EXTERNAL REFERENCES:
+!
+
+EXTERNAL ROUTINE
+    $CBDAT;					!Convert binary to decimal.
+
+GLOBAL ROUTINE $DAT (BUF_PTR_ADR, DATE_BLOCK) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	..BUF_PTR_ADR				!Pointer to buffer to receive text.
+!	.DATE_BLOCK[0]				!Year
+!	.DATE_BLOCK[1]				!Month (1-12)
+!	.DATE_BLOCK[2]				!Day (1-31)
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the information inserted.
+!
+! ROUTINE VALUE:
+!
+!	A count of the number of characters inserted is returned.
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    MAP
+	DATE_BLOCK : REF VECTOR [3];
+
+    LOCAL
+	BUF_PTR_INI;
+
+    BIND
+	MONTH = UPLIT (CH$PTR (UPLIT ('JAN')), CH$PTR (UPLIT ('FEB')),
+		CH$PTR(UPLIT('MAR')),CH$PTR(UPLIT('APR')),CH$PTR(UPLIT('MAY')),
+		CH$PTR(UPLIT('JUN')),CH$PTR(UPLIT('JUL')),CH$PTR(UPLIT('AUG')),
+		CH$PTR(UPLIT('SEP')),CH$PTR(UPLIT('OCT')),CH$PTR(UPLIT('NOV')),
+		CH$PTR(UPLIT('DEC')),CH$PTR(UPLIT('BAD')) ) : VECTOR [13];
+
+    BUF_PTR_INI = ..BUF_PTR_ADR;
+    $CBDAT (.BUF_PTR_ADR, .DATE_BLOCK [2], 0);
+    CH$WCHAR_A (%C'-', .BUF_PTR_ADR);
+    IF .DATE_BLOCK[1] LSS 1 OR .DATE_BLOCK[1] GTR 12 THEN DATE_BLOCK[1] = 13;
+    .BUF_PTR_ADR = CH$MOVE (3, .MONTH [.DATE_BLOCK [1] - 1], ..BUF_PTR_ADR);
+    CH$WCHAR_A (%C'-', .BUF_PTR_ADR);
+    $CBDAT (.BUF_PTR_ADR, .DATE_BLOCK [0], 0);
+    CH$DIFF (..BUF_PTR_ADR, .BUF_PTR_INI)
+    END;					!End of $DAT
+
+GLOBAL ROUTINE $TIM (BUF_PTR_ADR, TIME_BLOCK, COUNT) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	..BUF_PTR_ADR				!Pointer to buffer to receive text.
+!	.TIME_BLOCK[0]				!Hour in day
+!	.TIME_BLOCK[1]				!Minute in hour
+!	.TIME_BLOCK[2]				!Second in minute
+!	.TIME_BLOCK[3]				!Tick in second
+!	.TIME_BLOCK[4]				!Number of ticks in a second
+!	.COUNT					!Indicates the format to use:
+!						!0 or 1	- HH
+!						!   2	- HH:MM
+!						!   3	- HH:MM:SS
+!						!4 or 5	- HH:MM:SS.S
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the information inserted.
+!
+! ROUTINE VALUE:
+!
+!	A count of the number of characters inserted is returned.
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    MAP
+	TIME_BLOCK : REF VECTOR [5];
+
+    LOCAL
+	BUF_PTR_INI;
+
+    BUF_PTR_INI = ...BUF_PTR_ADR;
+
+    SELECT .COUNT OF
+	SET
+
+	[0 TO 5] :
+	    $CBDAT (.BUF_PTR_ADR, .TIME_BLOCK [0], 1);
+
+	[2 TO 5] :
+	    BEGIN
+	    CH$WCHAR_A (%C':', .BUF_PTR_ADR);
+	    $CBDAT (.BUF_PTR_ADR, .TIME_BLOCK [1], 1)
+	    END;
+
+	[3 TO 5] :
+	    BEGIN
+	    CH$WCHAR_A (%C':', .BUF_PTR_ADR);
+	    $CBDAT (.BUF_PTR_ADR, .TIME_BLOCK [2], 1)
+	    END;
+
+	[4 TO 5] :
+	    BEGIN
+	    CH$WCHAR_A (%C'.', .BUF_PTR_ADR);
+	    CH$WCHAR_A (%C'0', .BUF_PTR_ADR)
+	    END;
+	TES;
+
+    CH$DIFF (..BUF_PTR_ADR, .BUF_PTR_INI)
+    END;					!End of $TIM
+
+END						!End of module
+
+ELUDOM

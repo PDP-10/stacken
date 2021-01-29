@@ -1,0 +1,2689 @@
+;TOPSY::DSKB:MAISRV.MAC[10,335] 2003-05-07 00:28:47, Edit by OPERATOR
+;021	In progress, y2k fixes etc...
+;	remove edit 017.
+;	add code to talk to new TCP/IP stack.
+
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV] 1990-11-11 22:16:56, Edit by J.ERIKSSON
+;020	The sequence HELO; MAIL; RCPT; DATA; RSET... resulted in loss of
+;	memory, because of a bug in RSET handling.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV] 1989-11-16 19:29:49, Edit by L\THBERG P
+;017	Handle ISO character set command
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV] 1989-06-14 16:22:30, Edit by T NYSTR\M
+;016	If TIMZON doesn't work, use default from INIT-file.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV] 1989-04-27 14:33:32, Edit by J.RYNNING
+;015	Get time zone with TIMZON call instead of reading it from init file.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV] 1989-04-26 19:06:26, Edit by J.RYNNING
+;014	Make IPCF interrupt routine loop back and look for more messages.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV] 1989-03-18 19:23:08, Edit by J.RYNNING
+;013	Add VERBose and TICKet to HELP text, and clean it up.
+;	Remove IMP devices from the PSI system before closing them.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV,IP] 1988-05-31 20:56:25, By J.ERIKSSON
+;012	Install code to rename old log file at startup.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV,IP] 1988-05-05 22:42:18, Edit by J.RYNNING
+;011	Make it possible to turn off FTCIMP.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV,IP] 1988-04-25 12:23:19, Edit by J.RYNNING
+;010	Make the DECnet scheduler restart the process if the state was
+;	unacceptable, even if we said we didn't care about the state.
+;	Generate unique connection numbers instead of process numbers.
+;	Give each process a command line buffer of its own.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV,IP] 1988-04-21 12:20:25, Edit by J.RYNNING
+;007	Added VERBose and TICKet commands, to support BITNET mailers.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV,IP] 1988-04-07 11:38:02, Edit by J.RYNNING
+;006	Added TCP SMTP support, and ANF10 dispatch routines that just HALT.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV] 1988-02-18 15:35:13, Edit by J.ERIKSSON
+;005	Check for null domain and append a default such./BCQ
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV] 1988-01-06 01:04:20, Edit by J.ERIKSSON
+;004	Teach the code not to die if an interrupt arrives for a channel
+;	we dont have a PDB for, just log the failure.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV] 1987-11-21 00:48:30, Edit by J.ERIKSSON
+;003	Fixed wakeup-next (?) and a bug.
+;KICKI::DSKD:MAISRV.MAC[10,10,MAISRV] 1987-11-18 19:28:22, Edit by J.ERIKSSON
+;002	Installed Wakeup-Next code from M11SRV.
+;DSKD:MAISRV.MAC[10,6104,MAIL11] 1987-09-18 18:50:48, Edit by B.CARLSSON
+;001	First sligthly working version..
+TITLE MAISRV -- DECnet SMTP/MAIL-11 Server for TOPS-10/KOM/COM/SuperMAIL
+SUBTTL BCQ/1987-08-28 17:31:50
+
+ifndef fttcp,<fttcp==0>		;Leave off for now.
+ifn fttcp,<
+	;; do something fancy here.
+>;	
+ife fttcp,<
+	ftcimp==0
+	ftnip==0
+>; ifn fttcp
+
+IFNDEF FTCIMP,<FTCIMP==-1>
+IFNDEF FTTIMZ,<FTTIMZ==-1>
+
+	SEARCH GLXMAC, ORNMAC, JOBDAT, MAISYM
+IFN FTCIMP,<
+	SEARCH IMP
+	OPDEF IMPUUO [CALL[SIXBIT /IMPUUO/]]
+>;END IFN FTCIMP
+IFN FTTIMZ,<
+	OPDEF TIMZON [CALL[SIXBIT /TIMZON/]]
+>;END IFN FTTIMZ
+
+	SALL
+	.DIRECTIVE FLBLST
+	.TEXT "/NOINITIAL"
+	PROLOG MAISRV
+
+	PARSET
+
+;Version Components
+	MAIEDT==20		;Edit level
+	MAIWHO==0		;Last hacker
+	MAIMIN==0		;Minor version number
+	MAIVER==1		;Major version number
+
+;External references
+	EXT <PARSER,P$STAK,P$TAKE>
+	EXT <N$INIT,N$PASV,N$PSI,N$READ,N$WRT> ;from DCNLIB.
+	EXT <N$STS,N$REL,N$ERR,N$REJ,N$DISC> ;from DCNLIB.
+	EXT <N$CDAT,N$ACC>	;from DCNLIB
+	
+	LOC .JBVER
+	VRSN. (MAI)
+	RELOC
+	
+	.TEXT "/SEGMENT:LOW REL:OPRPAR.REL"
+	.TEXT "/SEGMENT:LOW DCNLIB.REL"
+	.TEXT "/SYMSEG:LOW/LOCALS"
+
+	SUBTTL Table of Contents
+
+;                  Table of Contents for MAISRV
+;
+;
+;			   Section			      Page
+;
+;    1. Table of Contents  . . . . . . . . . . . . . . . . . .   3
+;    2. Local Symbols  . . . . . . . . . . . . . . . . . . . .   4
+;    3. Data Storage . . . . . . . . . . . . . . . . . . . . .   5
+;    4. Parser Tree  . . . . . . . . . . . . . . . . . . . . .   6
+;    5. Main Program . . . . . . . . . . . . . . . . . . . . .   7
+;    6. Main Idle Loop . . . . . . . . . . . . . . . . . . . .   8
+;    7. Error Routines
+;         7.1   GLXERR Print GLXLIB error  . . . . . . . . . .   9
+;         7.2   NETERR Process Network Error . . . . . . . . .  10
+;    8. Debug Routines
+;         8.1   DBGMSG Display a DECnet message  . . . . . . .  11
+;    9. Logfile routines
+;         9.1   LOGPUT Write one byte to logile  . . . . . . .  12
+;   10. String Handling
+;        10.1   COPY Copy a string . . . . . . . . . . . . . .  13
+;        10.2   NCOPY Copy from network to buffer  . . . . . .  14
+;   11. Output Routines
+;        11.1   RFCDTM Print date & time in RFC822 format  . .  15
+;        11.2   PRT821 Print path in RFC821 format . . . . . .  16
+;        11.3   PRT822 Print path in RFC822 format . . . . . .  17
+;   12. RDINIT Routine to read init file . . . . . . . . . . .  18
+;   13. PARCMD Routine to parse a command  . . . . . . . . . .  19
+;   14. Commands
+;        14.1   DEBUG Command  . . . . . . . . . . . . . . . .  20
+;        14.2   DEFAULT Command  . . . . . . . . . . . . . . .  21
+;        14.3   LOCAL-NODE-NAME Command  . . . . . . . . . . .  22
+;        14.4   MAIL-11-OBJECT-NUMBER Command  . . . . . . . .  23
+;        14.5   MAIL-11-SERVERS Command  . . . . . . . . . . .  24
+;        14.6   OUTPUT-FILES Command . . . . . . . . . . . . .  25
+;        14.7   SMTP-OBJECT-NUMBER Command . . . . . . . . . .  26
+;        14.8   SMTP-SERVERS Command . . . . . . . . . . . . .  27
+;        14.9   TAKE Command . . . . . . . . . . . . . . . . .  28
+;        14.10  TCP-SMTP-SERVERS Command . . . . . . . . . . .  29
+;        14.11  TIME-ZONE Command  . . . . . . . . . . . . . .  30
+;        14.12  WAKEUP-NEXT Command  . . . . . . . . . . . . .  31
+;   15. Mail Routines
+;        15.1   MAICLR Clear data areas  . . . . . . . . . . .  32
+;        15.2   R$GBLK Allocate a sender/receiver block  . . .  33
+;        15.3   R$RBLK Release a sender/receiver block . . . .  34
+;        15.4   RLYADD Add a relay node first in list  . . . .  35
+;        15.5   PRS821 Parse a RFC821/RFC733 path  . . . . . .  36
+;        15.6   Check for and fix null domain  . . . . . . . .  37
+;        15.7   VAXPRS Parse a VAXmail sender/receiver . . . .  38
+;        15.8   VAXSUC Send success to VAX . . . . . . . . . .  39
+;        15.9   DOMCPY Fixup VMS-style foreign domains . . . .  40
+;   16. Mail Servers
+;        16.1   MAIL-11 -- M11SRV Mail-11 receiver . . . . . .  41
+;        16.2   MAIL-11 -- GETMAI MAIL-11 protocol reader  . .  42
+;        16.3   SMTP -- SMTSRV SMTP receiver . . . . . . . . .  43
+;        16.4   SMTP -- SMTP protocol reader . . . . . . . . .  44
+;        16.5   SMTP -- GETLIN Get a line from network . . . .  45
+;        16.6   SMTP -- GETPTH Get a forward/reverse path. . .  46
+;        16.7   SMTP -- SMTCMD Parse a SMTP command  . . . . .  47
+;        16.8   SMTP -- HELO Command . . . . . . . . . . . . .  48
+;        16.9   SMTP -- MAIL Command . . . . . . . . . . . . .  49
+;        16.10  SMTP -- RCPT Command . . . . . . . . . . . . .  50
+;        16.11  SMTP -- DATA Command . . . . . . . . . . . . .  51
+;        16.12  SMTP -- RSET Command . . . . . . . . . . . . .  52
+;        16.13  SMTP -- SEND Command . . . . . . . . . . . . .  53
+;        16.14  SMTP -- SOML Command . . . . . . . . . . . . .  54
+;        16.15  SMTP -- SAML Command . . . . . . . . . . . . .  55
+;        16.16  SMTP -- VRFY Command . . . . . . . . . . . . .  56
+;        16.17  SMTP -- EXPN Command . . . . . . . . . . . . .  57
+;        16.18  SMTP -- HELP Command . . . . . . . . . . . . .  58
+;        16.19  SMTP -- NOOP Command . . . . . . . . . . . . .  59
+;        16.20  SMTP -- QUIT Command . . . . . . . . . . . . .  60
+;        16.21  SMTP -- TURN Command . . . . . . . . . . . . .  61
+;   17. Process Control
+;        17.1   SPAWN Start a new process  . . . . . . . . . .  62
+;        17.2   A$SCHD The ANF10 Process scheduler . . . . . .  63
+;        17.3   D$SCHD The DECnet Process scheduler  . . . . .  64
+;        17.4   I$SCHD The IPCF Process scheduler  . . . . . .  65
+;        17.5   T$SCHD The TCP Process scheduler . . . . . . .  66
+;        17.6   .DISMS Dismiss a process . . . . . . . . . . .  67
+;        17.7   WAKNXT Wake next processor, if any.  . . . . .  68
+;   18. Disk Routines
+;        18.1   F$CREA Create a new mail file  . . . . . . . .  69
+;        18.2   F$OBYT Write a byte to mail file . . . . . . .  70
+;        18.3   F$CLOS Close the mail file . . . . . . . . . .  71
+;   19. Session Routines
+;        19.1   S$OPEN Open a passive connection . . . . . . .  72
+;        19.2   S$IBYT Read a byte from buffer . . . . . . . .  73
+;        19.3   S$OBYT Write a byte to buffer. . . . . . . . .  74
+;        19.4   S$INP Get a buffer from network. . . . . . . .  75
+;        19.5   S$OUT Post a buffer to network.  . . . . . . .  76
+;        19.6   S$CLOS Close a network link. . . . . . . . . .  77
+
+	SUBTTL Local Symbols
+
+;Local ACs
+TFP==.A14			;Take file pointer.
+PDB==.A15			;Points to current PDB.
+PTH==.A16			;Current sender/receiver block.
+
+;Transport protocols.
+.TPANF==1			;ANF10.
+.TPDCN==2			;DECnet.
+.TPTCP==3			;TCP.
+
+;Mail protocols.
+.MPM11==1			;MAIL-11.
+.MPSMT==2			;SMTP.
+
+;SMTP flags
+S%VAL==1B0			;Remote host validated.
+S%HELO==1B1			;HELO done.
+S%MAIL==1B2			;MAIL done.
+S%VERB==1B3			;VERB ON done.
+
+;Random Symbols
+PDLEN==^D200			;Push down list size.
+PSTKLN==^D150			;Process stack length.
+;TAKSIZ==^D20			;Max number of pushed IFNs.
+;MAXPRC==^D20			;Max number of processes.
+TAKSIZ==^D40			;Max number of pushed IFNs.
+MAXPRC==^D30			;Max number of processes.
+;
+BUFLEN==^D512			;Size of a DECnet buffer in 8-bit bytes.
+BUFWLN==<BUFLEN/4>+1		;Size of buffer in words.
+
+DEFINE $DISMS(CODE) <
+	PUSHJ P,.DISMS
+	JUMP [EXP CODE]
+>;$DISMS
+
+DEFINE SVMAIN <			;;Save MAIN process ACs.
+	MOVEM 17,MAINAC+17
+	HRRZI 17,MAINAC+0
+	BLT 17,MAINAC+16
+>;SVMAIN
+
+DEFINE RSMAIN <			;;Restore MAIN process ACs.
+	HRLZI 17,MAINAC+0
+	BLT 17,17
+>;RSMAIN
+
+DEFINE SVPROC <			;;Save process ACs.
+	MOVEM 17,.PDACS+17(PDB)
+	HRRZI 17,.PDACS+0(PDB)
+	BLT 17,.PDACS+16(PDB)
+>;SVPROC
+
+DEFINE RSPROC <			;;Restore process ACs.
+	HRLZI 17,.PDACS+0(PDB)
+	BLT 17,17
+>;RSPROC
+
+;The Process Data Block
+	PHASE 0
+.PDACS:! BLOCK 20		;Process' ACs.
+.PDSTK:! BLOCK PSTKLN		;Process' Stack.
+.PDTAB:! BLOCK 1		;Index into PDBTAB.
+.PDUNI:! BLOCK 1		;Unique process number.
+.PDPRO:! BLOCK 1		;Transport (LH) and mail (RH) protocols used.
+.PDCHN:! BLOCK 1		;ANF10/DECnet/TCP channel number.
+.PDDEV:! BLOCK 1		;TCP device name.
+.PDDSK:! BLOCK 1		;Disk channel for mail output.
+.PDSCH:! BLOCK 1		;Scheduler data (-1 if waiting, 0 if not).
+.PDSTR:! BLOCK 1		;Process' start address.
+				;N.B. 3 words below are a buffer control block.
+.PDIAD:! BLOCK 1		;ANF10/TCP address of input buffer ring.
+.PDIPT:! BLOCK 1		;Byte pointer into buffer.
+.PDICT:! BLOCK 1		;Input buffer count. (Bytes remaining in buf).
+				;N.B. 3+BUFWLN words below are a buffer.
+.PDIHD:! BLOCK 3		;Input buffer header.
+.PDIBF:! BLOCK BUFWLN		;Pointer to process input buffer space.
+				;N.B. 3 words below are a buffer control block.
+.PDOAD:! BLOCK 1		;ANF10/TCP address of buffer ring.
+.PDOPT:! BLOCK 1		;Byte pointer into buffer.
+.PDOCT:! BLOCK 1		;Output buffer byte count.
+				;N.B. 3+BUFWLN words below are a buffer.
+.PDOHD:! BLOCK 3		;Output buffer header.
+.PDOBF:! BLOCK BUFWLN		;Pointer to process output buffer space.
+.PDLIN:! BLOCK STRWSZ		;Command line buffer.
+.PDNOD:! BLOCK STRWSZ		;Node we're talking to.
+.PDOFF:! BLOCK STRWSZ		;Official node name.
+;----- Start of MAIL specific data areas.
+.PDFRM:! BLOCK 1		;Pointer to sender/receiver block for sender.
+.PDNRC:! BLOCK 1		;Number of receivers.
+.PDRCV:! BLOCK 1		;Pointer to sender/receiver blocks for recs.
+;----- Start of MAIL-11 specific data areas.
+.PDSUB:! BLOCK STRWSZ		;(MAIL-11) Subject: field.
+.PDMLD:! BLOCK STRWSZ		;(MAIL-11) Mailed-to: field.
+;-----
+.PDSIZ:!			;Size of a PDB.
+	DEPHASE
+
+	SUBTTL Data Storage
+
+IB:	$BUILD IB.SZ
+	  $SET IB.PRG,,%%.MOD
+	  $SET IB.FLG,IB.NPF,1
+	$EOB
+
+;The PSI Vector
+PSIVEC:
+PSIANF:	EXP A$SCHD,0,0,0	;ANF10 interrupts.
+PSIDCN:	EXP D$SCHD,0,0,0	;DECnet interrupts.
+IFN FTCIMP,<
+PSIIPC:	EXP I$SCHD,0,0,0	;IPCF interrupts (currently only TCP connects).
+PSITCP:	EXP T$SCHD,0,0,0	;TCP interrupts.
+>;END IFN FTCIMP
+
+CNDANF:	XWD <PSIANF-PSIVEC>,PS.RID!PS.ROD!PS.RIE!PS.ROE!PS.RDO!PS.ROL
+	XWD 0,0
+
+CNDDCN:	EXP .PCNSP
+	XWD <PSIDCN-PSIVEC>,0
+	XWD 0,0
+
+IFN FTCIMP,<
+CNDIPC:	EXP .PCIPC
+	XWD <PSIIPC-PSIVEC>,0
+	XWD 0,0
+
+CNDTCP:	XWD <PSITCP-PSIVEC>,PS.RID!PS.ROD!PS.RIE!PS.ROE!PS.RDO!PS.ROL
+	XWD 0,0
+>;END IFN FTCIMP
+
+MAIFOB:	$BUILD FOB.SZ
+	  $SET FOB.CW,FB.BSZ,^D7
+	  $SET FOB.FD,,MAILFD
+	$EOB
+
+MAILFD:	$BUILD FDXSIZ
+	  $SET .FDLEN,FD.LEN,FDXSIZ
+	  $SET .FDSTR,,<SIXBIT /DSK/>
+	  $SET .FDNAM,,<SIXBIT /MAISRV/>
+	  $SET .FDEXT,,<SIXBIT /MAI/>
+	$EOB
+
+LOGFOB:	$BUILD FOB.SZ
+	  $SET FOB.CW,FB.BSZ,^D7
+	  $SET FOB.FD,,LOGFD
+	$EOB
+
+LOGFD:	$BUILD FDXSIZ
+	  $SET .FDLEN,FD.LEN,FDXSIZ
+	  $SET .FDSTR,,<SIXBIT /DSK/>
+	  $SET .FDNAM,,%%.MOD
+	  $SET .FDEXT,,<SIXBIT /LOG/>
+	$EOB
+
+INIFOB:	$BUILD FOB.SZ
+	  $SET FOB.CW,FB.BSZ,^D7
+	  $SET FOB.FD,,INITFD
+	$EOB
+
+INITFD:	$BUILD FDXSIZ
+	  $SET .FDLEN,FD.LEN,FDXSIZ
+	  $SET .FDSTR,,<SIXBIT /DSK/>
+	  $SET .FDNAM,,%%.MOD
+	  $SET .FDEXT,,<SIXBIT /INI/>
+	$EOB
+
+LOGENT:	ITEXT <^H/[-1]/ ^D/.PDUNI(PDB)/->
+
+DAYTXT:	ASCII /Mon/
+	ASCII /Tue/
+	ASCII /Wed/
+	ASCII /Thu/
+	ASCII /Fri/
+	ASCII /Sat/
+	ASCII /Sun/
+
+MONTXT:	ASCII /Jan/
+	ASCII /Feb/
+	ASCII /Mar/
+	ASCII /Apr/
+	ASCII /May/
+	ASCII /Jun/
+	ASCII /Jul/
+	ASCII /Aug/
+	ASCII /Sep/
+	ASCII /Oct/
+	ASCII /Nov/
+	ASCII /Dec/
+
+SMTTAB:	TABLE
+	 T (DATA)
+	 T (EXPN)
+	 T (HELO)
+	 T (HELP)
+	 T (MAIL)
+	 T (NOOP)
+	 T (QUIT)
+	 T (RCPT)
+	 T (RSET)
+	 T (SAML)
+	 T (SEND)
+	 T (SOML)
+	 T (TICK)
+	 T (TURN)
+	 T (VERB)
+	 T (VRFY)
+	TEND
+
+	$DATA PDBLK,PDLEN	;Push down list.
+	$DATA TAKBLK,TAKSIZ	;IFN stack (TAKE command).
+
+	$DATA ZERBEG,0		;Start of data area zeroed at startup.
+	$DATA TAKIFN		;Current TAKE file IFN.
+	$DATA LOGIFN		;IFN of logfile.
+	$DATA OLDPAG		;Old parser data page.
+	$DATA MAINAC,20		;Main process' ACs.
+	$DATA PDBTAB,MAXPRC	;PDB table.
+	$DATA UNIQUE		;Unique process number.
+	$DATA DISRET		;Special return address for .DISMS (for IPCF).
+IFN FTCIMP,<
+	$DATA NTCPSMTP		;Number of TCP SMTP processes to start.
+>;IFN FTCIMP
+	$DATA NSMTP		;Number of SMTP processes to start.
+	$DATA NMAI11		;Number of MAIL-11 processes to start.
+	$DATA M11OBJ		;Object number for MAIL-11.
+	$DATA SMTOBJ		;Object number for SMTP (RFC821).
+	$DATA DEBFLG		;Debug flag.
+;IFE FTTIMZ,<
+	$DATA TIMZON,3		;Storage for time-zone string.
+;>;END IFE FTTIMZ
+	$DATA DEFDOM,STRWSZ	;Default domain spec, if none from input.
+	$DATA WAKNAM		;Name of program to wake up.  (Next processor)
+	$DATA QUTFLG		;Quoted string flag.
+	$DATA MBXPTR		;Used in PRS821.
+	$DATA ATMBUF,STRWSZ	;Atom buffer.
+	$DATA SMTBUF,STRWSZ	;SMTP command buffer.
+	$DATA OURNOD,STRWSZ	;Name of our (local) node.
+IFN FTCIMP,<
+	$DATA IMPBLK,.IBSIZ	;IMPUUO argument block.
+>;IFN FTCIMP
+	$DATA ZEREND,0		;End of data area zeroed at startup.
+	
+	SUBTTL Parser Tree
+
+PARBLK:	$BUILD PAR.SZ
+	  $SET PAR.TB,,MAIINI
+	$EOB
+
+MAIINI:	$INIT MAII00
+MAII00:	$KEYDSP MAII10
+MAII10:	$STAB
+	  DSPTAB CFMPDB,DEBCMD,<Debug>
+	  DSPTAB DEFPDB,DEFCMD,<Default-Domain>
+	  DSPTAB LOCPDB,LOCCMD,<Local-Node-Name>
+	  DSPTAB MOBPDB,MOBCMD,<Mail-11-Object-Number>
+	  DSPTAB MPSPDB,MPSCMD,<Mail-11-Servers>
+	  DSPTAB OUTPDB,OUTCMD,<Output-Files>
+	  DSPTAB SOBPDB,SOBCMD,<SMTP-Object-Number>
+	  DSPTAB SPSPDB,SPSCMD,<SMTP-Servers>
+	  DSPTAB TAKPDB,TAKCMD,<Take>
+IFN FTCIMP,<
+	  DSPTAB TPSPDB,TPSCMD,<TCP-SMTP-Servers>
+>;IFN FTCIMP
+	  DSPTAB TIMPDB,TIMCMD,<Time-Zone>
+	  DSPTAB WAKPDB,WAKCMD,<Wakeup-Next>
+	$ETAB
+
+CFMPDB:	$CRLF
+
+;DEFAULT Command Definition
+DEFPDB:	$NOISE DEFP00,<domain>
+DEFP00:	$QUOTE CFMPDB,<Quoted domain specifiction>
+
+;LOCAL-NODE-NAME Command Definition
+LOCPDB:	$NOISE LOCP00,<is>
+LOCP00:	$QUOTE CFMPDB,<Quoted node name>
+
+;MAIL-11-OBJECT-NUMBER Command Definition
+MOBPDB:	$NOISE MOBP00,<is>
+MOBP00:	$NUMBER CFMPDB,^D10,<Object number to use for MAIL-11>
+
+;MAIL-11-SERVERS Command Definition
+MPSPDB:	$NUMBER CFMPDB,^D10,<Number of MAIL-11 servers>
+
+;OUTPUT-FILES Command Definition
+OUTPDB:	$NOISE OUTP00,<is>
+OUTP00:	$OFILE CFMPDB,<Output file specification>
+
+;SMTP-OBJECT-NUMBER Command Definition
+SOBPDB:	$NOISE SOBP00,<is>
+SOBP00:	$NUMBER CFMPDB,^D10,<Object number to use for SMTP>
+
+;SMTP-SERVERS Command Definition
+SPSPDB:	$NUMBER CFMPDB,^D10,<Number of SMTP servers>
+
+;TAKE Command Definition
+TAKPDB:	$NOISE TAKP00,<commands from>
+TAKP00:	$IFILE CFMPDB,<File to take commands from>
+
+IFN FTCIMP,<
+;TCP-SMTP-SERVERS Command Definition
+TPSPDB:	$NUMBER CFMPDB,^D10,<Number of SMTP servers>
+>;IFN FTCIMP
+
+;TIME-ZONE Command Definition
+TIMPDB:	$NOISE TIMP00,<is>
+TIMP00:	$QUOTE CFMPDB,<Quoted time-zone>
+
+;WAKEUP-NEXT Command Definition
+WAKPDB:	$NOISE WAKP00,<program>
+WAKP00:	$FIELD CFMPDB,<Name of program to wake>
+
+	SUBTTL Main Program
+
+MAISRV:	JFCL			;Ignore runoffsets.
+	RESET			;The world.
+	SETZM ZERBEG		;Zero data area.
+	MOVE T1,[ZERBEG,,ZERBEG+1]
+	BLT T1,ZEREND-1
+	MOVE P,[IOWD PDLEN,PDBLK] ;Get a stack.
+	MOVEI S1,IB.SZ		;Re-initialize the world.
+	MOVEI S2,IB
+	$CALL I%INIT
+	SETZB S1,S2
+	$CALL P$INIT		;Initialize parser module.
+	MOVEI TFP,TAKBLK-1	;Setup TFP.
+	
+	PUSHJ P,RDINIT		;Read the init file for parameters.
+
+	MOVEI T1,PSIVEC		;Initialize PSI-system.
+	PIINI. T1,
+	 $STOP (FIP,Failed to initialize PSI-system)
+	
+	MOVX T1,PS.FAC+CNDDCN
+	PISYS. T1,
+	 $STOP (FAD,Failed to add DECnet condition to PSI)
+
+	$CALL RENLOG		;Rename old log file.
+
+	MOVEI S1,FOB.SZ		;Open logfile.
+	MOVEI S2,LOGFOB
+	$CALL F%AOPN
+	JUMPF GLXERR
+	MOVEM S1,LOGIFN
+	
+	$TEXT LOGPUT,<^H/[-1]/	MAISRV, version ^V/.JBVER/, started.>
+
+	MOVEI S1,SMTSRV		;Start address.
+	MOVE S2,[.TPDCN,,.MPSMT];DECnet SMTP.
+	SKIPE T1,NSMTP		;Get number of SMTP processes to start.
+MAIS.0:	 PUSHJ P,SPAWN		;Start a process.
+	SOJG T1,MAIS.0		;Loop for all processes.
+	
+	$TEXT LOGPUT,<^H/[-1]/	Started: ^D/NSMTP/ SMTP servers.>
+	
+	MOVEI S1,M11SRV		;Start address.
+	MOVE S2,[.TPDCN,,.MPM11];DECnet MAIL-11.
+	SKIPE T1,NMAI11		;Get number of MAIL-11 processes to start.
+MAIS.1:	 PUSHJ P,SPAWN		;Start a process.
+	SOJG T1,MAIS.1		;Loop.
+
+	$TEXT LOGPUT,<^H/[-1]/	Started: ^D/NMAI11/ MAIL-11 servers.>
+
+IFN FTCIMP,<
+	SKIPN NTCPSMTP		;Shall we start any TCP SMTP servers?
+	 JRST MAIS.3		; No, skip the whole thing.
+
+	PUSHJ P,T$PERM		;Try to set up permanent listen.
+	 JUMPF[	$TEXT LOGPUT,<^H/[-1]/	Failed to set up TCP permanent listen.>
+		JRST MAIS.3]
+
+	MOVEI S1,SMTSRV		;Start address.
+	MOVE S2,[.TPTCP,,.MPSMT];TCP SMTP.
+	SKIPE T1,NTCPSMTP	;Get number of TCP SMTP processes to start.
+MAIS.2:	 PUSHJ P,SPAWN		;Start a process.
+	SOJG T1,MAIS.2		;Loop for all processes.
+	
+	$TEXT LOGPUT,<^H/[-1]/	Started: ^D/NTCPSMTP/ TCP SMTP servers.>
+
+	MOVX T1,PS.FAC+CNDIPC
+	PISYS. T1,
+	 $STOP (FAI,Failed to add IPCF condition to PSI)
+MAIS.3:
+>;IFN FTCIMP
+
+	SKIPE S1,LOGIFN		;Checkpoint logfile.
+	 $CALL F%CHKP
+	
+	MOVX T1,PS.FON		;Turn PSI on.
+	PISYS. T1,
+	 $STOP (FTP,Failed to turn PSI on)
+	
+	FALL (MAIN)
+
+	SUBTTL Main Idle Loop
+
+MAIN:	MOVX T1,HB.RWJ+^D60K	;Sleep for a while.
+	HIBER T1,		;(We'll be interrupted)
+	 JFCL
+	JRST MAIN		;Loop forever.
+
+	SUBTTL Error Routines -- GLXERR Print GLXLIB error
+
+GLXERR:	$STOP (GEO,Fatal GLXLIB error occured ^E/[-1]/)
+
+	SUBTTL Error Routines -- NETERR Process Network Error
+
+NETERR:	$TEXT LOGPUT,<^I/LOGENT/Network error, ^O/S1/>
+	$TEXT LOGPUT,<^I/LOGENT/Restarting process.>
+	PUSHJ P,S$CLOS		;Close connection.
+	MOVE S1,.PDSTR(PDB)	;Get process start address.
+	JRST (S1)		;Restart it.
+
+	SUBTTL Debug Routines -- DBGMSG Display a DECnet message
+;*
+;* Accepts in	S1 / Byte count.
+;*		S2 / Byte-pointer to message.
+;*
+DBGMSG:	$SAVE <S1,S2,T1,P1>	;Save everything we use.
+	JUMPLE S1,DBGM.2
+DBGM.0:	MOVEI P1,^D15		;Byte/line.
+DBGM.1:	ILDB T1,S2		;Get a byte from message.
+	PUSHJ P,DBGBYT		;Output it.
+	SUBI S1,1		;Decrement.
+	JUMPE S1,DBGM.2		;End of message?
+	SOJG P1,DBGM.1		;End of line?
+	$TEXT LOGPUT,<>		;Yes, get a new line.
+	JRST DBGM.0		;And loop.
+DBGM.2:	$TEXT LOGPUT,<>
+	POPJ P,
+
+DBGBYT:	$SAVE <S1,T1>
+	$TEXT LOGPUT,<^O3R0/T1/(^A>
+	CAIN T1,177		;DEL?
+	 MOVEI T1," "		; Yes, print as space.
+	CAIGE T1," "		;Control-char?
+	 MOVEI T1," "		; Yes, -- space.
+	MOVE S1,T1		;Get it.
+	PUSHJ P,LOGPUT		;Print.
+	$TEXT LOGPUT,<), ^A>	;Next.
+	POPJ P,			;Return to caller.
+
+	SUBTTL Log File routines -- LOGPUT Write one byte to logile
+
+LOGPUT:	$SAVE <S1,S2>
+	MOVE S2,LOGIFN		;Get IFN.
+	EXCH S1,S2		;GLXLIB wants the other way around.
+	PJRST F%OBYT		;Output & return.
+
+	SUBTTL Log File Routines -- RENLOG Rename old log file
+;*
+;* RENLOG renames the old log file (SMTSND.LOG) to SMTSND.nnn, where
+;* nnn is the next free number, starting with 000.
+;*
+DSK==0				;Random channel number.
+
+RENLOG:	OPEN DSK,[EXP 0,<SIXBIT 'DSK'>,0] ;Open the channel.
+	 $RET			; Oh well.
+	MOVX T1,%%.MOD
+	MOVSI T2,(SIXBIT 'LOG')
+	SETZB T3,T4
+	LOOKUP DSK,T1		;Lookup old log file.
+	 $RET			; None, nothing to rename.
+	MOVSI S2,-^D1000	;Max number of extensions to try.
+RENLUP:	MOVEI T1,(S2)		;Copy extension number.
+	IDIVI T1,^D100
+	IDIVI T2,^D10
+	ROT T2,-6
+	ROTC T1,-6
+	TLO T2,'000'(T3)
+	MOVX T1,%%.MOD
+	SETZB T3,T4
+	RENAME DSK,T1		;Rename the old log file.
+	 TLZA T2,-1		; Oops.  Wipe lh, and skip.
+	  JRST RENDON		;  Good, go close channel.
+	CAIN T2,ERAEF%		;Already existing file?
+	 AOBJN S2,RENLUP	; Yes, more to try?
+RENDON:	CLOSE DSK,		;Done, someway.  Close channel.
+	RELEASE DSK,		;Totally.
+	$RET			;Done.
+
+	SUBTTL String Handling -- COPY Copy a string
+;*
+;* Accepts in	S1 / Byte-pointer to destination string space.
+;*		S2 / Byte-pointer to source.
+;*
+;* Returns in	S1 / Updated byte-pointer.
+;*		S2 / Updated byte-pointer.
+;*
+COPY:	$SAVE <T1>
+
+	.PTR S1			;Convert to real byte-pointer.
+	.PTR S2
+
+COPY.0:	ILDB T1,S2		;Get a byte from source.
+	JUMPE T1,.POPJ		;End of string?
+	IDPB T1,S1		;Store in destination space.
+	JRST COPY.0		;Loop.
+
+	SUBTTL String Handling -- NCOPY Copy from network to buffer
+;*
+;* Accepts in	S1 / Bytepointer to buffer.
+;*
+;* Returns in	S1 / Updated bytepointer.
+;*
+NCOPY:	$SAVE <S2>
+	
+	.PTR S1			;Build a real pointer.
+	MOVE S2,S1		;Copy pointer.
+	
+NCOP.0:	PUSHJ P,S$IBYT		;Get a byte from network.
+	JUMPF NCOP.1		;End of buffer?
+	IDPB S1,S2		;Store in buffer.
+	JRST NCOP.0		;Loop.
+NCOP.1:	MOVE S1,S2		;Get pointer into S1.
+	POPJ P,			;Return to caller.
+
+	SUBTTL Output Routines -- RFCDTM Print date & time in RFC822 format
+;*
+;* Accepts in	S1 / UDT.
+;*		S2 / Output routine.
+;*
+
+RFCDTM:	$SAVE <T1,T2,T3,T4,P1,P2>
+	CAME S1,[-1]		;Use current date/time?
+	 JRST RFCD.0		; No, use UDT in S1.
+	MOVX S1,%CNDTM		;Get UDT.
+	GETTAB S1,
+	 SETZ S1,
+RFCD.0:	HLRZ T1,S1		;Get day number.
+	ADDI T1,^D685+3		;Days since 1-Jan-1857 0:00, align to Monday.
+	IDIVI T1,7		;Get current day number (0=monday..6=sunday).
+	$TEXT @S2,<^T/DAYTXT(T2)/, ^A> ;Write day name.
+	MOVX T1,%CNDAY		;Current day in month.
+	GETTAB T1,
+	 SETZ T1,
+	MOVX T2,%CNMON		;Current month.
+	GETTAB T2,
+	 SETZ T2,
+	MOVX T3,%CNYER		;Current year.
+	GETTAB T3,
+	 SETZ T3,
+	skipa t4,t3		;[021] Y2K fix.
+	IDIVI T3,^D100		;Keep only last two digits in year.
+IFE FTTIMZ,<
+	$TEXT @S2,<^D/T1/ ^T/MONTXT-1(T2)/ ^D/T4/ ^C/[-1]/ ^T/TIMZON/^A>
+>;END IFE FTTIMZ
+IFN FTTIMZ,<
+	TIMZON P1,		;Get time zone and daylight savings extra.
+; Don't $STOP if TIMZON doesn't exist, just use default. [THN 016]
+;	 $STOP (TMZ,Time zone call failed)
+	  jrst	[$TEXT @S2,<^D/T1/ ^T/MONTXT-1(T2)/ ^D/T4/ ^C/[-1]/ ^T/TIMZON/^A>
+		 popj p,]	;[THN 016]
+	HLRE P2,P1
+	HRRE P1,P1
+	ADD P1,P2		;Add them up.
+	MOVSI T3,'+  '		;Start building time zone in SIXBIT.
+	SKIPGE P1
+	 MOVSI T3,'-  '
+	MOVM P1,P1
+	ADDI P1,^D30		;Round to minutes.
+	IDIVI P1,^D60
+	IDIVI P1,^D10
+	LSH P2,^D6
+	TRO T3,'0 '(P2)
+	IDIVI P1,^D6
+	LSH P2,^D12
+	TRO T3,'0  '(P2)
+	IDIVI P1,^D10
+	TLO T3,'0'(P2)
+	LSH P1,^D6
+	TLO T3,'0 '(P1)
+	$TEXT @S2,<^D/T1/ ^T/MONTXT-1(T2)/ ^D/T4/ ^C/[-1]/ ^W/T3/^A>
+>;END IFN FTTIMZ
+	POPJ P,			;Return to caller.
+
+	SUBTTL Output Routines -- PRT821 Print path in RFC821 format
+
+PRT821:	$SAVE <P1,P2>		;Save what we'll clobber.
+	MOVEI P1,.PTRLY(PTH)	;Use as relay index.
+	MOVE P2,.PTNRL(PTH)	;Get number of relays.
+	CAIL P2,2		;Less than 2 (that is 0 or 1)?
+	 JRST[	PUSHJ P,PRT1.0	; No, we have to print leading relays.
+		$TEXT F$OBYT,<:^A> ;And a ":".
+		JRST .+1]
+	$TEXT F$OBYT,<^T/.PTMBX(PTH)/^A> ;Print mailbox name.
+	SKIPN .PTNRL(PTH)	;At least one relay?
+	 POPJ P,		; No, so just return.
+	$TEXT F$OBYT,<@^T/@(P1)/^A>
+	POPJ P,			;Return to caller.
+	
+PRT1.0:	SUBI P2,1		;Remeber final node is after mailbox.
+	SKIPA
+PRT1.1:	 $TEXT F$OBYT,<,^A>	; Separate nodes.
+	$TEXT F$OBYT,<@^T/@(P1)/^A> ;Write a relay node.
+	ADDI P1,1		;Point to next relay.
+	SOJG P2,PRT1.1		;Loop.
+	POPJ P,			;Return to caller.
+
+	SUBTTL Output Routines -- PRT822 Print path in RFC822 format
+
+PRT822:	PJRST PRT821		;For now...
+
+	SUBTTL RDINIT Routine to read init file
+
+RDINIT:	$SAVE <S1,S2>
+	MOVEI S1,INITFD		;FD of init file
+	SETZ S2,		;No logfile
+	$CALL P$TAKE		;Tell OPRPAR about the file
+	SKIPT
+	 $STOP (ERI,Error Reading Init-file: ^E/[-1]/)
+	MOVEM S1,TAKIFN		;Save as TAKE file IFN
+RDIN.0:	MOVEI S1,PARBLK		;Parser block
+	PUSHJ P,PARCMD		;Try parse a command
+	$RETIF			;Return if done
+	$CALL P$KEYW		;Nope, get the keyword
+	PUSHJ P,(S1)		;Dispatch on it
+	JRST RDIN.0		;Loop
+	
+	SUBTTL	PARCMD Routine to parse a command
+
+PARCMD:	$SAVE <S1,S2,T1,T2,P1>	;Will be clobberd
+	MOVE P1,S1		;Save addr of parser block
+	SKIPE S1,OLDPAG		;Any old parser data page hanging around?
+	 $CALL M%RPAG		; Yes -- Release it
+PARC.0:	MOVE S2,P1		;Get addr. of parser block
+	MOVEI S1,PAR.SZ
+	$CALL PARSER		;Parse it
+	JUMPT PARSOK		;Everything ok?
+	SETZM OLDPAG		;Nope, no page created
+	MOVE T2,PRT.FL(S2)	;Get flags word
+	TXNE T2,P.ENDT		;End of TAKE file?
+	 JRST PARC.1		; Yes, go handle it
+	TXNE T2,P.CEOF		;Or incore parse EOF?
+	 $RETF			; Yes, return
+	$TEXT ,<^M^J? ^T/@PRT.EM(S2)/> ;Something else, inform user
+	$RETF			;And return
+PARC.1:	CAIL TFP,TAKBLK		;Last IFN?
+	 JRST PARC.2		; No, set up an old one
+	SETZM TAKIFN		;Yes, not in a take command any more
+	$RETF			;Return to caller
+PARC.2:	POP TFP,S1		;Restore an old IFN
+	MOVEM S1,TAKIFN		;Save as current
+	$CALL P$STAK		;Tell OPRPAR about it too
+	JRST PARC.0		;And repars
+
+PARSOK:	MOVE T1,PRT.CM(S2)	;Get addr. of data page
+	MOVEM T1,OLDPAG
+	MOVE S1,COM.PB(T1)	;Setup for retrieving of parsed data
+	ADDI S1,(T1)
+	PJRST P$SETU		;Set it up and return
+
+	SUBTTL Commands -- DEBUG Command
+
+DEBCMD:	SETOM DEBFLG		;Set the DEBUG flag.
+	POPJ P,			;That's all.
+
+	SUBTTL Commands -- DEFAULT Command
+
+DEFCMD:	$CALL P$QSTR		;Get quoted string.
+	$TEXT <-1,,DEFDOM>,<^T/1(S1)/^0>
+	$RET			;Done!
+
+	SUBTTL Commands -- LOCAL-NODE-NAME Command
+
+LOCCMD:	$CALL P$QSTR		;Parse a quoted string.
+	$TEXT <-1,,OURNOD>,<^T/1(S1)/^0>
+	POPJ P,
+
+	SUBTTL Commands -- MAIL-11-OBJECT-NUMBER Command
+
+MOBCMD:	$CALL P$NUM		;Get the object number.
+	MOVEM S1,M11OBJ		;Save the object number.
+	POPJ P,			;Return to caller.
+
+	SUBTTL Commands -- MAIL-11-SERVERS Command
+
+MPSCMD:	$CALL P$NUM		;Parse a number.
+	MOVEM S1,NMAI11		;Save number of servers to start.
+	POPJ P,			;Return to caller.
+
+	SUBTTL Commands -- OUTPUT-FILES Command
+
+OUTCMD:	$CALL P$OFILE		;Parse an output file.
+	LOAD T2,.FDLEN(S1),FD.LEN ;Get length of FD.
+	HRLZ T1,S1
+	HRRI T1,MAILFD
+	BLT T1,MAILFD-1(T2)	;Move the FD to a safe place.
+	POPJ P,
+
+	SUBTTL Commands -- SMTP-OBJECT-NUMBER Command
+
+SOBCMD:	$CALL P$NUM		;Parse a number.
+	MOVEM S1,SMTOBJ		;Save it.
+	POPJ P,
+
+	SUBTTL Commands -- SMTP-SERVERS Command
+
+SPSCMD:	$CALL P$NUM		;Parse a number.
+	MOVEM S1,NSMTP		;Save number of SMTP servers to start.
+	POPJ P,
+
+	SUBTTL Commands -- TAKE Command
+
+TAKCMD:	SKIPN T1,TAKIFN		;in a TAKE command already?
+	 JRST TAKC10		;no, this is first time
+	HLRZ T2,TFP		;number of pushed IFNs
+	CAIL T2,TAKSIZ		;room for one more?
+	 JRST TAKERR		;no, give error
+TAKC10:	$CALL P$IFIL		;get FD of file to TAKE commands from
+	SETZ S2,		;no logfile, since OPRPAR can't handle it!
+	$CALL P$TAKE		;setup for TAKE
+	JUMPF GLXERR		;hrlzm...
+	SKIPE T1		;old IFN?
+	 PUSH TFP,T1		;yes, push it
+	MOVEM S1,TAKIFN		;save as current TAKE IFN
+	$RETT
+	
+TAKERR:	$TEXT ,<? Nesting to deed in TAKE command>
+TAKE10:	POP TFP,S1		;pop an old IFN
+	$CALL F%REL		;and close it
+	JUMPF GLXERR		;what?!?!
+	CAIL TFP,TAKBLK		;@ bottom?
+	 JRST TAKE10		;no, pop next
+	MOVE S1,TAKIFN		;get current IFN
+	SETO S2,		;last position
+	PJRST F%POS		;to resume terminal input
+
+	SUBTTL Commands -- TCP-SMTP-SERVERS Command
+
+IFN FTCIMP,<
+TPSCMD:	$CALL P$NUM		;Parse a number.
+	MOVEM S1,NTCPSMTP	;Save number of TCP SMTP servers to start.
+	POPJ P,
+>;IFN FTCIMP
+
+	SUBTTL Commands -- TIME-ZONE Command
+
+TIMCMD:	$CALL P$QSTR		;Get the string.
+;IFE FTTIMZ,<
+	$TEXT <-1,,TIMZON>,<^T/1(S1)/^0>
+;>;END IFE FTTIMZ
+	POPJ P,
+
+	SUBTTL Commands -- WAKEUP-NEXT Command
+
+WAKCMD:	$CALL P$FLD		;Parse a field.
+	MOVEI S1,PFD.D1(S1)	;Load adress of string we got.
+	$CALL S%SIXB		;Convert to SIXBIT.
+	MOVEM S2,WAKNAM		;Store converted value.
+	POPJ P,
+
+	SUBTTL Mail Routines -- MAICLR Clear data areas
+
+MAICLR:	$SAVE <S1,S2,T1>
+	
+	SETZM .PDUNI(PDB)	;Wipe unique connection number.
+	SETZM .PDCHN(PDB)	;Wipe UDX and channel numbers.
+	SETZM .PDNRC(PDB)	;Wipe number of receivers.
+	
+	SKIPE S1,.PDDSK(PDB)	;Any disk channel left open?
+	 PUSHJ P,F%DREL		; Yes, delete it.
+	SETZM .PDDSK(PDB)
+
+	SKIPE PTH,.PDFRM(PDB)	;Any from field?
+	 PUSHJ P,R$RBLK		; Yes, release it.
+	SETZM .PDFRM(PDB)	;No from field any more.	
+	
+	SKIPE PTH,.PDRCV(PDB)	;Any receivers?
+	 PUSHJ P,R$RBLK		; Yes - release.
+	SETZM .PDRCV(PDB)	;No receiver list any more.
+
+	MOVEI S1,STRWSZ
+	MOVEI S2,.PDNOD(PDB)	;Remote node field.
+	PUSHJ P,.ZCHNK
+
+	MOVEI S1,STRWSZ
+	MOVEI S2,.PDOFF(PDB)
+	PUSHJ P,.ZCHNK
+	
+	MOVEI S1,STRWSZ
+	MOVEI S2,.PDMLD(PDB)
+	PUSHJ P,.ZCHNK
+
+	MOVEI S1,STRWSZ
+	MOVEI S2,.PDSUB(PDB)	;Subject field.
+	PJRST .ZCHNK
+	
+	SUBTTL Mail Routines -- R$GBLK Allocate a sender/receiver block
+;*
+;* Accepts	No Arguments.
+;*
+;* Returns with PTH setup.
+;*
+
+R$GBLK:	$SAVE <S1,S2,P1>	;Save what we'll clobber.
+	
+	MOVEI S1,.PTSIZ		;Size of a chunk.
+	$CALL M%GMEM		;Get it, please.
+	MOVE PTH,S2		;..into S1.
+	
+	MOVEI P1,.PTSTR(PTH)	;Get a pointer to string space in chunk.
+	MOVSI S2,-MAXRLY	;Max number of relay nodes.
+	HRR S2,PTH		;Get pointer to chunk.
+R$GB.0:	MOVEM P1,.PTRLY(S2)	;Save pointer to string space for relay.
+	ADDI P1,STRWSZ		;Point to next relays strings space.
+	AOBJN S2,R$GB.0		;Loop for all relay nodes.
+	
+	POPJ P,			;Return to caller.
+
+	SUBTTL Mail Routines -- R$RBLK Release a sender/receiver block
+
+R$RBLK:	$SAVE <S1,S2>
+	
+	PJRST R$RBL0		;Delete, all the way down.
+
+R$RBL0:	PUSH P,PTH
+	SKIPE PTH,.PTNXT(PTH)	;Any forward link?
+	 PUSHJ P,R$RBL0		; Yes, delete that first!
+	POP P,S2		;Restore PTH.
+	MOVEI S1,.PTSIZ		;Size of a chunk.
+	PJRST M%RMEM		;Release it and return.
+
+	SUBTTL Mail Routines -- RLYADD Add a relay node first in list
+;*
+;* Accepts in	S1 / Byte-pointer to relay node name.
+;*
+
+RLYADD:	$SAVE <S2,T1,T2,T3>	;Save what we'll clobber.
+	
+	MOVE T1,.PTNRL(PTH)	;Get number of relay nodes.
+	MOVEI T2,.PTRLY(PTH)	;Point to first of them.
+	ADDI T2,-1(T1)		;..and then to last.
+	JUMPE T1,RLYA.1		;If no relays found..
+RLYA.0:	MOVE T3,(T2)		;Get source.
+	EXCH T3,1(T2)		;Exchange with destination.
+	MOVEM T3,(T2)		;Save new pointer.
+	SUBI T2,1		;Step to next relay.
+	SOJG T1,RLYA.0		;(If there are any left).
+	
+RLYA.1:	AOS .PTNRL(PTH)		;Increment number of relays.
+
+	HRRO S2,.PTRLY(PTH)	;Point to first relay node space.
+	EXCH S1,S2		;COPY wants'em the other way around.
+	PUSHJ P,COPY		;COPY string...
+	SETZ S2,
+	IDPB S2,S1
+	POPJ P,			;And return.
+
+	SUBTTL Mail Routines -- PRS821 Parse a RFC821/RFC733 path
+;*
+;* Accepts	No Arguments
+;*
+;* Returns with PTH fields setup and .PTORI parsed.
+;*
+PRS821:	$SAVE <T1,P1,P2,P3,P4>	;Save what we'll clobber.
+	MOVE P1,[POINT 7,.PTORI(PTH)] ;Get pointer to original string.
+	ILDB T1,P1		;Get a byte from string.
+	CAIE T1,"@"		;Path starts with a RFC822 relay?
+	 JRST[	MOVE P1,[POINT 7,.PTORI(PTH)] ;No, reset pointer.
+		JRST PRS8.1]	;Go look for mailbox name.
+	
+PRS8.0:	PUSHJ P,RLY821		;Add RFC821 relay.
+	CAIN T1,","		;More RFC821 domains comming?
+	 JRST PRS8.0		; Yes, go get them in.
+	CAIE T1,":"		;Otherwise we must ha a ":" here!
+	 JRST ERR821		; We hadn't!! Foul play!
+
+PRS8.1:	MOVEM P1,MBXPTR		;Save mailbox pointer.
+	MOVE P2,[POINT 7,.PTMBX(PTH)] ;First: Get local mailbox name.
+	PUSHJ P,COPMBX		;Copy it.
+	CAIN T1,"@"		;Plain RFC821 path?
+	 PJRST RLY821		; Yes, add local node to relay list and return.
+
+;*
+;* RFC733 paths comes in reverse order. Allocate a PTH block to
+;* temporarily hold nodes.
+;*
+
+PRS733:	MOVE P3,.PTNRL(PTH)	;Get number of relay nodes.
+	ADDI P3,.PTRLY(PTH)	;Point to first free entry.
+	MOVE P4,P3		;P4 will be top-pointer.
+	PUSH P,.PTNRL(PTH)	;Save number of 822 relay nodes.
+	SETZM .PTNRL(PTH)	;Clear to count 733 relays.
+PRS7.0:	PUSHJ P,RLY733		;Add a RFC733 relay.
+	CAIN T1,"%"		;Next char is %? 
+	 JRST PRS7.0		; Yes, loop for all 733 relay nodes.
+	CAIE T1,"@"		;No, so it must be a "@"!
+	 JRST ERR733		; Wasn't -- Alarm.
+	PUSHJ P,RLY733		;It was, add as a 733 relay.
+	PUSHJ P,REV733		;Now: Reverse the order of the 733 relay nodes.
+	MOVE T1,.PTNRL(PTH)	;Get number of 733 relay nodes.
+	POP P,.PTNRL(PTH)	;Restore number 822 relay nodes.
+	ADDM T1,.PTNRL(PTH)	;Get the total amount of relay nodes.
+	POPJ P,			;Return to caller.
+
+RLY733:	MOVE P2,(P4)		;Get pointer to buffer.
+	HRLI P2,(POINT 7,)	;Byte-pointer.
+	ADDI P4,1		;Step up top pointer.
+	AOS .PTNRL(PTH)		;Increment number of relay nodes.
+	PJRST COP733		;Copy RFC733 relay node.
+
+RLY821:	MOVE P2,.PTNRL(PTH)	;Get number of relay nodes.
+	AOS .PTNRL(PTH)		;Increment!
+	ADDI P2,.PTRLY(PTH)	;Point to relay entry.
+	MOVE P2,(P2)		;Build pointer.
+	HRLI P2,(POINT 7,)
+	PJRST COP821		;Copy RFC821 relay node.
+	  
+REV733:	SUBI P4,1		;Step down top-pointer to last relay.
+REV7.0:	MOVE T1,(P3)		;Get buffer pointer of floor.
+	EXCH T1,(P4)		;Exchange with top.
+	MOVEM T1,(P3)		;...
+	SUBI P4,1		;Decrement top-pointer.
+	ADDI P3,1		;Increment floor-pointer.
+	CAMGE P3,P4		;Are we ready?
+	 JRST REV7.0		; No, keep reversing.
+	POPJ P,			;Return to caller with list reversed.
+
+COP821:	ILDB T1,P1		;Get a byte from source.
+	CAIE T1,","		;End of this relay node (more comming)?
+	 CAIN T1,":"		; End of this relay node (all relays done)?
+ 	  POPJ P,		;  Yes, we're ready.
+	JUMPE T1,.POPJ		;Or NULL == End of string?
+	IDPB T1,P2		;Neither of the above. Store byte.
+	JRST COP821		;And loop.
+
+COPMBX:				;Same as COP733.
+COP733:	ILDB T1,P1		;Get a byte from source.
+	CAIE T1,"%"		;An other relay comming?
+	 CAIN T1,"@"		; or the final relay?
+	  POPJ P,		;  Yes, leave.
+	JUMPE T1,.POPJ		;Or end of string?
+	IDPB T1,P2		;No, store and loop.
+	JRST COP733		;...
+
+ERR821:	$TEXT LOGPUT,<^I/LOGENT/PRS821: Failed to parse ^T/.PTORI(PTH)/.>
+	$RETF			;Return FALSE.
+
+;*
+;* Here if the RFC733 parser fails. Since RFC733 is only unofficial
+;* used with relays: Try to fix the problem by storing as much as
+;* possible of the suspected 733-route un-parsed in mailbox-string.
+;*
+
+ERR733:	POP P,.PTNRL(PTH)	;Restore number of 822 relays.
+	MOVE P1,MBXPTR		;Get saved pointer (pointing to mailbox).
+	MOVE P2,[POINT 7,.PTMBX(PTH)] ;Destination.
+ERR7.0:	ILDB T1,P1		;Get a byte.
+	CAIN T1,"@"		;Last relay node?
+	 PJRST RLY821		; Yes, store & return.
+	JUMPE T1,ERR7.1		;End of string?
+	IDPB T1,P2		;No, store character.
+	JRST ERR7.0		;Loop.
+;*
+;* Here we come if string ends without any "@". This is actually a
+;* error condition, but just log a warning and go on for now.
+;*
+ERR7.1:	$TEXT LOGPUT,<^I/LOGENT/PRS821: Warning, ERR733 couldn't find a @!>
+	$RETT			;Bye bye..
+
+	SUBTTL Mail Routines -- Check for and fix null domain
+;*
+;* Accepts PTH/ Pointer to receiver block.
+;*
+;* Returns with default domain appended to receiver if there was no
+;* domain there, and if we have a default domain.
+;*
+
+DOMCHK:	$SAVE <S1,S2,T1>	;[005] Save what we clobber.
+
+	SKIPE DEFDOM		;[005] Do we have a default domain?
+	 SKIPE .PTNRL(PTH)	;[005]  Yes, does this receiver have a domain?
+	  POPJ P,		;[005]   No/Yes, not to worry.
+
+	HRRO S1,.PTRLY(PTH)	;[005] Get address of buffer space.
+	HRROI S2,DEFDOM		;[005] Get pointer to default domain string.
+	PUSHJ P,COPY		;[005] Copy it.
+	AOS .PTNRL(PTH)		;[005] We now have a domain.
+
+	MOVE S1,[POINT 7,.PTORI(PTH)] ;[005] Get a pointer to the whole string.
+	ILDB T1,S1		;[005] Get a byte from string.
+	JUMPN T1,.-1		;[005] Loop until we find EOS.
+	MOVEI T1,"@"		;[005] Start the new domain.
+	DPB T1,S1		;[005]
+	HRROI S2,DEFDOM		;[005] Insert default domain here too.
+	PJRST COPY		;[005] Copy and leave.
+
+	SUBTTL Mail Routines -- VAXPRS Parse a VAXmail sender/receiver
+;*
+;* Accepts	No Arguments
+;*
+;* Returns with PTH setup to sender/receiver block.
+;*
+;* Notes:
+;*  This routine will split ut a VMSmail sender/receiver into it's
+;* components and store these in a sender/receiver block.
+;*
+
+VAXPRS:	$SAVE <S1,T1,T2,P2>	;Save what we'll clobber.
+
+	PUSHJ P,R$GBLK		;Get a sender/receiver block
+
+	SETZM QUTFLG		;Clear quote-flag.
+	
+VAXP.0:	PUSHJ P,S$IBYT		;Get a byte from buffer.
+	JUMPF VAXP.3		;End of VAXmail string.
+	CAIG S1," "		;Strip away leading blanks/controls.
+	 JRST VAXP.0		; Keep on stripping.
+	MOVE P2,[POINT 7,ATMBUF] ;Get pointer to temporary buffer.
+	JRST VAXP.2		;
+
+VAXP.1:	PUSHJ P,S$IBYT		;Get a byte from buffer.
+VAXP.2:	JUMPF VAXP.3
+	CAIN S1,""""		;Quote?
+	 SETCMM QUTFLG		; Yes, toggle flag.
+	SKIPE QUTFLG		;Inside quotes?
+	 JRST[	IDPB S1,P2	; Yes, just store character.
+		JRST VAXP.1]	;And loop.
+	CAIG S1," "		;White space?
+	 JRST VAXP.3		; Yes, so this is the username.
+	CAIE S1,":"		;End of node name?
+	 JRST[	IDPB S1,P2	; No, store & loop.
+		JRST VAXP.1]
+	PUSHJ P,S$IBYT		;Get next ":".
+	SKIPF			; If nothing there or...
+	 CAIE S1,":"		; ...not a ":"...
+	  JRST[	MOVEI T2,":"	; No!! Sorry..
+		IDPB T2,P2	; So store previous ":".
+		JRST VAXP.2]	; And loop with T1 hold new char.
+	SETZ S1,		;Yes, win! Terminate relay node name.
+	IDPB S1,P2		;...
+	
+	MOVE S1,.PTNRL(PTH)	;Get number of relay nodes.
+	AOS .PTNRL(PTH)		;Increment number of relay nodes.
+	ADDI S1,.PTRLY(PTH)	;Build an absolute ..
+	MOVE S1,(S1)		;Get adress of buffer.
+	HRLI S1,(POINT 7,)	;..byte-pointer.
+	HRROI S2,ATMBUF		;Get a pointer to atom buffer.
+	PUSHJ P,DOMCPY		;Copy the string and fixup VMS foreign domains.
+	
+	MOVE P2,[POINT 7,ATMBUF] ;Reset atom buffer pointer.
+	JRST VAXP.1		;Loop
+;*
+;* Here we come with username in ATMBUF and all nodes processed.
+;*
+
+VAXP.3:	SETZ T2,		;Terminate userid properly.
+	IDPB T2,P2
+
+	HRROI S1,.PTMBX(PTH)	;Copy the string.
+	HRROI S2,ATMBUF
+	PUSHJ P,COPY		;Copy.
+	SETZ S2,
+	IDPB S2,S1
+;; Should really check for foreign domains here..
+;;	PUSHJ P,USRCPY		;Copy.
+
+	JUMPF VAXP.7		;If end of string, finnish this up.
+
+	MOVE P2,[POINT 7,ATMBUF] ;Reset pointer.
+
+;*
+;* Here we come to find an optional personal name string.
+;* First strip away leading whitespaces.
+;*
+
+VAXP.4:	PUSHJ P,S$IBYT		;Get next character from buffer.
+	JUMPF VAXP.7		;End of string?
+	CAIG S1," "		;Found something?
+	 JRST VAXP.4		; No, keep looking.
+	IDPB S1,P2		;Yes, save that.
+VAXP.5:	PUSHJ P,S$IBYT		;Get next character.
+	JUMPF VAXP.6		;End of string?
+	IDPB S1,P2		;No, store away.
+	JRST VAXP.5		;Loop.
+VAXP.6:	SETZ S1,		;Get a null.
+	IDPB S1,P2		;Terminate string.
+
+	HRROI S1,.PTNAM(PTH)	;Copy the string.
+	HRROI S2,ATMBUF
+	PUSHJ P,COPY
+	SETZ S2,
+	IDPB S2,S1
+
+VAXP.7:	POPJ P,			;Return to caller.
+
+	SUBTTL Mail Routines -- VAXSUC Send success to VAX
+
+VAXSUC:	$SAVE <S1>		;Save what we clobber.
+	MOVEI S1,1		;Code for success.
+	PUSHJ P,S$OBYT		;Put into buffer.
+	SETZ S1,		;Followed by 3 nulls.
+	PUSHJ P,S$OBYT		;...
+	PUSHJ P,S$OBYT
+	PUSHJ P,S$OBYT
+	MOVX S1,NS.EOM		;End of Message bit.
+	PJRST S$OUT		;Send buffer.
+
+	SUBTTL Mail Routines -- DOMCPY Fixup VMS-style foreign domains
+;*
+;* Accepts in	S1 / Destination byte-pointer.
+;*		S2 / Source byte-pointer.
+;*
+;* Notes:
+;*  A VMS-style foreign domains looks like:
+;* PSI%240200101915::BC
+;* in VMS-mail. If the mail passes thru more than one node, and has real
+;* domains, it might look like:
+;* IDUN::PSI%240200101915::ODEN::BC
+;* or
+;* DRAKEN::KTH.SE%NADA:::BCQ
+;*
+
+DOMCPY:	$SAVE <T1,P1,P2>	;Save what we'll clobber.
+	
+	.PTR S1			;Fixup pointers.
+	.PTR S2			;...
+	
+	DMOVE P1,S1		;Get copies of pointers.
+	MOVE S1,[POINT 7,.PDLIN(PDB)] ;Get a pointer to a temporary buffer.
+
+DOMC.0:	ILDB T1,P2		;Get a byte from string.
+	CAIN T1,"%"		;Start of a foreign domain?
+	 JRST DOMC.1		; Yes, go handle.
+	IDPB T1,S1		;Store away byte.
+	JUMPN T1,DOMC.0		;If not end of string, do it again.
+	MOVE S1,P1		;Get the original pointer.
+	PUSHJ P,COPY		;Just copy (No foreign domains found).
+	SETZ S2,
+	IDPB S2,S1
+	POPJ P,
+
+DOMC.1:	MOVE S1,P1		;Get orig. dest. pointer.
+	MOVE S1,P2
+	PUSHJ P,COPY		;Copy the rest of the string to destination.
+	MOVEI T1,"."		;Get a "." to separate domain.
+	IDPB T1,S1		;Insert it.
+	HRROI S2,.PDLIN(PDB)	;Get the domain data.
+	PUSHJ P,COPY		;Copy and return.
+	SETZ S2,
+	IDPB S1,S1
+	POPJ P,
+
+	SUBTTL Mail Servers -- MAIL-11 -- M11SRV Mail-11 receiver
+
+M11SRV:	MOVEI P,.PDSTK-1(PDB)	;Reset stack (in case we were restarted).
+	HRLI P,-PSTKLN
+
+	SKIPE S1,LOGIFN		;Get IFN of logfile.
+	 $CALL F%CHKP		; Checkpoint it.
+
+	PUSHJ P,MAICLR		;Clear data areas.
+
+	PUSHJ P,S$OPEN		;Open a listening link.
+
+	$TEXT LOGPUT,<^I/LOGENT/Received MAIL-11 connect from ^T/.PDNOD(PDB)/>
+
+	PUSHJ P,GETMAI		;Link is now "running"; go get mail.
+	
+	PUSHJ P,S$CLOS		;Close the link.
+
+	JRST M11SRV		;Re-initialize server & Get next mail.
+
+	SUBTTL Mail Servers -- MAIL-11 -- GETMAI MAIL-11 protocol reader
+
+GETMAI:	PUSHJ P,F$CREA		;Open mail file.
+
+;*
+;* First: Get & Parse "From:" field.
+;*
+
+	PUSHJ P,S$INP		;Get a buffer from the network.
+	
+	PUSHJ P,VAXPRS		;Parse VAXmail From field.
+	MOVEM PTH,.PDFRM(PDB)	;Save FROM-chunk in PDB.
+	
+	HRROI S1,.PDNOD(PDB)	;Point to name of node we're talking to.
+	PUSHJ P,RLYADD		;Add the relay node.
+
+	PUSHJ P,PRT821		;Print in SMTP format to mail file.
+	$TEXT F$OBYT,<>		;Get a new line.
+
+;*
+;* Here we come to get all receivers.
+;*
+
+	SETZ P1,		;(Used as pointer to previous receiver block).
+GETM.0:	SETZM .PDIBF(PDB)	;Clear first word in buffer.
+	PUSHJ P,S$INP		;Get a new message from network.
+	SKIPN .PDIBF(PDB)	;Did we get anything?
+	 JRST GETM.2		; No, end of receiver list.
+	
+	PUSHJ P,VAXPRS		;Parse VAXmail receiver field.
+	
+	PUSHJ P,DOMCHK		;[005] Check for null/default domain.
+
+	PUSHJ P,PRT821		;Print in SMTP format to the mail file.
+	$TEXT F$OBYT,<>		;Get a new line.
+	
+	AOS .PDNRC(PDB)		;Increment number of receivers.
+
+	JUMPN P1,[
+		MOVEM PTH,.PTNXT(P1) ;Save pointer to next receiver block.
+		MOVE P1,PTH	;Set P1 to old block.
+		JRST GETM.1]	;Go on.
+	MOVE P1,PTH		;No, set pointer to first receiver block.
+	MOVEM PTH,.PDRCV(PDB)	;Save pointer to first block in PDB.
+GETM.1:	PUSHJ P,VAXSUC		;Send success signal to VAX.
+	JRST GETM.0		;Loop.
+	
+GETM.2:	PUSHJ P,S$INP		;Get "Mailed-to:" field from VAX.
+	
+	HRROI S1,.PDMLD(PDB)	;Where to store it.
+	PUSHJ P,NCOPY		;Copy.
+	SETZ T1,
+	IDPB T1,S1		;Terminate field.
+
+	PUSHJ P,S$INP		;Get "Subject:" field from VAX.
+	
+	HRROI S1,.PDSUB(PDB)	;Where to store.
+	PUSHJ P,NCOPY		;Copy.
+	SETZ T1,
+	IDPB T1,S1		;Terminate.
+	
+;*
+;* Start generating RFC822 headers from the VAX-mail we received.
+;*
+
+	$TEXT F$OBYT,<^M^JReceived: from ^T/.PDNOD(PDB)/ by ^T/OURNOD/ with MAIL-11; ^A>
+	SETO S1,		;Current date & time.
+	MOVEI S2,F$OBYT
+	PUSHJ P,RFCDTM		;Print date & time in RFC822 format.
+	$TEXT F$OBYT,<^M^JDate: ^A>
+	PUSHJ P,RFCDTM		;Once more.
+	$TEXT F$OBYT,<^M^JFrom: ^A>
+	MOVE PTH,.PDFRM(PDB)	;Get From block.
+	PUSHJ P,PRT822		;Print in full 822 format.
+
+	$TEXT F$OBYT,<^M^JTo:    ^A>
+	MOVE PTH,.PDRCV(PDB)	;Get first receiver in chain.
+GETM.3:	PUSHJ P,PRT822		;Print it.
+	SKIPE PTH,.PTNXT(PTH)	;More receivers?
+	 $TEXT F$OBYT,<, ^A>	; Yes, so separate them.
+	JUMPN PTH,GETM.3	;Loop for all receivers.
+	
+	$TEXT F$OBYT,<^M^JSubject: ^T/.PDSUB(PDB)/> ;Print subject: field.
+	$TEXT F$OBYT,<Mailed-to: ^T/.PDMLD(PDB)/^M^J> ;Some extra VAX info.
+	
+;*
+;* Now, get message test from the VAX.
+;*
+
+GETM.4:	SETZM .PDIBF(PDB)	;Clear buffer word.
+	PUSHJ P,S$INP		;Get a buffer from network.
+	SKIPN .PDICT(PDB)	;No characters received?
+	 JRST GETM.5		; That's right.
+	SKIPN .PDIBF(PDB)	;End of message?
+	 JRST GETM.7		; Yes.
+GETM.5:	PUSHJ P,S$IBYT		;Get a byte from message.
+	JUMPF GETM.6		;End of buffer.
+	PUSHJ P,F$OBYT		;Put byte in message.
+	JRST GETM.5		;Loop.
+GETM.6:	$TEXT F$OBYT,<>		;Generate CRLF.
+	JRST GETM.4		;Loop for whole message.
+
+GETM.7:	$TEXT F$OBYT,<>		;One extra blank line.
+	PUSHJ P,F$CLOS		;Close disk file.
+	
+	MOVE P1,.PDNRC(PDB)	;Get number fo receivers.
+GETM.8:	PUSHJ P,VAXSUC		;Send success for each receiver.
+	SOJG P1,GETM.8		;Loop.
+
+	POPJ P,			;Back to caller.
+
+	SUBTTL Mail Servers -- SMTP -- SMTSRV SMTP receiver
+
+SMTSRV:	MOVEI P,.PDSTK-1(PDB)	;Reset stack (in case we were restarted).
+	HRLI P,-PSTKLN
+
+	SKIPE S1,LOGIFN		;Get IFN of logfile.
+	 $CALL F%CHKP		; Checkpoint it.
+
+	PUSHJ P,MAICLR		;Clear data areas.
+
+	PUSHJ P,S$OPEN		;Open a listening link.
+
+	$TEXT LOGPUT,<^I/LOGENT/Received SMTP connect from ^T/.PDNOD(PDB)/>
+
+	PUSHJ P,SMTP
+
+	PUSHJ P,S$CLOS		;Close the link.
+
+	JRST SMTSRV		;Loop.
+
+	SUBTTL Mail Servers -- SMTP -- SMTP protocol reader
+
+SMTP:	SETZ P4,		;Clear flags.
+
+	$TEXT S$OBYT,<220 ^T/OURNOD/ SMTP Service ^V/.JBVER/ at ^A>
+	SETO S1,
+	MOVEI S2,S$OBYT
+	PUSHJ P,RFCDTM
+	$TEXT S$OBYT,<>
+
+	MOVX S1,NS.EOM		;End of message.
+	PUSHJ P,S$OUT		;Send buffer.
+
+SMTP.0:	SKIPE S1,LOGIFN		;Do we have a logfile?
+	 $CALL F%CHKP		; Yes, checkpoint it.
+	PUSHJ P,SMTCMD		;Parse a command.
+	PUSHJ P,(S1)		;Dispatch.
+	JUMPT SMTP.0		;Loop (if not QUIT).
+	
+	POPJ P,			;Return to caller.
+
+	SUBTTL Mail Servers -- SMTP -- GETLIN Get a line from network
+;*
+;* Accepts in	S1 / Byte-pointer to buffer.
+;*
+;* Returns in	S1 / Updated byte-pointer.
+;*
+;* Will terminate read on CR/LF.
+;*
+
+GETLIN:	$SAVE <T1>
+
+	.PTR S1			;Build a real byte-pointer.
+	MOVE P1,S1		;Save it.
+	
+GETL.0:	PUSHJ P,S$IBYT		;Try to get a byte from network.
+	JUMPF[	PUSHJ P,S$INP	;Try to get a new buffer.
+		JRST GETL.0]	;Try again.
+	CAIN S1,.CHCRT		;CR?
+	 JRST GETL.2		; Yes, go catch LF.
+	SOSLE S2
+	 IDPB S1,P1		;No, store char in buffer.
+	JRST GETL.0		;Loop.
+GETL.2:	PUSHJ P,S$IBYT		;Get next byte (should be LF!)
+	JUMPF[	PUSHJ P,S$INP	;Try for another buffer.
+		JRST GETL.2]
+	CAIE S1,.CHLFD		;Was it?
+	 JRST GETL.3		; No.., so store it. (Ignore sinlge CR).
+	SETZ S1,		;Get a NUL to terminate buffer.
+	IDPB S1,P1		;...
+	MOVE S1,P1
+	SKIPLE S2
+	 $RETT			;Return to caller.
+	  $RETF
+GETL.3:	MOVEI T1,.CHCRT		;Get a CR.
+	SOSLE S2
+	 IDPB T1,P1		;Store it.
+	CAIN S1,.CHCRT		;Next char a CR?
+	 JRST GETL.2		; Yes, so keep checking.
+	SOSLE S2
+	 IDPB S1,P1		;No, store next char.
+	JRST GETL.0		;Loop.
+
+	SUBTTL Mail Servers -- SMTP -- GETPTH Get a forward/reverse path.
+;*
+;* Accepts in	S1 / Byte-pointer to buffer.
+;*		S2 / SIXBIT/NOISE-WORD/
+;*
+
+GETPTH:	$SAVE <T1,T2,T3,T4>
+	
+	.PTR S1			;Build real pointer.
+	
+	ILDB T1,P1		;Step over " ".
+	CAIE T1," "
+	 $RETF
+	MOVEI T1,6		;Max number of bytes.
+	SETZ T2,		;Where to store.
+	MOVE T4,[POINT 6,T2]
+GETP.0:	ILDB T3,P1		;Get a byte.
+	CAIN T3,":"		;Start of Path?
+	 JRST GETP.1		; Yes.
+	JUMPE T3,.RETF		;Error if NULL here!
+	TRZE T3,100
+	 TROA T3,40
+	  TRZ T3,40
+	IDPB T3,T4		;Store byte.
+	SOJG T1,GETP.0
+GETP.1:	CAME T2,S2		;DO THEY MATCH?
+	 $RETF			; No, so get out of here.
+	ILDB T1,P1		;Get next byte.
+	CAIE T1,"<"		;">" Start of path?
+	 $RETF			; No.
+	SETZM QUTFLG		;Clear Quote flag.
+GETP.2:	ILDB T1,P1		;Get a byte.
+	JUMPE T1,.RETF		;Fail if null.
+	CAIN T1,""""		;Quote?
+	 SETCMM QUTFLG		; yes, set/clear flag.
+	SKIPN QUTFLG		;Inside Quotes? "<"
+	 CAIE T1,">"		; End of path?
+	  TRNA			;  No.
+	   JRST GETP.3		;   End of path.
+	IDPB T1,S1		;Store byte.
+	JRST GETP.2		;Loop.
+GETP.3:	SETZ T1,
+	IDPB T1,S1		;Terminate string properly..
+	$RETT			;Return success.
+
+	SUBTTL Mail Servers -- SMTP -- SMTCMD Parse a SMTP command
+
+SMTCMD:	$SAVE <S2,T1,P2>	;Save something.
+	
+SMTC.0:	HRROI S1,.PDLIN(PDB)	;Point to buffer.
+	MOVEI S2,STRLEN
+	PUSHJ P,GETLIN		;Get a line from remote node.
+
+	TXNE P4,S%VERB		;VERB ON?
+	 $TEXT S$OBYT,<050 ^T/.PDLIN(PDB)/>
+	JUMPF SMTC.2
+
+	MOVE P1,[POINT 7,.PDLIN(PDB)] ;Get a byte-pointer.
+	MOVE P2,[POINT 7,SMTBUF]
+	MOVEI P3,4		;4 characters.
+SMTC.1:	ILDB S1,P1		;Get a byte.
+	JUMPE S1,SMTC.3		;Fail if we find a NUL here!
+	IDPB S1,P2		;Store away.
+	SOJG P3,SMTC.1		;Loop until command ready.
+	SETZ T1,		;Get a null.
+	IDPB T1,P2		;Store it.
+	
+	MOVEI S1,SMTTAB		;Point to command table.
+	HRROI S2,SMTBUF
+	$CALL S%TBLK		;Look it up in table.
+	TXNN S2,TL%EXM		;Found an exact match?
+	 JRST SMTC.3		; No, so this is syntax error.
+	HRRZ S1,(S1)		;Get routine to call.
+	$RET			;Return.
+
+SMTC.2:	MOVEI S1,[ASCIZ/500 Line too long/]
+	PUSHJ P,SMTERR
+	JRST SMTC.0		;Try again.
+SMTC.3:	MOVEI S1,[ASCIZ/500 Syntax error, command unrecognized/]
+	PUSHJ P,SMTERR
+	JRST SMTC.0		;Try again.
+
+SYNERR:	MOVEI S1,[ASCIZ/501 Syntax error in parameters or arguments/]
+	PJRST SMTERR
+
+CNIERR:	MOVEI S1,[ASCIZ/502 Command not implemented/]
+	PJRST SMTERR
+
+HELERR:	MOVEI S1,[ASCIZ/503 Please start with HELO command/]
+	PJRST SMTERR
+
+MAIERR:	MOVEI S1,[ASCIZ/503 Please start with MAIL command/]
+	PJRST SMTERR
+
+SMTERR:	$TEXT LOGPUT,<^I/LOGENT/^T/(S1)/:>
+	$TEXT LOGPUT,<^I/LOGENT/^T/.PDLIN(PDB)/>
+
+	$TEXT S$OBYT,<^T/(S1)/>
+	MOVX S1,NS.EOM
+	PJRST S$OUT
+
+	SUBTTL Mail Servers -- SMTP -- HELO Command
+
+.HELO:	ILDB T1,P1		;Get a byte.
+	CAIE T1," "		;Must be a space.
+	 JRST SYNERR		; Wasn't, so complain!
+	MOVE P2,[POINT 7,.PDOFF(PDB)] ;Get a pointer to dest.
+.HELO0:	ILDB T1,P1		;Get a byte.
+	CAIG T1," "		;If white-space then terminate.
+	 JRST .HELO1
+	IDPB T1,P2		;Store away.
+	JRST .HELO0		;Loop.
+.HELO1:	SETZ T1,		;Get a NULL.
+	IDPB T1,P2		;Terminate official node name.
+	$TEXT LOGPUT,<^I/LOGENT/Received HELO from ^T/.PDOFF(PDB)/>
+	$TEXT S$OBYT,<250 ^T/OURNOD/ - Pleased to meet you, ^T/.PDOFF(PDB)/!>
+	TXO P4,S%HELO		;HELO done flag.
+	MOVX S1,NS.EOM		;Get EOM flag.
+	PJRST S$OUT		;Flush buffers.
+
+	SUBTTL Mail Servers -- SMTP -- MAIL Command
+
+.MAIL:	TXNN P4,S%HELO		;HELO command done?
+	 JRST HELERR
+	TXNE P4,S%MAIL		;MAIL comamnd done?
+	 JRST[	MOVEI S1,[ASCIZ/503 Only one MAIL FROM command allowed/]
+		JRST SMTERR]
+	HRROI S1,ATMBUF		;Where to put result.
+	MOVE S2,[SIXBIT/FROM/]	;Noise word.
+	PUSHJ P,GETPTH		;Go get a path.
+	JUMPF SYNERR
+	$CALL F$CREA		;Get a mail file.
+
+	$CALL R$GBLK		;Get a receiver block.
+	MOVE S1,[POINT 7,.PTORI(PTH)] ;Dest.
+	HRROI S2,ATMBUF		;Atom buffer.
+	PUSHJ P,COPY		;Copy reverse path.
+	SETZ S2,
+	IDPB S2,S1
+	MOVEM PTH,.PDFRM(PDB)	;Save in PDB.
+	PUSHJ P,PRS821		;Parse it (if we can).
+
+	$TEXT F$OBYT,<^T/.PTORI(PTH)/> ;Write reverse-path to file.
+	TXO P4,S%MAIL		;Note we've received a MAIL command.
+	$TEXT LOGPUT,<^I/LOGENT/Received MAIL FROM ^T/.PTORI(PTH)/>
+	$TEXT S$OBYT,<250 MAIL accepted.>
+	MOVX S1,NS.EOM
+	PJRST S$OUT		;Send buffer.
+
+	SUBTTL Mail Servers -- SMTP -- RCPT Command
+
+.RCPT:	TXNN P4,S%HELO		;HELO done?
+	 JRST HELERR
+	TXNN P4,S%MAIL		;MAIL done?
+	 JRST MAIERR
+	HRROI S1,ATMBUF		;Point to buffer.
+	MOVE S2,[SIXBIT/TO/]	;Noise.
+	PUSHJ P,GETPTH		;Get the path.
+	JUMPF SYNERR		;Syntax error.
+
+	AOS .PDNRC(PDB)		;Increment number of receivers.
+
+	PUSHJ P,R$GBLK		;Get a PTH block.
+
+	HRROI S1,.PTORI(PTH)
+	HRROI S2,ATMBUF
+	PUSHJ P,COPY
+	SETZ S2,
+	IDPB S2,S1
+
+	SKIPN P2,.PDRCV(PDB)	;Do we have a receiver block?
+	 JRST[	MOVEM PTH,.PDRCV(PDB) ;Save receiver block pointer.
+		JRST .RCPT2]	;Go on.
+.RCPT0:	SKIPN .PTNXT(P2)	;Any next pointer?
+	 JRST .RCPT1		; Last block.
+	MOVE P2,.PTNXT(P2)	;More block, loop.
+	JRST .RCPT0		;...
+.RCPT1:	MOVEM PTH,.PTNXT(P2)	;Store forward pointer.
+
+.RCPT2:	PUSHJ P,PRS821		;Try to parse the block.
+	
+	PUSHJ P,DOMCHK		;[005] Check for null/default domain.
+
+	$TEXT F$OBYT,<^T/.PTORI(PTH)/> ;Write to file.
+	$TEXT LOGPUT,<^I/LOGENT/Received RCPT TO ^T/.PTORI(PTH)/>
+	$TEXT S$OBYT,<250 RCPT accepted.>
+	MOVX S1,NS.EOM
+	PJRST S$OUT		;Send buffer.
+
+	SUBTTL Mail Servers -- SMTP -- DATA Command
+
+.DATA:	TXNN P4,S%HELO		;HELO Command done?
+	 JRST HELERR
+	TXNN P4,S%MAIL		;MAIL Command done?
+	 JRST HELERR
+	$TEXT F$OBYT,<>		;Separate RFC822 folder from RFC821 folder.
+
+	MOVE PTH,.PDFRM(PDB)
+	$TEXT F$OBYT,<Return-Path: ^A>
+	MOVEI S1,"<"		;">"
+	PUSHJ P,F$OBYT
+	$TEXT F$OBYT,<^T/.PTORI(PTH)/^A> ;"<"
+	MOVEI S1,">"
+	PUSHJ P,F$OBYT
+
+	$TEXT F$OBYT,<^M^JReceived: from ^T/.PDOFF(PDB)/ by ^T/OURNOD/; ^A>
+	SETO S1,
+	MOVEI S2,F$OBYT
+	PUSHJ P,RFCDTM		;Write date/time in RFC822 format.
+	$TEXT F$OBYT,<>		;Get a new line.
+
+	$TEXT LOGPUT,<^I/LOGENT/Received DATA>
+	$TEXT S$OBYT,<354 Start mail input; end with CRLF.CRLF>
+	MOVX S1,NS.EOM
+	PUSHJ P,S$OUT		;Send message.
+
+	SETZB P1,P2
+.DATA0:	PUSHJ P,S$IBYT		;Get a byte from network.
+	JUMPF[	PUSHJ P,S$INP	;Get a new buffer.
+		JRST .DATA0]	;Loop.
+	LSHC P1,6		;Make room for another character.
+	IOR P2,S1		;Insert character we just got.
+	LSHC P1,1
+	CAMN P2,[BYTE (7) .CHCRT,.CHLFD,".",.CHCRT,.CHLFD]
+	 JRST .DATA1		;End of message!
+	MOVE T1,[BYTE (7) .CHCRT,.CHLFD,".","."]
+	MOVE T2,P2		;Get a copy.
+	TRZ T2,377
+	CAMN T2,T1		;Should we delete a dot?
+	 JRST[	SETZ T1,	; Yes, setup to do it.
+		DPB T1,[POINT 7,P2,^D20] ;Wipe out first dot.
+		JRST .+1]
+	JUMPE P1,.DATA0		;Loop if this is a NUL.
+	MOVE S1,P1		;Get a copy of byte.
+	PUSHJ P,F$OBYT		;Put into file.
+	JRST .DATA0		;Loop.
+.DATA1:	SKIPE S1,P1		;Byte = NULL?
+	 PUSHJ P,F$OBYT		; No, so put in file.
+	PUSHJ P,F$CLOS		;Close the mail file.
+	TXZ P4,S%MAIL		;MAIL not given any more.
+	$TEXT S$OBYT,<250 Message queued for delivery.>
+	MOVX S1,NS.EOM
+	PJRST S$OUT		;Send it.
+
+	SUBTTL Mail Servers -- SMTP -- RSET Command
+
+.RSET:	TXZ P4,S%MAIL		;Abort any MAIL command in progress.	  [JE]
+;[JE]	TXZN P4,S%MAIL		;MAIL command given?
+;[JE]	 JRST .RSET0		; No, so much easier.
+	SKIPE S1,.PDDSK(PDB)	;Get IFN of mail-file.
+	 $CALL F%DREL		;Dispose of it.
+	SETZM .PDDSK(PDB)	;Clear it!				  [JMR]
+	SKIPE PTH,.PDFRM(PDB)	;Any sender yet?
+	 PUSHJ P,R$RBLK		; Yes, dispose of it.
+	SETZM .PDFRM(PDB)	;Clear.
+	SKIPE PTH,.PDRCV(PDB)	;Any receiver list?
+	 PUSHJ P,R$RBLK		; yes, delete it.
+	SETZM .PDRCV(PDB)	;Clear it.
+	SETZM .PDNRC(PDB)	;And counter too.
+
+.RSET0:	$TEXT LOGPUT,<^I/LOGENT/Received RSET>
+	$TEXT S$OBYT,<250 RSET done.>
+	MOVX S1,NS.EOM
+	PJRST S$OUT	
+
+	SUBTTL Mail Servers -- SMTP -- SEND Command
+
+.SEND:	$TEXT LOGPUT,<^I/LOGENT/Received SEND>
+	PJRST CNIERR
+
+	SUBTTL Mail Servers -- SMTP -- SOML Command
+
+.SOML:	$TEXT LOGPUT,<^I/LOGENT/Received SOML>
+	PJRST CNIERR
+
+	SUBTTL Mail Servers -- SMTP -- SAML Command
+
+.SAML:	$TEXT LOGPUT,<^I/LOGENT/Received SAML>
+	PJRST CNIERR
+
+	SUBTTL Mail Servers -- SMTP -- VRFY Command
+
+.VRFY:	$TEXT LOGPUT,<^I/LOGENT/Received VRFY>
+	PJRST CNIERR
+
+	SUBTTL Mail Servers -- SMTP -- EXPN Command
+
+.EXPN:	$TEXT LOGPUT,<^I/LOGENT/Received EXPN>
+	PJRST CNIERR
+
+	SUBTTL Mail Servers -- SMTP -- HELP Command
+
+.HELP:	$TEXT LOGPUT,<^I/LOGENT/Received HELP>
+	$TEXT S$OBYT,<214-Commands implemented in version ^V/.JBVER/:>
+	$TEXT S$OBYT,<214-HELO, MAIL, RCPT, DATA, RSET, HELP, NOOP and QUIT.>
+	$TEXT S$OBYT,<214-Nonstandard commands:>
+	$TEXT S$OBYT,<214-TICK and VERB.>
+	$TEXT S$OBYT,<214 Send bugs and gripes to the null device.>
+	MOVX S1,NS.EOM
+	PJRST S$OUT
+
+	SUBTTL Mail Servers -- SMTP -- NOOP Command
+
+.NOOP:	$TEXT LOGPUT,<^I/LOGENT/Received NOOP>
+	$TEXT S$OBYT,<250 Ok.>
+	MOVX S1,NS.EOM
+	PJRST S$OUT
+
+	SUBTTL Mail Servers -- SMTP -- QUIT Command
+
+.QUIT:	$TEXT LOGPUT,<^I/LOGENT/Received QUIT>
+	$TEXT S$OBYT,<221 ^T/OURNOD/ Closing transmission channel.>
+	SETZ P4,		;Clear all flags.
+	MOVX S1,NS.EOM
+	PUSHJ P,S$OUT
+	$RETF			;Return false to disconnect link.
+
+	SUBTTL Mail Servers -- SMTP -- TURN Command
+
+.TURN:	$TEXT LOGPUT,<^I/LOGENT/Received TURN>
+	PJRST CNIERR
+
+	SUBTTL Mail Servers -- SMTP -- TICK Command
+
+.TICK:	$TEXT LOGPUT,<^I/LOGENT/Received TICK>
+	$TEXT S$OBYT,<250 ^A>
+.TICK0:	ILDB S1,P1		;Get a byte.
+	JUMPE S1,.TICK2		;No ticket if it is a NUL.
+	CAIE S1," "		;Blank?
+	 CAIN S1,.CHTAB		; Tab?
+	  JRST .TICK0		;  Yes, skip past blanks and tabs.
+.TICK1:	PUSHJ P,S$OBYT		;Echo the byte.
+	ILDB S1,P1		;Get another byte.
+	JUMPN S1,.TICK1		;Loop until NUL.
+.TICK2:	$TEXT S$OBYT,<... That's the ticket>
+	MOVX S1,NS.EOM
+	PJRST S$OUT
+
+	SUBTTL Mail Servers -- SMTP -- VERB Command
+
+.VERB:	$TEXT LOGPUT,<^I/LOGENT/Received VERB>
+	$TEXT S$OBYT,<250 Verbose mode ON>
+	TXO P4,S%VERB		;VERB ON flag.
+	MOVX S1,NS.EOM		;Get EOM flag.
+	PJRST S$OUT		;Flush buffers.
+
+	SUBTTL Process Control -- SPAWN Start a new process
+;*
+;* Accepts in	S1 / Start-address of process.
+;*
+
+SPAWN:	$SAVE <S1,S2,T1,P1,P2>	;Save what we'll clobber.
+
+	DMOVE P1,S1		;Save start address, and protocol types.
+
+	MOVEI S1,.PDSIZ		;Size of a PDB.
+	$CALL M%GMEM		;Get a chunk for this PDB.
+	MOVE PDB,S2		;Setup PDB.
+	
+	SVMAIN			;Save MAIN process ACs.
+	
+	MOVEI P,.PDSTK-1(PDB)	;Setup process' stack.
+	HRLI P,-PSTKLN
+	
+	MOVEI T1,MAXPRC		;Max number of processes.
+SPAW.0:	SKIPE PDBTAB-1(T1)	;This entry free?
+	 SOJG T1,SPAW.0		; No, keep looking.
+	MOVEM PDB,PDBTAB-1(T1)	;Save in PDBTAB.
+	SUBI T1,1		;Get index into PDBTAB.
+	MOVEM T1,.PDTAB(PDB)	;Save in PDB.
+	
+	MOVEM P1,.PDSTR(PDB)	;Save process start address in case
+				;we'll have to restart it.
+	MOVEM P2,.PDPRO(PDB)	;Save transport and mail protocol types.
+
+	PJRST (P1)		;GO!
+
+	SUBTTL Process Control -- A$SCHD The ANF10 Process scheduler
+
+A$SCHD:	SVMAIN			;Save MAIN process ACs.
+	
+	HLRZ T1,PSIANF+.PSVIS	;Get ANF10 channel interrupting.
+	MOVEI P1,MAXPRC		;Use as index.
+A$SC.0:	SKIPN T2,PDBTAB-1(P1)	;This entry in use?
+	 JRST A$SC.1		; No, can't possibly interrupt.
+	HLRZ T3,.PDPRO(T2)	;Get transport protocol type.
+	CAIE T3,.TPANF		;ANF10?
+	 JRST A$SC.1		; No, shouldn't cause an ANF10 interrupt.
+	CAMN T1,.PDCHN(T2)	;Matches interrupting channel?
+	 JRST A$SC.2		; Yes, go set process up.
+A$SC.1:	SOJG P1,A$SC.0		;No, loop for whole table.
+	$TEXT LOGPUT,<%ANF10 interrupt without matching channel.  Ignored.>
+	HLRZ T1,PSIDCN+.PSVIS	;Get ANF10 channel interrupting.
+	RESDV. T1,		;Try to reset the device that interrupted.
+	 JFCL			; Failed, never mind.
+	JRST A$SC.3		;Instead of curling up.
+	
+A$SC.2:	HRRZ PDB,PDBTAB-1(P1)	;Get pointer to PDB for channel.
+
+	SETZM .PDSCH(PDB)	;No longer waiting.
+	
+	RSPROC			;Restore process' ACs.
+	POPJ P,			;Continue the process.
+
+A$SC.3:	RSMAIN			;Restore MAIN process ACs.
+	DEBRK.			;Dismiss this interrupt.
+	 JFCL
+	$HALT			;...foo!
+
+	SUBTTL Process Control -- D$SCHD The DECnet Process scheduler
+
+D$SCHD:	SVMAIN			;Save MAIN process ACs.
+	
+;[JMR]	PJOB T1,		;Get job number.
+;[JMR]	WAKE T1,		;Wake me up, please.
+;[JMR]	 JFCL			; never mind.
+
+	HRRZ T1,PSIDCN+.PSVIS	;Get DECnet channel interrupting.
+	MOVEI P1,MAXPRC		;Use as index.
+D$SC.0:
+;[JMR]	HLRZ T2,PDBTAB-1(P1)	;Get channel for this PDB.
+	SKIPN T2,PDBTAB-1(P1)	;This entry in use?
+	 JRST D$SC.1		; No, can't possibly interrupt.
+	HLRZ T3,.PDPRO(T2)	;Get transport protocol type.
+	CAIE T3,.TPDCN		;DECnet?
+	 JRST D$SC.1		; No, shouldn't cause a DECnet interrupt.
+	CAMN T1,.PDCHN(T2)	;Matches interrupting channel?
+	 JRST D$SC.2		; Yes, go set process up.
+D$SC.1:	SOJG P1,D$SC.0		;No, loop for whole table.
+	$TEXT LOGPUT,<%DECnet interrupt without matching channel.  Ignored.>
+	JRST D$SC.5		;Instead of curling up.
+;[JE]	$STOP (NPC,No PDB matching interrupting channel found)
+	
+D$SC.2:	HRRZ PDB,PDBTAB-1(P1)	;Get pointer to PDB for channel.
+
+	MOVE S1,.PDCHN(PDB)	;Get channel number.
+	PUSHJ P,N$STS		;Get status.
+
+	HRRZ T1,.PDSCH(PDB)	;Get expected link state.
+	LOAD T2,S2,NS.STA	;Get actual link state.
+	CAMN T1,T2		;Do they match?
+	 JRST D$SC.3		; Yes, go on.
+	
+;*
+;* Here we come if states don't match, check for bad link state, and
+;* disconnect link if so.
+;*
+	CAIE T2,.NSSRJ		;Connect reject?
+	 CAIN T2,.NSSDR		; Disconnect received?
+	  JRST D$SC.6		;  Yes, no good.
+	CAIE T2,.NSSCF		;No confidence?
+	 CAIN T2,.NSSLK		; No link?
+	  JRST D$SC.6		;  No good?
+	CAIE T2,.NSSCM		;No communication?
+	 CAIN T2,.NSSNR		; ..or no resources?
+	  JRST D$SC.6		;  ..nervous breakdown?
+	JUMPN T1,D$SC.5		;No, so just dismiss process again.
+				;0 means we don't care about link state.
+
+D$SC.3:	HLLZ T1,.PDSCH(PDB)	;Get expected bits.
+	JUMPE T1,D$SC.4		;Zero means we don't care about'em bits.
+	
+	TDNN S2,T1		;Do they (partially) match?
+	 JRST D$SC.5		; No, so dismiss.
+	
+D$SC.4:	SETZM .PDSCH(PDB)	;No longer waiting.
+	
+	RSPROC			;Restore process' ACs.
+	POPJ P,			;Continue the process.
+
+D$SC.5:	RSMAIN			;Restore MAIN process ACs.
+	DEBRK.			;Dismiss this interrupt.
+	 JFCL
+	$HALT			;...foo!
+
+;*
+;* Here we come if a "bad" link state was found.
+;* (Restart current process (from whereever its start-address was).
+;*
+
+D$SC.6:	SETZM .PDSCH(PDB)	;No longer waiting.
+	
+	RSPROC			;Restore process' ACs.
+	
+	PUSHJ P,S$CLOS		;Close the link (pray S$CLOS wont $DISMS..!).
+	
+	MOVE S1,.PDSTR(PDB)	;Get start address.
+	JRST (S1)		;Restart process.
+
+	SUBTTL Process Control -- I$SCHD The IPCF Process scheduler
+
+IFN FTCIMP,<
+I$SCHD:	SVMAIN			;Save MAIN process ACs.
+	
+	MOVEI S1,I$SC.6		;Set up the special return address, as we might
+	MOVEM S1,DISRET		; get one interrupt for several IPCF packages.
+
+I$SC.0:	MOVE T1,PSIIPC+.PSVIS	;Get associated variable.
+	CAME T1,[1,,INSVL.(.IPCCC,IP.CFC)]
+	 JRST I$SC.4		; Not right type or not from [SYSTEM]IPCC.
+
+	MOVX T1+.IPCFL,IP.CFB	;Don't block (shouldn't happen, but ...).
+	MOVE T1+.IPCFP,[1,,P2]	;Put the device name into P2.
+	MOVE S1,[.IPCFP+1,,T1]
+	IPCFR. S1,		;Read the packet.
+	 JRST I$SC.5		; Failed.
+
+	HLRZ S1,P2		;Check that the device is an IMP.
+	CAIE S1,'IMP'
+	 JRST I$SC.6		; It's not.
+
+	MOVX T1,.PCIPC		;Scheduler condition to look for.
+	MOVEI P1,MAXPRC		;Use as index.
+I$SC.1:	SKIPN T2,PDBTAB-1(P1)	;This entry in use?
+	 JRST I$SC.2		; No, can't possibly accept a connect.
+	HLRZ T3,.PDPRO(T2)	;Get transport protocol type.
+	CAIE T3,.TPTCP		;TCP?
+	 JRST I$SC.2		; No, can't accept a TCP connect.
+	CAMN T1,.PDSCH(T2)	;Waiting for IPCF?
+	 JRST I$SC.3		; Yes, go set process up.
+I$SC.2:	SOJG P1,I$SC.1		;No, loop for whole table.
+	$TEXT LOGPUT,<%IPCF interrupt without free process.  Aborted.>
+	MOVE S1,P2		;Abort the connection.
+	PUSHJ P,T$ABRT
+	JRST I$SC.6		;Instead of curling up.
+
+I$SC.3:	HRRZ PDB,PDBTAB-1(P1)	;Get pointer to PDB for channel.
+
+	SETZM .PDSCH(PDB)	;No longer waiting.
+	
+	MOVEM P2,.PDDEV(PDB)	;Hand over the device name.
+
+	RSPROC			;Restore process' ACs.
+	POPJ P,			;Continue the process.
+
+I$SC.4:	HRRZ T1+.IPCFL,PSIIPC+.PSVIS ;Get page mode flag from associated
+	TXO T1+.IPCFL,IP.CFT+IP.CFB  ; variable, light truncate and no block.
+	SETZ T1+.IPCFP,		;Zero length, and no address.
+	MOVE S1,[.IPCFP+1,,T1]
+	IPCFR. S1,		;Throw away the packet.
+	 JRST I$SC.5		; Failed.
+
+I$SC.5:	SETZM DISRET		;No special return address any more.
+	RSMAIN			;Restore MAIN process ACs.
+	DEBRK.			;Dismiss this interrupt.
+	 JFCL
+	$HALT			;...foo!
+
+I$SC.6:	MOVE	S1,[4,,T1]	;Check if more packages in the queue, and build
+	IPCFQ.	S1,		; an associated variable for the first one.
+	 JRST	I$SC.5		;No more packages, probably.
+	HRRZ	S1,T1+.IPCFL	;The associated variable contains the flags in
+	HLL	S1,T1+.IPCFP	; the right half and length in the left half.
+	MOVEM	S1,PSIIPC+.PSVIS;Save the associated variable.
+	JRST	I$SC.0		;Loop back for more work.
+>;END IFN FTCIMP
+
+	SUBTTL Process Control -- T$SCHD The TCP Process scheduler
+
+IFN FTCIMP,<
+T$SCHD:	SVMAIN			;Save MAIN process ACs.
+	
+	HLRZ T1,PSITCP+.PSVIS	;Get TCP UDX interrupting.
+	MOVEI P1,MAXPRC		;Use as index.
+T$SC.0:	SKIPN T2,PDBTAB-1(P1)	;This entry in use?
+	 JRST T$SC.1		; No, can't possibly interrupt.
+	HLRZ T3,.PDPRO(T2)	;Get transport protocol type.
+	CAIE T3,.TPTCP		;TCP?
+	 JRST T$SC.1		; No, shouldn't cause an TCP interrupt.
+	HLRZ T2,.PDCHN(T2)	;Get UDX.
+	CAMN T1,T2		;Matches interrupting UDX?
+	 JRST T$SC.2		; Yes, go set process up.
+T$SC.1:	SOJG P1,T$SC.0		;No, loop for whole table.
+	$TEXT LOGPUT,<%TCP interrupt without matching channel.  Ignored.>
+	JRST T$SC.3		;Instead of curling up.
+	
+T$SC.2:	HRRZ PDB,PDBTAB-1(P1)	;Get pointer to PDB for channel.
+
+	MOVE T1,.PDCHN(PDB)	;Get reason bits we are waiting for.
+	TDNN T1,PSITCP+.PSVIS	;Is any of them set?
+	 JUMPN T1,T$SC.3	; Zero means we don't care about'em bits.
+
+	SETZM .PDSCH(PDB)	;No longer waiting.
+	
+	RSPROC			;Restore process' ACs.
+	POPJ P,			;Continue the process.
+
+T$SC.3:	RSMAIN			;Restore MAIN process ACs.
+	DEBRK.			;Dismiss this interrupt.
+	 JFCL
+	$HALT			;...foo!
+>;END IFN FTCIMP
+
+	SUBTTL Process Control -- .DISMS Dismiss a process
+
+.DISMS:	PUSH P,T1		;Save an AC.
+	HRRZ T1,-1(P)		;Get address of scheduler data.
+	HRRZ T1,(T1)		;Get scheduler data.
+	MOVE T1,(T1)		;...
+	MOVEM T1,.PDSCH(PDB)	;Save in PDB.
+	POP P,T1		;Get back the AC.
+	
+	SVPROC			;Save process' ACs.
+	
+	SKIPE DISRET		;If there is a special return address,
+	 JRST @DISRET		; jump there (for IPCF).
+
+	RSMAIN			;Get back main process' ACs.
+	
+	DEBRK.			;Dismiss interrupt (if any).
+	 $STOP (DNI,DEBRK. not implemented!!)
+	POPJ P,			;If no interrupt, POPJ back to caller (MAIN).
+
+	SUBTTL Process Control -- WAKNXT Wake next processor, if any.
+
+WAKNXT:	$SAVE	<S1,S2>		;Preserve all registers.
+	MOVX 	S2,%CNSJN
+	GETTAB	S2,		;Get max. number of jobs.
+	 POPJ	P,		; Well, we tried.
+	MOVEI	S2,(S2)		;Keep only right half.
+WAKLUP:	HRL	S1,S2
+	HRRI	S1,.GTPRG	;Get name of program.
+	GETTAB	S1,
+	 SETZ	S1,
+	CAME	S1,WAKNAM	;The guy we want?
+	 JRST	WAKL.7		; No, don't wake him.
+	MOVE	S1,S2		;Copy job number.
+	WAKE	S1,		;Hit the alarm button.
+	 JFCL			; Well, everybody can have a bad day...
+WAKL.7:	SOJG	S2,WAKLUP	;Loop over all jobs.
+	POPJ	P,		;Ought tobe done now.
+
+	SUBTTL Disk Routines -- F$CREA Create a new mail file
+
+F$CREA:	$SAVE <S1,S2,T1>	;Save some workspace.
+	MOVX T1,%CNDTM		;Get date & time.
+	GETTAB T1,
+	 MSTIME T1,		;Better than SETZ.
+F$CR.0:	PUSHJ P,F$CR.1		;Go make a file name of it.
+	MOVEM T1,MAILFD+.FDNAM	;Save (hopefully) new name in FD.
+	MOVX S1,FB.NFO		;Don't supersede any existing file.
+	IORM S1,MAIFOB+FOB.CW
+	MOVEI S1,FOB.SZ
+	MOVEI S2,MAIFOB
+	$CALL F%OOPN		;Open file for output.
+	JUMPT[	MOVEM S1,.PDDSK(PDB) ;Save IFN
+		SETO S2,
+		$CALL F%FD	;Get a FD.
+		$TEXT LOGPUT,<^I/LOGENT/Entering mail into ^F/(S1)/>
+		$RET]		;And return.
+	ADDI T1,4711		;If this didn't work, add a magic number.
+	JRST F$CR.0		;And try again!
+	
+F$CR.1:	$SAVE <T2,T3,P1,P2,P3,P4>
+	MOVE P1,[POINT 2,T1,^D5] ;Get a pointer to date portion.
+	MOVE P2,[POINT 3,T1,^D17] ;..and to time in UDT format.
+	MOVEI P3,6		;Get a counter.
+	SETZ P4,		;Clear result.
+F$CR.2:	ILDB T2,P1		;Get a byte.
+	ILDB T3,P2		;Byte to insert.
+	LSH T3,3		;Shift into position.
+	IOR T2,T3		;Insert.
+	LSH P4,6		;Make room for letter/digit.
+	ADDI T2,'A'		;Make it a SIXBIT letter.
+	CAIG T2,'Z'		;...but if too big a letter.
+	 JRST F$CR.3		; (not)
+	IDIVI T2,^D10		;...make it a digit instead.
+	MOVEI T2,'0'(T3)	;...in SIXBIT.
+F$CR.3:	IORI P4,(T2)		;Insert into result.
+	SOJG P3,F$CR.2		;Loop until filled.
+	MOVE T1,P4		;Get name we just built.
+	POPJ P,			;And return it.
+
+	SUBTTL Disk Routines -- F$OBYT Write a byte to mail file
+;*
+;* Accepts in	S1 / Byte to be written.
+;*
+;* The reason for this procedure to exist, is that sometimes letters
+;* with DECs 8-bit code arrives. From VT200s et.c.
+;* This routine should sometime in the future convert from that format
+;* to plain swedish ASCII.
+;*
+
+F$OBYT:	$SAVE <S1,S2>		;Save what we'll clobber.
+	MOVE S2,.PDDSK(PDB)	;Get IFN of mail file.
+	EXCH S1,S2		;Exchange S1/S2.
+	PJRST F%OBYT		;Write to output.
+
+	SUBTTL Disk Routines -- F$CLOS Close the mail file
+
+F$CLOS:	$SAVE <S1>
+	MOVE S1,.PDDSK(PDB)	;Get IFN.
+	$CALL F%REL		;Close it.
+	SETZM .PDDSK(PDB)	;No IFN any more.
+	SKIPE WAKNAM		;Any next processor?
+	 PJRST WAKNXT		; Yes, go wake him up.
+	$RET			;Back to caller.
+
+	SUBTTL Session Routines -- S$OPEN Open a passive connection
+;*
+;* Accepts	No arguments.
+;*
+;* Returns with Connection setup.
+;*
+S$OPEN:	$SAVE <S1>		;Save what we'll clobber.
+
+	HLRZ S1,.PDPRO(PDB)	;Get transport protocol type.
+	PUSHJ P,@[EXP A$OPEN,D$OPEN,T$OPEN]-1(S1)
+
+	AOS S1,UNIQUE		;Get a unique number for this process.
+	MOVEM S1,.PDUNI(PDB)
+	$RET
+
+A$OPEN:	HALT .POPJ
+
+D$OPEN:	$SAVE <S1,S2,T1>	;Save what we'll clobber.
+	
+D$OP.0:	HRRZ S1,.PDPRO(PDB)	;Get mail protocol type.
+	MOVE S1,@[EXP M11OBJ,SMTOBJ]-1(S1) ;Get fuckin' DECnet object number.
+				;This is an ugly hack, which should be replaced
+				; by having the object number or name stored in
+				; the PDB.
+
+	PUSHJ P,N$PASV		;Open passive channel.
+	JUMPF D$OERR		;Complain if we can't!
+
+	MOVEM S1,.PDCHN(PDB)	;Save channel number.
+	MOVE T1,.PDTAB(PDB)	;Get PDBTAB index.
+;[JMR]	HRLM S1,PDBTAB(T1)	;Save channel in PDBTAB.
+	
+	MOVEI S2,(NS.NDA!NS.STA) ;Get PSI reason mask (rec. data + state chng).
+	PUSHJ P,N$PSI		;Set the mask.
+	JUMPF D$OERR
+
+	PUSHJ P,N$STS		;Get link status.
+	JUMPF D$OERR
+
+	LOAD T1,S2,NS.STA	;Get connect state of link.
+	CAIE T1,.NSSCW		;Connect wait?
+	 CAIN T1,.NSSCR		; or Connect received?
+	  TRNA			;  Yes, one of the above, ok.
+	   JRST D$OERR		;   No, something fishy about this!
+	CAIE T1,.NSSCR		;Connect received?
+	 $DISMS (.NSSCR)	; No, so wait for connect.
+
+;*
+;* Here when we've received a connect initiate message.
+;* Read Connect information & Accept the connect.
+;*
+
+	PUSHJ P,N$CDAT		;Get connect data.
+	JUMPF D$OERR
+
+	MOVSI S1,(POINT 7,)
+	HRRI S1,.PDNOD(PDB)
+	PUSHJ P,COPY		;Copy the string.
+	SETZ S2,
+	IDPB S2,S1
+	
+	MOVEI T1,BUFSIZ		;Size of a network buffer.
+	MOVEM T1,.PDOCT(PDB)	;Save..
+	MOVE T1,[POINT 8,.PDOBF(PDB)] ;Get a pointer.
+	MOVEM T1,.PDOPT(PDB)	;Save away.
+
+	MOVE S1,.PDCHN(PDB)	;Get channel.
+	PUSHJ P,N$ACC		;Accept the connect.
+	$RETIT			;Return if TRUE.
+
+;*
+;* Here we come if something went wrong. Tell the logfile, and reinit
+;* connection. 
+;* Come here with NSP. error code in S1.
+;*
+
+D$OERR:	PUSHJ P,N$ERR		;Translate error code into text.
+	$TEXT LOGPUT,<^I/LOGENT/	Failed to accept connect from ^T/.PDNOD(PDB)/>
+	$TEXT LOGPUT,<^I/LOGENT/	NSP. error code = ^O/S1/, ^T/(S2)/>
+	SKIPE S1,.PDCHN(PDB)	;Do we have a channel defined?
+	 PUSHJ P,N$REL		; Yes, release it.
+	SETZM .PDCHN(PDB)	;And wipe it out.
+	SETZM .PDNOD(PDB)	;No node name any more.
+	JRST D$OP.0		;Loop: try again.
+
+IFE FTCIMP,<
+T$OPEN:	HALT .POPJ
+>;IFE FTCIMP
+IFN FTCIMP,<
+T$OPEN:	$SAVE <S1,S2,T1,T2,T3,T4> ;Save what we'll clobber.
+
+	$DISMS (.PCIPC)		;Wait for connection.
+
+	MOVX T1+.FOFNC,FO.ASC!.FOSAU
+	MOVX T1+.FOIOS,UU.AIO!.IOPIM
+	MOVE T1+.FODEV,.PDDEV(PDB)
+	HRLI T1+.FOBRH,.PDOAD(PDB)
+	HRRI T1+.FOBRH,.PDIAD(PDB)
+	MOVE S1,[.FOBRH+1,,T1]
+	FILOP. S1,		;Open the device on a channel.
+	 JRST T$OP.3		; Failed.
+
+	LDB S1,[POINTR T1+.FOFNC,FO.CHN]
+	MOVEM S1,.PDCHN(PDB)	;Remember the channel number.
+
+	IONDX. S1,		;Get the universal device index of the device.
+	 JRST T$OP.2		; Failed.
+	HRLM S1,.PDCHN(PDB)	;Remember the universal device index.
+
+	HRRZ T1+.PSECN,.PDCHN(PDB)
+	DMOVE T1+.PSEOR,CNDTCP
+	MOVX S1,PS.FAC!T1
+	PISYS. S1,		;Connect the device to the interrupt system.
+	 JRST T$OP.2		; Failed.
+
+T$OP.0:	MOVE S1,.PDDEV(PDB)	;Put device name into argument block.
+	MOVEM S1,IMPBLK+.IBDEV
+	MOVX S1,IF.NWT!INSVL.(.IUSTT,IF.FNC)!IMPBLK
+	IMPUUO S1,		;Get the status of the connection.
+	 JRST T$OP.2		; Failed.
+	HRRZ S1,IMPBLK+.IBSTT
+	CAIN S1,.ISEST		;Is it established?
+	 JRST T$OP.1		; Yes.
+	CAIL S1,.ISLST		;Is it listening or in some synchronization
+	 CAILE S1,.ISSRA	; state?
+	  JRST T$OP.2		; No, error.
+	$DISMS (PS.RDO!PS.ROL)	;Wait for something to happen.
+	JRST T$OP.0
+
+T$OP.1:	MOVE S1,[POINT 8,IMPBLK+.IBHST,3]
+	ILDB T1,S1
+	ILDB T2,S1
+	ILDB T3,S1
+	ILDB T4,S1
+	$TEXT <-1,,.PDNOD(PDB)>,<[^D/T1/.^D/T2/.^D/T3/.^D/T4/]^0>
+
+	HRRZI S1,.PDOHD+.BFHDR(PDB)
+	HRLI S1,BUFWLN
+	MOVEM S1,(S1)		;Set up output buffer header.
+	HRLI S1,(BF.VBR)
+	MOVEM S1,.PDOAD(PDB)	;Set up output control block.
+	HRRZI S1,.PDIHD+.BFHDR(PDB)
+	HRLI S1,BUFWLN
+	MOVEM S1,(S1)		;Set up input buffer header.
+	HRLI S1,(BF.VBR)
+	MOVEM S1,.PDIAD(PDB)	;Set up input control block.
+
+	MOVE S1,[1,,S2]		;One word argument block for FILOP.
+	HRRZI S2,.FOINP		;Input function.
+	HRL S2,.PDCHN(PDB)	;Channel number.
+	FILOP. S1,		;Try to read some.
+	 SKIPN S1		; Failed. Error?
+	  $RETT			;  Succeeded or no error, return TRUE.
+
+T$OP.2:	HRRZ S1,.PDCHN(PDB)
+	RESDV. S1,		;Try to reset the channel.
+	 JFCL
+T$OP.3:	MOVE S1,.PDDEV(PDB)
+	PUSHJ P,T$ABRT		;Try to abort the connection.
+
+	MOVE S1,.PDSTR(PDB)	;Get start address.
+	JRST (S1)		;Restart process.
+
+T$PERM:	$SAVE <S1>		;Save what we'll clobber.
+	PJOB S1,		;Use job number as a PID.
+	MOVEM S1,IMPBLK+.IBDEV
+	MOVEI S1,^D25		;SMTP uses port 25.
+	MOVEM S1,IMPBLK+.IBLCL
+	MOVX S1,IF.NWT!INSVL.(.IUPLS,IF.FNC)!IMPBLK
+	IMPUUO S1,		;Set up the permanent listen.
+	 $RETF			; Failed, return FALSE.
+	$RETT			;Succeeded, return TRUE.
+>;IFN FTCIMP
+
+	SUBTTL Session Routines -- S$IBYT Read a byte from buffer
+;*
+;* Accepts		No Arguments.
+;*
+;* Returns  TRUE with	S1 / Byte.
+;*	   FALSE	End of buffer.
+;*
+
+S$IBYT:	SOSGE .PDICT(PDB)	;More to read from this buffer?
+	 $RETF			; No, have to get a new buffer.
+	ILDB S1,.PDIPT(PDB)	;Yes, get the byte.
+	$RETT			;And return TRUE.
+
+	SUBTTL Session Routines -- S$OBYT Write a byte to buffer.
+;*
+;* Accepts in	S1 / Byte to write.
+;*
+
+S$OBYT:	SOSGE .PDOCT(PDB)	;Room for one more char?
+	 JRST S$OB.0		; No, have to post this buffer first.
+	IDPB S1,.PDOPT(PDB)	;Yes, store the byte.
+	$RETT			;And return.
+
+S$OB.0:	PUSH P,S1		;In case character isn't a NUL ...	  [JMR]
+	SETZ S1,		;Post buffer without NS.EOM.
+	PUSHJ P,S$OUT		;Send buffer.
+	POP P,S1		;Get the character back, not a NUL ...	  [JMR]
+	JUMPT S$OBYT		;Ok?
+	$RETF			;No, return FALSE.
+
+	SUBTTL Session Routines -- S$INP Get a buffer from network.
+;*
+;* Accepts	No Arguments.
+;*
+;* Returns  TRUE with a new buffer setup.
+;* Returns FALSE if none could be read (Link failure).
+;*
+
+S$INP:	$SAVE <S1,S2>		;Save what we'll clobber.
+	
+	HLRZ S1,.PDPRO(PDB)	;Get transport protocol type.
+	PUSHJ P,@[EXP A$INP,D$INP,T$INP]-1(S1)
+	$RETIF
+
+	SKIPN DEBFLG		;Debugging?
+	 $RETT			; No, return TRUE.
+
+	$TEXT LOGPUT,<^I/LOGENT/=============== S$INP  ===============>
+	$TEXT LOGPUT,<Count: ^D/.PDICT(PDB)/, Msg:>
+	MOVE S1,.PDICT(PDB)
+	MOVSI S2,(POINT 8,)
+	HRRI S2,.PDIBF(PDB)
+	PUSHJ P,DBGMSG
+	$TEXT LOGPUT,<^I/LOGENT/======================================>
+	$RETT
+
+A$INP:	HALT .POPJ
+
+D$INP:	$SAVE <S1,S2,T1,T2>	;Save what we'll clobber.
+
+	MOVE S1,.PDCHN(PDB)	;Get channel number.
+	PUSHJ P,N$STS		;Get link status.
+	$RETIF
+	TXNN S2,NS.NDA		;Any data available?
+	 $DISMS (NS.NDA)	; No, dismiss until data IS available.
+	
+	SKIPE DEBFLG		;Debugging?
+	 $TEXT LOGPUT,<Data became available at ^H/[-1]/.>
+
+	MOVEI S2,BUFSIZ		;Size of a buffer (in bytes).
+	MOVSI T1,(POINT 8,)	;Get pointer to buffer.
+	HRRI T1,.PDIBF(PDB)
+	SETO T2,		;-1 to wait for message. (Should be there..!)
+	PUSHJ P,N$READ		;Get the buffer.
+	SKIPE DEBFLG		;Debugging?
+	 $TEXT LOGPUT,<TF: ^D/S1/ (0 == NETERR & Restart)>
+	JUMPF[	$TEXT LOGPUT,<^I/LOGENT/======================================>
+		JRST NETERR]
+	MOVEM S1,.PDICT(PDB)	;Save new byte count.
+	MOVSI T1,(POINT 8,)	;Setup pointer to buffer.
+	HRRI T1,.PDIBF(PDB)
+	MOVEM T1,.PDIPT(PDB)	;Save it.
+	
+	$RETT
+	
+IFE FTCIMP,<
+T$INP:	HALT .POPJ
+>;IFE FTCIMP
+IFN FTCIMP,<
+T$INP:	$SAVE <S1,S2>		;Save what we'll clobber.
+
+T$IN.0:	MOVE S1,[1,,S2]		;One word argument block for FILOP.
+	HRRZI S2,.FOINP		;Input function.
+	HRL S2,.PDCHN(PDB)	;Channel number.
+	FILOP. S1,		;Try to read some.
+	 SKIPA			; Failed.
+	  $RETT			;  Succeeded, return TRUE.
+	SKIPE S1		;Real error?
+	 JRST T$IN.1		; Yes, analyse.
+	$DISMS (PS.RID!PS.RIE!PS.RDO) ;Wait for something to happen.
+	JRST T$IN.0		;Loop back for another attempt to read.
+
+T$IN.1:	$TEXT LOGPUT,<^I/LOGENT/	TCP input error, status = ^O/S1/>
+	HRRZ S1,.PDCHN(PDB)
+	RESDV. S1,		;Try to reset the channel.
+	 JFCL
+	MOVE S1,.PDDEV(PDB)
+	PUSHJ P,T$ABRT		;Try to abort the connection.
+
+	MOVE S1,.PDSTR(PDB)	;Get start address.
+	JRST (S1)		;Restart process.
+>;IFN FTCIMP
+
+	SUBTTL Session Routines -- S$OUT Post a buffer to network.
+;*
+;* Accepts in	S1 / Possible NS.EOM flag or 0.
+;*
+
+S$OUT:	$SAVE <T1>		;Save what we'll clobber.
+
+	SKIPE DEBFLG		;Debugging?
+	 PUSHJ P,DBGOUT		; Yes, go do debugging output!
+
+	HLRZ T1,.PDPRO(PDB)	;Get transport protocol type.
+	PJRST @[EXP A$OUT,D$OUT,T$OUT]-1(T1)
+
+A$OUT:	HALT .POPJ
+
+D$OUT:	$SAVE <S1,S2,T1,T2>	;Save what we'll clobber.
+	MOVE T2,S1		;Save NS.EOM flag.
+
+	SKIPGE .PDOCT(PDB)	;May be negative.
+	 SETZM .PDOCT(PDB)	; Fix up count.
+
+	MOVE S1,.PDCHN(PDB)	;Get channel number.
+	MOVEI S2,BUFSIZ		;Size of buffer.
+	SUB S2,.PDOCT(PDB)	;Compute number of bytes written in buffer.
+	MOVSI T1,(POINT 8,)
+	HRRI T1,.PDOBF(PDB)
+	PUSHJ P,N$WRT		;Post buffer to network..
+	SKIPE DEBFLG		;Are we debugging?
+	 $TEXT LOGPUT,<TF: ^D/TF/^M^J^I/LOGENT/======================================>
+	$RETIF			;Failed?
+	
+	MOVEI T1,BUFSIZ		;Size of a buffer.
+	MOVEM T1,.PDOCT(PDB)	;Save new buffer count.
+	MOVE T1,[POINT 8,.PDOBF(PDB)] ;Get a new buffer pointer.
+	MOVEM T1,.PDOPT(PDB)	;Save new buffer pointer.
+	
+	$RETT			;Return TRUE.
+
+IFE FTCIMP,<
+T$OUT:	HALT .POPJ
+>;IFE FTCIMP
+IFN FTCIMP,<
+T$OUT:	$SAVE <S1,S2>		;Save what we'll clobber.
+
+T$OU.0:	MOVE S1,[1,,S2]		;One word argument block for FILOP.
+	HRRZI S2,.FOOUT		;Output function.
+	HRL S2,.PDCHN(PDB)	;Channel number.
+	FILOP. S1,		;Try to write some.
+	 SKIPA			; Failed.
+	  $RETT			;  Succeeded, return TRUE.
+	SKIPE S1		;Real error?
+	 JRST T$OU.1		; Yes, analyse.
+	$DISMS (PS.ROD!PS.ROE!PS.RDO) ;Wait for something to happen.
+	JRST T$OU.0		;Loop back for another attempt to write.
+
+T$OU.1:	$TEXT LOGPUT,<^I/LOGENT/	TCP output error, status = ^O/S1/>
+	HRRZ S1,.PDCHN(PDB)
+	RESDV. S1,		;Try to reset the channel.
+	 JFCL
+	MOVE S1,.PDDEV(PDB)
+	PUSHJ P,T$ABRT		;Try to abort the connection.
+
+	MOVE S1,.PDSTR(PDB)	;Get start address.
+	JRST (S1)		;Restart process.
+>;IFN FTCIMP
+
+DBGOUT:	$SAVE <S1,S2>		;Save what we'll clobber.
+	$TEXT LOGPUT,<^I/LOGENT/=============== S$OUT  ===============>
+
+	MOVEI S1,BUFSIZ		;Size of a buffer.
+	SUB S1,.PDOCT(PDB)	;Compute number of bytes written.
+	$TEXT LOGPUT,<^I/LOGENT/S$OUT, Count: ^D/S1/, Msg:>
+	MOVSI S2,(POINT 8,)	;Build pointer to buffer.
+	HRRI S2,.PDOBF(PDB)
+	PJRST DBGMSG		;Print message.
+
+	SUBTTL Session Routines -- S$CLOS Close a network link.
+
+S$CLOS:	$SAVE <S1>		;Save what we'll clobber.
+
+	HLRZ S1,.PDPRO(PDB)	;Get transport protocol type.
+	PJRST @[EXP A$CLOS,D$CLOS,T$CLOS]-1(S1)
+
+A$CLOS:	HALT .POPJ
+
+D$CLOS:	$SAVE <S1,T1>		;Save what we'll clobber.
+	
+	MOVE S1,.PDCHN(PDB)	;Get channel number.
+	PUSHJ P,N$STS		;Get link status.
+	JUMPF N$REL		;If this fails, return through N$REL.
+	
+	LOAD T1,S2,NS.STA	;Get connect state.
+	CAIN T1,.NSSCR		;Connect received?
+	 JRST D$CL.0		; Yes, send reject message & release.
+	CAIN T1,.NSSRN		;Running?
+	 JRST D$CL.1		; Yes, send disconnect & release.
+	
+	PJRST N$REL		;All other states -> release of link.
+	
+D$CL.0:	PUSHJ P,N$REJ		;Send reject message.
+	PJRST N$REL		;And release channel.
+
+D$CL.1:	PUSHJ P,N$DISC		;Send disconnect message.
+	PUSHJ P,N$STS		;Get link status.
+	LOAD T1,S1,NS.STA	;Just connect state.
+	CAIE T1,.NSSDC		;Disconnect confirmed?
+	 $DISMS (.NSSDC)	; No, so wait for that state.
+	PJRST N$REL		;And release the link.
+
+IFE FTCIMP,<
+T$CLOS:	HALT .POPJ
+>;IFE FTCIMP
+IFN FTCIMP,<
+T$CLOS:	$SAVE <S1,S2>		;Save what we'll clobber.
+
+T$CL.0:	MOVE S1,.PDOAD(PDB)	;Get the address of the current buffer.
+	HRRZ S2,S1		;Extract the address part.
+				;Loop over the buffers.
+T$CL.1:	SKIPL S1,(S1)		;Is the buffer in use?
+	 CAIN S2,(S1)		; Back to first buffer?
+	  SKIPA			;  Yes to either.
+	   JRST T$CL.1		;   No, loop.
+	JUMPGE S1,T$CL.2	;No buffers in use.
+	$DISMS (PS.ROD!PS.ROE!PS.RDO) ;Wait for something to happen.
+	JRST T$CL.0		;Loop back to see if we are done.
+
+T$CL.2:	HRRZ T1+.PSECN,.PDCHN(PDB)
+	DMOVE T1+.PSEOR,CNDTCP
+	MOVX S1,PS.FRC!T1
+	PISYS. S1,		;Remove the device from the interrupt system.
+	 JRST .+1		; Ignore failure.
+
+	MOVE S1,[1,,S2]		;One word argument block for FILOP.
+	HRRZI S2,.FOREL		;Release function.
+	HRL S2,.PDCHN(PDB)	;Channel number.
+	FILOP. S1,		;Try to release the channel.
+	 JRST[	HRRZ S1,.PDCHN(PDB)
+		RESDV. S1,	;Failed, try to reset the channel.
+		 JFCL
+		JRST .+1]
+	
+	MOVE S1,.PDDEV(PDB)	;Put device name into argument block.
+	MOVEM S1,IMPBLK+.IBDEV
+	MOVX S1,IF.NWT!INSVL.(.IUCLS,IF.FNC)!IMPBLK
+	IMPUUO S1,		;Close the connection.
+	 SKIPA S1,.PDDEV(PDB)	; Failed, try to abort the connection.
+	  $RETT			;  Succeeded, return TRUE.
+
+T$ABRT:	MOVEM S1,IMPBLK+.IBDEV
+	MOVX S1,IF.NWT!INSVL.(.IUABT,IF.FNC)!IMPBLK
+	IMPUUO S1,		;Abort the connection.
+	 $RETF			; Failed, return FALSE.
+	$RETT			;Succeeded, return TRUE.
+>;IFN FTCIMP
+
+END MAISRV

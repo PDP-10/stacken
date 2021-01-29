@@ -1,0 +1,499 @@
+	TITLE	SOSMAC -- MACRO COMMAND FACILITY
+
+	SEARCH	SOSTCS,UUOSYM,JOBDAT
+	$INIT
+
+CHINM::	PUSHJ	P,GMCH			;Get char from macro stream
+	SKIPN	MACFLG			;Want macro sutff?
+	 POPJ	P,			;No
+	SKIPE	NSTFLG			;Nested?
+	 CAIE	C,">"			;Yes--First close
+	  CAIA				;No
+	   JRST	[SOS NSTFLG		;Yes--Clear nested
+		 PJRST GMCH]		;And get next
+	CAIE	C,"<"			;Start of macro name?
+	 POPJ	P,			;No--Return with char
+	PUSHJ	P,GMCH			;Get a char
+	CAIN	C,"<"			;Nested macro?
+	 JRST	[AOS NSTFLG		;Flag nested
+		 POPJ  P,]		;And give him the "<"
+	PUSH	P,T1			;Save an ac
+	PUSH	P,T2			;Maybe 2
+	MOVE	T1,MACLVL		;GET CURRENT NESTING LEVEL
+	SETZM	MACCNT+1(T1)		;CLEAR NEXT REPEAT COUNT
+	PUSHJ	P,GETMAC		;Get a macro name
+	AOS	T1,MACLVL		;Bump level
+	CAIL	T1,MAXLVL		;Too deep?
+	 NERROR	MTD			;Yes
+	MOVEM	C,MACPTR(T1)		;Store for this level
+	MOVEM	C,MACOPTR(T1)		;And save a copy
+	POP	P,T2			;Restore t2
+	POP	P,T1			;Restore t1
+	JRST	CHINM			;And loop
+
+GMCH:	SKIPG	C,MACLVL		;In a macro?
+	 PJRST	@CHIN			;No--Just get from chin
+	ILDB	C,MACPTR(C)		;Get a char
+	JUMPN	C,CPOPJ##		;Return if got one
+	MOVE	C,MACLVL		;Get this level
+	SOSG	MACCNT(C)		;See if more to repeat
+	 JRST	GMCH1			;No
+	PUSH	P,T1			;Save t1
+	MOVE	T1,MACOPTR(C)		;Yes--Point to start
+	MOVEM	T1,MACPTR(C)		;Store
+	POP	P,T1			;Get t1 back
+	JRST	GMCH			;And loop
+GMCH1:	SOS	MACLVL			;Back down a level
+	JRST	GMCH			;And loop
+	SUBTTL	GETMAC -- RETURN POINTER TO MACRO STRING
+
+;This routine handles macro names of the forms:
+;
+;	<NAME>			;Simple macro
+;	<nnM>			;N'th match string (sosfas)
+;	<nn>			;N'th macro arg
+;	<NAME(ARG1,ARG2,..)>	;Macro with args
+;
+;Call:
+;	MOVEI	C,FIRST-CHAR
+;	PUSHJ	P,GETMAC
+;Return with c/ byte pointer to string
+
+GETMAC:	CAIL	C,"0"			;Digit?
+	 CAILE	C,"9"			;..
+	  CAIA				;No
+	   JRST	GETMAD			;Yes--Go handle
+	PUSHJ	P,CMSIXC		;Read macro name
+	CAIN	C,"("			;Start of arg list
+	 PUSHJ	P,GETMAA		;Yes--Get and define args
+	PUSHJ	P,GETMAT		;Check termination
+	JRST	GETMAE			;And return
+
+GETMAD:	PUSHJ	P,CMDECC		;Read decimal number
+	CAIE	C,">"			;Simple arg?
+	 JRST	GETMAM			;No--Check for match string
+	HRL	T1,MACLVL		;Get level,,arg
+	JRST	GETMAE			;And return
+
+GETMAM:	CAIE	C,"M"			;See if match string
+	 CAIN	C,"m"			;..
+	  CAIA				;Yes
+	   NERROR IMN			;No--Illegal
+	PUSHJ	P,CHINM			;Get next char
+	PUSHJ	P,GETMAT		;Scan for end
+	CAILE	T1,0			;Range check
+	 CAMLE	T1,ARBCNT		;..
+	  NERROR NSG			;No such string
+	MOVE	C,ARBPTR##-1(T1)	;Return pointer to string
+	POPJ	P,			;And return
+
+GETMAE:	PUSHJ	P,FNDMCE		;Find name in table
+	MOVE	C,MACSTR(C)		;Point to it
+	POPJ	P,			;And return
+	SUBTTL	GETMAT -- CHECK TERMINATION AND ,NNN OPTION
+
+GETMAT:	CAIN	C,","			;Comma syntax?
+	 PUSHJ	P,GETMAR		;Yes--Go handle
+	CAIE	C,">"			;Terminate now?
+	 NERROR	IMN			;No--Error
+	POPJ	P,			;Yes--Return
+
+GETMAR:	PUSH	P,T1		;Save t1
+	PUSHJ	P,CHINM			;Get char
+	CAIE	C,"*"			;Infinate?
+	 JRST	GETM.1			;No
+	PUSHJ	P,CHINM			;Yes--Get a char
+	SKIPA	T1,[377777,,-1]		;And load big number
+GETM.1:	 PUSHJ	P,CMDECC		;No--Get a decimal number
+	PUSH	P,C			;Save a reg
+	MOVE	C,MACLVL		;Get current level
+	MOVEM	T1,MACCNT+1(C)		;Save repeat count
+	POP	P,C			;Restore c
+	POP	P,T1			;Restore t1
+	POPJ	P,			;And return
+	SUBTTL	GETMAA -- GET AND DEFINE MACRO ARGS
+
+GETMAA:	PUSH	P,T1			;Save name
+	MOVEI	T2,1			;Start with first arg
+GETMA1:	MOVE	T1,MACLVL		;Get current level
+	ADDI	T1,1			;Bump by one
+	MOVSI	T1,(T1)			;Get level,,0
+	HRRI	T1,(T2)			;Get level,,arg
+	PUSH	P,T1			;Save name
+	PUSHJ	P,GETPTR		;Get pointer to arg
+	PUSH	P,C			;Save old,,new
+GETMA2:	PUSHJ	P,CHINM			;Get a char
+	CAIN	C,","			;End of arg?
+	 JRST	GETMAX			;Yes--Get next
+	CAIN	C,")"			;End if list
+	 JRST	GETMAL			;Yes--Handle end
+	IDPB	C,T1			;Store in definition
+	JRST	GETMA2			;And loop
+
+GETMAX:	MOVEI	C,0			;Terminate
+	IDPB	C,T1			;This definition
+	POP	P,T1			;Restore old,,new
+	POP	P,C			;Restore name
+	MOVEM	C,MACNAM(T1)		;Store new name
+	HLRZS	T1			;Get old
+	CAIE	T1,-1			;If set
+	 SETZM	MACNAM(T1)		;Zero old name
+	AOJA	T2,GETMA1		;And get next arg
+
+GETMAL:	MOVEI	C,0			;Terminate 
+	IDPB	C,T1			;This definition
+	POP	P,T1			;Restore old,,new
+	POP	P,C			;Restore name
+	MOVEM	C,MACNAM(T1)		;Store new name
+	HLRZS	T1			;Get old
+	CAIE	T1,-1			;If set
+	 SETZM	MACNAM(T1)		;Zero old name
+	PUSHJ	P,CHINM			;Get next char
+	POP	P,T1			;Restore t1
+	POPJ	P,			;And return
+	SUBTTL	FNDMAC -- FIND A MACRO NAME
+
+;Call:	move	t1,[sixbit/name/]
+;	PUSHJ	P,FNDMAC
+;	  <ERROR>
+;	<NORMAL>		;C/ index into table
+;
+;Or
+;
+;	MOVE	T1,[SIXBIT/NAME/]
+;	PUSHJ	P,FNDMCE
+;	<RETURN>		;C/ index into table
+
+FNDMCE:	PUSHJ	P,FNDMAC		;Find name
+	 NERROR	IMN			;Not found
+	POPJ	P,			;And return
+
+FNDMAC:	MOVSI	C,-MAXNUM		;Get max names
+FNDN.1:	CAME	T1,MACNAM(C)		;Match?
+	 AOBJN	C,FNDN.1		;No--Loop
+	JUMPL	C,CPOPJ1##		;Skip return if found
+	POPJ	P,			;Else error
+	SUBTTL	CMSIX -- READ SIXBIT NAME
+
+CMSIX:	PUSHJ	P,CHINM			;Get a char
+CMSIXC:	MOVEI	T1,0			;Clear destination
+	MOVE	T2,[POINT 6,T1]		;Point to it
+CMSI.1:	CAIL	C,"A"+40		;Upper case?
+	 CAILE	C,"Z"+40		;..
+	  CAIA				;No
+	   SUBI	C,40			;Yes--Convert
+	CAIL	C,"0"			;Letter?
+	 CAILE	C,"Z"			;..?
+	  POPJ	P,			;No--Return
+	CAIGE	C,"A"			;Digit?
+	 CAIG	C,"9"			;..
+	  CAIA				;Yes
+	   POPJ P,			;No
+	SUBI	C," "-' '		;Convert to sixbit
+	TLNE	T2,770000		;Word full?
+	 IDPB	C,T2			;No--Stor it
+	PUSHJ	P,CHINM			;Get next char
+	JRST	CMSI.1			;And loop
+	SUBTTL	CMDEC -- READ DECIMAL NUMBER
+
+CMDEC:	PUSHJ	P,CHINM			;Get a char
+CMDECC:	MOVEI	T1,0			;Clea word
+CMDE.1:	CAIL	C,"0"			;See if digit
+	 CAILE	C,"9"			;..
+	  POPJ	P,			;No--Return
+	IMULI	T1,^D10			;Position result
+	ADDI	T1,-"0"(C)		;Add digit
+	PUSHJ	P,CHINM			;Get next char
+	JRST	CMDE.1			;And loop
+	SUBTTL	GNCHE -- GET CHAR TURNING <200> INTO <33>
+
+GNCHE:	PUSHJ	P,GNCH##		;Get a char
+	CAIN	C,200			;<ESC>?
+	 MOVEI	C,33			;Yes--Make a real one
+	POPJ	P,			;And return
+	SUBTTL	DEFINE INTERFACE (FROM SOSSET)
+
+SETDEF::PUSHJ	P,GETDEF		;Scan and setup pointer
+	PUSH	P,C			;Save old,,new
+	MOVE	T2,MACLVL		;Get current level
+	MOVEI	T3,MAXSIZ		;Max chars/name
+	PUSHJ	P,GNCHE			;Get a char
+	CAIN	C,""""			;Quote?
+	 JRST	SETQ.1			;Yes
+	CAIA				;No--Skip get char
+
+SETD.4:	 PUSHJ	P,GNCHE			;Get a char
+	CAIN	C,15			;See if <cr>
+	 CAME	T2,MACLVL		;See if at same level
+	  CAIA				;No
+	   JRST SETD.5			;Yes--Exit
+	IDPB	C,T1			;Store char
+	SOJG	T3,SETD.4		;Count down
+	NERROR	MDL			;Definition too long
+
+SETD.5:	TLNE	FL2,INOPTF		;In option file?
+	 JRST	SETD.6			;Yes--No terminator check
+	PUSHJ	P,GNCHE			;Get <lf>
+	CAIE	C,12			;Right?
+	 NERROR	ILC			;No--Error
+SETD.6:	MOVEI	C,0			;Terminate
+	IDPB	C,T1			;The string
+	POP	P,T1			;Get old,,new
+	MOVE	C,ACCUM			;Get name
+	MOVEM	C,MACNAM(T1)		;Store new
+	HLRZS	T1			;Get old
+	CAIE	T1,-1			;See if set
+	 SETZM	MACNAM(T1)		;Yes--Clear old entry
+	POPJ	P,			;Yes--Return
+
+SETQ.1:	PUSHJ	P,GNCHE			;Get a char
+	CAIN	C,""""			;The quote char?
+	 CAME	T2,MACLVL		;At same level?
+	  CAIA				;No
+	   JRST	[PUSHJ	P,GNCHE		;GET NEXT CHAR
+		 CAIE	C,""""		;DOUBLE QUOTE?
+		  JRST	SETQ.2		;NO--CHECK FOR EOL
+		 JRST	.+1]		;YES--GIVE HIM ONE
+	IDPB	C,T1			;Store
+	CAIE	C,12			;New line?
+	 JRST	SETQ.3			;No
+	PUSH	P,T1			;Save t1
+	MOVE	T1,[2,,[ASCIZ/M*/]]	;Get prompt
+	SKIPN	COMFLF			;See if cmd file
+	 PUSHJ	P,PROMPT##		;No--Prompt
+	POP	P,T1			;Restore t1
+SETQ.3:	SOJG	T3,SETQ.1		;Loop for all
+	NERROR	MDL			;Macro definition too long
+
+SETQ.2:	TLNE	FL2,INOPTF		;In option file?
+	 JRST	SETD.6			;Yes--No terminator check
+	CAIE	C,15			;Be sure end
+	 NERROR	ILC			;No
+	JRST	SETD.5			;And finish up
+PURDEF::CAIN	C,"*"			;Want all
+	 JRST	PURD.1			;Yes
+	PUSHJ	P,SCAN##		;Get terminator
+	PUSHJ	P,CKTRMF##		;Check terminator
+	MOVE	T1,ACCUM		;Get name
+	PUSHJ	P,FNDMCE		;Find it
+	SETZM	MACNAM(C)		;Zap it
+	POPJ	P,			;And return
+
+PURD.1:	PUSHJ	P,SCAN##		;Get next
+	PUSHJ	P,CKTRMF##		;See that terminates ok
+	MOVSI	T1,-MAXNUM		;Get max names
+	SETZM	MACNAM(T1)		;Zap
+	AOBJN	T1,.-1			;Loop for all
+	POPJ	P,			;And return
+	SUBTTL	GETDEF -- SCAN MACRO NAME AND RETURN POINTER
+
+;Call:
+;	PUSHJ	P,GETDEF		;(AFTER SOSSET)
+;Returns with t1/ byte pointer to string and macstr setup
+
+
+GETDEF:PUSHJ	P,SCAN##		;Get a char
+	CAIE	C,":"			;End ok?
+	 NERROR	ILC			;No
+	MOVE	T1,ACCUM		;Get name
+GETPTR:	PUSHJ	P,FNDMAC		;Find name
+	TLOA	T1,-1			;Not found--Flag
+	  MOVSI	T1,(C)			;Found--Save index to old
+	MOVSI	C,-MAXNUM		;Get -number
+GETP.1:	SKIPE	MACNAM(C)		;See if free
+	 AOBJN	C,GETP.1		;No--Loop
+	JUMPG	C,[NERROR TMM]		;Error if none free
+	HRRI	T1,(C)			;Include new address
+	PUSH	P,T1			;And save
+	PUSHJ	P,CHKPAG		;Insure macro page allocated
+	MOVEI	T1,(C)			;Get index
+	IMULI	T1,MAXSIZ/5		;Times entry size
+	ADD	T1,MACPAG		;Add in offset
+	HRLI	T1,(POINT 7,)		;Form byte pointer
+	MOVEM	T1,MACSTR(C)		;Store
+	HRLI	T1,(POINT 7,)		;Form byte pointer to it
+	POP	P,C			;Restore old,,new
+	POPJ	P,			;And return
+	SUBTTL	GIVE MACRO NAMES INTERFACE (FROM SOSSET)
+
+GIVDEF::MOVSI	T4,-MAXNUM		;Get names
+	MOVEI	T3,OCHR##		;Set printer
+GIVD.1:	SKIPE	T1,MACNAM(T4)		;See if defined
+	 PUSHJ	P,GVDEF			;Yes--Type
+	AOBJN	T4,GIVD.1		;Loop
+	POPJ	P,			;And return
+
+;Here w/ t1=name t4=index
+
+GVDEF:	TLNN	T1,770000		;Real sixbit?
+	 POPJ	P,			;No--Return
+	PUSHJ	P,PRTSX##		;Type name
+	MOVEI	C,"	"		;Get tab
+	PUSHJ	P,OCHR##		;Output
+	MOVE	T1,MACSTR(T4)		;Point to string
+	PUSHJ	P,TYPSTR##		;Type
+	PJRST	FOCRLF##		;End and return
+	SUBTTL MACRO/NOMACRO SET COMMANDS (FROM SOSSET)
+
+SETMAC::SETOM	MACFLG			;Flag he wants macro tuff
+CHKPAG:	SKIPE	MACPAG			;See if macro page yet
+	 POPJ	P,			;Yes--Return
+	HRRZ	T1,.JBHRL		;Get high seg addr
+	ADDI	T1,1			;Bump to next page
+	MOVEM	T1,MACPAG		;And save addr
+	MOVEI	T4,MAXNUM*MAXSIZ/5	;Setup max args
+	HRRZ	T2,.JBHRL		;Get high segment addr
+	LSH	T2,-^D9			;Form page
+SETM.1:	ADDI	T2,1			;Advance to next page
+	MOVEI	T1,1			;Point to args
+	MOVE	T3,[.PAGCD,,T1]		;Function create page
+	PAGE.	T3,			;Create it
+	 JRST	CLRMAC			;**TEMP**
+	SUBI	T4,1000			;See if needs next page
+	JUMPG	T4,SETM.1		;Yes--Get another
+	POPJ	P,			;And return
+
+CLRMAC::SETZM	MACFLG			;Clear the flag
+	POPJ	P,			;And return
+
+GIVMAC::SKIPN	MACFLG			;See if macros
+	 OUTSTR [ASCIZ/No /]		;No
+	OUTSTR	[ASCIZ/Macro facility/]
+	PJRST	FOCRLF##		;And finish off
+	SUBTTL	OM COMMAND PROCESSING (FROM SOSLST)
+
+OMCMD::	MOVSI	T4,-MAXNUM	;GET MACRO NAMES
+MCM3:	SKIPE	T1,MACNAM(T4)	;GET A NAME
+	 PUSHJ	P,MCMM		;OUTPUT
+	AOBJN	T4,MCM3		;LOOP FOR ALL
+	TRO	FL,LINSN	;SO LST6 DOESNT BARF
+	POPJ	P,		;AND RETURN TO SOSLST
+
+MCMM:	TLNN	T1,770000	;FIRST BLANK?
+	 POPJ	P,		;YES--REJECT
+	MOVEI	T1,[ASCIZ"/DEFINE:"];GET HEADER
+	PUSHJ	P,PRTSTR	;TYPE
+	MOVE	T1,MACNAM(T4)	;GET NAME
+	PUSHJ	P,PRTSX##	;OUTPUT
+	MOVEI	T1,[ASCIZ/:"/]	;GET DELIMITER
+	PUSHJ	P,PRTSTR	;TYPE
+	MOVE	T1,MACSTR(T4)	;POINT TO STRING
+	PUSHJ	P,PRTSTQ	;TYPE
+	MOVEI	T1,[ASCIZ/"
+/]				;FINISH OFF DELIMITER
+	PJRST	PRTSTR		;AND RETURN
+
+PRTSTR:	HRLI	T1,(POINT 7,)	;FORM BYTE POINTER
+PRTST1:	ILDB	C,T1		;GET CHAR
+	JUMPE	C,CPOPJ		;RETURN ON ZERO
+	PUSHJ	P,(T3)		;TYPE
+	JRST	PRTST1		;AND LOOP
+
+PRTSTQ:	HRLI	T1,(POINT 7,)	;FORM BYTE POINTER
+PRTSQ1:	ILDB	C,T1		;GET CHAR
+	JUMPE	C,CPOPJ		;RETURN ON ZERO
+	PUSHJ	P,(T3)		;TYPE
+	CAIN	C,""""		;QUOTE?
+	 PUSHJ	P,(T3)		;YES--DOUBLE
+	SKIPG	MACLVL		;/MACRO ON?
+	 JRST	PRTSQ1		;NO--JUST LOOP
+	CAIN	C,"<"		;START OF NESTED MACRO?
+	 PUSHJ	P,(T3)		;YES--DOUBLE
+	CAIN	C,">"		;END OF NESTED MACRO?
+	 PUSHJ	P,(T3)		;YES--DOUBLE
+	JRST	PRTSQ1		;AND LOOP FOR MORE
+	SUBTTL	MACCMD -- EVAULATE MACRO STRING (FROM SOSCMD)
+
+MACCMD::MOVE	T1,MACLVL		;Save current level
+MACC.1: PUSHJ	P,GNCHE			;Get a char
+	PUSHJ	P,OCHR##		;Type
+	CAIN	C,12			;<LF>
+	 CAME	T1,MACLVL		;Yes--Same level?
+	  JRST	MACC.1			;No--Loop
+	PUSHJ	P,FORCE##		;Dump buffer
+	JRST	COMND##			;And process next
+	SUBTTL	SETLDF -- HANDLE /LDEFINE: FROM SOSSET
+
+SETLDF::PUSHJ	P,GETDEF		;Process name etc
+	PUSH	P,ACCUM		;Save name
+	PUSH	P,C			;Save old,,new
+	PUSH	P,CLN		;Save current line
+	PUSH	P,CPGL		;And page
+	MOVE	T5,T1		;Save pointer
+	PUSHJ	P,GET2SD##		;Get a position
+	PUSHJ	P,CKTRMF##	; Verify correct termination
+	PUSHJ	P,FINDLO##		;Find loln/lopg
+	TRZ	FL,LINSN		;None seen yet
+SETL.1:	PUSHJ	P,ONMOV##		;In range?
+	 JRST	SETL.2			;No--Done
+	MOVE	T1,(PNTR)		;Get this line
+	MOVE	T2,CPG			;..
+	DMOVEM	T1,CLN			;Store logical line/page
+	TRON	FL,LINSN		;Any seen yet?
+	 DMOVEM	T1,SLN			;No--Flag and save first
+	PUSHJ	P,FINDN##		;Find next
+	JRST	SETL.1			;And loop
+
+SETL.2:	TRNN	FL,LINSN		;Any seen?
+	 NERROR	NLN			;No lines
+	DMOVE	T1,SLN			;Get first line/page
+	PUSHJ	P,SETLPG		;Store line/page
+	DMOVE	T1,CLN			;Get last line/page
+	CAMN	T1,SLN			;Same as first?
+	 CAME	T2,SPG			;..
+	  PUSHJ	P,SETFPG		;No-output :line/page
+	MOVEI	C,0			;Terminate
+	PUSHJ	P,LDFSTO		;..
+	POP	P,CPGL			;Restore current page
+	POP	P,CLN			;And line
+	POP	P,T1			;Get old,,new
+	POP	P,C			;Restore name
+	MOVEM	C,MACNAM(T1)		;Store new
+	HLRZS	T1			;Get old
+	CAIE	T1,-1			;See if set
+	 SETZM	MACNAM(T1)		;Yes--Clear old entry
+	JRST	COMND##		;And return
+
+LDFSTO:	IDPB	C,T5		;Store char
+	POPJ	P,		;And return
+
+SETFPG:	MOVEI	C,":"			;Delimit
+	PUSHJ	P,LDFSTO		;Store
+SETLPG:	PUSH	P,T2			;Save page
+	MOVEI	T3,LDFSTO		;Point to char sticker
+	MOVE	T2,[POINT 7,T1]		;Point to ascii line
+	CAIN	T1,0			;See if zero
+	 MOVE	T1,LNZERO##		;Yes--Use this
+	REPEAT 5,<
+	ILDB	C,T2			;Get a char
+	PUSHJ	P,LDFSTO		;Store
+>
+	MOVEI	C,"/"			;Delimit
+	PUSHJ	P,LDFSTO		;Store
+	POP	P,T1			;Get t1 back
+	PJRST	DECPR##			;Output page and return
+	SUBTTL	DATA STORAGE
+
+MAXLVL==^D10				;Max nesting level
+MAXNUM==:^D15				;Max names
+MAXSIZ==^D340				;Max chars/name
+
+	XLIST
+	LIT
+	LIST
+	RELOC	0
+
+QUOCHR:	BLOCK	1			;QUOTE CHAR FOR /DEFINE/QDEFINE
+SLN:	BLOCK	1			;First line
+SPG:	BLOCK	1			;First page
+MACFLG:	BLOCK	1			;-1=ALLOW <NAME>
+NSTFLG:	BLOCK	1			;-1=<< SEEN
+MACLVL::BLOCK	1			;Current nesting level
+MACPTR:	BLOCK	MAXLVL			;Pointers to current strings
+MACOPTR:BLOCK	MAXLVL			;Pointers to beginning of 
+MACCNT:	BLOCK	MAXLVL			;Repeat count this level
+MACNAM::BLOCK	MAXNUM			;Macro names
+MACSTR::BLOCK	MAXNUM			;Pointers to start of strings
+MACPAG:	BLOCK	1			;Page addr of macro storage
+
+	END

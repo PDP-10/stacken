@@ -1,0 +1,2640 @@
+
+
+
+     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                      WHO MANUAL                                      WHO MANUAL
+
+
+                               Reflects version 4(155)
+                                      March 1982
+
+
+
+
+                                   William S. Meier
+                            Digital Equipment Corporation
+                           Internal Software Support Group
+
+
+
+                            Table of contents for WHO.MAN
+
+
+
+   CHAPTER 1       COMMAND FORMAT   CHAPTER 1       COMMAND FORMAT
+
+           1.1     SPECIFICATIONS . . . . . . . . . . . . . . . . . . 1-1           1.1     SPECIFICATIONS
+           1.2     LOGICAL OPERATORS  . . . . . . . . . . . . . . . . 1-1                   LOGICAL OPERATORS
+
+
+   CHAPTER 2       JOB MODE   CHAPTER 2       JOB MODE
+
+           2.1     SELECTION SWITCHES . . . . . . . . . . . . . . . . 2-1           2.1     SELECTION SWITCHES
+           2.1.1     /ACCOUNT:"string"  . . . . . . . . . . . . . . . 2-1                     /ACCOUNT:"string"
+           2.1.2     /ACTIVE and /NOACTIVE  . . . . . . . . . . . . . 2-1                     /ACTIVE and /NOACTIVE
+           2.1.3     /AUTODIALER and /NOAUTODIALER  . . . . . . . . . 2-1                     /AUTODIALER and /NOAUTODIALER
+           2.1.4     /BADGE:nn  . . . . . . . . . . . . . . . . . . . 2-1                     /BADGE:nn
+           2.1.5     /BATCH and /NOBATCH  . . . . . . . . . . . . . . 2-2                     /BATCH and /NOBATCH
+           2.1.6     /BBATCH and /NOBBATCH  . . . . . . . . . . . . . 2-2                     /BBATCH and /NOBBATCH
+           2.1.7     /BEFORE:date:time  . . . . . . . . . . . . . . . 2-2                     /BEFORE:date:time
+           2.1.8     /CAPABILITY:(key,key)  . . . . . . . . . . . . . 2-2                     /CAPABILITY:(key,key)
+           2.1.9     /CATEGORY:oo . . . . . . . . . . . . . . . . . . 2-3                     /CATEGORY:oo
+           2.1.10    /CHARGE:ss . . . . . . . . . . . . . . . . . . . 2-3                     /CHARGE:ss
+           2.1.11    /CID:ss  . . . . . . . . . . . . . . . . . . . . 2-3                     /CID:ss
+           2.1.12    /CLASS:nn  . . . . . . . . . . . . . . . . . . . 2-3                     /CLASS:nn
+           2.1.13    /CORE:nn:mm  . . . . . . . . . . . . . . . . . . 2-3                     /CORE:nn:mm
+           2.1.14    /CTLJOB:nn . . . . . . . . . . . . . . . . . . . 2-3                     /CTLJOB:nn
+           2.1.15    /CTLPRG:ss . . . . . . . . . . . . . . . . . . . 2-3                     /CTLPRG:ss
+           2.1.16    /CTY or /NOCTY . . . . . . . . . . . . . . . . . 2-4                     /CTY or /NOCTY
+           2.1.17    /DIALUP and /NODIALUP  . . . . . . . . . . . . . 2-4                     /DIALUP and /NODIALUP
+           2.1.18    /DDB:filespec  . . . . . . . . . . . . . . . . . 2-4                     /DDB:filespec
+           2.1.19    /DDT or /NODDT . . . . . . . . . . . . . . . . . 2-4                     /DDT or /NODDT
+           2.1.20    /DETACH or /DETACH:oo or /NODETACH . . . . . . . 2-4                     /DETACH or /DETACH:oo or /NODETACH
+           2.1.21    /DEVICE:ss . . . . . . . . . . . . . . . . . . . 2-4                     /DEVICE:ss
+           2.1.22    /DSKPRIORITY:n or /DSKPRIORITY . . . . . . . . . 2-4                     /DSKPRIORITY:n or /DSKPRIORITY
+           2.1.23    /FILE:filespec . . . . . . . . . . . . . . . . . 2-5                     /FILE:filespec
+           2.1.24    /GANDALF and /NOGANDALF  . . . . . . . . . . . . 2-5                     /GANDALF and /NOGANDALF
+           2.1.25    /GLXOPR:key or /GLXOPR . . . . . . . . . . . . . 2-5                     /GLXOPR:key or /GLXOPR
+           2.1.26    /HARDWIRED and /NOHARDWIRED  . . . . . . . . . . 2-5                     /HARDWIRED and /NOHARDWIRED
+           2.1.27    /HPQ:n or /HPQ . . . . . . . . . . . . . . . . . 2-5                     /HPQ:n or /HPQ
+           2.1.28    /JOB:n . . . . . . . . . . . . . . . . . . . . . 2-5                     /JOB:n
+           2.1.29    /JSTATUS:(key,key) . . . . . . . . . . . . . . . 2-6                     /JSTATUS:(key,key)
+           2.1.30    /LOCAL and /NOLOCAL  . . . . . . . . . . . . . . 2-6                     /LOCAL and /NOLOCAL
+           2.1.31    /LOCATE:oo or /LOCATE  . . . . . . . . . . . . . 2-6                     /LOCATE:oo or /LOCATE
+           2.1.32    /LPPN:[p,pn] . . . . . . . . . . . . . . . . . . 2-6                     /LPPN:[p,pn]
+           2.1.33    /MOUNT:ss  . . . . . . . . . . . . . . . . . . . 2-7                     /MOUNT:ss
+           2.1.34    /NAME:"ss" . . . . . . . . . . . . . . . . . . . 2-7                     /NAME:"ss"
+           2.1.35    /NODE:ss_ll or /NODE:ss  . . . . . . . . . . . . 2-7                     /NODE:ss_ll or /NODE:ss
+           2.1.36    /NOOPERATOR  . . . . . . . . . . . . . . . . . . 2-7                     /NOOPERATOR
+           2.1.37    /OPERATOR:key  . . . . . . . . . . . . . . . . . 2-7                     /OPERATOR:key
+           2.1.38    /PFH or /NOPFH . . . . . . . . . . . . . . . . . 2-7                     /PFH or /NOPFH
+           2.1.39    /PIVOTED and /NOPIVOTED  . . . . . . . . . . . . 2-8                     /PIVOTED and /NOPIVOTED
+           2.1.40    /PPN:[p,pn]  . . . . . . . . . . . . . . . . . . 2-8                     /PPN:[p,pn]
+           2.1.41    /PRIVILEGE:(key,key) . . . . . . . . . . . . . . 2-8                     /PRIVILEGE:(key,key)
+           2.1.42    /PRGRUN:ss . . . . . . . . . . . . . . . . . . . 2-8                     /PRGRUN:ss
+                                                                  Page ii
+
+
+           2.1.43    /PROGRAM:ss  . . . . . . . . . . . . . . . . . . 2-9                     /PROGRAM:ss
+           2.1.44    /PTY:oo or /PTY or /NOPTY  . . . . . . . . . . . 2-9                     /PTY:oo or /PTY or /NOPTY
+           2.1.45    /RBEFORE:date:time . . . . . . . . . . . . . . . 2-9                     /RBEFORE:date:time
+           2.1.46    /REMOTE and /NOREMOTE  . . . . . . . . . . . . . 2-9                     /REMOTE and /NOREMOTE
+           2.1.47    /RSINCE:date:time  . . . . . . . . . . . . . . . 2-9                     /RSINCE:date:time
+           2.1.48    /SEGMENT:ss  . . . . . . . . . . . . . . . . . . 2-9                     /SEGMENT:ss
+           2.1.49    /SELF and /NOSELF  . . . . . . . . . . . . . . . 2-9                     /SELF and /NOSELF
+           2.1.50    /SINCE:date:time . . . . . . . . . . . . . . .  2-10                     /SINCE:date:time
+           2.1.51    /SLOT:nn . . . . . . . . . . . . . . . . . . .  2-10                     /SLOT:nn
+           2.1.52    /STATE:(key,key) . . . . . . . . . . . . . . .  2-10                     /STATE:(key,key)
+           2.1.53    /STREAM:n  . . . . . . . . . . . . . . . . . .  2-10                     /STREAM:n
+           2.1.54    /SWAP:key  . . . . . . . . . . . . . . . . . .  2-10                     /SWAP:key
+           2.1.55    /TSN and /NOTSN  . . . . . . . . . . . . . . .  2-11                     /TSN and /NOTSN
+           2.1.56    /TTY:oo or /TTY or /NOTTY  . . . . . . . . . .  2-11                     /TTY:oo or /TTY or /NOTTY
+           2.1.57    /VCORE:nn:mm . . . . . . . . . . . . . . . . .  2-11                     /VCORE:nn:mm
+           2.1.58    /VM and /NOVM  . . . . . . . . . . . . . . . .  2-11                     /VM and /NOVM
+           2.1.59    /WHEELED and /NOWHEELED  . . . . . . . . . . .  2-11                     /WHEELED and /NOWHEELED
+           2.1.60    /WSCODE:ss . . . . . . . . . . . . . . . . . .  2-11                     /WSCODE:ss
+           2.1.61    /WTO:key or /WTO . . . . . . . . . . . . . . .  2-12                     /WTO:key or /WTO
+           2.2     TYPEOUT SWITCHES . . . . . . . . . . . . . . . .  2-12           2.2     TYPEOUT SWITCHES
+           2.2.1     /DDBS  . . . . . . . . . . . . . . . . . . . .  2-12                     /DDBS
+           2.2.2     /DPY:n:m . . . . . . . . . . . . . . . . . . .  2-12                     /DPY:n:m
+           2.2.3     /ERNONE  . . . . . . . . . . . . . . . . . . .  2-12                     /ERNONE
+           2.2.4     /FAST  . . . . . . . . . . . . . . . . . . . .  2-13                     /FAST
+           2.2.5     /FILES . . . . . . . . . . . . . . . . . . . .  2-13                     /FILES
+           2.2.6     /FORMAT:(format-list)  . . . . . . . . . . . .  2-13                     /FORMAT:(format-list)
+           2.2.7     /INCLUDE:key . . . . . . . . . . . . . . . . .  2-13                     /INCLUDE:key
+           2.2.8     /INCREMENTAL and /NOINCREMENTAL  . . . . . . .  2-13                     /INCREMENTAL and /NOINCREMENTAL
+           2.2.9     /INFORMATION:keys  . . . . . . . . . . . . . .  2-14                     /INFORMATION:keys
+           2.2.10    /MAP . . . . . . . . . . . . . . . . . . . . .  2-14                     /MAP
+           2.2.11    /NORMAL  . . . . . . . . . . . . . . . . . . .  2-14                     /NORMAL
+           2.2.12    /OKNONE  . . . . . . . . . . . . . . . . . . .  2-15                     /OKNONE
+           2.2.13    /ORIGIN and /NOORIGIN  . . . . . . . . . . . .  2-15                     /ORIGIN and /NOORIGIN
+           2.2.14    /PERFORMANCE and /NOPERFORMANCE  . . . . . . .  2-15                     /PERFORMANCE and /NOPERFORMANCE
+           2.2.15    /PRINT and /NOPRINT  . . . . . . . . . . . . .  2-15                     /PRINT and /NOPRINT
+           2.2.16    /REPEAT:N:M  . . . . . . . . . . . . . . . . .  2-15                     /REPEAT:N:M
+           2.2.17    /SLOW  . . . . . . . . . . . . . . . . . . . .  2-16                     /SLOW
+           2.2.18    /SORT:key:x:n or /SORT:key . . . . . . . . . .  2-16                     /SORT:key:x:n or /SORT:key
+           2.2.19    /STAMP and /NOSTAMP  . . . . . . . . . . . . .  2-17                     /STAMP and /NOSTAMP
+           2.2.20    /SUMMARY:key . . . . . . . . . . . . . . . . .  2-18                     /SUMMARY:key
+           2.2.21    /TOTALS and /NOTOTALS  . . . . . . . . . . . .  2-19                     /TOTALS and /NOTOTALS
+           2.2.22    /VFAST . . . . . . . . . . . . . . . . . . . .  2-19                     /VFAST
+
+
+   CHAPTER 3       LINE MODE   CHAPTER 3       LINE MODE
+
+           3.1     SELECTION SWITCHES . . . . . . . . . . . . . . . . 3-1           3.1     SELECTION SWITCHES
+           3.1.1     /AUTODIALER and /NOAUTODIALER  . . . . . . . . . 3-1                     /AUTODIALER and /NOAUTODIALER
+           3.1.2     /ASSIGN and /NOASSIGN  . . . . . . . . . . . . . 3-1                     /ASSIGN and /NOASSIGN
+           3.1.3     /CARRIER and /NOCARRIER  . . . . . . . . . . . . 3-1                     /CARRIER and /NOCARRIER
+           3.1.4     /CTY or /NOCTY . . . . . . . . . . . . . . . . . 3-1                     /CTY or /NOCTY
+           3.1.5     /DIALUP and /NODIALUP  . . . . . . . . . . . . . 3-2                     /DIALUP and /NODIALUP
+           3.1.6     /GANDALF and /NOGANDALF  . . . . . . . . . . . . 3-2                     /GANDALF and /NOGANDALF
+           3.1.7     /HARDWIRED and /NOHARDWIRED  . . . . . . . . . . 3-2                     /HARDWIRED and /NOHARDWIRED
+           3.1.8     /INITED and /NOINITED  . . . . . . . . . . . . . 3-2                     /INITED and /NOINITED
+                                                                 Page iii
+
+
+           3.1.9     /JOB:n . . . . . . . . . . . . . . . . . . . . . 3-2                     /JOB:n
+           3.1.10    /LOCAL and /NOLOCAL  . . . . . . . . . . . . . . 3-2                     /LOCAL and /NOLOCAL
+           3.1.11    /LOCATE:"string" . . . . . . . . . . . . . . . . 3-2                     /LOCATE:"string"
+           3.1.12    /MIC and /NOMIC  . . . . . . . . . . . . . . . . 3-3                     /MIC and /NOMIC
+           3.1.13    /NODE:ss_ll or /NODE:ss  . . . . . . . . . . . . 3-3                     /NODE:ss_ll or /NODE:ss
+           3.1.14    /PHONE:"aa"  . . . . . . . . . . . . . . . . . . 3-3                     /PHONE:"aa"
+           3.1.15    /PTY:oo or /PTY or /NOPTY  . . . . . . . . . . . 3-3                     /PTY:oo or /PTY or /NOPTY
+           3.1.16    /RCVSPEED:n  . . . . . . . . . . . . . . . . . . 3-3                     /RCVSPEED:n
+           3.1.17    /REMOTE AND /NOREMOTE  . . . . . . . . . . . . . 3-3                     /REMOTE AND /NOREMOTE
+           3.1.18    /SLAVE and /NOSLAVE  . . . . . . . . . . . . . . 3-4                     /SLAVE and /NOSLAVE
+           3.1.19    /SPEED:n . . . . . . . . . . . . . . . . . . . . 3-4                     /SPEED:n
+           3.1.20    /TSN and /NOTSN  . . . . . . . . . . . . . . . . 3-4                     /TSN and /NOTSN
+           3.1.21    /TTY:oo or /TTY or /NOTTY  . . . . . . . . . . . 3-4                     /TTY:oo or /TTY or /NOTTY
+           3.1.22    /TYPE:ss . . . . . . . . . . . . . . . . . . . . 3-4                     /TYPE:ss
+           3.1.23    /USER and /NOUSER  . . . . . . . . . . . . . . . 3-4                     /USER and /NOUSER
+           3.1.24    /XMTSPEED:n  . . . . . . . . . . . . . . . . . . 3-4                     /XMTSPEED:n
+           3.2     TYPEOUT SWITCHES . . . . . . . . . . . . . . . . . 3-5           3.2     TYPEOUT SWITCHES
+           3.2.1     /DPY:n:m . . . . . . . . . . . . . . . . . . . . 3-5                     /DPY:n:m
+           3.2.2     /ERNONE  . . . . . . . . . . . . . . . . . . . . 3-5                     /ERNONE
+           3.2.3     /FAST  . . . . . . . . . . . . . . . . . . . . . 3-5                     /FAST
+           3.2.4     /INCLUDE:key . . . . . . . . . . . . . . . . . . 3-5                     /INCLUDE:key
+           3.2.5     /INCREMENTAL and /NOINCREMENTAL  . . . . . . . . 3-5                     /INCREMENTAL and /NOINCREMENTAL
+           3.2.6     /INFORMATION:keys  . . . . . . . . . . . . . . . 3-6                     /INFORMATION:keys
+           3.2.7     /MAP . . . . . . . . . . . . . . . . . . . . . . 3-6                     /MAP
+           3.2.8     /NORMAL  . . . . . . . . . . . . . . . . . . . . 3-6                     /NORMAL
+           3.2.9     /OKNONE  . . . . . . . . . . . . . . . . . . . . 3-6                     /OKNONE
+           3.2.10    /PERFORMANCE and /NOPERFORMANCE  . . . . . . . . 3-6                     /PERFORMANCE and /NOPERFORMANCE
+           3.2.11    /PRINT and /NOPRINT  . . . . . . . . . . . . . . 3-7                     /PRINT and /NOPRINT
+           3.2.12    /REPEAT:N:M  . . . . . . . . . . . . . . . . . . 3-7                     /REPEAT:N:M
+           3.2.13    /SLOW  . . . . . . . . . . . . . . . . . . . . . 3-7                     /SLOW
+           3.2.14    /SORT:key:x:n or /SORT:key . . . . . . . . . . . 3-7                     /SORT:key:x:n or /SORT:key
+           3.2.15    /STAMP and /NOSTAMP  . . . . . . . . . . . . . . 3-8                     /STAMP and /NOSTAMP
+           3.2.16    /SUMMARY:key . . . . . . . . . . . . . . . . . . 3-8                     /SUMMARY:key
+           3.2.17    /TOTALS and /NOTOTALS  . . . . . . . . . . . . . 3-9                     /TOTALS and /NOTOTALS
+           3.2.18    /VFAST . . . . . . . . . . . . . . . . . . . . . 3-9                     /VFAST
+
+
+   CHAPTER 4       FORMATTING THE DISPLAY   CHAPTER 4       FORMATTING THE DISPLAY
+
+           4.1     FORMAT LIST  . . . . . . . . . . . . . . . . . . . 4-1                   FORMAT LIST
+           4.2     FORMAT LIST SWITCHES . . . . . . . . . . . . . . . 4-1                   FORMAT LIST SWITCHES
+           4.2.1     /FINAL:(format-list) . . . . . . . . . . . . . . 4-1                     /FINAL:(format-list)
+           4.2.2     /FOOTING:(format-list) . . . . . . . . . . . . . 4-2                     /FOOTING:(format-list)
+           4.2.3     /HEADING:(format-list) . . . . . . . . . . . . . 4-2                     /HEADING:(format-list)
+           4.2.4     /INITIAL:(format-list) . . . . . . . . . . . . . 4-2                     /INITIAL:(format-list)
+           4.2.5     /FORMAT:(format-list)  . . . . . . . . . . . . . 4-2                     /FORMAT:(format-list)
+           4.3     DEFAULT FORMAT CONTROL . . . . . . . . . . . . . . 4-2                   DEFAULT FORMAT CONTROL
+           4.3.1     /BLANK . . . . . . . . . . . . . . . . . . . . . 4-3                     /BLANK
+           4.3.2     /DEFAULT . . . . . . . . . . . . . . . . . . . . 4-3                     /DEFAULT
+           4.3.3     /FIX . . . . . . . . . . . . . . . . . . . . . . 4-3                     /FIX
+           4.3.4     /FLOAT . . . . . . . . . . . . . . . . . . . . . 4-3                     /FLOAT
+                                                                  Page iv
+
+
+   CHAPTER 5       ACTION SWITCHES   CHAPTER 5       ACTION SWITCHES
+
+           5.1     INPUT/OUTPUT FUNCTIONS . . . . . . . . . . . . . . 5-1                   INPUT/OUTPUT FUNCTIONS
+           5.1.1     /FORCE:command . . . . . . . . . . . . . . . . . 5-1                     /FORCE:command
+           5.1.2     /INPUT:"string"  . . . . . . . . . . . . . . . . 5-2                     /INPUT:"string"
+           5.1.3     /OUTPUT:"string" . . . . . . . . . . . . . . . . 5-2                     /OUTPUT:"string"
+           5.1.4     /SEND:"string" . . . . . . . . . . . . . . . . . 5-2                     /SEND:"string"
+           5.2     NETWORK FUNCTIONS  . . . . . . . . . . . . . . . . 5-2                   NETWORK FUNCTIONS
+           5.2.1     /NETWORK:CONNECT . . . . . . . . . . . . . . . . 5-2                     /NETWORK:CONNECT
+           5.2.2     /NETWORK:DISCONNECT  . . . . . . . . . . . . . . 5-2                     /NETWORK:DISCONNECT
+           5.3     SETUUO FUNCTIONS . . . . . . . . . . . . . . . . . 5-2                   SETUUO FUNCTIONS
+           5.3.1     CPU:n  . . . . . . . . . . . . . . . . . . . . . 5-3                     CPU:n
+           5.3.2     DEFAULT:BUFFERS:n  . . . . . . . . . . . . . . . 5-3                     DEFAULT:BUFFERS:n
+           5.3.3     DEFAULT:PROTECTION:n . . . . . . . . . . . . . . 5-3                     DEFAULT:PROTECTION:n
+           5.3.4     DEFER:key  . . . . . . . . . . . . . . . . . . . 5-3                     DEFER:key
+           5.3.5     DSKFUL:key . . . . . . . . . . . . . . . . . . . 5-3                     DSKFUL:key
+           5.3.6     LIMIT:hh:mm:ss . . . . . . . . . . . . . . . . . 5-3                     LIMIT:hh:mm:ss
+           5.3.7     PHYSICAL:key:n . . . . . . . . . . . . . . . . . 5-3                     PHYSICAL:key:n
+           5.3.8     TIME:hh:mm:ss  . . . . . . . . . . . . . . . . . 5-4                     TIME:hh:mm:ss
+           5.3.9     VIRTUAL:n  . . . . . . . . . . . . . . . . . . . 5-4                     VIRTUAL:n
+           5.3.10    WATCH:(keys) . . . . . . . . . . . . . . . . . . 5-4                     WATCH:(keys)
+
+
+   CHAPTER 6       OUTPUT FILE CONTROL   CHAPTER 6       OUTPUT FILE CONTROL
+
+           6.1     FILE SPECIFICATION DEFAULTS  . . . . . . . . . . . 6-1                   FILE SPECIFICATION DEFAULTS
+           6.2     SWITCHES . . . . . . . . . . . . . . . . . . . . . 6-1                   SWITCHES
+           6.2.1     /APPEND and /NOAPPEND  . . . . . . . . . . . . . 6-1                     /APPEND and /NOAPPEND
+           6.2.2     /ERSUPERSEDE . . . . . . . . . . . . . . . . . . 6-1                     /ERSUPERSEDE
+           6.2.3     /OKSUPERSEDE . . . . . . . . . . . . . . . . . . 6-1                     /OKSUPERSEDE
+           6.2.4     /PROTECTION:n  . . . . . . . . . . . . . . . . . 6-2                     /PROTECTION:n
+           6.2.5     /VERSION:x . . . . . . . . . . . . . . . . . . . 6-2                     /VERSION:x
+
+
+   APPENDIX A      JOB STATE CODES   APPENDIX A      JOB STATE CODES
+
+
+   APPENDIX B      INFORMATION DISPLAYS                   INFORMATION DISPLAYS
+
+           B.1     ACCOUNT  . . . . . . . . . . . . . . . . . . . . . B-1                   ACCOUNT
+           B.2     BATCH  . . . . . . . . . . . . . . . . . . . . . . B-1                   BATCH
+           B.3     CAPABILITIES . . . . . . . . . . . . . . . . . . . B-1                   CAPABILITIES
+           B.4     CHANNEL  . . . . . . . . . . . . . . . . . . . . . B-2                   CHANNEL
+           B.5     CORE . . . . . . . . . . . . . . . . . . . . . . . B-2                   CORE
+           B.6     DDBS . . . . . . . . . . . . . . . . . . . . . . . B-2                   DDBS
+           B.6.1     DSK DDB information  . . . . . . . . . . . . . . B-3                     DSK DDB information
+           B.6.2     MTA DDB information  . . . . . . . . . . . . . . B-3                     MTA DDB information
+           B.6.3     NET DDB information  . . . . . . . . . . . . . . B-3                     NET DDB information
+           B.6.4     TSK DDB information  . . . . . . . . . . . . . . B-3                     TSK DDB information
+           B.6.5     TTY DDB information  . . . . . . . . . . . . . . B-4                     TTY DDB information
+           B.7     DEFAULTS . . . . . . . . . . . . . . . . . . . . . B-4                   DEFAULTS
+           B.8     IPCF . . . . . . . . . . . . . . . . . . . . . . . B-4                   IPCF
+           B.9     JSL  . . . . . . . . . . . . . . . . . . . . . . . B-4                   JSL
+           B.10    LOGICAL  . . . . . . . . . . . . . . . . . . . . . B-5                   LOGICAL
+           B.11    MTA  . . . . . . . . . . . . . . . . . . . . . . . B-5                   MTA
+                                                                   Page v
+
+
+           B.12    ORIGIN . . . . . . . . . . . . . . . . . . . . . . B-5                   ORIGIN
+           B.13    PATH . . . . . . . . . . . . . . . . . . . . . . . B-6                   PATH
+           B.14    PRIVILEGES . . . . . . . . . . . . . . . . . . . . B-6                   PRIVILEGES
+           B.15    SIZE . . . . . . . . . . . . . . . . . . . . . . . B-6                   SIZE
+           B.16    SPOOL  . . . . . . . . . . . . . . . . . . . . . . B-6                   SPOOL
+           B.17    TIME . . . . . . . . . . . . . . . . . . . . . . . B-7                   TIME
+           B.18    TMPCOR . . . . . . . . . . . . . . . . . . . . . . B-7                   TMPCOR
+
+
+
+
+
+
+
+
+
+
+
+
+                                      CHAPTER 1
+
+                                    COMMAND FORMAT                                    COMMAND FORMAT
+
+
+
+   .WHO file=spec                  !(default JOB mode)
+   .WHO:LINE file=spec             !(LINE mode)
+   .WHO:JOB file=spec              !(JOB mode)
+
+   A mode can also be selected by the use of the /MODE switch which takes arguments
+   WHO,  JOB, or LINE.  JOB mode primarily selects jobs, and lists attributes about
+   them, such as users PPN, name,  program,  runtime,  etc.   LINE  mode  primarily
+   selects  lines,  and  lists attributes about them, such as node, line, speed and
+   terminal type.
+
+
+
+   1.1  SPECIFICATIONS        SPECIFICATIONS
+
+   SPEC is a list of commands, each separated by commas, optionally followed  by  a
+   list of switches.
+   FILE is a standard file specification, to be used as the  output  specification.
+   The default is TTY:WHO.LST[-].
+
+   The following specifications have the following switch equivalents:
+   Command Switch      Function
+   n       /JOB:n      Select job n
+   #n      /TTY:n      Select job on TTYn
+   [p,pn]  /PPN:[p,pn] Select all ppns that match wildcarding
+   mmmm    /NAME:mmmm  Select jobs with user name MMMM
+   dev:    /DEVICE:dev Select jobs using DEV:
+
+
+
+   1.2  LOGICAL OPERATORS        LOGICAL OPERATORS
+
+   The following SCAN logical operators can be used by WHO to control the selection
+   of objects.
+
+           'OR'        Select thing if matches spec A 'OR' spec B
+           'AND'       Select thing if matches spec A 'AND' spec B
+           'NOT'       Select thing if matches spec A 'NOT' spec B
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                      CHAPTER 2
+
+                                       JOB MODE                                       JOB MODE
+
+
+
+   2.1  SELECTION SWITCHES        SELECTION SWITCHES
+
+   The following switches can be included on the command line to  select  different
+   classes  of  jobs.   None  of  these switches are global, they apply only to the
+   current specification.  Multiple specifications are separated by commas.
+
+
+
+   2.1.1  /ACCOUNT:"string"
+
+   This switch selects jobs with the specified account string.  The account  string
+   can  be up to 39 characters, optionally containing wildcards (?  and *).  If the
+   account string contains blanks or other non-alpha numeric characters, it must be
+   inclosed  in  quotations.   The  syntax  /ACCOUNT:""  selects jobs with the null
+   account string.
+
+
+
+   2.1.2  /ACTIVE and /NOACTIVE
+
+   This switch selects active jobs.  An active job is defined  as  currently  using
+   system  resources  or  the  CPU,  as  opposed  to waiting for terminal input, or
+   sleeping or hibernating.  /NOACTIVE selects jobs which are not active.
+
+
+
+   2.1.3  /AUTODIALER and /NOAUTODIALER
+
+   This switch selects jobs that are on an autodialer line.  /NOAUTODIALER  selects
+   jobs that are not on autodialer lines.
+
+
+
+   2.1.4  /BADGE:nn
+
+   This switch selects jobs that are logged in with the DEC badge number nn.
+   JOB MODE                                                                Page 2-2   JOB MODE
+   SELECTION SWITCHES
+
+
+   2.1.5  /BATCH and /NOBATCH
+
+   This switch selects batch jobs running under BATCON, or MIC.   /NOBATCH  selects
+   jobs that are not batch jobs.
+
+
+
+   2.1.6  /BBATCH and /NOBBATCH
+
+   This switch selects jobs that are running  in  the  background  batch  scheduler
+   class  (if  one  has  been  defined).  This does not imply nor select batch jobs
+   implicitly.  /NOBBATCH selects jobs that are not running in the background batch
+   scheduler class.
+
+
+
+   2.1.7  /BEFORE:date:time
+
+   This switch selects jobs that have logged in before the specified date and time.
+   Date and time can be any one of the standard formats.
+
+
+
+   2.1.8  /CAPABILITY:(key,key)
+
+   This  switch  selects  jobs  with  the  specified  capability  bits.    Multiple
+   capability  bits  can  be  specified  by  including  a  list of keys inclosed in
+   parentheses,  and  separated  by  commas.   An  optional  NO  can  precedes  any
+   capability   bit   to   mean   not   the   specified  capability.   For  example
+   /CAPABILITY:(POKE,NORTTRP) selects jobs who have POKE capability and do not have
+   RTTRP capability.  A complete list of the CAPABILITY keys follows:
+
+           CHGPPN      Change PPN (projects .GT.  10) privilege
+           CPU         Ability to change CPU specifications
+           DISK        Ability to set disk priority greater than 0
+           ENQ         Ability to do privileged ENQ/DEQ functions
+           HPQ         Ability to set high priority queue greater than 0
+           IPCF        Ability to do IPCF privileged functions
+           LOCK        Ability to LOCK in core
+           METER       Ability to use METER UUO
+           NETEXAM     Ability to do network examines (for NTRACK)
+           POKE        Ability to use POKE UUO
+           RTTRP       Ability to use RTTRP UUO
+           SPYALL      Ability to SPY on all of core
+           SPYMON      Ability to SPY on monitor low segment
+           TRPSET      Ability to use TRPSET UUO
+           UNSPOOL     Ability to unspool spooled devices
+   JOB MODE                                                                Page 2-3   JOB MODE
+   SELECTION SWITCHES
+
+
+   2.1.9  /CATEGORY:oo
+
+   This switch selects jobs that are in job category oo.  OO is an  octal  category
+   from 0 to 777.
+
+
+
+   2.1.10  /CHARGE:ss
+
+   This switch selects jobs that are logged in with the specified charge number ss.
+   SS is a sixbit word with optional ?  and * wildcarding.
+
+
+
+   2.1.11  /CID:ss
+
+   This switch selects jobs that are logged in with the specified charge ID ss.  SS
+   is a sixbit word with optional ?  and * wildcarding.
+
+
+
+   2.1.12  /CLASS:nn
+
+   This switch selects jobs that are in scheduler class nn.  NN is a decimal number
+   from 0 to 31.
+
+
+
+   2.1.13  /CORE:nn:mm
+
+   This switch selects jobs whose core size (sum of the low and  high  segments  in
+   pages)  is  in  the range specified by nn and mm.  NN and MM are decimal numbers
+   from 0 to 511.  If :mm is omitted (eg /CORE:nn), jobs whose core size is  nn  or
+   larger  are selected.  If nn is omitted, and mm is specified (eg /CORE::mm) jobs
+   whose core size is less than or equal to mm are selected.
+
+
+
+   2.1.14  /CTLJOB:nn
+
+   This switch selects jobs who are being controlled by job number  nn.   NN  is  a
+   decimal  number.   Typically, these are jobs on a PTY controlled by BATCON, MIC,
+   or OPSER.
+
+
+
+   2.1.15  /CTLPRG:ss
+
+   This switch selects jobs who are being controlled by program ss.  SS is a sixbit
+   word  with  optional  ?   and * wildcarding.  Typically, these are jobs on a PTY
+   controlled by BATCON, MIC, or OPSER.
+   JOB MODE                                                                Page 2-4   JOB MODE
+   SELECTION SWITCHES
+
+
+   2.1.16  /CTY or /NOCTY
+
+   This switch selects the job (if any) on the CTY, the console  terminal.   /NOCTY
+   selects jobs that are not on the CTY (ie jobs on PTYs, TTYs, and detached).
+
+
+
+   2.1.17  /DIALUP and /NODIALUP
+
+   This switch selects jobs that are on dialup terminals.  /NODIALUP  selects  jobs
+   that are not on dialup terminals.
+
+
+
+   2.1.18  /DDB:filespec
+
+   This switch selects jobs that have a DDB (device data block) for  the  specified
+   file specification.  The file specification can include device, file, extension,
+   and PPN.  File, extension, and PPN can be optionally wildcarded with  ?   and  *
+   characters.   If  any  part of the specification is omitted, it is considered to
+   match.  If the device name is exactly three characters long, it will  match  any
+   device starting with those three characters.
+
+
+
+   2.1.19  /DDT or /NODDT
+
+   This switch selects jobs that have DDT in their address space (.JBDDT non-zero).
+   /NODDT selects jobs that do not have DDT in their address space.
+
+
+
+   2.1.20  /DETACH or /DETACH:oo or /NODETACH
+
+   This switch selects jobs that are detached, ie not attached to  any  controlling
+   terminal.   If  oo  is  specified,  jobs  who detached from terminal line oo are
+   selected.  /NODETACH selects jobs that are not detached (ie jobs on PTYs,  TTYs,
+   and CTY).
+
+
+
+   2.1.21  /DEVICE:ss
+
+   This switch selects the job (if any) that  has  device  ss  assigned  or  inited
+   (opened).
+
+
+
+   2.1.22  /DSKPRIORITY:n or /DSKPRIORITY
+
+   This switch selects jobs with disk priority n.  N is a decimal number from -3 to
+   3.  If :n is omitted any job with a disk priority greater than 0 is selected.
+   JOB MODE                                                                Page 2-5   JOB MODE
+   SELECTION SWITCHES
+
+
+   2.1.23  /FILE:filespec
+
+   This switch selects jobs that have a DDB (device data block) for  the  specified
+   file specification.  The file specification can include device, file, extension,
+   and PPN.  File, extension, and PPN can be optionally wildcarded with  ?   and  *
+   characters.   If  any  part of the specification is omitted, it is considered to
+   match.  If the device name is exactly three characters long, it will  match  any
+   device starting with those three characters.
+
+
+
+   2.1.24  /GANDALF and /NOGANDALF
+
+   This switch selects jobs that are on gandalf switched lines.  /NOGANDALF selects
+   jobs that are not on gandalf switched lines.
+
+
+
+   2.1.25  /GLXOPR:key or /GLXOPR
+
+   This switch selects jobs that have Galaxy operator privileges.  Legal  keys  can
+   be one of:
+
+           HOST        Host operator privileges
+           NONE        No operator privileges
+           REMOTE      Remote operator privileges
+           SYSTEM      System operator privileges
+
+   If no keyword is present, all jobs with any operator privileges are selected.
+
+
+
+   2.1.26  /HARDWIRED and /NOHARDWIRED
+
+   This switch selects jobs that are on hardwired lines.  /NOHARDWIRED selects jobs
+   that are not on hardwired lines.
+
+
+
+   2.1.27  /HPQ:n or /HPQ
+
+   This switch selects jobs running in high priority  queue  n.   N  is  a  decimal
+   number  from 0 to 15.  If :n is omitted any job in a high priority queue greater
+   than 0 is selected.
+
+
+
+   2.1.28  /JOB:n
+
+   This switch selects job n.  N is a decimal number greater than 0.
+   JOB MODE                                                                Page 2-6   JOB MODE
+   SELECTION SWITCHES
+
+
+   2.1.29  /JSTATUS:(key,key)
+
+   This switch selects jobs with the specified job status attributes.  Multiple job
+   status  attributes  can  be  specified  by  including a list of keys inclosed in
+   parentheses, and separated by commas.  An optional NO can precedes any attribute
+   to  mean  not  the  specified  attribute.   For example /JSTATUS:(JACCT,NOXONLY)
+   selects jobs who are JACCTed and that are not execute only.  A complete list  of
+   the job status attributes follows:
+
+           CMDWAIT     Jobs waiting to have a command processed
+           DCORE       Jobs doing a DCORE command
+           DSKFUL      Jobs with DSKFUL PAUSE set
+           JACCT       Jobs with JACCT set
+           LOCK        Jobs locked in core
+           MONERR      Jobs with a monitor detected error
+           OPRWAIT     Jobs waiting for operator action
+           RUN         Jobs with the run bit set
+           SWAP        Jobs swapped out
+           XONLY       Jobs that are execute only
+
+
+
+   2.1.30  /LOCAL and /NOLOCAL
+
+   This switch selects jobs running on local terminals.   Local  terminals  implies
+   the "TTY NO REMOTE" setting rather than non-network terminals.  /NOLOCAL selects
+   jobs not running on local terminals (eg remote terminals).
+
+
+
+   2.1.31  /LOCATE:oo or /LOCATE
+
+   This switch selects jobs who are logically located to node oo.  OO is  an  octal
+   number  from 0 to 77.  The special case of 0 selects jobs who are located to the
+   central site, and if :oo is omitted, jobs who are  logically  located  to  where
+   their terminal is physically connected to are selected.
+
+
+
+   2.1.32  /LPPN:[p,pn]
+
+   This switch selects jobs with the specified logged-in PPN.  The logged-in PPN is
+   the  PPN  the  job  logged  in  under, and remains the same if the job WHEELs or
+   PIVOTs into another PPN.  PPN may be wildcarded with ?  and *  characters.   The
+   constructions  [,pn],  [p,],  and  [,]  can  be  also  be used.  However, [-] is
+   illegal.
+   JOB MODE                                                                Page 2-7   JOB MODE
+   SELECTION SWITCHES
+
+
+   2.1.33  /MOUNT:ss
+
+   This switch selects jobs with file structure ss  mounted  (eg  in  their  search
+   list).   SS must be a legal structure name.  This does not imply that these jobs
+   have open files on the structure (see /FILE or /DDB for that function).
+
+
+
+   2.1.34  /NAME:"ss"
+
+   This switch selects jobs logged in in the specified name ss.  If ss  contains  n
+   characters,  the  jobs  with user names who start with the first n characters of
+   the users switch are selected.  Blanks are treated as  matching  any  character,
+   and  if  ss  contains  blanks  or  more than 6 characters it must be inclosed in
+   quotations.
+
+
+
+   2.1.35  /NODE:ss_ll or /NODE:ss
+
+   This switch selects  jobs  whose  terminals  are  physically  connected  to  the
+   specified  node  ss  and  line  ll.   ss  is  a node name with optional ?  and *
+   wildcarding, and ll is an octal line number.  If only a node name  is  specified
+   any  jobs  whose  terminals  are  physically  connected  to node ss are selected
+   regardless of their line number.
+
+
+
+   2.1.36  /NOOPERATOR
+
+   This switch selects jobs which are not operator jobs.  Operator jobs are defined
+   as  jobs  with  PPN  [1,2] or [1nn,2] where nn is the node number for the remote
+   operator.
+
+
+
+   2.1.37  /OPERATOR:key
+
+   This switch selects jobs as specified by the key.  KEY may be one of
+
+           LOCAL       to select only [1,2] operator jobs
+           NO          to select jobs that are neither local or remote operators
+           REMOTE      to select only [1nn,2] operator jobs
+           YES         to select either local or remote operator jobs
+
+
+
+   2.1.38  /PFH or /NOPFH
+
+   This switch selects jobs that have a page fault handler in their  address  space
+   (.JBPFH  non  zero).  /NOPFH selects jobs that do not have page fault handler in
+   their address space.
+   JOB MODE                                                                Page 2-8   JOB MODE
+   SELECTION SWITCHES
+
+
+   2.1.39  /PIVOTED and /NOPIVOTED
+
+   This switch selects jobs that are pivoted into another PPN.  PIVOTed is  defined
+   as the logged in PPN not equal to the current PPN.  /NOPIVOTED selects jobs that
+   are not pivoted.
+
+
+
+   2.1.40  /PPN:[p,pn]
+
+   This switch selects jobs with the specified PPN.  PPN may be wildcarded  with  ?
+   and  *  characters.  The constructions [,pn], [p,], and [,] can be also be used.
+   However, [-] is illegal.
+
+
+
+   2.1.41  /PRIVILEGE:(key,key)
+
+   This switch selects jobs with the specified privilege bits.  Multiple  privilege
+   bits  can  be specified by including a list of keys inclosed in parentheses, and
+   separated by commas.  An optional NO can precedes any privilege bit to mean  not
+   the specified privilege.  For example /PRIVILEGE:(POKE,NORTTRP) selects jobs who
+   have POKE privileges and do not have RTTRP privileges.  A complete list  of  the
+   privilege keys follows:
+
+           CHGPPN      Change PPN (projects .GT.  10) privilege
+           CPU         Ability to change CPU specifications
+           DISK        Ability to set disk priority greater than 0
+           ENQ         Ability to do privileged ENQ/DEQ functions
+           HPQ         Ability to set high priority queue greater than 0
+           IPCF        Ability to do IPCF privileged functions
+           LOCK        Ability to LOCK in core
+           METER       Ability to use METER UUO
+           NETEXAM     Ability to do network examines (for NTRACK)
+           POKE        Ability to use POKE UUO
+           RTTRP       Ability to use RTTRP UUO
+           SPYALL      Ability to SPY on all of core
+           SPYMON      Ability to SPY on monitor low segment
+           TRPSET      Ability to use TRPSET UUO
+           UNSPOOL     Ability to unspool spooled devices
+
+
+
+   2.1.42  /PRGRUN:ss
+
+   This switch selects jobs with program to run set to be ss.  SS is a sixbit  word
+   with optional ?  and * wildcarding.
+   JOB MODE                                                                Page 2-9   JOB MODE
+   SELECTION SWITCHES
+
+
+   2.1.43  /PROGRAM:ss
+
+   This switch selects jobs whose program name is ss.  SS is  a  sixbit  name  with
+   optional ?  and * wildcarding.
+
+
+
+   2.1.44  /PTY:oo or /PTY or /NOPTY
+
+   This switch selects the job (if any) running on pseudo-terminal (PTY)  line  oo.
+   OO  is  an octal terminal number from 0 to the number of legal PTYs minus 1.  If
+   :oo is omitted, jobs running on any PTY are selected.  /NOPTY selects jobs  that
+   are not on a PTY ie jobs on TTYs, CTY and detached).
+
+
+
+   2.1.45  /RBEFORE:date:time
+
+   This switch selects jobs that have done a RESET UUO before  the  specified  date
+   and  time.  Typically programs do a RESET as soon as they are started.  Date and
+   time can be in any of the standard formats.
+
+
+
+   2.1.46  /REMOTE and /NOREMOTE
+
+   This switch selects jobs running on remote terminals.  Remote terminals  implies
+   the  "TTY REMOTE" setting rather than network terminals.  /NOREMOTE selects jobs
+   not running on remote terminals (eg local terminals).
+
+
+
+   2.1.47  /RSINCE:date:time
+
+   This switch selects jobs who have done a RESET UUO since the specified date  and
+   time.   Typically  jobs do a RESET when they first start running.  Date and time
+   can be in any of the standard formats.
+
+
+
+   2.1.48  /SEGMENT:ss
+
+   This switch selects jobs with high segment name ss.  SS is a  sixbit  word  with
+   optional  ?  and * wildcarding.  The special names (OLD) for old/superseded high
+   segments, and (PRIV), for private non-sharable high segments can also be used.
+
+
+
+   2.1.49  /SELF and /NOSELF
+
+   This switch selects jobs who are logged in with the same PPN as the current job.
+   /NOSELF selects all jobs not logged in with the current jobs PPN.
+   JOB MODE                                                               Page 2-10   JOB MODE
+   SELECTION SWITCHES
+
+
+   2.1.50  /SINCE:date:time
+
+   This switch selects jobs who have logged in since the specified date  and  time.
+   Date and time may be in any of the standard formats.
+
+
+
+   2.1.51  /SLOT:nn
+
+   This switch selects jobs with an output distribution slot number nn.   NN  is  a
+   decimal number from 0 to 511.
+
+
+
+   2.1.52  /STATE:(key,key)
+
+   This switch selects jobs with  the  specified  state  classes.   Multiple  state
+   classes  can  be  specified by including a list of keys inclosed in parentheses,
+   and separated by commas.  An optional NO can precedes any state  class  to  mean
+   not  the  specified  state class.  For example /STATE:(EVENTWAIT,NOSWAP) selects
+   jobs that are in an wait state and are not swapped out.  A complete list of  the
+   state class keys follows:
+
+           ACTIVE      Select active (running, or otherwise active) jobs
+           CODES       Selects jobs in state codes (see S.MAC)
+           EVENTWAIT   Select jobs in one of the event wait states
+           IOWAIT      Select jobs in an I/O wait state
+           LOCK        Select jobs locked in core
+           QUEUES      Selects jobs in queues (see S.MAC)
+           RWAITS      Selects jobs in resource wait (see S.MAC)
+           RUN         Select jobs in a processor run queue
+           SLEEP       Select jobs hibernating, sleeping, or napping
+           STOP        Select jobs that are stopped
+           SWAP        Select jobs that are swapped out
+
+
+
+   2.1.53  /STREAM:n
+
+   This switch selects the job that is in batch stream number "n", where "n"  is  a
+   decimal  number greater than or equal to zero.  (Valid only under Galaxy version
+   4.1 and later)
+
+
+
+   2.1.54  /SWAP:key
+
+   This switch selects the job that the swapper is currently dealing with.  KEY can
+   be one of the following:
+
+           FIT         to select the job trying to be fit into core
+           FORCE       to select the job trying to be forced out
+           IN          to select the job currently being swapped in
+           OUT         to select the job currently being swapped out
+   JOB MODE                                                               Page 2-11   JOB MODE
+   SELECTION SWITCHES
+
+
+   2.1.55  /TSN and /NOTSN
+
+   This switch selects jobs on TSN controlled lines.  /NOTSN selects jobs that  are
+   not on TSN controlled lines.
+
+
+
+   2.1.56  /TTY:oo or /TTY or /NOTTY
+
+   This switch selects the job (if any) running on terminal (TTY) line oo.   OO  is
+   an  octal  terminal  number  from  0 to the number of legal terminals (including
+   PTYs) minus 1.  If :oo is omitted, jobs running on any TTY (not CTY or PTY)  are
+   selected.   /NOTTY  selects  jobs  that are not on TTYs (ie jobs on PTYS, CTY or
+   detached).
+
+
+
+   2.1.57  /VCORE:nn:mm
+
+   This switch selects jobs whose virtual core  size  (sum  of  the  low  and  high
+   segments  in  pages)  is  in  the  range  specified by nn and mm.  NN and MM are
+   decimal numbers from 0 to 511.  If :mm is omitted  (eg  /VCORE:nn),  jobs  whose
+   core  size  is nn or larger are selected.  If nn is omitted, and mm is specified
+   (eg /VCORE::mm) jobs whose core size is less than or equal to mm are selected.
+
+
+
+   2.1.58  /VM and /NOVM
+
+   This switch selects jobs that are running virtual.  Virtual is  defined  as  any
+   job  whose  physical  core  core  does  not  equal its virtual core size.  /NOVM
+   selects jobs that are not virtual.
+
+
+
+   2.1.59  /WHEELED and /NOWHEELED
+
+   This switch selects jobs that are WHEELed into [1,2].  WHEELed is defined as the
+   logged  in  PPN  not  equal  to  [1,2], but with the current PPN equal to [1,2].
+   /NOWHEELED selects jobs that are not wheeled.
+
+
+
+   2.1.60  /WSCODE:ss
+
+   This switch selects jobs with wait state code ss.  SS can be a two  letter  code
+   (TO,  R2,  HB,  etc), or a quoted string such as "TO SW" which requires an exact
+   match for swapped out jobs in terminal output wait.  For a complete list of wait
+   state codes see Appendix A.
+   JOB MODE                                                               Page 2-12   JOB MODE
+   SELECTION SWITCHES
+
+
+   2.1.61  /WTO:key or /WTO
+
+   This switch selects jobs with the specified WTO (Write To Operator)  privileges.
+   The legal keys are
+
+           ALL         All privileges (WTO and WTOR)
+           NONE        No WTO privileges
+           WTO         Only WTO privileges
+
+   If no key is specified, jobs with any WTO or WTOR privileges are selected.
+
+
+
+   2.2  TYPEOUT SWITCHES        TYPEOUT SWITCHES
+
+   The following switches can be included on the command line to control the format
+   of  the  job  mode  output.  In all cases, these switches are global, and can be
+   specified anywhere in the command line and have the same effect.
+
+
+
+   2.2.1  /DDBS
+
+   This switch displays the DDBs for the selected jobs.  A DDB  is  a  device  data
+   block,  and  one  exists  for  every  open file, or assigned device that the job
+   controls.  For more information on the format of the output from the /DDBS refer
+   to Appendix B under /INFORMATION:DDBS.
+
+
+
+   2.2.2  /DPY:n:m
+
+   This switch displays the selected jobs on a video  terminal  in  DPY  mode  with
+   cursor  update  of  the  data.  If :n is specified, n is treated as a sleep scan
+   between display updates.  The default is 10 seconds.  If :n is 0, DPY mode  will
+   not  be  selected.   If  :M is specified, m in the number of times to repeat the
+   display.  The default is to repeat forever.  While in DPY  mode,  the  following
+   single characters can be typed to control the output on the display:  more                                                                         m
+
+
+
+   2.2.3  /ERNONE   2
+
+   This switch generates a fatal error when no jobs match the selection  criterion.   T
+   Either  "?WHONTM  Job  number  not  assigned"  or  "?WHOARC All jobs rejected by
+   constraints" message is generated as appropriate.  The default is to  issue  the
+   standard message "No one".
+   JOB MODE                                                               Page 2-13   JOB MODE
+   TYPEOUT SWITCHES
+
+
+   2.2.4  /FAST
+
+   This switch displays fast information about the selected jobs.  This information
+   is in the format:
+
+   17 MEIER,BILL   TTY43  WHO    R1
+
+   The information displayed is  the  job  number  (17),  user  name  (MEIER,BILL),   T
+   terminal name (TTY43), program name (WHO), and job state (R1).                                                               )
+
+
+
+   2.2.5  /FILES
+
+   This switch displays the DDBs for the selected jobs.  A DDB  is  a  device  data
+   block,  and  one  exists  for  every  open file, or assigned device that the job
+   controls.  For more information on the format of  the  output  from  the  /FILES
+   refer to Appendix B under /INFORMATION:DDBS.
+
+
+
+   2.2.6  /FORMAT:(format-list)
+
+   This switch can be used to completely control the  information  displayed  about
+   each  job  in  the  format  desired.   For  more  information,  see  the chapter
+   "FORMATTING THE DISPLAY".
+
+
+
+   2.2.7  /INCLUDE:key
+
+   This switch selects the inclusion of additional information in  the  job  format
+   display.   The current keys are FUNNY, to include pages of funny space allocated
+   to the job.
+
+
+
+   2.2.8  /INCREMENTAL and /NOINCREMENTAL
+
+   This switch selects the display of incremental job information  for  the  fields
+   that  are  incremental  in  nature.   /NOINCREMENTAL  displays the total fields.
+   Fields that are incremental are batch time limit, IPCF messages  received,  IPCF
+   messages   sent,   uuos   executed,   CPU  runtime,  kilo-core-seconds,  virtual
+   kilo-core-seconds, disk blocks read, disk blocks written, time since last  RESET
+   UUO,  and  jobs  logged in time.  If /REPEAT or /DPY are specified, it should be
+   noted that the first display will have zeros for all the incremental fields,  as
+   no previous values are available to compute them.
+   JOB MODE                                                               Page 2-14   JOB MODE
+   TYPEOUT SWITCHES
+
+
+   2.2.9  /INFORMATION:keys
+
+   This switch displays addition information about the selects jobs as specified by
+   the  keys.   Typically  this information is one or more additional line per key.
+   Legal keys are:
+
+           ACCOUNT     Display jobs account string
+           BATCH       Display jobs batch and operator information
+           CAPABILITY  Display the jobs DEC and local capability bits
+           CORE        Display virtual and physical core limits for the job.
+           CHANNELS    Display information about each open channel for the job
+           DDBS        Display the DDBS for the job
+           DEFAULTS    Display the jobs SET DEFAULT parameters
+           IPCF        Display IPCF message statistics and quotas
+           JSL         Display the jobs search list and switch settings
+           LOGICAL     Display the jobs pathological names
+           MTA         Display information about each MTA the job has in use
+           ORIGIN      Display the low and high segment origin and version
+           PATH        Display the jobs current path
+           PRIVILEGES  Display the jobs DEC and local privilege bits
+           SIZE        Display information about open file sizes and dates
+           SPOOL       Display the spooled devices and spooling status
+           TIME        Displays the jobs logged in and reset time and date.
+           TMPCOR      Display a directory of the jobs TMPCOR files
+
+   For more information about the format of each detailed display, see Appendix B.
+
+
+
+   2.2.10  /MAP
+
+   This switch displays the line mode information about the job that was  selected.
+   The  line  mode information is for the terminal that is controlling the job.  If
+   it is detached, no additional information is printed.
+
+
+
+   2.2.11  /NORMAL
+
+   This  switch  displays  normal  information  about  the  selected  jobs.    This
+   information is in the format:
+
+   17 MEIER,BILL       10,3146  TTY43  WIZARD_1    WHO    26+33     R2    0:05:08                                                                       
+
+   The information displayed is  the  job  number  (17),  user  name  (MEIER,BILL),
+   project  programmer  number (10,3146), terminal name (TTY43), node name and line
+   number (WIZARD_1), program name (WHO), low+high segment core size  (26+33),  job
+   state (R2), and cpu runtime (0:05:08).
+   JOB MODE                                                               Page 2-15   JOB MODE
+   TYPEOUT SWITCHES
+
+
+   2.2.12  /OKNONE
+
+   This switch requests that no message be printed when no jobs match the selection
+   criterion.  The default is to issue the standard message "No one".
+
+
+
+   2.2.13  /ORIGIN and /NOORIGIN
+
+   This switch displays the complete file specification of the origin of  the  high
+   and  low segment of the jobs program.  The low and high version numbers are also
+   displayed.
+
+
+
+   2.2.14  /PERFORMANCE and /NOPERFORMANCE
+
+   This switch displays performance ratios with various fields related to the  job.
+   The current ratios are:
+
+           DSK/C       disk blocks read and written per CPU second of runtime
+           DSK/E       disk blocks read and written per elapsed second
+           UUOS/C      UUOS executed per CPU second of runtime
+           UUOS/E      UUOs executed per elapsed second
+           CPU/E       CPU to elapsed time percentage ratio
+
+   If /INCREMENTAL is  also  specified,  the  performance  statistics  reflect  the
+   previous  incremental  interval  only, rather than since the job has been logged
+   in.
+
+
+
+   2.2.15  /PRINT and /NOPRINT
+
+   This switch controls the output of the job line when used  in  conjunction  with
+   the  /MAP  or  /SUMMARY switch.  If /MAP and /PRINT (default) is given, both the
+   job and line mode information is printed, and if /NOPRINT  is  given,  only  the
+   line mode information is printed.  If /SUMMARY and /PRINT is given, the selected
+   jobs will be output, as well  as  the  summary  at  the  end,  and  if  /NOPRINT
+   (default) is given, only the summary information will be displayed.
+
+
+
+   2.2.16  /REPEAT:N:M
+
+   This switch repeats the display of  the  selected  jobs  at  the  selected  time
+   interval.   If  :n  is  specified,  n is treated as a sleep scan between display
+   updates.  The default is 10 seconds.  If :n  is  0,  repeat  mode  will  not  be
+   selected.   If  :M is specified, m in the number of times to repeat the display.
+   The default is to repeat forever.
+   JOB MODE                                                               Page 2-16   JOB MODE
+   TYPEOUT SWITCHES
+
+
+   2.2.17  /SLOW
+
+   This switch displays slow information about the selected jobs.  This information
+   is in the format:
+
+   17 MEIER,BILL       10,3146  TTY43  WIZARD_1    WHO    26+33     R2    0:05:08                                                                       
+        RD:6452   WR:2441   UUOS:32535   JLT:2:19:18   PC:422017 
+
+   The information displayed is  the  job  number  (17),  user  name  (MEIER,BILL),
+   project  programmer  number (10,3146), terminal name (TTY43), node name and line
+   number (WIZARD_1), program name (WHO), low+high segment core size  (26+33),  job
+   state  (R2),  cpu  runtime  (0:05:08),  disk  blocks read (RD:6452), disk blocks
+   written (WR:2441), uuos executed (UUOS:32535), job logged in time (JLT:2:19:18),
+   program  counter  (PC:422017).   Other  information  (if  non-zero)  may be also
+   displayed, which can be disk priority  (DPR:2),  high  priority  queue  (HPQ:1),
+   paging rate (PGR:4.23), and batch time limit (LIM:0:3:20).
+
+
+
+   2.2.18  /SORT:key:x:n or /SORT:key
+
+   This switch displays jobs in sorted order as specified by the switch  arguments.
+   KEY  is  the field to sort on.  If :x is specified, x can be either ASCENDING or
+   DESCENDING to control the sort, and if :n is present, only the  first  (last)  N
+   jobs will be output.  The legal sort keys are:
+
+           ACCOUNT     Sort by the first five characters of the account string
+           APC         Sort by the jobs asynchronous port characteristics
+           BADGE       Sort by jobs DEC badge number
+           BATCH       Sort by batch job flag (no/yes)
+           BATCORE     Sort by jobs batch core maximum
+           CATEGORY    Sort by jobs login category
+           CHARGE      Sort by jobs charge number
+           CID         Sort by jobs charge ID.
+           CLASS       Sort by jobs scheduler class
+           CORE        Sort by jobs core size (sum low+high segment)
+           CTLJOB      Sort by controlling job number
+           CTLPRG      Sort by controlling jobs program name
+           DEFATTACH   Sort by jobs default attach setting (yes/no)
+           DEFBUFFER   Sort by jobs default number of buffers setting
+           DEFPROTECT  Sort by the jobs default protection setting
+           DSKPRIORITY Sort by jobs dsk priority
+           FUNNY       Sort by jobs funny page allocation
+           GLXOPR      Sort by the jobs galaxy operator privilege
+           HPQ         Sort by jobs high priority queue setting
+           IPCFOREC    Sort by number of outstanding IPCF receives
+           IPCFOSEND   Sort by number of outstanding IPCF sends
+           IPCFQREC    Sort by IPCF receive quotas
+           IPCFQSEND   Sort by IPCF send quotas
+           IPCFREC     Sort by IPCF messages received
+           IPCFSEND    Sort by IPCF messages sent
+           JLT         Sort by jobs logged in time
+           KCS         Sort by jobs kilo-core-seconds
+           LIMIT       Sort by jobs batch time limit
+   JOB MODE                                                               Page 2-17   JOB MODE
+   TYPEOUT SWITCHES
+
+
+           LINE        Sort by jobs terminal line number
+           LOCATION    Sort by jobs logically located node
+           LPPN        Sort by jobs logged-in PPN (project-programmer number)
+           LPRGNUM     Sort by jobs logged-in programmer number
+           LPRJNUM     Sort by jobs logged-in project number
+           NAME        Sort by the first six characters of the user name
+           NODE        Sort  by  node  name  where  jobs  terminal  is   physically
+                       connected
+           NODENAME    Sort  by  node  name  where  jobs  terminal  is   physically
+                       connected
+           NODENUMBER  Sort by  node  number  where  jobs  terminal  is  physically
+                       connected
+           PAGERATE    Sort by jobs paging rate
+           PC          Sort by jobs PC (program counter)
+           PHYHIGH     Sort by jobs physical high segment size.
+           PHYLOW      Sort by jobs physical low segment size.
+           PPN         Sort by jobs PPN (project-programmer number)
+           PRGNUMBER   Sort by jobs programmer number only
+           PRGRUN      Sort by program to run
+           PRJNUMBER   Sort by jobs project number only
+           PROGRAM     Sort by jobs program name
+           PROSET      Sort by jobs default protection set (yes/no)
+           READS       Sort by number of disk blocks read
+           REMOTE      Sort by jobs remote flag (no/yes)
+           RESET       Sort by jobs RESET time
+           RUNTIME     Sort by jobs CPU runtime
+           SEGMENT     Sort by jobs high segment name
+           SLOT        Sort by jobs distribution slot
+           TTY         Sort by jobs terminal name
+           UUOS        Sort by jobs executed UUO count
+           VCORE       Sort by jobs virtual core size (sum low+high segments)
+           VIRHIGH     Sort by jobs virtual high segment size.
+           VIRLOW      Sort by jobs virtual low segment size.
+           VKCS        Sort by jobs virtual kilo-core-seconds
+           WRITES      Sort by number of disk blocks written
+           WSCODE      Sort by jobs wait state code
+           WTO         Sort by jobs WTO privileges
+
+   If /INCREMENTAL is also specified, and the key  is  an  incremental  field,  the
+   sorted order will reflect the intervals incremental values.
+
+
+
+   2.2.19  /STAMP and /NOSTAMP
+
+   This switch displays a date/time stamp at the top of the display of the selected
+   jobs.
+   JOB MODE                                                               Page 2-18   JOB MODE
+   TYPEOUT SWITCHES
+
+
+   2.2.20  /SUMMARY:key
+
+   This switch displays a summary of jobs by the selected key.  The specified field
+   and  the  number  of  jobs  matching  that field is displayed, one line for each
+   different value of the field.  If the field can be a large numeric value, it  is
+   rounded off, and grouped into various buckets and displayed.
+
+           ACCOUNT     Summarize by the first five characters of the account string
+           APC         Summarize by the jobs asynchronous port characteristics
+           BADGE       Summarize by jobs DEC badge number
+           BATCH       Summarize by batch job flag (no/yes)
+           BATCORE     Summarize by jobs batch core maximum
+           CATEGORY    Summarize by jobs login category
+           CHARGE      Summarize by jobs charge number
+           CID         Summarize by jobs charge ID.
+           CLASS       Summarize by jobs scheduler class
+           CORE        Summarize by jobs core size (sum low+high segment)
+           CTLJOB      Summarize by controlling job number
+           CTLPRG      Summarize by controlling jobs program name
+           DEFATTACH   Summarize by jobs default attach setting (yes/no)
+           DEFBUFFER   Summarize by jobs default number of buffers setting
+           DEFPROTECT  Summarize by the jobs default protection setting
+           DSKPRIORITY Summarize by jobs dsk priority
+           FUNNY       Summarize by jobs funny page allocation
+           GLXOPR      Summarize by the jobs galaxy operator privilege
+           HPQ         Summarize by jobs high priority queue setting
+           IPCFOREC    Summarize by number of outstanding IPCF receives
+           IPCFOSEND   Summarize by number of outstanding IPCF sends
+           IPCFQREC    Summarize by IPCF receive quotas
+           IPCFQSEND   Summarize by IPCF send quotas
+           IPCFREC     Summarize by IPCF messages received
+           IPCFSEND    Summarize by IPCF messages sent
+           JLT         Summarize by jobs logged in time
+           KCS         Summarize by jobs kilo-core-seconds
+           LIMIT       Summarize by jobs batch time limit
+           LINE        Summarize by jobs terminal line number
+           LOCATION    Summarize by jobs logically located node
+           LPPN        Summarize by jobs logged-in PPN (project-programmer number)
+           LPRGNUM     Summarize by jobs logged-in programmer number
+           LPRJNUM     Summarize by jobs logged-in project number
+           NAME        Summarize by the first six characters of the user name
+           NODE        Summarize by node name where  jobs  terminal  is  physically
+                       connected
+           NODENAME    Summarize by node name where  jobs  terminal  is  physically
+                       connected
+           NODENUMBER  Summarize by node number where jobs terminal  is  physically
+                       connected
+           PAGERATE    Summarize by jobs paging rate
+           PC          Summarize by jobs PC (program counter)
+           PHYHIGH     Summarize by jobs physical high segment size.
+           PHYLOW      Summarize by jobs physical low segment size.
+           PPN         Summarize by jobs PPN (project-programmer number)
+           PRGNUMBER   Summarize by jobs programmer number only
+           PRGRUN      Summarize by program to run
+   JOB MODE                                                               Page 2-19   JOB MODE
+   TYPEOUT SWITCHES
+
+
+           PRJNUMBER   Summarize by jobs project number only
+           PROGRAM     Summarize by jobs program name
+           PROSET      Summarize by jobs default protection set (yes/no)
+           READS       Summarize by number of disk blocks read
+           REMOTE      Summarize by jobs remote flag (no/yes)
+           RESET       Summarize by jobs RESET time
+           RUNTIME     Summarize by jobs CPU runtime
+           SEGMENT     Summarize by jobs high segment name
+           SLOT        Summarize by jobs distribution slot
+           TTY         Summarize by jobs terminal name
+           UUOS        Summarize by jobs executed UUO count
+           VCORE       Summarize by jobs virtual core size (sum low+high segments)
+           VIRHIGH     Summarize by jobs virtual high segment size.
+           VIRLOW      Summarize by jobs virtual low segment size.
+           VKCS        Summarize by jobs virtual kilo-core-seconds
+           WRITES      Summarize by number of disk blocks written
+           WSCODE      Summarize by jobs wait state code
+           WTO         Summarize by jobs WTO privileges
+
+   If /INCREMENTAL is also specified, and the key  is  an  incremental  field,  the
+   summary display will reflect the intervals incremental values.
+
+
+
+   2.2.21  /TOTALS and /NOTOTALS
+
+   This switch selects whether or not a total line will be  generated.   The  total
+   line is of the format "Total of n jobs" where n is the number of jobs that match
+   the selection criterion.
+
+
+
+   2.2.22  /VFAST
+
+   This switch displays very  fast  information  about  the  selected  jobs.   This
+   information is in the format:
+
+   MEIER,BILL   TTY43
+
+   The information displayed is user name (MEIER,BILL) and terminal name (TTY43).
+
+
+
+
+
+
+
+
+
+
+
+
+                                      CHAPTER 3
+
+                                      LINE MODE                                      LINE MODE
+
+
+
+   3.1  SELECTION SWITCHES        SELECTION SWITCHES
+
+   The following switches can be included on the command line to  select  different
+   classes  of  lines.   None  of these switches are global, they apply only to the
+   current specification.  Multiple specifications are separated by commas.
+
+
+
+   3.1.1  /AUTODIALER and /NOAUTODIALER
+
+   This switch selects lines that have autodialers.   /NOAUTODIALER  selects  lines
+   that don't have autodialers.
+
+
+
+   3.1.2  /ASSIGN and /NOASSIGN
+
+   This switch selects lines that are assigned by a job  with  the  monitor  assign
+   command.  /NOASSIGN selects lines that are not assigned by a job.
+
+
+
+   3.1.3  /CARRIER and /NOCARRIER
+
+   This  switch  selects  lines  that  are  dialup  lines  with  carrier   present.
+   /NOCARRIER selects lines that are dialup but without carrier present.
+
+
+
+   3.1.4  /CTY or /NOCTY
+
+   This switch selects the line of the CTY, the console terminal.   /NOCTY  selects
+   all lines except the CTY (ie TTYs and PTYs).
+   LINE MODE                                                               Page 3-2   LINE MODE
+   SELECTION SWITCHES
+
+
+   3.1.5  /DIALUP and /NODIALUP
+
+   This switch selects lines that are dialup lines.  /NODIALUP selects  lines  that
+   are not dialup lines.
+
+
+
+   3.1.6  /GANDALF and /NOGANDALF
+
+   This switch selects gandalf switched lines.  /NOGANDALF selects  jobs  that  are
+   not gandalf switched lines.
+
+
+
+   3.1.7  /HARDWIRED and /NOHARDWIRED
+
+   This switch selects hardwired lines.  /NOHARDWIRED selects lines  that  are  not
+   hardwired.
+
+
+
+   3.1.8  /INITED and /NOINITED
+
+   This switch selects lines that are inited (opened) by a job with the OPEN, INIT,
+   or FILOP.  UUO.  /NOINITED selects lines that are not inited by a job.
+
+
+
+   3.1.9  /JOB:n
+
+   This switch selects lines that are in use by job n.  The lines may be  assigned,
+   inited, or otherwise in use by job n.
+
+
+
+   3.1.10  /LOCAL and /NOLOCAL
+
+   This switch selects local  terminals.   Local  terminals  implies  the  "TTY  NO
+   REMOTE"  setting  rather than non-network terminals.  /NOLOCAL selects non-local
+   terminals (eg remote terminals).
+
+
+
+   3.1.11  /LOCATE:"string"
+
+   This switch selects lines with the  specified  location  string.   The  location
+   string  can  be up to 19 characters, optionally containing wildcards (?  and *).
+   If the location string contains blanks or other non-alpha numeric characters, it
+   must  be  inclosed  in  quotations.  The lines location string is defined by the
+   system administrator in the binary file STD:LINES.INI which  relates  node  name
+   and  line number to a location string, which generally describes the location of
+   the terminal drop.
+   LINE MODE                                                               Page 3-3   LINE MODE
+   SELECTION SWITCHES
+
+
+   3.1.12  /MIC and /NOMIC
+
+   This switch selects lines by are being controlled by MIC, ie MIC  is  typing  or
+   otherwise controlling the input or output to the terminal.  /NOMIC selects lines
+   not controlled by MIC.
+
+
+
+   3.1.13  /NODE:ss_ll or /NODE:ss
+
+   This switch selects lines who are physically connected to the specified node  ss
+   and line ll.  ss is a node name with optional ?  and * wildcarding, and ll is an
+   octal line number.  If  only  a  node  name  is  specified  any  lines  who  are
+   physically connected to node ss are selected regardless of their line number.
+
+
+
+   3.1.14  /PHONE:"aa"
+
+   This switch selects dialup phone lines with the specified phone  number  string.
+   The  phone  number  string  can  be  up  to 19 characters, optionally containing
+   wildcards (?  and *).  If the phone  number  string  contains  blanks  or  other
+   non-alpha  numeric  characters,  it  must  be inclosed in quotations.  The lines
+   phone number string is defined by the system administrator in  the  binary  file
+   STD:LINES.INI  which relates node name and line number to a phone number string,
+   which generally describes the phone number of the terminal line.
+
+
+
+   3.1.15  /PTY:oo or /PTY or /NOPTY
+
+   This switch selects pseudo-terminal (PTY) line oo.  OO is an octal  line  number
+   from  0  to  the number of legal PTYs minus 1.  If :oo is omitted, all PTY lines
+   are selected.  /NOPTY selects lines that arent PTYs (ie TTYs and the CTY).
+
+
+
+   3.1.16  /RCVSPEED:n
+
+   This switch selects lines that have a receive speed of n baud.
+
+
+
+   3.1.17  /REMOTE AND /NOREMOTE
+
+   This switch selects remote terminals.  Remote terminals implies the "TTY REMOTE"
+   setting   rather  than  non-network  terminals.   /NOREMOTE  selects  non-remote
+   terminals (eg local terminals).
+   LINE MODE                                                               Page 3-4   LINE MODE
+   SELECTION SWITCHES
+
+
+   3.1.18  /SLAVE and /NOSLAVE
+
+   This switch selects lines that are  slaved  and  cannot  type  commands  to  the
+   monitor.  /NOSLAVE selects lines that are not slaved.
+
+
+
+   3.1.19  /SPEED:n
+
+   This switch selects lines whose transmit and receive speed are both equal  to  n
+   baud.
+
+
+
+   3.1.20  /TSN and /NOTSN
+
+   This switch selects TSN controlled lines.  /NOTSN selects lines that are not TSN
+   controlled.
+
+
+
+   3.1.21  /TTY:oo or /TTY or /NOTTY
+
+   This switch selects the line (TTY) oo.  OO is an octal  number  from  0  to  the
+   number  of legal terminals (including PTYs) minus 1.  If :oo is omitted, all TTY
+   lines (but not CTY and PTY lines) are selected.  /NOTTY selects lines that arent
+   TTYs (ie PTYs and the CTY).
+
+
+
+   3.1.22  /TYPE:ss
+
+   This switch selects lines whose terminal type is ss.  SS is a sixbit  word  with
+   optional ?  and * wildcarding.
+
+
+
+   3.1.23  /USER and /NOUSER
+
+   This switch selects lines that are controlling a job  (user).   /NOUSER  selects
+   lines that are not controlling a job.
+
+
+
+   3.1.24  /XMTSPEED:n
+
+   This switch selects lines that have a transmit speed of n baud.
+   LINE MODE                                                               Page 3-5   LINE MODE
+   TYPEOUT SWITCHES
+
+
+   3.2  TYPEOUT SWITCHES        TYPEOUT SWITCHES
+
+   The following switches can be included on the command line to control the format
+   of  the  line  mode output.  In all cases, these switches are global, and can be
+   specified anywhere in the command line and have the same effect.
+
+
+
+   3.2.1  /DPY:n:m
+
+   This switch displays the selected lines on a video terminal  in  DPY  mode  with
+   cursor  update  of  the  data.  If :n is specified, n is treated as a sleep scan
+   between display updates.  The default is 10 seconds.  If :n is 0, DPY mode  will
+   not  be  selected.   If  :M is specified, m in the number of times to repeat the
+   display.  The default is to repeat forever.  While in DPY  mode,  the  following
+   single characters can be typed to control the output on the display:  more                                                                         m
+
+
+
+   3.2.2  /ERNONE   3
+
+   This switch generates a fatal error when no lines match the selection criterion.   T
+   Either   "?WHONTM  Line  not  connected"  or  "?WHOARC  All  lines  rejected  by
+   constraints" message is generated as appropriate.  This is the default.
+
+
+
+   3.2.3  /FAST
+
+   This  switch  displays  fast  information  about  the  selected   lines.    This
+   information is in the format:
+
+   TTY43  WIZARD   1 RDC     A U job 17
+
+   The information displayed is terminal name (TTY43),  node  name  (WIZARD),  line
+   number (1), flags (RDC), and job control information (A U job 17).
+
+
+
+   3.2.4  /INCLUDE:key
+
+   This switch selects the inclusion of additional information in the  line  format
+   display.  The current keys are PTY, to include PTY lines in the display.
+
+
+
+   3.2.5  /INCREMENTAL and /NOINCREMENTAL
+
+   This switch selects the display of incremental line information for  the  fields
+   that  are  incremental  in  nature.   /NOINCREMENTAL  displays the total fields.
+   Fields that are incremental are input character count, output  character  count,
+   break  character count, and command count.  If /REPEAT or /DPY are specified, it
+   should be noted that the first display will have zeros for all  the  incremental
+   fields, as no previous values are available to compute them.
+   LINE MODE                                                               Page 3-6   LINE MODE
+   TYPEOUT SWITCHES
+
+
+   3.2.6  /INFORMATION:keys
+
+   This switch displays addition information about the selects lines  as  specified
+   by the keys.  Typically this information is one or more additional line per key.
+   Legal keys are:
+
+           TTY         Display all terminal parameters like INITIA TTY command
+
+
+
+   3.2.7  /MAP
+
+   This switch displays the job mode information about the line that was  selected.
+   The  job  mode  information  is for the job that that has the terminal assigned,
+   inited, or logged in.  If there is no related job, no additional information  is
+   printed.
+
+
+
+   3.2.8  /NORMAL
+
+   This  switch  displays  normal  information  about  the  selected  lines.   This
+   information is in the format:
+
+   TTY43  WIZARD   1 Dataset - 1281     RDC   VT52     600  300  A U job 17
+
+   The information displayed is terminal name (TTY43),  node  name  (WIZARD),  line
+   number  (1),  location or phone string descriptor (Dataset - 1281), flags (RDC),
+   terminal type (VT52), receive speed (600), transmit speed (300), and job control
+   information (A U job 17).
+
+
+
+   3.2.9  /OKNONE
+
+   This switch requests that  no  message  be  printed  when  no  lines  match  the
+   selection  criterion.   The default is /ERNONE which will generate a fatal error
+   when no lines match the selection criterion.
+
+
+
+   3.2.10  /PERFORMANCE and /NOPERFORMANCE
+
+   This switch displays performance ratios with various fields related to the line.
+   The current ratios are:
+
+           O/I         Output to input character count ratio
+           ICC/E       Input characters typed per elapsed second
+           OCC/E       Output characters displayed per elapsed second
+           BRK/EM      Break characters typed per elapsed minute
+           CMD/EM      Commands typed per elapsed minute
+
+   If /INCREMENTAL is  also  specified,  the  performance  statistics  reflect  the
+   previous incremental interval only, rather than since the line has connected.
+   LINE MODE                                                               Page 3-7   LINE MODE
+   TYPEOUT SWITCHES
+
+
+   3.2.11  /PRINT and /NOPRINT
+
+   This switch controls the output of the line line when used in  conjunction  with
+   the  /MAP  or  /SUMMARY switch.  If /MAP and /PRINT (default) is given, both the
+   line and job mode information is printed, and if /NOPRINT is given, only the job
+   mode  information  is  printed.   If  /SUMMARY and /PRINT is given, the selected
+   lines will be output, as well as  the  summary  at  the  end,  and  if  /NOPRINT
+   (default) is given, only the summary information will be displayed.
+
+
+
+   3.2.12  /REPEAT:N:M
+
+   This switch repeats the display of the  selected  lines  at  the  selected  time
+   interval.   If  :n  is  specified,  n is treated as a sleep scan between display
+   updates.  The default is 10 seconds.  If :n  is  0,  repeat  mode  will  not  be
+   selected.   If  :M is specified, m in the number of times to repeat the display.
+   The default is to repeat forever.
+
+
+
+   3.2.13  /SLOW
+
+   This  switch  displays  slow  information  about  the  selected   lines.    This
+   information is in the format:
+
+   TTY43  WIZARD   1 Dataset - 1281     RDC   VT52     600  300  A U job 17
+        ICC:44234  OCC:737227  BRK:4166  CMD:1211
+
+   The information displayed is terminal name (TTY43),  node  name  (WIZARD),  line
+   number  (1),  location or phone string descriptor (Dataset - 1281), flags (RDC),
+   terminal type (VT52), receive speed (600), transmit  speed  (300),  job  control
+   information  (A  U  job  17),  count  of  characters input (ICC:44234), count of
+   characters output (OCC:737227), break characters typed (BRK:4166), and count  of
+   commands typed (CMD:1211).
+
+
+
+   3.2.14  /SORT:key:x:n or /SORT:key
+
+   This switch displays lines in sorted order as specified by the switch arguments.
+   KEY  is  the field to sort on.  If :x is specified, x can be either ASCENDING or
+   DESCENDING to control the sort, and if :n is present, only the  first  (last)  N
+   lines will be output.  The legal sort keys are:
+
+           APC         Sort by asynchronous port characteristics
+           ASSIGN      Sort by assigned flag (no/yes)
+           BREAK       Sort by break character count
+           CARRIER     Sort by carrier flag (no/yes)
+           COMMANDS    Sort by commands typed
+           DIALUP      Sort by dialup flag (no/yes)
+           INITED      Sort by inited flag (no/yes)
+           INPUT       Sort by input character count
+           JOB         Sort by job using line
+   LINE MODE                                                               Page 3-8   LINE MODE
+   TYPEOUT SWITCHES
+
+
+           LINE        Sort by line
+           NODE        Sort by node name
+           NODENAME    Sort by node name
+           NODENUMBER  Sort by node number
+           OUTPUT      Sort by output character count
+           RCVSPEED    Sort by receive speed
+           REMOTE      Sort by remote flag (no/yes)
+           SLAVE       Sort by slave flag (no/yes)
+           TYPE        Sort by terminal type
+           USER        Sort by user flag (no/yes)
+           XMTSPEED    Sort by terminal transmit speed
+
+   If /INCREMENTAL is also specified, and the key  is  an  incremental  field,  the
+   sorted order will reflect the intervals incremental values.
+
+
+
+   3.2.15  /STAMP and /NOSTAMP
+
+   This switch displays a date/time stamp at the top of the display of the selected
+   lines.
+
+
+
+   3.2.16  /SUMMARY:key
+
+   This switch displays a summary of lines by  the  selected  key.   The  specified
+   field  and  the  number  of lines matching that field is displayed, one line for
+   each different value of the field.  If the field can be a large  numeric  value,
+   it is rounded off, and grouped into various buckets and displayed.
+
+           APC         Summarize by asynchronous port characteristics
+           ASSIGN      Summarize by assigned flag (no/yes)
+           BREAK       Summarize by break character count
+           CARRIER     Summarize by carrier flag (no/yes)
+           COMMANDS    Summarize by commands typed
+           DIALUP      Summarize by dialup flag (no/yes)
+           INITED      Summarize by inited flag (no/yes)
+           INPUT       Summarize by input character count
+           JOB         Summarize by job using line
+           LINE        Summarize by line
+           NODE        Summarize by node name
+           NODENAME    Summarize by node name
+           NODENUMBER  Summarize by node number
+           OUTPUT      Summarize by output character count
+           RCVSPEED    Summarize by receive speed
+           REMOTE      Summarize by remote flag (no/yes)
+           SLAVE       Summarize by slave flag (no/yes)
+           TYPE        Summarize by terminal type
+           USER        Summarize by user flag (no/yes)
+           XMTSPEED    Summarize by terminal transmit speed
+
+   If /INCREMENTAL is also specified, and the key  is  an  incremental  field,  the
+   summary display order will reflect the intervals incremental values.
+   LINE MODE                                                               Page 3-9   LINE MODE
+   TYPEOUT SWITCHES
+
+
+   3.2.17  /TOTALS and /NOTOTALS
+
+   This switch selects whether or not a total line will be  generated.   The  total
+   line  is  of  the  format "Total of n lines" where n is the number of lines that
+   match the selection criterion.
+
+
+
+   3.2.18  /VFAST
+
+   This switch displays very fast  information  about  the  selected  lines.   This
+   information is in the format:
+   TTY43  WIZARD   1
+   The information displayed is terminal name (TTY43), node name (WIZARD), and line
+   number (1).
+
+
+
+
+
+
+
+
+
+
+
+
+                                      CHAPTER 4
+
+                                FORMATTING THE DISPLAY                                FORMATTING THE DISPLAY
+
+
+
+   WHO provides the sophisticated used with complete control of the output display.
+   The exact formats of the display line, as well as optional headings and footings
+   can be specified.
+
+
+
+   4.1  FORMAT LIST        FORMAT LIST
+
+   A number of format control switches take a  "format-list"  as  an  argument.   A
+   "format-list"  is  a  list  of  parameters  separated  by commas and inclosed in
+   parentheses.  Each parameter is either  a  text  string  or  a  switch  specific
+   keyword.   Text  string  parameters  are simply ascii strings enclosed in double
+   quotations (").  Keywords must be from  the  legal  set  of  keywords,  and  can
+   include several arguments of the form keyword:arg1:arg2:arg3.  All arguments are
+   optional, and can be omitted.   ARG1  is  the  default  fieldwidth  of  for  the
+   specified keyword.  ARG2 is a keyword to control the justification of the field.
+   It can be either LEFT (for left justification in  the  specified  field  width),
+   CENTER  (for  centering  in  the  specified  field  width), or RRIGHT (for right
+   justification in the specified field width).  ARG3 is the number  of  spaces  to
+   follow  the  field (only valid when the fieldwidth is zero).  If any argument is
+   omitted, a default depending on the nature of the keyword field destined  to  be
+   output is used.
+
+
+
+   4.2  FORMAT LIST SWITCHES        FORMAT LIST SWITCHES
+
+   The following switches take a format-list an an argument.  For  a  list  of  the
+   keywords  that  each  format-list  can  be  composed  of, refer to the following
+   section.
+
+
+
+   4.2.1  /FINAL:(format-list)
+
+   This format switch provides a format-controlled line to be output  once  at  the
+   end  of  all  selected  jobs  or  lines.   It  is  useful  for including trailer
+   information.   For  example,   [10,]/FINAL:list1,/PROGRAM:WHO   (equivalent   to                                      ]
+   [10,],/PROGRAM:WHO/FINAL:list1  since  FINAL  is  a  global switch) would output       ]
+   format-list 1 after listing all project 10 jobs, and all  jobs  running  program
+   FORMATTING THE DISPLAY                                                  Page 4-2   FORMATTING THE DISPLAY
+   FORMAT LIST SWITCHES
+
+
+   WHO.
+
+
+
+   4.2.2  /FOOTING:(format-list)
+
+   This format switch provides a format-controlled line to be output at the end  of
+   each  list  of  job/line  specifications, and thus, is a "file" specific switch.
+   For   example,   [10,]/FOOTING:list1,/PROGRAM:WHO/FOOTING:list2   would   output                        ]
+   format-list 1 after listing all project 10 jobs, and format list 2 after listing
+   all jobs running program WHO.
+
+
+
+   4.2.3  /HEADING:(format-list)
+
+   This format switch provides a format-controlled line to be  output  before  each
+   list  of  job/line  specifications,  and thus, si also a "file" specific switch.
+   For   example,   [10,]/HEADING:list1,/PROGRAM:WHO/HEADING:list2   would   output                        ]
+   format-list  1  before  listing  all  project  10 jobs, and format list 2 before
+   listings all jobs running program WHO.
+
+
+
+   4.2.4  /INITIAL:(format-list)
+
+   This format switch provides a format-controlled line to be  output  once  before
+   the start of all the selected jobs or lines.  It is useful for including titles,
+   or other information.  For example, [10,]/INITIAL:list1,/PROGRAM:WHO (equivalent                                           ]
+   to  [10,],/PROGRAM:WHO/INITIAL:list1  since  INITIAL  is  a global switch) would           ]
+   output format-list 1 before listing all project 10 jobs, and  all  jobs  running
+   program WHO.
+
+
+
+   4.2.5  /FORMAT:(format-list)
+
+   This format switch controls the detailed listing for each job.  It is  a  global
+   switch,  and  can  be  used  to taylor the output to display exactly the desired
+   fields for each job.  The switches  /VFAST,  /FAST,  /NORMAL  and  /SLOW  select
+   several common detail line formats.
+
+
+
+   4.3  DEFAULT FORMAT CONTROL        DEFAULT FORMAT CONTROL
+
+   The following switches can be used to control the default global justifications.
+   However,  any  specified as ARG2 to any of the above switches, will override the
+   defaults.
+   FORMATTING THE DISPLAY                                                  Page 4-3   FORMATTING THE DISPLAY
+   DEFAULT FORMAT CONTROL
+
+
+   4.3.1  /BLANK
+
+   This default format control switch suppresses  the  output  of  any  field  that
+   normally would be blank.  Thus, this can destroy the neat, columnized output.
+
+
+
+   4.3.2  /DEFAULT
+
+   This default format control switch selects that  the  default  justification  be
+   used for each field.
+
+
+
+   4.3.3  /FIX
+
+   This default format control switch forces all fields to  be  output  in  strict,
+   fixed length columnized areas.
+
+
+
+   4.3.4  /FLOAT
+
+   This default format control switch allows all fields to be output in  completely
+   free  floating format.  Generally, by default, each field will be separated from
+   the previous field by exactly one space.
+
+
+
+
+
+
+
+
+
+
+
+
+                                      CHAPTER 5
+
+                                   ACTION SWITCHES                                   ACTION SWITCHES
+
+
+
+   The following action switches may be used to force various actions on the target
+   job  or  line.   Some  switches require a target job, and use the job (if in JOB
+   mode), or the job owning the terminal (if in LINE mode), others require a target
+   line,  and use the line number of the selected job (if in JOB mode), or the line
+   number (if in LINE mode).
+
+   All of these functions can be done to any job with the same programmer number as
+   the  commanding  job,  or  to  any terminal owned by the commanding job.  If the
+   target job/line does not meet one of those criterion, POKE or  WHEEL  privileges
+   are required.
+
+   In all cases except for /NETWORK:CONNECT  the  action  is  preformed  after  the
+   jobs/lines  are  selected,  and  the  information  displayed.   In  the  case of
+   /NETWORK:CONNECT, the lines are selected, and information  displayed  after  the
+   lines are connected.
+
+
+
+   5.1  INPUT/OUTPUT FUNCTIONS        INPUT/OUTPUT FUNCTIONS
+
+   5.1.1  /FORCE:command
+
+   This switch uses the FRCUUO monitor call to force  a  command  on  the  selected
+   jobs.   If  the  job  is detached, the switch is ignored.  Legal forced commands
+   are:
+
+           .HALT       Force a ^C (stop the stop with control-C trapping)
+           .BYE        Detach the job
+           .HELLO      Run the INITIA program
+           .RESTA      Type the system restart greeting
+           KJOB        Log the job out
+           INITIA      Run the INITIA program
+           .FCONT      Force a CONTINUE
+           .TYPE       Retype the line (control-R)
+           USESTA      Type statistics (control-T)
+           .NETLDR     Force run the NETLDR program
+           HALT        HALT the job regardless of control-C trapping
+           CTEST       Force a CTEST command (for patching)
+   ACTION SWITCHES                                                         Page 5-2   ACTION SWITCHES
+   INPUT/OUTPUT FUNCTIONS
+
+
+   5.1.2  /INPUT:"string"
+
+   This switch inputs the "string" into the terminal buffer, as though it was typed
+   on  the  terminal.   Control  characters  can  be  imbedded by inserting them in
+   up-arrow form.
+
+
+
+   5.1.3  /OUTPUT:"string"
+
+   This switch outputs the "string" on the terminal.   Control  characters  can  be
+   imbedded by inserting them in up-arrow form.
+
+
+
+   5.1.4  /SEND:"string"
+
+   This switch outputs the "string" on the terminal,  prefixed  with  the  standard
+   "<bell>;;TTYnnn - " leader.
+
+
+
+   5.2  NETWORK FUNCTIONS        NETWORK FUNCTIONS
+
+   5.2.1  /NETWORK:CONNECT
+
+   This switch connects all the specified terminals to the host system.  The  /NODE
+   switch  must  be  given,  and the node name cannot be wildcarded.  If a specific
+   line is given (/NODE:name_line) only that terminal is connected, if no  line  is
+   given (/NODE:name) all terminals on that node will be connected.
+
+
+
+   5.2.2  /NETWORK:DISCONNECT
+
+   This switch sends a disconnect message  to  the  node  to  which  each  selected
+   terminal is connected to.  If a job is on the line, it is detached.
+
+
+
+   5.3  SETUUO FUNCTIONS        SETUUO FUNCTIONS
+
+   The following arguments can  be  specified  to  the  /SETUUO  switch.   Multiple
+   /SETUUO  switches  with  different arguments can be specified.  Each argument to
+   the  /SETUUO  switch  is  a  keyword  followed  by  another  argument  (such  as
+   /SETUUO:DSKFUL:PAUSE to set disk-full pause for the job).
+   ACTION SWITCHES                                                         Page 5-3   ACTION SWITCHES
+   SETUUO FUNCTIONS
+
+
+   5.3.1  CPU:n
+
+   This argument sets the CPU runability for the selected jobs to CPU n.  (.SET RUN
+   CPUn ONLY)
+
+
+
+   5.3.2  DEFAULT:BUFFERS:n
+
+   This argument sets the default number of disk buffers for the  job  to  N  (.SET
+   DEFAULT BUFFERS n).
+
+
+
+   5.3.3  DEFAULT:PROTECTION:n
+
+   This argument sets the default file protection for the selected jobs to n.  N is
+   an octal number between 0 and 777.  (.SET DEFAULT PROTECTION n)
+
+
+
+   5.3.4  DEFER:key
+
+   This argument sets or clears defered spooling for the selected jobs.  Key may be
+   either YES to set defered spooling (.SET DEFER), or NO to clear defered spooling
+   (.SET NODEFER).
+
+
+
+   5.3.5  DSKFUL:key
+
+   This argument sets or clears the disk-full action for the  selected  jobs.   Key
+   may  be  either PAUSE to enable disk-full pause (.SET DSKFUL PAUSE), or ERROR to
+   disable disk-full pause (.SET DSKFUL ERROR).
+
+
+
+   5.3.6  LIMIT:hh:mm:ss
+
+   This argument sets the batch time limit for the selected jobs to hh:mm:ss.
+
+
+
+   5.3.7  PHYSICAL:key:n
+
+   This argument sets the physical core parameter to n pages for the selected jobs.
+   Key  may  be  either  LIMIT  to  set  physical limit (.SET PHYSICAL LIMIT n), or
+   GUIDELINE to set physical guideline (.SET PHYSICAL GUIDELINE n).
+   ACTION SWITCHES                                                         Page 5-4   ACTION SWITCHES
+   SETUUO FUNCTIONS
+
+
+   5.3.8  TIME:hh:mm:ss
+
+   This argument sets the batch time limit for the selected jobs to hh:mm:ss.
+
+
+
+   5.3.9  VIRTUAL:n
+
+   This argument sets the virtual core limit to n  pages  for  the  selected  jobs.
+   (.SET VIRTUAL n)
+
+
+
+   5.3.10  WATCH:(keys)
+
+   This argument sets watch parameters for the selected jobs.  Any of the  keywords
+   to  the  monitor  .SET  WATCH  command  may  be specified.  Multiple keys can be
+   specified, inclosed in parentheses, and separated by commas.
+
+
+
+
+
+
+
+
+
+
+
+
+                                      CHAPTER 6
+
+                                 OUTPUT FILE CONTROL                                 OUTPUT FILE CONTROL
+
+
+
+   6.1  FILE SPECIFICATION DEFAULTS        FILE SPECIFICATION DEFAULTS
+
+   The default output specification is TTY:WHO.LST.  However, if any part of a file
+   specification is typed, the defaults are filled in from DSK:WHO.LST[-].
+
+
+
+   6.2  SWITCHES        SWITCHES
+
+   The following switches may be placed on the output file specification to control
+   it.
+
+
+
+   6.2.1  /APPEND and /NOAPPEND
+
+   This switch controls whether or not the output file is appended to.  The default
+   (/NOAPPEND) is to supersede the output file for the first command, and append to
+   it each time if /REPEAT is specified.  /APPEND will always append to the  output
+   file.
+
+
+
+   6.2.2  /ERSUPERSEDE
+
+   This switch will cause a fatal error to be generated if the output file  exists,
+   and would be superseded.  The default is not to generate an error, and supersede
+   the file.
+
+
+
+   6.2.3  /OKSUPERSEDE
+
+   This switch allows the output file to be superseded, if it exists.  This also is
+   the default action.
+   OUTPUT FILE CONTROL                                                     Page 6-2   OUTPUT FILE CONTROL
+   SWITCHES
+
+
+   6.2.4  /PROTECTION:n
+
+   This switch sets the output file protection to n.  N is an octal number  between
+   1 and 777.  A value of 0 uses the system default.
+
+
+
+   6.2.5  /VERSION:x
+
+   This switch sets the  output  file  version.   X  is  a  standard  version  word
+   consisting  of  major minor(edit)-who.  The default is to use the version of the
+   program.
+
+
+
+
+
+
+
+
+
+
+
+
+                                      APPENDIX A
+
+                                   JOB STATE CODES                                   JOB STATE CODES
+
+
+
+   The following wait state codes may be output  for  the  jobs  wait  state.   The
+   format  of  the  output  is  XXYY  where XX is the one of the wait states listed                                  Y   w
+   below, XX indicates the job is currently running on a CPU, YY  is  the  swapping             i
+   state (SW=swapped out, SF=swapped out and fragmented, LK=locked in core), and YY
+   indicates the job is actively  being  swapped.   A  list  of  wait  state  codes   i
+   follows:
+
+   State   Explanation
+
+   AU      Alter disk UFD queue
+   B1      Running background batch in PQ1
+   B2      Running background batch in PQ2
+   CA      Semi-permanent core allocation wait
+   CB      Disk core-block scan wait
+   D1      Dectape control wait (up to 8 drives)
+   D2      Second DECtape controler wait
+   DA      Disk storage allocation wait
+   DC      Data control (DC) wait - magtape and dectape
+   DI      Disk input wait
+   DO      Disk output wait
+   DS      Disk I/O wait satisfied
+   DW      Disk I/O wait
+   E6      Event wait (DN60)
+   EF      Event wait (front ends)
+   EI      Event wait (IPCF)
+   EK      Event wait (tape kontroller)
+   EL      Event wait (tape labeling)
+   EN      Event wait (networks)
+   EQ      ENQ/DEQ wait
+   ER      Event wait (tape rewinding)
+   ES      Event wait satisfied
+   EV      Exec virtual memory wait
+   EW      General event wait
+   EW      Job in event wait
+   GU      GETSEG UUO in progress
+   HB      Hibernate (no sleep time)
+   HS      Hibernate with sleep time
+   Hd      Running in HPQ d
+   IO      IO wait
+   JD      Waiting for DAEMON to be run
+   JOB STATE CODES                                                         Page A-2   JOB STATE CODES
+
+
+
+   LK      Locked in core
+   MM      Memory management wait
+   NA      Job napping (.lt.  1 sec sleep)
+   NU      Job number not assigned
+   OW      Operator wait
+   PI      Paging I/O wait
+   PS      Paging I/O wait satisfied
+   R1      Running in PQ1
+   R2      Running in PQ2
+   RN      Running
+   RU      Run UUO in progress
+   SF      Swapped and fragmented
+   SL      Sleeping
+   SW      Swapped out
+   TI      TTY input wait
+   TO      TTY output wait
+   TS      TTY I/O wait satisfied
+   TW      TTY I/O wait
+   WI      General input wait
+   WO      General output wait
+   WS      I/O wait satisfied
+   ^C      Job stopped
+   ^D      Job in DAEMON DCORE wait
+   ^W      Job in command wait
+
+
+
+
+
+
+
+
+
+
+
+
+                                      APPENDIX B
+
+                                 INFORMATION DISPLAYS                                 INFORMATION DISPLAYS
+
+
+
+   The following is a detailed description of all the output for  the  /INFORMATION
+   switch.   For  a description of the switch, refer to "selection switches" in the
+   previous sections.
+
+
+
+   B.1  ACCOUNT
+
+   This  keyword  displays  the  account  string  for  the  selected  jobs.    This
+   information is in the format:
+
+        Account: 6PFS.C684422
+
+   The information displayed is the account string (6PFS.C684422).
+
+
+
+   B.2  BATCH
+
+   This keyword displays batch and operator  information  for  the  selected  jobs.
+   This information is in the format:
+
+       WTO privs:all  OPR privs:system  Batch stream:no  Limit:0:09:45 Core:511
+
+   The information displayed is the write to operator privileges (all) [can be  one
+   of  ALL,  WTO,  NONE], operator privileges (system) [can be one of NONE, REMOTE,
+   HOST, SYSTEM], batch stream number (no) [a stream number or "no" if  none  set],
+   batch CPU time limit (0:9:45), and batch core limit (511).
+
+
+
+   B.3  CAPABILITIES
+
+   This keyword displays the enabled  capabilities  of  the  selected  jobs.   This
+   information is in the format:
+
+        Capabilities: 777777,1
+         DEC: IPCF DPR:3 METER POKE CPU HPQ:15 USPL ENQ RTTRP LOCK TRPSET SPY MSPY 
+         Local: CHGPPN 
+   INFORMATION DISPLAYS                                                    Page B-2   INFORMATION DISPLAYS
+   CAPABILITIES
+
+
+   The information displayed is the octal capability  bits  (left  half=DEC,  right
+   half=local)   (777777,1),  and  a  breakdown  of  each  of  the  DEC  and  local
+   capabilities by name.
+
+
+
+   B.4  CHANNEL
+
+   This keyword displays information about all open channels for the selected jobs.
+   This information is in the format:
+
+      2  DSK         14      OO      OB      E       O   IC      
+
+   The information displayed is the channel number (2), device  inited  (DSK),  I/O
+   mode  (14)  and  various  channel  status flags from USRJDA (OO OB E O IC).  The
+   channel status flags are:
+
+           OI          Opened with input buffer specified
+           OO          Opened with output buffer specified
+           IB          Input buffers have been setup
+           OB          Output buffers have been setup
+           L           LOOKUP has been done
+           E           ENTER has been done
+           I           INPUT has been done
+           O           OUTPUT has been done
+           IC          Input close has been done (or not needed)
+           OC          Output close has been done (or not needed)
+
+
+
+   B.5  CORE
+
+   This keyword displays the current and maximum physical and virtual  core  limits
+   for the selected jobs.  This information is in the format:
+
+        Core limits:  Current: Virt:200 Phys:120  Maximum: Virt:512 Phys:300
+
+   The information displayed is the  jobs  current  virtual  limit  (200),  current
+   physical  limit  (120),  maximum virtual limit (512), and maximum physical limit
+   (300), all expressed in pages of core.
+
+
+
+   B.6  DDBS
+
+   This keyword displays information about all open devices for the selected  jobs.
+   This information is in the format:
+
+   * TTY104  A      node WIZARD(123) line 45                                     R
+     LPT773  I      node SOFDCP(77) unit 3                                       W
+     MTA710  A   MTA0    reelid:COBOL file 11 record 45                       WE/W
+     DSK     I           DSKE0:PROJCT.SYS[10,7,GALAXY,ACT]                 1   U/R
+     ACT     I   DEVIN   DSKE0:SYSDEV.BIN[1,7]                                   R
+     TSK71   I           I: *::FTSFAL[1,2] P: TWINKY::NETSPL[1,2]                R
+   INFORMATION DISPLAYS                                                    Page B-3   INFORMATION DISPLAYS
+   DDBS
+
+
+   The information displayed is the flag ('=device is  spooled,  *=I/O  active  for
+   this  DDB),  the device name the program opened (DEVNAM), the status (A=assigned
+   by console command, I=inited by program), and the logical  name  assignment  (if
+   any).   The  rest of the information is device specific, and is discussed below.
+   The final character is the last I/O direction, which is either R (reading last),
+   or W (writing last).
+
+
+
+   B.6.1  DSK DDB information
+
+   If the DDB  is  for  a  disk,  the  following  device  specific  information  is
+   displayed.   The  logical unit name (if a file is open), the file and extension,
+   and the files complete path including five levels of SFD.   Following  the  file
+   specification  information,  is  the  current block number to be read or written
+   next.  If the file is open, the reader count followed by the access table status
+   is  displayed.   The  access  table status is C=file being created, S=file being
+   superseded, R=file being read, U=file being updated (single  user),  and  M=file
+   being  updated (multi user).  If the file is marked for deletion, the separating
+   "/" will turn into a "!".
+
+
+
+   B.6.2  MTA DDB information
+
+   If the DDB is for a  magtape,  the  following  device  specific  information  is
+   displayed.   The tapes reelid (reelid:COBOL), the current file number (file 11),
+   the current record number (record 45) [???   means  the  record  number  is  not
+   known], various flags [BOT=tape at beginning of tape, EOT=tape at logical end of
+   tape, REW=tape is in the process and being rewound], and the write enable status
+   (WE) [WE=tape is write enabled, WL=tape is write locked].
+
+
+
+   B.6.3  NET DDB information
+
+   If the DDB is for a network device, with the exception of  TTYs  and  TSKs,  the
+   following network device specific information is displayed.  The node name, node
+   number, and unit number of the device is output.
+
+
+
+   B.6.4  TSK DDB information
+
+   If the DDB  is  for  a  task,  the  following  device  specific  information  is
+   displayed.   The  network  process  descriptor (NPD) for both the input (I:) and
+   passive (P:) tasks are displayed.  Each NPD includes the node name (*=any  node)
+   and the ascii connect string, with \ substituted for nulls.
+   INFORMATION DISPLAYS                                                    Page B-4   INFORMATION DISPLAYS
+   DDBS
+
+
+   B.6.5  TTY DDB information
+
+   If the DDB is for a terminal,  the  following  device  specific  information  is
+   displayed.   The  node  name,  node  number,  and line number of the terminal is
+   output.
+
+
+
+   B.7  DEFAULTS
+
+   This keyword displays the various SET DEFAULT parameters for the selected  jobs.
+   This information is in the format:
+
+        Defaults: Buffers:10   Protection:<077>On  Attach:Ask
+
+   The information displayed is the  default  number  of  disk  buffers  (from  SET
+   DEFAULT  BUFFER  n  command)  (10),  the  jobs default file protection (from SET
+   DEFAULT PROTECTION nnn command) (<077>), if the default file protection  is  set
+   (On), and the ATTACH:  status (from LOGIN/ATTACH:[IGNORE,ASK]) (Attach:Ask).
+
+
+
+   B.8  IPCF
+
+   This keyword displays IPCF statistics for the selected jobs.   This  information
+   is in the format:
+
+     IPCF messages: S:12  R:7  outstanding: S:1  R:0  quotas: S:100 R:50
+
+   The information displayed is the send and receive message counts (messages  S:12
+   R:7),  the  outstanding send and receive message counts (outstanding:  S:1 R:0),
+   and the send and receive quotas (quotas:  S:100 R:50).
+
+
+
+   B.9  JSL
+
+   This keyword displays the job search list and switches for  the  selected  jobs.
+   The information displayed is in the format:
+
+        Job search list:  TSG0:/NOWRITE, SOFT:, FENCE, DSKE:/NOCREATE
+
+   The information displayed is the structures in the jobs active  search  list  to
+   the  left  of  the  FENCE  (TSG0:,  SOFT:),  the  FENCE  itself (FENCE), and the
+   structures in the jobs passive search list to the right of  the  FENCE  (DSKQ:).
+   If  applicable,  the  switches  /NOWRITE  (do  not write on this structure), and
+   /NOCREATE (do not create on this structure if generic DSK is specified)  may  be
+   present.
+   INFORMATION DISPLAYS                                                    Page B-5   INFORMATION DISPLAYS
+   LOGICAL
+
+
+   B.10  LOGICAL
+
+   This keyword displays the pathological names  defined  for  the  selected  jobs.
+   This information is in the format:
+
+        Logical name definitions:
+         SYS: = DSKQ:[10,3146,SYS],SSL:[1,5],SSL:[1,4]
+         LIB:/SEARCH = DSKQ:[10,3146,LIB]
+         WSM: = DSKQ:[10,3146]
+
+   The information displayed is the pathological name (SYS:), the search  attribute
+   (/SEARCH),  and  the  list of structures and paths that compose the logical name
+   (DSKQ:[10,3146,SYS],SSL:[1,5],SSL:[1,4]).
+
+
+
+   B.11  MTA
+
+   This keyword displays information about the parameters of any magtapes in use by
+   the job.  This keyword also implies DDBS (see above for a description of the DDB
+   format).  The information displayed is in the format:
+
+        Density:1600  Track:9  Mode:DEC core dump  Labels:ANSI
+
+   The information displayed is the tape density (1600) [can be one  of  200,  556,
+   800, 1600, 6250], the track (9) [can be either 7 or 9], the mode (DEC core dump)
+   [can be one of none, DEC core dump, Industry core dump, SIXBIT, ASCII, DEC  core
+   dump],  and  the  label type (ANSI) [can be of No MDA, Bypass, ANSI, ANSI(user),
+   IBM, IBM(user), leading tape mark, nonstandard, none, COBOL ASCII, COBOL SIXBIT,
+   user EOT].
+
+
+
+   B.12  ORIGIN
+
+   This keyword displays the program origin and version for both the  high  segment
+   and low segment.  The information displayed is in the format:
+
+      Origin: DSKQ:QUASAR[1,4,QSR] 4(761)/1(5) + DSKE:GLXLIB[1,4] 1(763)
+
+   The information displayed is the low segment origin (DSKQ:QUASAR[1,4,QSR]),  the
+   low segment Digital version (loc .JBVER==137) [4(761)], the low segment customer
+   version (loc .JBCST==136) [1(5)], the high  segment  origin  (DSKE:GLXLIB[1,4]),
+   and  the  high  segment  Digital version [1(763)].  If all the attributes of the
+   high segment are the same as the low segment, only the low  segment  information
+   and  a plus (+) are displayed.  If the program has no high segment, only the low
+   segment information excluding the plus is displayed, and if the  program  has  a
+   spy  segment, it is indicated by + SPY (117P), where 117P is the highest address
+   spied upon.  If DDT and/or  PFH  (page  fault  handler)  are  present,  that  is
+   indicated  by  DDT:   12345-45671, or PFH:  776000-777777.  The range of numbers
+   indicates the core occupied by DDT or PFH.
+   INFORMATION DISPLAYS                                                    Page B-6   INFORMATION DISPLAYS
+   PATH
+
+
+   B.13  PATH
+
+   This keyword displays information about the jobs default path and path switches.
+   The information displayed is in the format:
+
+        Path:  [10,3146,WHO]/SCAN/NEW
+
+   The information displayed is the  default  path  ([10,3146,WHO])  and  any  path
+   switches,  such  as  /SCAN (scan higher level SFDs and the UFD), /NOSCAN (do not
+   scan higher level SFDs and the UFDs), /NEW (include NEW  when  running  programs
+   from SYS), and /SYS (include SYS when running programs from DSK).
+
+
+
+   B.14  PRIVILEGES
+
+   This keyword displays the privileges of the selected jobs.  This information  is
+   in the format:
+
+        Privileges: 777777,1
+         DEC: IPCF DPR:3 METER POKE CPU HPQ:15 USPL ENQ RTTRP LOCK TRPSET SPY MSPY 
+         Local: CHGPPN 
+
+   The information displayed is the octal  privilege  bits  (left  half=DEC,  right
+   half=local)  (777777,1), and a breakdown of each of the DEC and local privileges
+   by name.
+
+
+
+   B.15  SIZE
+
+   This keyword displays information about the file size of the  opened  files  for
+   the  selected jobs.  This keyword also implies DDBS (see above for a description
+   of the DDB format).  The information displayed is in the format:
+
+        Size written: 5 allocated: 30 Created:  3-Mar-81 20:36
+
+   The information displayed for each open file is the written size in blocks (size
+   written:   5),  the  allocated size in blocks (allocated:  30), and the creation
+   date and time (Created:  3-Mar-81 20:36).
+
+
+
+   B.16  SPOOL
+
+   This keyword displays information about the  spooling  status  of  the  selected
+   jobs.  The information displayed is in the format:
+
+        Defered spooling: CDR:XYZ, CDP:, LPT: (unspooling allowed)
+
+   The information displayed is the  spooling  mode  ("Defered  spooling"  or  just
+   "Spooling"),  the  spooled  devices  (CDR:, CDP:, LPT:), the spooled card reader
+   name if CDR:  is spooled (CDR:XYZ), and  the  unspooling  privilege  (unspooling
+   allowed) if applicable.
+   INFORMATION DISPLAYS                                                    Page B-7   INFORMATION DISPLAYS
+   TIME
+
+
+   B.17  TIME
+
+   This keyword displays information about the login duration,  and  date/time  and
+   the  RESET  UUO  duration  and  date/time.   The information displayed is in the
+   format:
+
+        Login for 1:08:29 at Fri 19-Mar-82: 8:25:57
+        Reset for 0:04:07 at Fri 19-Mar-82: 9:30:19
+
+   The information displayed is the time since LOGIN (1:08:29) and the date/time of
+   LOGIN (Fri 19-Mar-82: 9:30:19) , and the time since last RESET UUO (0:04:07) and
+   the date/time of the RESET UUO (Fri 19-Mar-82: 9:30:19) .
+
+
+
+   B.18  TMPCOR
+
+   This keyword displays information about the selected  jobs  TMPCOR  file  usage.
+   The information displayed is in the format:
+
+        TMPCOR directory:
+           SVC    6
+           EDS    3
+        Total of 9 words in 2 files
+
+   The information displayed is the TMPCOR file name (SVC),  and  the  TMPCOR  file
+   size in words (6).  A summary line including the total number of words allocated
+   to TMPCOR files, and the total number of files is also displayed.

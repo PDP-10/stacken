@@ -1,0 +1,330 @@
+%TITLE 'XPNPUT - Put data to a network link'
+MODULE xpnput (
+               ENTRY ( XPN$PUT )
+              ) =
+BEGIN
+!  COPYRIGHT (C) DIGITAL EQUIPMENT CORPORATION 1986.
+!  ALL RIGHTS RESERVED.
+!  
+!  THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED  AND
+!  COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE AND WITH
+!  THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS  SOFTWARE  OR
+!  ANY  OTHER  COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE
+!  AVAILABLE TO ANY OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE
+!  SOFTWARE IS HEREBY TRANSFERRED.
+!  
+!  THE INFORMATION IN THIS SOFTWARE IS  SUBJECT  TO  CHANGE  WITHOUT
+!  NOTICE  AND  SHOULD  NOT  BE CONSTRUED AS A COMMITMENT BY DIGITAL
+!  EQUIPMENT CORPORATION.
+!  
+!  DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF
+!  ITS SOFTWARE ON EQUIPMENT THAT IS NOT SUPPLIED BY DIGITAL.
+
+!++
+! FACILITY:
+!   Transportable BLISS interface to DECNET-10.
+!
+! ABSTRACT:
+!   This module implements the XPN$PUT routine, called by the $XPN_PUT
+!   macro.
+!
+! ENVIRONMENT:
+!   TOPS10 user mode.
+!
+! AUTHOR:  Larry Campbell, CREATION DATE:  January 8, 1982
+!
+! MODIFIED BY: Doug Rayner
+!
+! 01    - Start TOPS-10 support [Doug Rayner]
+!
+! Start using the DIL standard edit history format.
+!
+! Edit (%O'2', '12-Apr-84', 'Sandy Clemens')
+!  %( Add the TOPS-10 BLISSnet sources for DIL V2.  )%
+!
+! Edit (%O'6', '5-Oct-84', 'Sandy Clemens')
+!  %( Add new format of COPYRIGHT notice.  FILES:  ALL )%
+!--
+
+! TABLE OF CONTENTS:
+!
+FORWARD ROUTINE
+    xpn$put,
+    xpn$$put;
+!
+! INCLUDE FILES:
+!
+LIBRARY 'BLI:XPORT';                    ! XPORT definitions
+LIBRARY 'BLISSNET';                     ! Transportable definitions
+LIBRARY 'BLI:UUOSYM';                   ! TOPS-10 definitions
+LIBRARY 'BLSN10';                       ! BLISSnet-10 definitions
+LIBRARY 'BLI:TENDEF';			! System dependant macros
+LIBRARY 'UUODEF';			! UUO definition macros
+
+! MACROS:
+!
+
+!
+! EQUATED SYMBOLS:
+!
+LITERAL
+    XPN$_TOOMUCHDATA = XPN$_BUG;        ! *** Temporary until BLISSNET.REQ
+                                        !     gets definition
+!
+! OWN STORAGE:
+!
+
+!
+! EXTERNAL REFERENCES:
+!
+EXTERNAL ROUTINE
+    xpn$$valid_nlb,
+    xpn$$link_status,
+    xpn$$uuo_error;
+
+GLOBAL ROUTINE xpn$put (nlb, success_routine, failure_routine) =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   Top level code to support $XPN_PUT macro.  This routine validates the
+!   NLB, calls xpn$$put to do the actual work, and deals with optional
+!   user-supplied success/failure routines.
+!
+! FORMAL PARAMETERS:
+!   nlb         - address of the Network Link Block
+!
+! IMPLICIT INPUTS:
+!   NONE
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   Code returned by xpn$$put.
+!
+! SIDE EFFECTS:
+!   NONE
+!
+!--
+    BEGIN
+
+    MAP
+        nlb : REF $XPN_NLB();
+
+    LOCAL
+        original_primary_code,
+        primary_code,
+        secondary_code,
+        retcode;
+
+    nlb_binds;                          ! create nice names for NLB fields
+    !
+    ! validate the NLB
+    !
+    retcode = xpn$$valid_nlb (.nlb);
+    IF NOT .retcode THEN
+        BEGIN
+        original_primary_code = XPN$_BAD_NLB;
+        secondary_code = .retcode
+        END
+    ELSE
+        BEGIN
+	original_primary_code = xpn$$put (.nlb);
+        nlb[NLB$G_COMP_CODE] = .original_primary_code;
+        secondary_code = .nlb[NLB$G_2ND_CODE]
+        END;
+    !
+    ! Check completion code and call success or failure routine as required
+    !
+    IF .original_primary_code THEN
+        IF .success_routine NEQ 0 THEN
+            primary_code =
+                (.success_routine) (XPN$K_PUT, .original_primary_code,
+                    .secondary_code, .nlb)
+        ELSE
+            primary_code = .original_primary_code
+    ELSE
+        IF .failure_routine NEQ 0 THEN
+            primary_code =
+                (.failure_routine) (XPN$K_PUT, .original_primary_code,
+                    .secondary_code, .nlb)
+        ELSE
+            primary_code = .original_primary_code;
+    !
+    ! Unless the NLB was bad, store the completion code there
+    !
+    IF .original_primary_code NEQ XPN$_BAD_NLB
+    THEN
+        nlb[NLB$G_COMP_CODE] = .primary_code;
+    RETURN (.primary_code);
+
+    END;                                !End of xpn$put
+
+ROUTINE xpn$$put (nlb) =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   Does the actual work to support the $XPN_PUT macro.
+!
+! FORMAL PARAMETERS:
+!   nlb         - address of the Network Link Block
+!
+! IMPLICIT INPUTS:
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!	NONE
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   XPN$_ABORT          - link has been aborted
+!   XPN$_DISCONNECTED   - link has been disconnected
+!   XPN$_NOT_OPEN       - NLB not open
+!   XPN$_TOOMUCHDATA    - more than 16 bytes supplied for an interrupt message
+!   XPN$_ILLOGIC        - user logic error
+!      XPN$_ACTIVE          - TYPE=ACCEPT for active link is meaningless
+!      XPN$_NO_EVENT        - no connect request pending for TYPE=ACCEPT
+!
+! SIDE EFFECTS:
+!   NONE
+!
+!--
+    BEGIN
+
+    MAP
+        nlb : REF $XPN_NLB();
+
+    LOCAL
+        link_status,
+        output_descriptor : REF $STR_DESCRIPTOR(),
+	nsp_arg_blk : MONBLOCK[$NSAA2+1] INITIAL (0);
+
+
+    REGISTER
+	t1;
+
+    nlb_binds;
+    IF .nlb[NLB$V_OPEN] EQL 0
+    THEN
+        RETURN (XPN$_NOT_OPEN);
+    output_descriptor = .nlb[NLB$A_OUTPUT];
+    CASE .nlb[NLB$B_SUBFUNC] FROM NLB$K_DATA TO NLB$K_REJECT OF
+        SET
+        [NLB$K_DATA] :
+            BEGIN
+            LOCAL
+                byte_count;
+            IF (byte_count = .output_descriptor[STR$H_LENGTH]) EQL 0
+            THEN
+                RETURN (XPN$_NORMAL);
+
+	    nsp_arg_blk[$NSAFN,NS$AFN] = $NSFDS;	!function
+	    nsp_arg_blk[$NSAFN,$WORD] = (.nsp_arg_blk[$NSAFN,$WORD]
+		OR NS$WAI				!must wait
+		OR (IF .nlb[NLB$V_END_MSG]
+			THEN NS$EOM ELSE 0));		!EOM if requested
+	    nsp_arg_blk[$NSAFN,NS$ALN] = $NSAA2 + 1;	!size of block
+	    nsp_arg_blk[$NSACH,$WORD] = .nlb[NLB$H_JFN];!channel
+	    nsp_arg_blk[$NSAA1,$WORD] = .byte_count;	! byte count
+	    nsp_arg_blk[$NSAA2,$WORD] = .output_descriptor[STR$A_POINTER];
+							! byte pointer
+	    t1 = nsp_arg_blk[0,$WORD];
+
+	    IF NOT NSP$_UUO(t1)
+                THEN
+                    RETURN (xpn$$uuo_error (.nlb, .t1));
+
+            RETURN (XPN$_NORMAL)
+            END;
+        [NLB$K_INTERRUPT] :
+            BEGIN
+            LOCAL
+                byte_count,
+		intdt_string_ptr : VECTOR[XPN$K_INTDT_MAX_LEN_W]
+		    INITIAL (XPN$K_INTDT_MAX_LEN_W);
+	    BIND
+		intdt_size = intdt_string_ptr[0];
+
+            IF (byte_count = MIN (.output_descriptor[STR$H_LENGTH], 16)) EQL 0
+            THEN
+                RETURN (XPN$_NORMAL);
+
+	    CH$MOVE(.byte_count,
+		.output_descriptor[STR$A_POINTER],
+		CH$PTR(intdt_string_ptr[1],0,8));
+
+	    intdt_size<lh> = .byte_count;
+
+	    nsp_arg_blk[$NSAFN,NS$AFN] = $NSFIS;	!function
+	    nsp_arg_blk[$NSAFN,NS$ALN] = $NSAA1 + 1;	!size of block
+	    nsp_arg_blk[$NSACH,$WORD] = .nlb[NLB$H_JFN];!channel
+	    nsp_arg_blk[$NSAA1,$WORD] = intdt_string_ptr[0];!optional data
+	    t1 = nsp_arg_blk[0,$WORD];
+
+	    IF NOT NSP$_UUO(t1)
+            THEN
+                RETURN (xpn$$uuo_error (.nlb, .t1));
+            IF .output_descriptor[STR$H_LENGTH] GTR 16
+            THEN
+                RETURN (XPN$_TOOMUCHDATA)
+            ELSE
+                RETURN (XPN$_NORMAL)
+            END;
+        [NLB$K_LINK_SERV] : RETURN (XPN$_NORMAL);
+        [NLB$K_ACCEPT] :
+            BEGIN
+	    LOCAL
+		byte_count,
+		optdt_string_ptr : VECTOR[XPN$K_OPTDT_MAX_LEN_W]
+		    INITIAL (XPN$K_OPTDT_MAX_LEN_W);
+	    BIND
+		optdt_size = optdt_string_ptr[0];
+
+            IF active
+            THEN
+                BEGIN
+                nlb[NLB$G_2ND_CODE] = XPN$_ACTIVE;
+                RETURN (XPN$_ILLOGIC)
+                END;
+            !
+            ! Check to make sure link is waiting for connect confirm
+            !
+            link_status = xpn$$link_status (.nlb);
+	    IF .POINTR(link_status,NS$STA) NEQ $NSSCR
+            THEN
+                BEGIN
+                nlb[NLB$G_2ND_CODE] = XPN$_NO_EVENT;
+                RETURN (XPN$_ILLOGIC)
+                END;
+
+	    byte_count =
+		MIN (XPN$K_OPTDT_MAX_LEN_C,.output_descriptor[STR$H_LENGTH]);
+
+	    CH$MOVE(.byte_count,
+		.output_descriptor[STR$A_POINTER],
+		CH$PTR(optdt_string_ptr[1],0,8));
+
+	    optdt_size<lh> = .byte_count;
+
+	    nsp_arg_blk[$NSAFN,NS$AFN] = $NSFAC;	!function
+	    nsp_arg_blk[$NSAFN,NS$ALN] = $NSAA1 + 1;	!size of block
+	    nsp_arg_blk[$NSACH,$WORD] = .nlb[NLB$H_JFN];!channel
+	    nsp_arg_blk[$NSAA1,$WORD] = optdt_string_ptr[0];!optional data
+	    t1 = nsp_arg_blk[0,$WORD];
+
+	    IF NOT NSP$_UUO(t1)
+            THEN
+                RETURN (xpn$$uuo_error (.nlb, .t1));
+            nlb[NLB$V_CONNECTED] = 1;
+            nlb[NLB$V_CONN_REQ] = 0;
+            IF .output_descriptor[STR$H_LENGTH] GTR 16
+            THEN
+                RETURN (XPN$_TOOMUCHDATA)
+            ELSE
+                RETURN (XPN$_NORMAL)
+            END;
+        [INRANGE, OUTRANGE] : xpn$$bug ('Invalid NLB$B_SUBFUNC value');
+        TES;
+    RETURN (XPN$_BUG)                   ! Should never fall through here
+    END;                                !End of xpn$$put
+
+END                                     !End of module XPNPUT
+ELUDOM

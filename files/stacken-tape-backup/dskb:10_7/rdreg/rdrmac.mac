@@ -1,0 +1,143 @@
+	UNIVERSAL RDRMAC -- Monitor specific definitions for RDREG
+	SUBTTL	G.M. Uhler/GMU
+
+
+;This universal file contains the monitor specific definitions for the
+;assembly of RDREG.  By changing the value of the symbol TOPS on the next
+;page, RDREG may be assembled for either the TOPS-10 or TOPS-20 monitors.
+
+
+
+	.DIRECTIVE .XTABM,FLBLST,.NOBIN
+	SALL
+
+
+;Copyright (C) 1980,1981,1982,1983 by
+;Digital Equipment Corporation, Maynard, Mass.
+;
+;
+;This software is furnished under a license and may be used and copied
+;only  in  accordance  with  the  terms  of  such license and with the
+;inclusion of the above copyright notice.  This software or any  other
+;copies thereof may not be provided or otherwise made available to any
+;other person.  No title to and ownership of the  software  is  hereby
+;transferred.
+;
+;The information in this software is subject to change without  notice
+;and  should  not  be  construed  as a commitment by Digital Equipment
+;Corporation.
+;
+;Digital assumes no responsibility for the use or reliability  of  its
+;software on equipment which is not supplied by Digital.
+
+
+	RDMVER==1		;Major version
+	RDMMIN==0		;Minor version
+	RDMEDT==0		;Edit number
+	RDMWHO==0		;Who edited
+	SUBTTL	Parameter definitions
+
+
+;The following symbol determines which monitor RDREG is to be assembled
+;for.  Setting the symbol TOPS to the value 10 (octal) will cause RDREG
+;to be assembled for the TOPS-10 monitor.  Setting the symbol TOPS to
+;the value 20 (octal) will cause RDREG to be assembled for the TOPS-20
+;monitor.  The rest of this file contains conditionally assembled definitions
+;that depend on the value of TOPS.
+
+
+IFNDEF TOPS, <TOPS==10>		;Default assembly is for TOPS-10
+
+
+
+;The following statement defines the symbol IF as a synonym for IFE.
+;This lets us do conditional assembly of the form IF TOPS-10,<>.
+
+	SYN	IFE,IF
+
+
+
+;Define the ACs used by the program
+
+	T1==1			;First of 4 temporary register
+	T2==2
+	T3==3
+	T4==4
+	P1==5			;First of 3 preserved registers
+	P2==6
+	P3==7
+	N==P3			;Returned numbers
+	C==10			;Character
+	DTR==11			;Drive type register index
+	P==17			;PDL pointer
+	SUBTTL	TOPS-10 specific definitions
+
+
+IF TOPS-10,<
+
+	OPDEF	CALL[PUSHJ P,0]	;Define the CALL instruction
+	OPDEF	RET[POPJ P,0]	;Define the RET instruction
+
+
+;Define the RETSKP macro to give a skip return
+
+	DEFINE	RETSKP,<
+	  JRST	.POPJ1
+	>
+
+;Define the USRIOT macro to get User IOT privs
+
+	DEFINE	USRIOT,<
+	  XLIST
+	  MOVEI	T1,0		;;TRPSET with a zero arg gives
+	  LIST
+	  TRPSET T1,		;;  us User IOT
+	>
+
+>
+	SUBTTL	TOPS-20 specific definitions
+
+
+IF TOPS-20,<
+
+;Define the EXIT macro so that we can use EXIT for both TOPS-10 and
+;TOPS-20
+
+	DEFINE	EXIT,<
+	  XLIST
+	  RESET			;;Reset the program
+	  LIST
+	  HALTF			;;Stop it
+	  XLIST
+	  JRST	.-1		;;No restart
+	  LIST
+	>
+
+
+;Define the RETSKP macro to give a skip return
+
+	DEFINE	RETSKP,<
+	  JRST	.POPJ1
+	>
+
+
+;Define the USRIOT macro to get User IOT privs
+
+	DEFINE	USRIOT,<
+	  USRIO			;;Use the USRIO JSYS
+	>
+
+
+;Opdef MONRT. to be HALTF so we can use MONRT. for both TOPS-10 and TOPS-20.
+
+	OPDEF	MONRT.[104000,,170]
+
+
+;Ofdef PJRST to be JRST
+
+	OPDEF	PJRST[JRST]
+
+> ;End IF TOPS-20
+
+
+	END

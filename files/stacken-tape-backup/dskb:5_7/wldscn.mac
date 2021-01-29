@@ -1,0 +1,417 @@
+TITLE	WLDSCN - Wildcard file scanner for GLXLIB
+;
+;   Written by Sven Erik Enblom in December 1985
+;
+;   This is really the pre-first version, without documentation,
+;   but it should at least be safe to use.
+;
+SEARCH	GLXMAC,WLDMAC,WLDINT
+PROLOG	WLDSCN
+
+.REQUI	FDCOPY
+EXTERN	FD2FOP
+
+.TEXT	"/LOCALS/SYMSEG:LOW"
+
+; Entry points in this module
+;
+ENTRY	W$NEW				; Create a scanner given an FD
+ENTRY	W$NEXT				; Get next FD from scanner
+ENTRY	W$KILL				; Kill a scanner
+
+$DATA	PTHBLK,.PTMAX			; PATH. argument block
+$DATA	FOPBLK,.FOLEB+1			; FILOP. argument block
+LUPBLK:	EXP	.RBSIZ			; LOOKUP argument block
+	BLOCK	.RBSIZ
+UFDFD:	$BUILD	FDMSIZ
+	 $SET	.FDLEN,FD.LEN,FDMSIZ
+	 $SET	.FDEXT,LHMASK,'UFD'
+	$EOB
+	SUBTTL	W$NEW - Create a new wildcard scanner
+;
+;   Accepts in	S1/ Address of a wild FD
+;		S2/ Flags (see WF$???)
+;
+;   Returns in	S1/ Address of the wildcard scanner
+;
+W$NEW:	$SAVE	<P1,P2>
+	DMOVE	P1,S1			; Save FD address and flags
+	MOVEI	S1,WS$SIZ		; Get size of a WS
+	$CALL	M%GMEM			; Allocate a chunk
+	HRL	T1,P1			; Copy from given FD...
+	HRRI	T1,WS$OFD(S2)		; ...to FD space in WS
+	BLT	T1,WS$OFD+FD$SIZ-1(S2)
+	MOVE	T1,FD$FLG(P1)		; Get FD flags
+	MOVEM	T1,WS$FLG(S2)		; Put them in flag word
+	MOVEM	P2,WS$AFL(S2)		; Store argument flags too
+	MOVE	T1,[IOWD FPLSIZ,WS$FPL]
+	ADD	T1,S2
+	MOVEM	T1,WS$FPP(S2)		; Store channel PDL pointer
+	MOVE	T1,[IOWD PDLSIZ,WS$PDL]
+	ADD	T1,S2			; Make local stack pointer
+	PUSH	T1,[EXP SCAN]		; Set up "activation point"
+	MOVEM	T1,WS$P(S2)
+	MOVEI	T1,FDXSIZ
+	STORE	T1,WS$CFD+.FDLEN(S2),FD.LEN
+	MOVE	S1,S2			; Get WS address...
+	$RETT				; ...and return
+	SUBTTL	W$NEXT - Get next file spec from wildcard scanner
+;
+;   Accepts in	S1/ Address of the WS
+;
+;   Returns in	S1/ Address of a full FD
+;		S2/ Some flags, perhaps? Or an IFN or channel number?
+;
+W$NEXT:	$SAVE	WS
+	MOVE	WS,S1			; Get WS address
+	JSP	T1,.EXCH
+	$RET				; Reenter scanner
+
+.EXCH:	EXCH	F,WS$FLG(WS)		; Get flag word
+	EXCH	FP,WS$FPP(WS)
+	EXCH	P,WS$P(WS)		; Switch PDLs
+	JRST	(T1)			; Return
+
+RETFIL:	MOVE	T1,WS$AFL(WS)		; Get argument flags
+	TXNE	T1,WF$DIR		; Are we allowed to return directories?
+	 JRST	RETFI0			;  Yes, skip this test
+	HLRZ	T2,WS$CFD+.FDEXT(WS)	; No, get extension
+	CAIE	T2,'UFD'
+	 CAIN	T2,'SFD'
+	  $RET				; ...ignore this directory
+;
+RETFI0:	TXNN	T1,WF$FOB		; Is there a FOB to use?
+	 JRST	RETFI1			;  No, continue...
+	MOVEI	T2,WS$CFD(WS)		; Yes, get address of FD...
+	MOVEM	T2,FOB.FD(T1)		; ...and store it in FOB
+	MOVEI	S1,FOB.SZ		; Get FOB size...
+	HRRZ	S2,T1			; ...and address
+	$CALL	F%IOPN			; Try to open the file
+	JUMPT[	MOVE	S2,S1		;  If success, get IFN...
+		JRST	RETFI4]		;  ...and return
+	$RET				; Else just ignore it (for now)
+;
+RETFI1:	TXNN	T1,WF$LUP		; Should we do a LOOKUP?
+	 JRST	RETFI2			;  No, continue...
+	MOVEI	S1,WS$CFD(WS)		; Yes, so get address of FD...
+	HRRZ	S2,T1			; ...and of FILOP. block
+	$CALL	FD2FOP			; Copy data
+	SKIPT
+	 $FATAL	<FD2FOP says "^T/(S1)/" at RETFI1>
+	HRRZ	T1,WS$AFL(WS)		; Get address of FILOP. block...
+	HRLI	T1,.FOMAX		; ...and insert max. size
+	FILOP.	T1,			; Try to do the FILOP.
+	 $RET				;  Ignore errors (for now)
+	LOAD	S2,.FOFNC(T1),FO.CHN	; Extract channel number...
+	JRST	RETFI4			; ...and return
+;
+RETFI2:	TXNN	T1,WF$RBC		; Should we return a RIB copy?
+	 JRST	RETFI3			;  No, continue...
+	MOVEI	T2,PTHBLK		; Yes, get address of path block...
+	MOVEM	T2,.RBPPN(T1)		; ...and store it in LOOKUP block
+	HRRZM	T1,FOPBLK+.FOLEB	; Point at supplied block
+	MOVEI	S1,WS$CFD(WS)		; Get address of FD...
+	MOVEI	S2,FOPBLK		; ...and of FILOP. block
+	$CALL	FD2FOP			; Copy data
+	SKIPT
+	 $FATAL	<FD2FOP says "^T/(S1)/" at RETFI2>
+	$CALL	LUPFIL			; Do a LOOKUP
+	JUMPF	.POPJ			; Ignore errors (for now)
+	$CALL	CLSFIL			; Close the file again...
+	JRST	RETFI4			; ...and return
+;
+RETFI3:	TXNE	T1,WF$VER		; Should we verify the file?
+	 TXNE	F,F$FVER		;  Yes, is it already verified?
+	  JRST	RETFI4			;   Don't verify it now
+	MOVEI	S1,WS$CFD(WS)		; Get address of FD
+	$CALL	OPNFIL			; Try to open the file
+	$RETIF				; Couldn't, ignore it
+	$CALL	CLSFIL			; We could, just close it again
+;
+RETFI4:	MOVEI	S1,WS$CFD(WS)		; Get address of current FD
+	JSP	T1,.EXCH		; Switch context
+	$RETT
+	SUBTTL	SCAN - Top level of wildcard scanner
+
+SCAN:	LOAD	T1,F,F$SLT		; Get search list type
+	JRST	@[EXP SCNSLN,SCNSLJ,SCNSLA,SCNSLS](T1)
+
+SCANZ:	PUSH	P,[EXP .]		; Make sure we stay here
+	JSP	T1,.EXCH		; Switch context
+	$RETF				; Return false
+
+SCNSLN:	MOVE	T1,WS$OFD+.FDSTR(WS)	; Get structure name
+	MOVEM	T1,WS$CFD+.FDSTR(WS)	; ...
+	$CALL	SCNSTR			; Scan just this structure
+	JRST	SCANZ
+
+SCNSLJ:	SETOM	WS$CFD+.FDSTR(WS)	; Start from beginning
+	MOVEI	T1,WS$CFD+.FDSTR(WS)	; Point at structure word
+	HRLI	T1,1			; We use only one word
+	JOBSTR	T1,			; Get next structure
+	 $FATAL	<JOBSTR error ^O/T1/>
+	SKIPN	WS$CFD+.FDSTR(WS)	; Fence reached?
+	 JRST	SCANZ			;  Yes, stop this
+	$CALL	SCNSTR			; No, scan this structure
+	JRST	SCNSLJ+1
+
+SCNSLA:	SETZ	T1,
+	SYSSTR	T1,			; Get first structure in system
+	 $FATAL	<SYSSTR failed>
+	JUMPE	T1,SCANZ		; All structures scanned?
+	MOVEM	T1,WS$CFD+.FDSTR(WS)	; No, store this name...
+	$CALL	SCNSTR			; ...and scan it
+	MOVE	T1,WS$CFD+.FDSTR(WS)
+	JRST	SCNSLA+1		; Loop for more
+
+SCNSLS:	SETOM	WS$CFD+.FDSTR(WS)	; Start from beginning
+	MOVE	T1,[3,,T2]
+	MOVE	T4,WS$CFD+.FDSTR(WS)	; Get previous structure
+	SETZB	T2,T3			; Job 0 means SSL
+	GOBSTR	T1,			; Get next structure
+	 $FATAL	<GOBSTR error ^O/T1/>
+	JUMPE	T4,SCANZ		; Reached fence?
+	MOVEM	T4,WS$CFD+.FDSTR(WS)	; No, store structure name...
+	$CALL	SCNSTR			; ...and scan it
+	JRST	SCNSLS+1
+
+; SCNSTR - Scan one specific structure only
+;
+; Assumes that WS$CFD+.FDSTR is correct
+;
+SCNSTR:	SKIPN	WS$MSK+.FDPPN(WS)	; Wild PPN?
+	 JRST[	MOVE	T1,WS$OFD+.FDPPN(WS) ; No, get PPN...
+		MOVEM	T1,WS$CFD+.FDPPN(WS) ; ...put it in current FD...
+		PJRST	SCNPPN]		; ...and scan it
+	SETZ	S1,			; Yes, we have to read the MFD
+	$CALL	.SUFD			; For each UFD...
+	$RETIF
+	CAME	S2,[SIXBIT/UFD/]	; Is this really an UFD?
+	 $RET				;  No, ignore it
+	MOVEM	S1,WS$CFD+.FDPPN(WS)	; Yes, put PPN away for a while
+	XOR	S1,WS$OFD+.FDPPN(WS)
+	ANDCM	S1,WS$MSK+.FDPPN(WS)
+	JUMPE	S1,SCNPPN		; Scan matching PPN
+	$RET
+
+SCNPPN:	SETZM	WS$LEV(WS)		; Reset SFD level
+
+SCNDIR:	LOAD	T1,F,F$LEV0		; Get first "return level"
+	CAMLE	T1,WS$LEV(WS)		; Can we return files from here?
+	 JRST	SCNDI2			;  No, continue...
+	TXNE	F,F$WFIL		; Yes, is file name wild?
+	 JRST	SCNDI1			;  Yes, scan for it in directory
+	DMOVE	T1,WS$OFD+.FDNAM(WS)	; No, get name and extension
+	DMOVEM	T1,WS$CFD+.FDNAM(WS)	; Store them in current FD
+	TXZ	F,F$FVER		; File is not verified
+	$CALL	RETFIL			; Return this file
+	JRST	SCNDI2			; Now check for more SFDs
+;
+; Come here when file name is wild
+;
+SCNDI1:	$CALL	.SCDIR			; For each entry...
+	JUMPF	SCNDI2			; End of directory?
+	DMOVEM	S1,WS$CFD+.FDNAM(WS)	; Save name and extension
+	XOR	S1,WS$OFD+.FDNAM(WS)	; Test file name
+	ANDCM	S1,WS$MSK+.FDNAM(WS)
+	JUMPN	S1,.POPJ		; Matching file name?
+	XOR	S2,WS$OFD+.FDEXT(WS)	; Yes, now test extension
+	ANDCM	S2,WS$MSK+.FDEXT(WS)
+	JUMPN	S2,.POPJ		; Matching extension too?
+	TXO	F,F$FVER		; Yes, we have a verified file
+	PJRST	RETFIL			; Return it and loop
+;
+; Come here to check if more SFDs are needed
+;
+SCNDI2:	LOAD	T1,F,F$LEV1		; Get max. SFD level
+	CAMG	T1,WS$LEV(WS)		; Do we need more SFDs?
+	 $RET				;  No, return now
+	MOVE	T1,WS			; Yes, get WS address...
+	ADD	T1,WS$LEV(WS)		; ...and add current level
+	SKIPE	WS$MSK+.FDPAT(T1)	; Is next SFD name wild?
+	 JRST	SCNDI4			;  Yes, we have to scan for it
+	MOVE	T2,WS$OFD+.FDPAT(T1)	; No, get name...
+	MOVEM	T2,WS$CFD+.FDPAT(T1)	; ...and pretend it's there
+SCNDI3:	AOS	WS$LEV(WS)
+	$CALL	SCNDIR
+	SOS	T1,WS$LEV(WS)
+	ADD	T1,WS
+	SETZM	WS$CFD+.FDPAT(T1)
+	$RET
+;
+; Come here when next SFD name is wild
+;
+SCNDI4:	$CALL	.SCDIR			; Scan current directory
+	$RETIF				; End of directory
+	CAME	S2,[SIXBIT/SFD/]	; Is this a directory?
+	 $RET				;  No, ignore it
+	MOVE	T1,WS
+	ADD	T1,WS$LEV(WS)
+	MOVEM	S1,WS$CFD+.FDPAT(T1)	; Yes, store it
+	XOR	S1,WS$OFD+.FDPAT(T1)
+	ANDCM	S1,WS$MSK+.FDPAT(T1)
+	JUMPE	S1,SCNDI3		; If match, scan it
+	$RET
+
+; .SUFD - Scan a UFD file on current structure
+;
+;   Accepts in	S1/ PPN (zero mean MFD PPN)
+;
+;   Returns in	S1, S2/ Name and extension
+;
+.SUFD:	SKIPE	UFDFD+.FDPPN		; Do we have the MFD PPN?
+	 JRST	.SUFD1			;  Yes, continue
+	MOVX	T1,%LDMFD
+	GETTAB	T1,			; Ask monitor
+	 MOVE	T1,[1,,1]		;  ...usual default
+	MOVEM	T1,UFDFD+.FDPPN		; Store it for later use
+.SUFD1:	SKIPN	S1			; Scan the MFD?
+	 MOVE	S1,UFDFD+.FDPPN		;  Yes, get MFD PPN again
+	MOVEM	S1,UFDFD+.FDNAM		; Store PPN
+	MOVE	T1,WS$CFD+.FDSTR(WS)	; Get structure name
+	MOVEM	T1,UFDFD+.FDSTR
+	MOVEI	S1,UFDFD		; Get FD address
+	$CALL	OPNFIL			; Try to open the file
+	$RETIF				; Propagate error...
+	PJRST	.SDIR			; Scan directory and return
+
+; .SCDIR - Scan current directory
+;
+;
+.SCDIR:	SKIPN	T1,WS$LEV(WS)		; Get current directory level
+	 JRST[	MOVE	S1,WS$CFD+.FDPPN(WS)
+		PJRST	.SUFD]
+	ADD	T1,WS
+	MOVE	T2,WS$CFD+.FDPAT-1(T1)	; Get last SFD name
+	MOVSI	T3,'SFD'
+	DMOVEM	T2,WS$CFD+.FDNAM(WS)
+	SETZM	WS$CFD+.FDPAT-1(T1)	; Remove name from path
+	MOVEI	S1,WS$CFD(WS)		; Get FD address
+	$CALL	OPNFIL			; Try to open the file
+	MOVE	T1,WS
+	ADD	T1,WS$LEV(WS)
+	MOVE	T2,WS$CFD+.FDNAM(WS)
+	MOVEM	T2,WS$CFD+.FDPAT-1(T1)	; Put last SFD name back
+	$RETIF				; Could we open the file?
+	PJRST	.SDIR			; Yes, go scan it
+
+; .SDIR - Scan currently open directory file
+;
+;   Returns in	S1, S2/ Name and extension
+;
+.SDIR:	SKIPN	S1,LUPBLK+.RBSIZ	; Anything written in directory?
+	 JRST[	$CALL	CLSFIL		;  No, so close it immediately
+		$RETF]
+	ADDI	S1,1			; Reserve space for buffer pointer
+	$CALL	M%GMEM			; Allocate the directory buffer
+	PUSH	FP,S2			; Save buffer address...
+	HRLM	S1,(FP)			; ...and length
+	MOVEI	T1,1(S2)		; Get address + 1...
+	MOVN	T2,LUPBLK+.RBSIZ	; ...negated word count...
+	HRL	T1,T2			; ...and make a buffer pointer
+	MOVEM	T1,(S2)			; Put it first in buffer
+	MOVEI	T1,.FOINP		; Function code 'input'...
+	STORE	T1,FOPBLK+.FOFNC,FO.FNC
+	MOVEI	T1,T2			; Address of I/O list...
+	MOVEM	T1,FOPBLK+.FOIOS
+	HLL	T2,(S2)			; Get length...
+	HRR	T2,S2			; ...and address
+	SETZ	T3,			; Mark end of list
+	MOVE	T1,[.FOIOS+1,,FOPBLK]
+	FILOP.	T1,			; Read the directory file
+	 JRST[	$WARN	<FILOP. function .FOINP error ^O/T1/>
+		$CALL	CLSFIL		;  Release the channel...
+		JRST	.SDIR4]		;  ...and the buffer space
+	$CALL	CLSFIL			; Close it
+	HRRZ	T1,(FP)			; Get address of directory buffer
+	MOVE	T2,(T1)			; Get buffer pointer
+;
+; Loop here for each two-word entry in directory file
+;
+.SDIR2:	SKIPN	S1,0(T2)		; Blank entry?
+	 JRST	.SDIR3			;  Yes, skip it
+	HLLZ	S2,1(T2)		; No, get extension too
+	MOVEM	T2,(T1)			; Put buffer pointer back in buffer
+	SETO	TF,			; Say that we have something...
+	$CALL	@(P)			; ...and give it to the caller
+	HRRZ	T1,(FP)			; Get address of directory buffer
+	MOVE	T2,(T1)			; Get buffer pointer
+.SDIR3:	ADD	T2,[2,,2]		; Increment pointer
+	JUMPL	T2,.SDIR2		; More left in buffer?
+.SDIR4:	HLRZ	S1,(FP)			; No, get length...
+	HRRZ	S2,(FP)			; ...and address
+	$CALL	M%RMEM			; Release buffer space
+	SETZM	(FP)			; Remove old data...
+	SUB	FP,[1,,1]		; ...and pop the word
+	$RETF
+
+; OPNFIL - Open a file for dump mode input
+;
+;   Accepts in	S1/ Address of FD
+;
+OPNFIL:	MOVEI	T1,PTHBLK
+	MOVEM	T1,LUPBLK+.RBPPN	; Set pointer to path block
+	MOVEI	T1,LUPBLK
+	MOVEM	T1,FOPBLK+.FOLEB	; Set pointer to lookup block
+	MOVEI	S2,FOPBLK		; Get address of filop block
+	$CALL	FD2FOP			; Copy FD contents
+	SKIPT
+	 $FATAL	<FD2FOP says "^T/(S1)/" at OPNFIL>
+;
+; RETFIL calls LUPFIL to obtain a RIB copy
+;
+LUPFIL:	MOVX	T1,FO.PRV!FO.ASC+.FORED	; Flags and function...
+	MOVEM	T1,FOPBLK+.FOFNC
+	MOVEI	T1,.IODMP		; Dump mode I/O...
+	MOVEM	T1,FOPBLK+.FOIOS
+	SETZM	FOPBLK+.FOBRH		; No buffers...
+	SETZM	FOPBLK+.FONBF		; ...
+	MOVEI	T1,.PTSCN		; /NOSCAN
+	MOVEM	T1,PTHBLK+.PTSWT
+	MOVE	T1,[.FOLEB+1,,FOPBLK]
+	FILOP.	T1,			; Try to read the file
+	 JRST[	$CALL	RELFIL		;  Failed, release the channel
+		$RETF]
+	MOVX	T1,FO.CHN		; Get channel number mask
+	ANDM	T1,FOPBLK+.FOFNC	; Remove flags and function
+	$RETT
+
+; CLSFIL - Close and release channel in FOPBLK
+;
+CLSFIL:	MOVEI	T1,.FOCLS		; Get function 'close'
+	STORE	T1,FOPBLK+.FOFNC,FO.FNC
+	MOVX	T1,CL.ACS		; Don't update access date
+	MOVEM	T1,FOPBLK+.FOIOS
+	MOVE	T1,[.FOIOS+1,,FOPBLK]
+	FILOP.	T1,			; Close the file
+	 $WARN	<FILOP. function .FOCLS error ^O/T1/>
+;
+; Come here to release channel in filop block
+;
+RELFIL:	MOVEI	T1,.FOREL		; Get function 'release'
+	STORE	T1,FOPBLK+.FOFNC,FO.FNC
+	SETZM	FOPBLK+.FOIOS
+	MOVE	T1,[.FOIOS+1,,FOPBLK]
+	FILOP.	T1,			; Release the channel
+	 $WARN	<FILOP. function .FOREL error ^O/T1/>
+	$RET
+	SUBTTL	W$KILL
+
+; W$KILL - Deallocate a wildcard scanner block
+;
+;   Accepts in	S1/ Address of scanner block
+;
+W$KILL:	MOVE	T2,S1			; Save block address
+	MOVE	T1,S1
+	HRLI	T1,-FPLSIZ		; Insert length of file buffer PDL
+KILL.1:	SKIPN	S2,WS$FPL(T1)		; Is there an allocated buffer?
+	 JRST	KILL.2			;  No, go loop
+	HLRZ	S1,S2			; Yes, so get length...
+	ANDI	S2,-1			; ...and extract address
+	$CALL	M%RMEM			; Deallocate the buffer
+KILL.2:	AOBJN	T1,KILL.1		; Loop thru the file buffer PDL
+	MOVEI	S1,WS$SIZ		; Now get length...
+	MOVE	S2,T2			; ...and address of scanner block
+	PJRST	M%RMEM			; Deallocate it and return
+
+END

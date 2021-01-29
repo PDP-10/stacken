@@ -1,0 +1,98 @@
+
+@@LPT_SUB_1
+   SYSTEM AVAILABILITY: %%%%%%%%%%    T= 0.5HRS: %%%%%%%%%%      MAXIMUM RUN TIME  : %%%%%%%%%%       MAXIMUM DOWNTIME  : %%%%%%%%%%
+@@
+
+@@LPT_SUB_2
+   USER AVAILABILITY  : %%%%%%%%%%    T= 1.0HRS: %%%%%%%%%%      MINIMUM RUN TIME  : %%%%%%%%%%       MINIMUM DOWNTIME  : %%%%%%%%%%
+@@
+
+@@LPT_SUB_3
+   NUMBER OF RELOADS  : %%%%%%%%%%    T= 4.0HRS: %%%%%%%%%%      MEAN RUN TIME     : %%%%%%%%%%       MEAN DOWN TIME    : %%%%%%%%%%
+@@
+
+@@LPT_BAD_HDR
+
+
+
+***** RELOADS AFFECTING MEASURED AVAILABILITY *****
+
+MONITOR NAME & VERSION
+
+    BUG/STOPCD         HALT       PARITY     HARDWARE          NXM         HUNG         LOOP   Corr Maint     TOTALS         
+
+@@
+
+@@LPT_GOOD_HDR
+
+
+
+***** RELOADS NOT AFFECTING MEASURED AVAILABILITY *****
+
+MONITOR NAME & VERSION
+
+    POWER FAIL       STATIC    OPERATOR    Prev Maint          NEW    SCHEDULED   STANDALONE   OTHER /UNK     TOTALS         
+
+@@
+
+@@LPT_RELOAD_DATA
+    %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%  Count
+    %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%   %%%%%%%%%%  Time (HRS)
+
+@@
+
+@@LPT_MON_NAME
+##
+	##
+
+@@
+
+@@RELOAD_REPORT
+
+
+##
+	Built on:	##
+	Version:	##
+	Loaded on:	##
+	Crashed on:	##
+	Reloaded on:	##,	Why: ##
+	Run time: ##,	Down time: ##
+@@
+
+@@BUG_HEADER
+Bug/Stopcode	Count
+@@
+
+@@BUG_REPORT
+   ##	##
+@@
+
+@@LPT_HEADER
+
+
+SYSTEM AVAILABILITY REPORT FOR THE PERIOD: ## TO ##
+
+
+                                          CUSTOMER SATISFIED(Y OR N)?____   CUSTOMER SIGNATURE________________________
+
+@@GUTS
+***** SYSTEM UPTIME STATISTICS WITHIN THIS OPERATIONAL CYCLE *****(ALL TIMES IN HOURS)
+
+CONTRACT EFFECTIVE ## TO ##
+                                 
+   SYSTEM UPTIME %   : %%%%%%%%%%                   (COVERAGE)
+   DOWNTIME:                            SATURDAY : ############  WEDNESDAY : ############
+       TOTAL         : %%%%%%%%%%       SUNDAY   : ############  THURSDAY  : ############
+       CHARGEABLE    : %%%%%%%%%%       MONDAY   : ############  FRIDAY    : ############    
+   NUMBER OF OUTAGES : %%%%%%%%%%       TUESDAY  : ############                  
+
+@@SUB_LPT_HDR
+***** SYSTEM STATISTICS *****(ALL TIMES IN HOURS)
+
+AVAILABILITY                        SYSTEM EFFECTIVENESS        RUNTIME                             DOWNTIME 
+
+   OPERATIONAL CYCLE  : %%%%%%%%%%    T= 0.1HRS: %%%%%%%%%%      TOTAL RUN TIME    : %%%%%%%%%%       SYSTEM NOT RUNNING: %%%%%%%%%%
+@@
+
+
+

@@ -1,0 +1,2390 @@
+	UNIVER	PLRMAC - PULSAR (MDA) UNIVERSAL FILE
+
+;
+;
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1975,1976,1977,1978,1979,
+;1980,1981,1982,1983,1984,1985,1986,1987.  ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+
+	SEARCH	GLXMAC			;Get library MACROs and symbols
+	PROLOG	(PLRMAC)
+
+%%.PLR==1				;MAJOR CHANGE NUMBER OF PLRMAC
+
+PLRVER==5				;MAJOR VERSION NUMBER
+PLRMIN==0				;MINOR VERSION NUMBER
+PLRWHO==0				;LAST EDITOR
+PLREDT==543				;EDIT NUMBER
+
+
+REPEAT 0,<
+
+	D E C s y s t e m   -   1 0   L A B E L   F O R M A T 
+
+
+
+
+00000000011111111112222222222333333333344444444445555555555666666666677777777778
+12345678901234567890123456789012345678901234567890123456789012345678901234567890
+VOL1volumeP..........................D%AT10..sernov............................1
+
+00000000011111111112222222222333333333344444444445555555555666666666677777777778
+12345678901234567890123456789012345678901234567890123456789012345678901234567890
+UVL1pppppp[nnnnn,nnnnnn]users name..............................................
+
+00000000011111111112222222222333333333344444444445555555555666666666677777777778
+12345678901234567890123456789012345678901234567890123456789012345678901234567890
+HDR1FILEnn...........volumeFSECFSEQVERSGNCDATEXedatexPblkcntDECSYSTEM10.........
+EOF1
+EOV1
+
+
+00000000011111111112222222222333333333344444444445555555555666666666677777777778
+12345678901234567890123456789012345678901234567890123456789012345678901234567890
+HDR2FBLOCKRECORpppppp[nnnn,nnnnn].................00............................
+EOF2
+EOV2
+
+
+
+
+FILE STRUCTURE FOR LABELED MAGNETIC TAPES
+
+1. Single File, Single Volume
+   BOT,VOL1,UVL1,HDR1,HDR2*---DATA---*EOF1,EOF2**
+
+2. Single File, Multi Volume
+   BOT,VOL1,UVL1,HDR1,HDR2*---DATA---*EOV1,EOV2**
+   BOT,VOL1,UVL1,HDR1,HDR2*---DATA---*EOF1,EOF2**
+
+3. Multi-File, Single Volume
+   BOT,VOL1,UVL1,HDR1,HDR2*---DATA---*EOF1,EOF2*HDR1,HDR2*---DATA---*EOF1,EOF2**
+
+4. Multi-File, Multi-Volume
+   BOT,VOL1,UVL1,HDR1,HDR2*---DATA---*EOF1,EOF2*HDR1,HDR2*---DATA---*EOV1,EOV2**
+   BOT,VOL1,UVL1,HDR1,HDR2*---DATA---*EOF1,EOF2*HDR1,HDR2*---DATA---*EOF1,EOF2**
+>
+SUBTTL	Revision History
+
+	COMMENT \
+
+	Edit	Module	Explanation
+
+	1	ALL	First version of PULSAR-10
+
+	2	PULSAR	Add support for STOPCD's as Local UUO's.
+		PLRT10
+
+	3	PLRT10	Don't wait for operator if SCHED=400
+		PLRLBP
+
+	4	PLRLBP	Unload tape before asking operator for another tape
+
+	 5	PLRLBP	Make positioning use LE.CON for skip file
+			and skip record
+
+	 6	PLRMAC	Remove CLOSE REWIND option.
+		PLRLBP
+
+	7	PLRLBP	Change T$OPEN to also set up LT with
+		PLRTAP	the label type
+
+	10	PLRLBP	Implement label type NL and LTM.
+
+	11	PLRMAC	Add bit to prevent I/O when no tape present.
+		PLRLBP
+		PLRTAP	Also, remove unused bits, TS.MIN AND TS.MOU
+
+	12	PLRLBP	Remove Edit 5 due to monitor problems.
+
+	13	PLRT10	Restrict all nine track tape drives at startup.
+
+	14	PLRLBP	Add code to give write-protection messages
+		PLRTAP	and to check write ring status.
+		PLRMAC
+		PLRIPC
+
+	15	PLROPR	Add a WHAT command to allow operator
+			to check status.
+		PLRT10	Add a decimal output routine.
+
+	16	PLRLBP	Make rewind do a close ouput if doing output
+
+	17	PULSAR	Failsoft TCB after AC's are saved
+
+	20	PLRLBP	Clear unexpired file bit so it doesn't stay on
+			forever
+
+	21	PLRTAP	Check no-tape-present bit correctly at release time
+
+	22	PLRT10	Save T1-T4 before all calls to SCAN typeout
+			routines.
+
+	23	PLRTAP	Preallocate buffers for tape I/O.
+
+	24	PLRLBP	Add code to read/set label parameters for
+		PLRT10	user's using the new TAPOP.
+		PLRMAC
+
+	25	PLRMAC	Move relevant routines from SBSMAC and SBSCOM
+		PULSAR	to PLRMAC and PULSAR.
+
+	26	PLROPR	Add a HELP command.
+
+	27	PLRMAC	Add code to allow user to clear label errors.
+		PLRLBP	This uses the user-request TAPOP.
+		PLRTAP
+
+	30	PLRLBP	Make edit 24 work.
+		PLRT10
+
+	31	PLRTAP	Add changes to make switch units work
+
+	32	PLRLBP	Make backspace across volumes work
+
+	33	PLROPR	Fix bug that prevented volid's with a 9
+			in them to work.
+
+	34	PLRT10	Fix bug that picks up contents of ac12 in
+			I$USRN rather than 12 characters
+	35	PULSAR	Don't set BF.IBC in .BFSTS
+
+	36	PLRLBP	Set TS.FFF when switching tapes
+
+	37	PLRLBP	Make UNLOAD clear out volids so we don't later find wrong TCB
+
+	40	PULSAR	Add a FTFSS feature test to allow users to turn
+		PLRT10	off failsofting
+		PULSAR
+
+	41	PLRLBP	Catch EOT during output of HDR labels
+
+	42	PLROPR	Check for units availability before switching units
+		PLRTAP
+
+	43	PLRLBP	Don't check file sequence number in HDR1 if first
+			out on first file of a volume
+
+	44	PLRLBP	Write generation numbers of 1, not zero to conform
+			to the ANSI standard
+
+	45	PLRTAP	Add code to T$OPEN to fail if user is doing
+			read backwards.
+
+	46	PULSAR	Always make sure we have 203 words from start
+			of TCB so filser doesn't give us an address check
+
+	47	PLRMAC	Trap offline drives and report to operator
+		PLRTAP
+		PLROPR
+		PLRT10
+
+	50	PLRT10	Only use failsoft file if it has been
+			written since last system reload.
+
+	51	PLRMAC	Fix bug to make /POSITION switch
+		PLRLBP	work on mount.  PS.REW was clearing the requested position
+
+	52	PLRTAP	Don't try to catch offline drives before
+			we do i/o to them--have to do full t$open to
+			make this work
+
+	53	PLROPR	Tell operator if no drives match on WHAT
+			command
+
+	54	ALL	Fix bugs in edits 40-53
+
+	55	PLROPR	Fix bug at WHTL.2 that causes help text to come
+			out on WHAT commands. QAR 10-02125.
+	56	ALL	Minor cleanup
+		PLRLBP	Expiration dates for EOF labels are compared
+			incorrectly.
+		PLRMAC	"Symbol"ize TCB PDL size.
+		PULSAR		"
+		ALL	Put in trace parameter - produces lots of output
+			on operator's terminal.
+	57		Unknown
+
+	56	PLROPR	Don't wait for operators response when
+			informing him of unlabeled tape being prestaged.
+	57	PLROPR	Clean up what command on prestaged tapes.
+		PLRLBP
+	60	PLRLBP	Save protection field of UVL1 labels as default
+			if mounted protection is zero.
+	61
+	62	PLRLBP	Allow tape marks to be written for LABEL=NOL.
+	63	PLRLBP	Fix bug preventing default EXPIRATION DATE from
+			being written
+	64	PLRLBP	Give user a failure on tape positioning requests
+			instead of asking for operator intervention when no tape
+			present.
+	65	PLRLBP	Put edit 56 under FTOPR conditional assembly
+	66	PLRLBP	AVR does not inform the operator of bad tape when it is
+			mounted.
+	67	PLRLBP	Edit 63 broke expriation dates for files being over
+			written on the day they expire
+	70	ALL	Code cleanups  comments etc.
+	71	PLRLBP	Can not write an EOF on an output file and simulate
+			a CLOSE operation.
+	72	PLRTAP	An ABORTed mount request do not set an error code for 
+			the user. (EDIT 61 in error)
+		PLRLBP	Tape Not Present not set on a manual reel switch
+	73	PLROPR	Require the operator to use MOUNT/CANCEL for MOUNT
+			requests. Make proceed illegal
+	74	PLRTAP	Tape offline after a CANCEL/ABORT request. Set TS.NTP
+	75	PLRLBP	The tape is in an unknown status after an error 
+			condition. If the user RESETs the tape, set the
+			status as follows:
+			1) If the tape is mounted (rewind and verify volumes)
+			2) If NOT mounted set TS.NTP
+	76	PLRTAP	Set TS.NTP if the drive does OFFLINE
+			This will force the Volumes to be verified.
+	77	PULSAR	AVR will ingonre labeled tapes if previouly there
+			had peen an error or mount cancelled. Clear errors
+	100	PLRLBP	"BSR,BSF,WBT" are ignored for output tapes. They
+			should not be ignored but the file closed,trailerss
+			written and then the operation executed. (This error
+			caused BACKUP to fail in tape error recovery.)
+	101	PLRLBP	Reel switching for tapes mount in NL mode does not work
+			for input. Define double EOF's as logical end of tape
+			and double EOF's on the last volume of the volume set
+			as the logical end of volume set. For output request
+			the operator to mount the next reel in the volume set
+			or a SCRTCH tape if the volume set will be exceeded.
+	102	PLRLBP	After a mounting error the reelid is blank. Use the
+			reelid of the current volume to me mounted as a check
+			against the volume mounted by the operator.
+	103	PLRMAC	If the operator tries to unload a tape that is not
+		PLRTAP	ready, then readys it, and type UNLOAD again, the
+		PLROPR	dirve will hang the next access in EW. Force the operator
+			to type PROCEED to a tape that was offline.
+	104	TOPS10	DUMP MODE fails to reel switch on end of tape. TAPUUO
+			does not call PULSAR with EOT.
+			REQUIRES THE MONITOR PATCH:
+					TAPUUO$:
+					DMPDUN+4 1/2 insert
+						TRNE S,IOTEND
+						JRST LBLEOT+2
+	105	TOPS10	TAPUUO never calls PULSAR on the 2nd thru the Nth EOF
+		TAPUUO	during DUMP mode I/O.
+		FIX:   TAPUUO$:
+			TPDNXT+20/ POPJ P,  PJRST STOIOS
+	106	PLRLBP	Logical EOT is not handled quite right in
+			NOLABEL mode. The user can read off the
+			physical end of tape. (LAST VOLUME of a VOLUME SET)
+	107	PLR	AVR does not work correctly in setting density on tape
+			other tan TU70's.  ie  TU45's
+
+	200	ALL	GLXLIBize the world; Change version
+			to 4.
+
+	201	PLRLBP	Clear NFI and NFO on any positioning requests
+
+	202	PLROPR	Show status of devices from TCB if wait
+			state is not idle
+
+	203	PLRLBP	Clear VLV at NXTVO1 if operator gets into the act
+		PULSAR	Clear NTP on AVR
+
+	204	PLRLBP	Cancel WTOR if AVR satisfies a mount.
+
+	205	PLRLBP	a) Don't WTO on-line condition if a mount is pending
+			b) Don't set NFO after WBT ... WBT IS the first output
+			c) Set file pos # to 1 on backspace file 
+				thru BOT
+			d) Clear NTP after MNTVOL continues
+
+	206	PLRLBP	Don't let skip file or skip rec go past EOT
+
+	207	PLRLBP	Read Record len, then Block len from HDR2 into TCB
+			HDD.A1 used to read them swapped, and then only by
+			accident!
+
+	210	PLRLBP	Don't ask OPR for disposition of unlabeled tape
+			found via AVR.  Just send him/her a note via WTO
+
+	211	PLRLBP	Don't get and setup user density since regular
+			DDB and label DDB density are 'guaranteed'
+			by monitor to always agree.
+		PLRTAP	Don't set density in T$OPEN after label get,
+			in light of guarantee above
+
+	212	PLRT10	Loop thru all devices on a restart and try
+		PLRTAP	to do AVR if they're unassigned and on-line
+
+	213	PLRLBP	Write ANSI standard version #3
+		VOLINI
+
+	214	PLRLBP	Re-read label params on first out to overwrite
+			a file (VERHDR was clearing label params)
+			Also, Don't clear label params on write-blank-tape.
+			This ensures that EOF labels will have same params
+			as their corresponding HDR labels.
+
+	215	PLRLBP	Reorganize RECFMT table.  Assume U format records
+			if no match found in table.
+		PLRT10	Range check Record format code from .TFLPR
+	216	PLRLBP	Clear WLK before digging into HDR2 during
+			label-type-dependent checks in VERHDR.
+			Clear INP when we get a Close input message
+	217	PLROPR	Fix CANWTO
+	220	PLRMAC	Change default record format from F to U.
+			Thus dumb tape writers write U format (core dump)
+			User can still set F format and write
+			core dump, creating 'non-interchangeable' tapes
+	221	PLRMAC	Add support for extended channel FILOP.
+		PLRTAP	Build buffers on the fly, and we can now
+			handle more than 15 tape drives
+	222	PLRMAC	Extend PDL.  221 was getting overflows getting memory
+			in which to build the buffers.
+	223	PLROPR	Throw Text messages of ODE type away.
+			$WTO all other internal errors.
+			Prevents IPCF war with ORION.
+	224	PLRMAC	Change the volume verifier to bypass
+		PLRLBP	all labels which begin with VOL. (TOPS20 writes VOL2)
+		PLRTAP	To speed things up and prevent read-backspace-read
+			proliferation, invent the TS.NOI bit for re-reading
+
+	225	PLRLBP	Change accessability checker to ignore accessability
+			char (VOL1 cp 11) if not a DEC-10 tape.
+
+	226	ALL	More MDA changes. Get rid of the volume list in the
+			TCB.  Change MOUNT message. Get rid of TS.NOI. Bad idea
+
+	227	PLRLBP	Add File section number checker, try to get
+			section number correct on output
+
+	230	PLRLBP	Add support for new label type .TFLNV (LT.NLV=12)
+			which is unlabeled, with user EOV processing.
+
+	231	PLRLBP	Don't force volume verify on rewind if unlabeled,
+			and we don't switch volumes.
+
+	232	PULSAR	Modify CHKIPC so we don't lose incoming messages
+			if we happen to be rewinding a TCB
+			(and sleeping) while the message comes in.
+			This is a crock around a known monitor bug.
+			The WAKJOB assumes that a job
+			which is sleeping is hibered for such
+			activity, and will wake and get the message.
+			On a rewind, job goes to sleep, but is not
+			hibered. Thus the interrupt gets lost.
+			Also, get rid of TCB.AD.
+
+	233	PLRTAP	Invent G$UNL, so unloading an offline drive
+			just ignores offline device trap
+
+	234	PLRDSK	Invent this module, do Structure building,
+			Home block reading, quota fetching... etc.
+
+	235	PLRDSK	Send status back to MDA after reading HOM blocks
+
+	236	PLROPR	Invent the concept of the message queue,
+			so that if a message can't be processed,
+			it'll get queued up for later.
+			Gets rid of MAT stopcode!
+
+	237	PLRT10	Setup channel number in I$SDEN
+
+	240	PULSAR	Invent the G$PROC flag so that we can tell
+		PLRTAP	if we are running a TCB or not.
+			Use this flag in the offline checker.
+
+	241	PLRCAT	After failing search of STRLST, give back page
+			which was going to have message to MDA
+
+	242	PLRDSK	Don't lookup STRLST.SYS if str beign removed is
+			not in the SSL
+
+	243	PLRLBP	Never rewrite VOL1 and UVL1 on output.
+			when writing first file on tape, just skip the existing
+			volume header labels.  This keeps the original owner
+			and protection codes intact across writes.
+
+	244	PLRLPB	Handle extended .TFLPR block which contains
+		PLRT10	17-char filename, version number, creation
+		PLRMAC	date, etc.
+
+	245	PLRLBP	Fix the tape positioning code for lookup/enter
+
+	246	PLRDSK	Don't blow up if RIB pointers in HOMe blocks
+			are out to lunch.
+
+	247	PLRDSK	HANDLE THE ADD/REMOVE STRUCTURE/UNIT FROM
+			ACTIVE-SWAP/SYSTEM-SEARCH/SYSTEM-DUMP
+
+	250	PLRDSK	Write LOKUFD
+
+	251	PLRDSK	Change position in system dump list check
+		PLRDSP	so 0 from DSKCHR means - In the list.
+
+	252	PLRT10	Change the density finder
+			to try highest possible density of the drive
+
+	253	PLRDSK	Don't return memory right away if GOBSTR fails
+			in GETSL.  Leave on stack for GSLRET cleanup
+
+	254	PLRDSK	Finish single access/passive search list stuff
+
+	255	PLRLBP	DON'T CLEAR FILE SEQUENCE # DURING L$CLEF 
+			CALL FROM UNLOAD WOULD BUY INCORRECT
+			SEQ # ON NEXT TAPE IF OPR UNLOADED DURING VOLUME SWITCH
+
+	256	PLRDSK	Finish the quota enforcement code.  Include check
+			of ASL.NQ during this.
+
+	257	PLRINI	Do the VOLINI replacement
+			Invent new module (PLRINI) to do most of the dirty work
+		PLRMAC	Add new space in TCB to store initialization data
+
+	260	PLRMAC	Get rid of TCB.SQ, put in a real object block instead
+		ALL	Use it in WTOs, wherever possible
+
+	261	PLROPR	Fix bug in Ack canceller during multiple initializations
+
+	262	PLRTAP	Invent TS.KIL so that offline trap during
+		PULSAR	AVR read just flushes the TCB and the label DDB,
+			and forgets about the drive
+
+	263	PULSAR	Really pass device nmae to T$LGET if monitor requests
+			action on an unknown drive
+
+	264	PLRTAP	In T$LGET, do label release on user drive, not
+			label device
+
+	265	PLRLBP	If looking for HDR2, and there is no HDR2,
+			leave tape in user data (after tape mark)
+
+	266	PLROPR	Give OPR a hint if a recognize or unload is given
+			and the TCB is waiting for RESPOND.
+
+	267	PLRLBP	Add the forms control character checking and support
+
+	270	PLRMAC	Invent the CPTR and CPTRI macros to get at
+		PLRLBP	bytes of a given CP in label records
+
+	271	PLRLBP	When writing HDR2/EOF2/EOV2, write HDR2fbbbbbrrrrr
+			instead of HDR2frrrrrbbbbb to conform to ANSI.
+			Day one bug, methinks
+
+	272	PLRLBP	Invent FTPRO, FTUPRO, FTVPRO  assembly
+		PLRMAC	switches to control the various flavors
+			of volume protection mechanisms for output.
+
+	273	ALL	Conditionalize all COBOL relate label processing
+			FTCOBOL (normally off!)
+
+	274	PLRTAP	Handle offline during label get for AVR.
+			Lite TI.OPN earlier, dont release/destroy if no device
+
+	275	PULSAR	When making TCBs, don't look for 'old' TCBs
+			with 0 for a device name.
+
+	276	PLRDSK	Implement /NOCHECK on DISMOUNT STRUCTURE
+
+	277	PLRLBP	Fix protection check bug from 270
+
+	300	PLRT10	Add TM78 support
+		PULSAR	Make PULSAR return a 'good' error if an operation is
+			requested on an unknown drive.
+		PLRLBP	change the record type/record format symbols to match
+			the ones defined in UUOSYM.
+			Add routine SAVEIT, to failsoft any message sent to
+			PULSAR, which causes an error
+		PLRMAC	Change the record type/record format symbols to match
+			the ones in UUOSYM
+
+	301	PLRTAP	In T$OFLN, check to see if we are initializing and if
+			so, continue processing normally.
+
+	302	PLRLBP	In L$CLEF, make sure we do not clear out the TS.INI
+			status bit
+
+	303	PLRLBP	In L$FEOV, delete the TXNN P2,TS.IUD & JRST PS.BAD
+			instructions after the MOVE P2,TCB.ST(B). This will
+			clear up the problem of a user requesting FEOV
+			processing, but not getting it because he is not
+			in user data.
+
+	304	PULSAR	Restore the error return in MSGD.3 so that a user cannot
+			continue if PULSAR is restarted.
+			Create routine G$REST which gets control on a REENTER
+			command and will try to continue PULSAR from the
+			address at location 130.
+			Add routine DETACH to detach the job if started on the
+			force line.
+		PLRDSK	Fix 2 literals so that they contain correct halfword
+			values
+	305	ALL	Remove the FTFSS (Failsoft) code/support
+
+	306	PLRLBP	Modify L$CLIN to look for non-zero additional data
+			field indicating an unprocessed tape mark was read.
+			If found, go off to L$TMARK for processing, before
+			continuing.
+
+	307	PLRLBP	Modify L$FEOV so that we always call NXTVIN whether
+			we are using a labeled tape or not. Also, reverse the
+			input/output check to now see if doing output and if 
+			not assume input.
+	310	PLRTAP	Check DEVCHR bits DV.ASC!DV.ASP to determine if a
+			device is in use instead of DEVTYP's TY.JOB field.
+
+	311	PLRCAT	QAR 10-04599 Move -1 to S2 before calling F%FD
+
+	312	PULSAR	Use the new feature IB.DET to detach from FRCLIN
+
+	313	PULSAR	Delete IB.DET (GLXLIB defaults to detach)
+
+	314	PLRT10	Delete controller check from routines I$PDEN and
+			I$NDEN.
+			Delete routine I$GTRK (not used)
+		PLRLBP	Do not reset density type to 'default density' if
+			we can't read a tapes labels.
+		PLRTAP	Delete routine T$9TRK (not used)
+
+	315	PLRINI	Save the requested density in TCB.PS after we set it
+		PLRLBP	At VERV.1, delete the BLP label check
+			At VERV.6, delete the error check and return true if
+			unlabeled, false it labeled.
+			At MDC.5, call I$PDEN to set up a default density
+		PLRT10	In I$SDEN, set the density for both the real device
+			and the label DDB
+
+	316	PLRDSK	Don't do illegal structure name checking in LOGUNI.
+			Instead, let the monitor do it. This requires the
+			monitor to do the checking in FILFND at DEFSTR +
+			a few.
+
+	317	PLRT10	Add ER.OFL to the .JBINT block. Apparently, this bit
+			is needed to trap RP02/RP03 device offline conditions.
+		PLRLBP	Change the I/O
+		PLRTAP	   from buffered
+		PLRMAC	      to dump mode
+		PLRINI	Fix init code so that we write out EOF labels 
+			on initialization
+
+	320	PLRLBP	Make L$POSI call VERVOL before processing to correctly
+			position the tape
+			Delete references to TS.OOL (obsolete)
+
+	321	PULSAR	Create a general purpose text buffer and routines to
+		PLRDSK	manage it. When dismounting structures, don't typeout
+			'n' messages for 'n' different problems. Put it all in
+			a single message. If the operator said /NOCHECK, don't
+			ask him if he wants to proceed; just wanr him and hope
+			for the best.
+
+	322	PLRLBP	Clear INP+OUT+VLV+POS when rewinding
+			Set NFO on write blank tape if FOUT is called
+		PLRTAP	Do not rewind the tape in T$RELE if an error occurs
+		PLRINI	Skip the last tape mark in initialization so that
+			we have a correct null file.
+			(VOL/HDR<TM><TM>EOF<TM><TM>)
+
+	323	PULSAR	Add code for disk usage recomputes
+		PLRDSK	Add code to recompute disk usage.
+		PLRT10	When enforcing tape file protection codes, allow
+		PLRLBP	[1,2] and JACCT jobs access.
+			Fix bugs in tape label read TAPOP. support. Monitor
+			now sends first input msg with 77 as additional data.
+
+	324	PLRDSP	Add copywrite statement
+		PLRCAT	Add copywrite statement
+		PLROPR	Add support for returning text strings to MDA
+		PLRLBP	Make it so data security erase does'nt work with MDA
+
+	325	PLRMAC	Delete FTOPR conditional
+		PLRT10	Wait for MDA to start before we do.
+		PLRLBP	Delete all references to FTOPR conditional
+		PLROPR	Add job number to OACM.U wto message
+
+	326	PLROPR	Fix O$CVSD to recode the volume switch errors into
+			something that makes sense.
+		PLRLBP	Fix MNTVOL to setup the correct error codes if the
+			volume switch fails.
+
+	327	PLRDSK	Make 'No UFD' error return as a warning.
+			Make CHKUFD look to see if a UFD exists before
+			returning 'No UFD'
+		PLRTAP	Make error processing work correctly.
+		PLRLBP	Make L$CLEF clear everything but the initialization bit
+
+	330	PLRLBP	If PULSAR calls VERVOL with an unlabeled tape with
+			a leading tape mark, make sure we rewind the tape
+			before returning to the user (VERV.7+3).
+
+	331	PLRMAC	For consistancy with the TOPS-10 monitor, when a [1,2]
+		PLRLBP	job writes a file on a user's tape, store the volume
+			owner's PPN instead of the operator's PPN. *** Note ***
+			This behavior was implemented years ago to support MPB
+			BATCON and is no longer needed, but customers might
+			rely on this happening, so the monitor code MUST not
+			be changed.
+
+	332	PULSAR	Allow a tape to be initialized
+		PLRINI	   on a drive which is involved in a reel switch
+			Also, if a count of 1 or 0 is specified for tape
+			initialization, then do not unload the drive.
+
+
+	333	PLRDSK	Fix CHKHOM $WTO macro so it does not stopcode
+
+	334	PLRLBP	Don't stopcode when called to process BYPASS labels
+			cuz some prived moron changed the label type.
+
+	335	PLRLBP	Fix L$FOUTPUT so that if we fail for some reason, we
+			don't write any data on the close call.
+
+	336	PLRLBP	Add support for TAPOP. UUO functions .TFDSE (data
+			erase) and .TFWLE (write logical end of tape).
+
+	337	PLRLBP	Fix one instance of ?UUO ERROR from monitor 
+		Also requires MCO #9760
+
+	340	PLRTAP	Fix T$LGET so that it actually releases the user
+		PLRLBP	Lite TS.IUD if first INPUT/OUTPUT succeed
+
+	341	PLRTAP	Make T$RELE report the correct label return code 
+		PLROPR	Make UNLOAD and RECOGNIZE code clear TCB.ST if
+			no one owns the device.
+
+	342	PULSAR	Fix bug in determining the difference between
+			a KL10 and a KS10.
+		PLRLBP	Allow appends to labeled tapes (requires MCO #9797)
+			Do not allow recognize on tapes owned by a user
+
+	343	PLRLBP	Make USER-EOT tapes return EOF on input for EOT
+
+	344	PLROPR	Kill off any outstanding WTORs when a tape is assigned
+			and at volume switch time
+		PLRT10	Only set the density on the label DDB as the monitor
+			ensures that both the real and label DDB are the same
+		PLRINI	Fix /TAPE-DISPOSITION:UNLOAD bug so it works
+		PLRTAP	Fix T$RELE routine so that we get rid of label DDB
+
+	345	PLROPR	If TCB has an open channel when reassigned, close it
+		PLRINI	Allow initializations on offline tape drives
+
+	346	PLRDSK	Not always recomputing disk usage when necessary on
+			disk mounts. Do it when
+
+				RIPLOG is on
+				RIBUSD < 0
+				RIBUSD > RIBQTO
+
+			Disk dismounts seem to work OK.
+		PLRINI	Add support code for SET TAP INIT /ABORT
+
+	347	PLRDSK	Fix IBS stopcodes when looking up the KS front end file
+
+	350	PLRDSK	Don't try to use alternate ports. They don't work.
+			Only use primary ports.
+
+	351	PLRTAP	If a tape drive is flakey and no longer allows us to
+			write a tape even though the write wing is still on
+			the tape, don't stopcode trying to write a tape mark.
+			Return 'write locked tape' label error to the program.
+
+	352	PULSAR	Rework code to handle the addition of structures to
+		PLRDSK	a search list. Correctly handle the case where strs
+		PLRDSP	are being moved from the active to the passive side
+			of the search list and changing the status of /SINGLE.
+
+	353	PLRCAT	Don't set FCFS quota to 0 when defaulting from AUXACC
+		PLRDSK	Include new STRUUO error FSISN% (Illegal structure
+			name) in the STRUUO error code table. Fix bugs dealing
+			with recomputing disk usage and quota setting.
+
+	354	ALL	Update copyright notices
+		PLROPR	Change all $WTORs to only allow ABORT or PROCEED
+		PLRLBP	as legal responses.
+		PLRINI	Add object blocks to ACKs at IMSG.1 and IMSG.3+2.
+
+	355	PULSAR	Remove call to CPUINI and use .CPUTY in GLXLIB.
+		PLRDSK	Use new CPU type code. Don't stopcode if DSKCHR fails.
+			Use GETDCH to do all DSKCHR UUOs.
+
+	356	PULASR	$LOG a message to ORION when PULSAR starts up.
+		PLRLBP	Use new TAPOP function .TFCEC to clear error counters
+			in the UDB after sucessfully reading labels.
+			Fix up ACs at POST.2+ when calling STRCMP.
+		PLRDSK	Compare owner PPN from STRLST against the one in the
+			HOM block. If there is a difference, complain and clear
+			the owner PPN. Fix up SATERR message when called
+			from CHKEOF. Issue a verbose message when we can't
+			read the HOM blocks on a mounted structure.
+		PLROPR	For non-disk devices, make sure it is still owned by
+			MDA before proceeding after a $WTOR.
+		PLRTAP	Allow read-backwards if unlabeled, user EOV tape.
+
+	357	PLRMAC	Add flag bit TS.BOP to indicate a bad owner PPN found.
+		PLROPR	Pass owner PPN back to QUASAR on volume RECOGNIZEs.
+		PLRDSK	Send new mount ACK code %MNTNO to QUASAR when an owner
+			PPN mismatch occurs.
+
+	360	PULSAR	Use new routine UFDOP to do all UFD creates, recomputes
+		PLRDSK	mounts and dismounts. UFDOP is a superset of the old
+		PLROPR	RCOMP subroutine package.
+
+	361	PLRINI	Fixed a bug that would crash PULSAR if a tape
+			was initialized on a drive during a volume switch.
+			QAR: 10-06819 = GCO: 4.2.1244
+
+	362	PLRMAC	Check for pending queue requests that require the
+		PLROPR	STR we're in the process of dismounting. Clear up
+		PLRDSK	Possible junk in the WTO to the operator about owner
+			PPN mismatches. GCO 1259.
+
+	363	PLRLBP	Made PULSAR recognize labels on tapes if the
+			drive/tape comes on line with a density that
+			is not expected. GCO 1260.
+
+	364	PLRLBP	Edit 363 only with unlabelled tapes this time.
+			GCO 1265.
+
+	365	PLRLBP	Fix a bug with .TFLNV processing which would
+			confuse user programs by not allowing them to
+			see the EOV records. GCO 1278.
+
+	366	PLRLBP	Make the above tape density fixes work with
+			TU70s and other auto-density detecting drives.
+			GCO 1285
+
+	367	PLRLBP	Make IBM labels work. GCO 1286
+
+	370	PLRDSK	Add support for hardware-write-protect.
+			Make SSL modifications work again.
+			Interface to new PSI code.
+		PLRDSP	Lite the WTO no formatting bit for system-list display.
+		PLRMAC	Add PSI words in the TCB for PSI stuff.
+		PLROPR	Pass HWP bit on mounts back and forth to QUASAR.
+		PLRTAP	Remove .JBINT trap crock and interface to new PSI code.
+		PLRT10	Add new PSI interrupt code.
+
+	371	PLRDSK	Turn on hung
+		PLRT10	  device code for
+		PLRTAP	    disks and tapes
+
+	372	PLRTAP	Clear any pending I/O errors before doing tape
+			positioning cuz 702 won't do it for us.
+
+	373	PLRMAC	Define TF.LT to be suppressed by DDT so that
+			we don't get things like PUSHJ TF.LT,FOO.
+		PLRTAP	Define a new routine T$WAIT so to be called
+			whenever I/O must be done on a tape and it's
+			ready status is not determinable. It will make
+			sure we wait for operations to complete.
+			Teach T$FILOP to use it.
+			GCO 1303.
+
+	374	PLRDSK	Make KL10 FE checking work again. GCO 1331
+
+	375	PLRTAP	Fix T$FILOP so that it gets the correct lenght
+			of the function block on an I/O operation.
+
+	376	PLRMAC	Teach PULSAR about
+		PLRTAP	    Logical end of tape
+		PLRLBP		GCO: 1345
+		PLRDSK
+
+	377	PLRTAP	Prevent labelled tapes from going off the
+		PLRLBP	reel on second SKIP EOT. GCO 1410.
+
+	400	PLRMAC	Fix problems relating to PSI interrupts that were
+		PLRDSK	created as a result of removing the .JBINT for
+		PLRINI	off-line trapping.  A side effect of this now makes
+		PLROPR	initializing of off-line tapes work again, though this
+		PLRTAP	was broken before the PSI work was done.  GCO 1426
+
+	401	PLRINI	Make virgin tapes initialize on a TU77. GCO 1441
+
+	402	PLROPR	Make reassigning of tapes with errors from the
+			previous user work. GCO 1443
+
+	403	PLRTAP	Fix ?Ill UUO at PC 000001 problem. GCO 1452
+
+	404	PLRDSK	Translate DUOPI% error code to text.  GCO 1454
+
+	405	PLROPR	Make DISMOUNT STRUCTURE/NOCHECK work. GCO 1457
+
+	406	PLRLBP	Allow users to mount the second, third, etc...
+			tape sections of a multivolume tape set without
+			haveing to go through previous ones. GCO 1458
+
+	407	PLRDSK	MAke sure the drive type agrees with the HOM
+			blocks when a structure comes on line. GCO 1462
+
+	410	PLRLBP	Make sure the drive density is not changed from
+			under PULSAR's feet when it goes to do a recognize
+			on an auto density drive.
+
+	411	PLROPR	Intercept and ignore an extraneous message sent
+			to the operator when the user does a ^C RESET on
+			a labelled tape. Also take out routine SAVEIT, since
+			it is only supposed to be in development sources.
+
+	412	PLRLBP	IBM label processing doesn't.  Rewrite it.
+			Also, keep density in sync with reality when reading.
+
+	413	PLRLBP	Cure extra tape mark disease when initializing tapes.
+			Make DUMMY.FILE containa real dummy file.
+
+	414	PLRLBP	Forward/backspace positioning on same file caused
+			multiple LEOTs to be written on tape.  Later, reading
+			the tape didn't work too well.  L$CLIN/L$TMAR
+			interaction is a crock.  Should fix L$TMAR someday.
+			Work around it for now.  Depends on MCO 10790.
+
+	415	PLRINI	The /LABEL-TYPE switch is supposed be defaulted
+			if not specified by the operator.  Default to the
+			label type defined by GALGEN.
+			Default /PROTECTION if not specified or out of range.
+			Clear /PROTECTION if /OWNER not specified.
+			Avoid leftover junk in dummy file buffer by init'ing
+			it to all spaces.
+		PLRLBP	Density stuff in 412 didn't.  Edit 410 was OK.
+			Always let attempt positioning requests if a rewind
+			or previously had LE.IOP set.
+		PLRT10	Never return negative record counts in I$BCNT.
+		PLRTAP	Set LE.DER to get user out of EW on hung device.
+
+	416	PLRLBP	For labeled tapes, in cases where no "tape mark"
+			message is received, but instead the "close input"
+			message claims a tape mark was seen, then call L$TMAR
+			unless TS.ATM is already set.  Also, in L$FINP, clear
+			TS.IHL and set TS.ATM bits when backing up to start of
+			HDR1 labels  Side effect of edit 414.
+			Prevent loop @ L$POSI if repeated calls to T$OPEN fail.
+
+	417	PLRLBP	Can write NOLABEL tapes but can't read past first reel.
+		PLRTAP	Make sure user always gets out of EW on hung device
+			errors by clearing TS.SLR bit.
+
+	420	PLRMAC	Invent new bit (TI.LTP) to indicate this is the last
+			tape in the volume-set.  Used by positioning code for
+			processing NOLABELS tapes.  Not valid for other types
+			of labels.
+		PLRINI	Add a new entry point (V$FILE) so that the routines to
+			write dummy files may be called from other modules.
+			Specifically needed for the data security erase stuff.
+			Don't require a reelid for unlabeled tapes.
+		PLRLBP	Make positioning operations work for NOLABELS tapes.
+			A side effect of this edit will allow labeled tapes in
+			a multi reel volume-set to be correctly erased.
+		PLRTAP	Pay attention to IO.BOT bit when positioning so reel
+			switching on backspace operations for NOLABELS tapes
+			will work.
+
+	421	PLRLBP	Return EOF if premature end of volume-set encountered.
+			Prevent  reading past physical EOT on labeled tapes.
+
+	422	PLRMAC	Update disk HOM block definitions to include 702 stuff.
+		PLRLBP	Always clear tape mark flag when entering user data.
+
+	423	PLRDSK	Make DSKTRY agree with the monitor.
+
+	424	PULSAR	Add support for ABORT labeler message from monitor.
+		PLRMAC	This will prevent cases where the user ^C's out of
+		PLRLBP	a program and later hangs in EL when trying to use
+		PLROPR	the tape.
+
+	425	PLRTAP	Correct TAPOP. error recovery stuff where it compares
+			function codes.
+
+	426	PLRMAC	Add new termination codes for 1) volume protection
+			failure, 2) file protection failure, and 3) unexpired
+			file.
+		PLRLBP	Return new termination codes as necessary.  Only ask
+			the operator about volume protection errors once and
+			memorize the answer for use later when suceeding errors
+			occur.
+
+	427	PLRMAC	Add support for
+		PLRINI	 /NEW-VOLUME processing
+		PLRLBP    in the tape initializer
+
+	430	PULSAR	Add code to detect and optionally override file
+		PLRMAC	sequence number errors.  This is needed because
+		PLRLBP	of PULSAR we're too particular about what junk it
+		PLROPR	wrote into the HDR labels.  The operator is notified
+			of the error and has the options:
+			  ABORT:   Abort request and return LE.PSE to user.
+			  PROCEED: Fix up TCB and pretend error didn't occur.
+			  RETRY:   Retry search for correct sequence number.
+					*** Note ***
+			This error recovery proceedure has purposly been made
+			painful to use.  The intent is to pursuade users to
+			rewrite their tapes with good data.
+
+
+	431	PLRLBP	Don't store junk in IBM HDR2 records.
+
+	432	PLRLBP	SKIP MTA: EOT/BACKSPACE MTA:1 FILE/TYPE MTA: doesn't
+			on a labeled tape.  PS.SET shouldn't lite TI.LET bit.
+
+	433	PLRMAC	Add new bit TS.ILC to inhibit label parameter clearing
+		PLRLBP	after a positioning operation.  Needed so appending to
+			a file will carry over the necessary parameters to the
+			EOF records.  Also fix numerous bugs with associated
+			with appending to files and writing tape marks.
+
+	434	PLRLBP	Return LE.WLK if drive is hardware write-locked instead
+			of volume protection failure.
+
+	435	PLRLBP	On labeled tapes, always set file sequence number
+			to one at mount time. This avoid positioning errors
+			when users start I/O without doing a rewind first.
+
+	436	PULSAR	Fix ?Ill UUO at PC 1 introduced by abort code.
+
+	437	PLRLBP	After failing to read a good VOL1 record, set
+			default density for drives which do not do
+			auto-density detection.
+
+	440	PLRT10	Correct bug in date translation routine.
+
+	441	PLROPR	Add support for PSI on reel switch.  This merely
+		PLRTAP	involes doing the label switch TAPOP. on all
+			reel switches.
+
+	442	PLRTAP	Remove RTT stopcode.  It's no longer a fatal
+			condition.
+
+	443	PLRTAP	Handle spurious interrupts and I/O error recovery
+			following a previously off-line drive while reading
+			or writing label records.
+
+	444	PLRLBP	Always clear low order 4 bits prior to checking
+			for ANSI or EBCDIC "VOL1".
+
+	445	PLRLBP	Return correct density for unlabeled tapes after
+			attempting to read VOL1 labels.
+
+	446	PLRLBP	More of edit 445.  DX10/DX20 densities were still
+		PLRT10	not predictable due to ancient version 1 code to
+			recognize kontrollers which can do auto density
+			detection.  Remove all knowledge of specific types
+			of tape kontrollers.
+
+	447	PLRLBP	Fix loop during backspace operation.
+
+	450	PLRLBP	Some unprivileged users can't access IBM labeled
+			tapes which contain an access code of " " (space).
+
+	451	PLRLBP	Allow unprivileged users can't access IBM labeled
+			which contain an access code of " " (space).
+
+	452	PLRLBP	Prevent PULSAR/user program loop if IBM label
+			protection prohibits user access.
+
+	453	PLRLBP	Remove rewind from L$MOUNT.  It is no longer needed
+			and it's presence is responsible for some tape hangs.
+
+	454	PLRTAP	Always clear TS.SLR in T$RELE to prevent hangs
+			caused by edit 453.
+
+	500	PLRDSK	Fix text string in $WTO at SATBAD.
+
+	501	PLRT10	Put disk off-line interrupt code under FTFLBK and
+			write new code to handle off-line interrupts for 703.
+
+	502	PLRDSK	Make sure user gets NAKed if call to UFDJSL fails.
+
+	503	PLRMAC	Update HOMe block definitions.  Update major
+			version number from 4 to 5.
+		PULSAR	Add support for monitor "disk sets" feature.
+		PLRDSK	Since the feature is normally turned off in
+			the monitor this code is not executed.
+
+	504	PLRMAC	Add
+		PLROPR	 DECtape
+		PLRDTA	  Support
+
+	505	PLRDSK	Don't allow non-operator job to mount private
+		PLRMAC	file structure if no quotas on structure.
+
+	506	PLRDTA	Fix bug in INITIALIAZE code. Pay attention
+			to ERASE bit.
+
+	507	PLRDSK	Invent the QUOTA application for OPR/ORION.
+		PLRQUO	Obsoletes PLRCAT.
+		PULSAR
+		QUOTAB
+		QUOPRM
+
+	510	PLRDSK	Copy set number into STRUUO block when defining
+		PLRMAC	a structure.
+
+	511	PLRQUO	Fix a few random bugs.
+
+	512	PRLQUO	A few more.
+
+	513	PLRDSK	Fix WTO for non-mounted disk set.
+
+	514	PLRDSK	Clean up some $WTO messages to be consistent.
+
+	515	PLRQUO	Remove lots of code for parsing and wildcarding.
+		QUOTAB	Make use of common subroutines that reside in
+			ACTLIB.
+
+	516	PLRQUO	Fixup after 515.
+
+	517	PLRQUO	Fixup for QUOTA.SYS problems with accounts not known
+			to ACTDAE.
+
+	520	PLRDSK	Allow structure owner to mount his private structure
+			even if he doesn't have quota information.  Bump
+			BLOKLN to equal .DCMAX.
+
+	521	PLRQUO	Fix up some bum AC usage that led to ILMs.
+
+	522	PLRLBP	Fix backspace file operations on NOLABELS tapes.
+
+	523	PLRLBP	Light TS.ILC when backspacing records and the tape
+			is left positioned in user data.
+
+	524	PLRLBP	Rewrite PS.WTM routine to make EOF command work.
+
+	525	PULSAR	Fix bad BLT (broken by KL10 ucode 430 and later)
+
+	526	PLRDSK	Implement support for the /OVERRIDE-SET-NUMBER
+		PLROPR	switch to the MOUNT STRUCTURE command.
+
+	527	PLRDSK	Add descriptive text for .FSREM error FSASL% for 
+			/NOCHECK case.
+
+	530	PLRQUO	Change processing of default quotas to pay proper
+			attention to .AEDEF in the user profile.
+
+	531	ALL	Change $STOP to STOPCD.
+
+	532	PLRDSK	Use new DSKCHR status flag when checking for FE pack.
+
+	533	PLRLBP	Edit 453 removed a rewind to avoid  a monitor bug
+			(tape hangs).  Under some circumstances, a tape is
+			no longer left at BOT following AVR.   Make L$RVOL
+			always leave the tape at BOT.
+
+	534	PLRDSK	Set "don't cache monitor I/O" flag when defining a
+			structure based on /OVERRIDE-SET-NUMBER.
+
+	535	PLRDSK	Fix bugs in CHKKLF/CHKKSF dealing with front-end
+			status returned from DSKCHR UUO.
+
+	536	PLRT10	Remove FTFLBK conditionals.
+		PLRQUO
+
+	537	PLROPR	Add a SLEEP call for 1 clock tick in OACU.0
+			just before checking the availability of the
+			device being dismounted, to give the Monitor a
+			chance to finish clearing the bits.
+
+	540	PLRDTA	Take advantage of new 7.04 DEVOP. UUO function
+		PLRINI	to set/clear DECtape reelid and block read/write
+		PLRLBP	counts.  This is necessary for proper DECtape
+		PLROPR	accounting.
+
+	541	PLRLBP	Fix it so PULSAR doesn't set the density of
+		PLRT10  a tape unless it's initializing or playing with
+			a drive that doesn't do auto density detection.
+			Also fix label recognition in L$RVOL. Should
+			have MCO 13830 installed in monitor.
+			
+	542	PLRQUO	Make sure we have System-Admin privs at startup
+			so that we can change user profiles.  Needed
+			because %CNPRV might not have given it to us.
+
+	543	PLRLPB	Ask operator what to do if errors writing
+			EOV data to tape.
+\
+SUBTTL	Accumulator Definitions
+
+	.SAC==TF		;Scratch AC for STKVAR
+	B=13			;B POINTS TO A TCB
+	LT=14			;LT CONTAINS THE LABEL TYPE
+	BUF=15			;BUF IS THE POINTER TO THE CURRENT IO BUFFER
+	M=16			;MESSAGE POINTER
+
+	IOVPF%==24		;UNTIL IN UUOSYM
+	IOFPF%==25		;UNTIL IN UUOSYM
+	IOUEF%==26		;UNTIL IN UUOSYM
+	%RLABO==4		;UNTIL IN QSRMAC
+SUBTTL	Global Symbol Definitions
+
+FTTRACE==-1			;Turn on tracing, we're debugging
+
+ND(FTTRACE,0)			;NON-ZERO TO INCLUDE TRACE CODE
+ND(CHNIPC,0)			;Don't change (breaks ipcf interrupts)
+
+;If FTVPRO is turned off, then no volume protection mechanism is used
+; ie, only VOL1 is processed.
+;If FTVPRO is turned on (default), then volume-level protection is implemented
+; according to FTUPRO. 
+;	If FTUPRO is turned on, then the UVL1 label is used to store owner
+;	 name and PPN and protection.
+;	If FTUPRO is turned off, then the VOL2 label is used to store owner
+;	 name and PPN and protection.
+;When the latest rev of ANSI is approved, then VOL2 should be used to
+; store this protection information
+
+ND(FTVPRO,-1)				;Default to generate some flavor
+					; of volume protection
+
+ND(FTUPRO,-1)				;Default to generate volume
+					; protection via UVL1
+
+ND(FTCOBOL,0)				;Default is no COBOL label processing
+
+ND(TXTSIZ,^D100)			;Length of text buffer for ACKing
+SUBTTL	TCB -- Tape Control Block
+
+;	!=======================================================!
+;	!                  TCB sequence number                  !
+;	!-------------------------------------------------------!
+;	!                 current physical unit                 !
+;	!-------------------------------------------------------!
+;	!                    wait state code                    !
+;	!-------------------------------------------------------!
+;	!                                                       !
+;	\                     pushdown list                     \
+;	!                                                       !
+;	!-------------------------------------------------------!
+;	!                                                       !
+;	\              AC's from previous context               \
+;	!                                                       !
+;	!-------------------------------------------------------!
+;	!                    IO status word                     !
+;	!-------------------------------------------------------!
+; ** A FILOP. block follows
+;	!-------------------------------------------------------!
+;	!X!C! !          Channel #  !        FILOP. Function    !
+;	!-------------------------------------------------------!
+;	!               IO mode or dump command list            !
+;	!-------------------------------------------------------!
+;	!        device name of label DDB for this drive        !
+;	!-------------------------------------------------------!
+;	!  pointers to ring header or dump mode command list    !
+;	!   output buffer header    !     input buffer header   !
+;	!-------------------------------------------------------!
+; ** End of FILOP. block
+;	!-------------------------------------------------------!
+;	!                  Label DDB to destroy on close	!
+;	!-------------------------------------------------------!
+;	!                  file section number                  !
+;	!-------------------------------------------------------!
+;	!      magtape density      !   current file position   !
+;	!-------------------------------------------------------!
+;	!             requested position from MOUNT             !
+;	!-------------------------------------------------------!
+;	!                    expiration date                    !
+;	!-------------------------------------------------------!
+;	!    write status flags     !        protection         !
+;	!-------------------------------------------------------!
+;	!                      label type                       !
+;	!-------------------------------------------------------!
+;	!          unused           !    record format code     !
+;	!-------------------------------------------------------!
+;	!                    expiration date                    !
+;	!-------------------------------------------------------!
+		CONT.
+;	!-------------------------------------------------------!
+;	!       record length       !       block length        !
+;	!-------------------------------------------------------!
+;	!                   block count word                    !
+;	!-------------------------------------------------------!
+;	!                protection from TAPOP.                 !
+;	!-------------------------------------------------------!
+;	!                job number owning drive                !
+;	!-------------------------------------------------------!
+;	!                   PPN owning drive                    !
+;	!-------------------------------------------------------!
+;	!                   label status word                   !
+;	!       status flags        !      position flags       !
+;	!-------------------------------------------------------!
+;	!                     info from TLM                     !
+;	!-------------------------------------------------------!
+;	!                    WTOR ack code                      !
+;	!-------------------------------------------------------!
+;	!               current volid, two words                !
+;	!                written in 8-bit ASCII                 !
+;	!-------------------------------------------------------!
+;	!          first volid in set, two words                !
+;	!                written in 8-bit ASCII                 !
+;	!-------------------------------------------------------!
+;	!		User name (12 chars) ASCII		!
+;	!=======================================================!
+
+	;CONTINUED ON THE NEXT PAGE
+	;CONTINUED FROM THE PREVIOUS PAGE
+
+	PHASE	0			;NORMALLY INDEXED BY B
+
+TCB.FZ::!				;First location to be zeroed
+TCB.OB::! BLOCK OBJ.SZ			;An object block
+TCB.DV==:TCB.OB+OBJ.UN			;CURRENT PHYSICAL UNIT
+TCB.WS::! BLOCK	1			;WAIT STATE WORD
+	TW.RUN==-1			;TCB IS WAITING TO RUN
+	TW.IGN==0			;TCB IS NOT WAITING
+	TW.MNT==1			;TCB IS WAITING FOR A MOUNT
+	TW.LBL==2			;TCB IS WAITING FOR OPR INTERVENTION
+					;  ON A LABEL FAILURE
+	TW.OFL==3			;WAITING FOR OFFLINE TAPE
+	TW.BLK==4			;WAITING FOR ANOTHER TCB TO DO WORK
+	TW.INM==5			;WAITING FOR NEW TAPE OR OPR RESPONSE
+					; DURING LABEL INITIALIZATION
+	TW.MAX==6			;MAX # OF WS CODES NOT COUNTING TW.RUN
+TCB.PZ==67				;SIZE OF TCB PDL
+TCB.PL::! BLOCK	TCB.PZ			;PUSHDOWN LIST
+TCB.AC::! BLOCK	20			;SPACE TO SAVE AC'S ON CONTEXT SWITCH
+TCB.IO::! BLOCK	1			;IO STATUS WORD
+	  TI.DEC==1B0			;I/O IS TO BE DONE IN DEC COMPATIBLE MODE
+	  TI.EOF==1B1			;LAST OPERATION SAW EOF
+	  TI.EOT==1B2			;LAST OPERATION SAW PHYSICAL EOT
+	  TI.OPN==1B3			;DEVICE IS OPEN FOR IO
+	  TI.BOT==1B4			;LAST OPERATION SAW BOT
+	  TI.LND==1B5			;SET IF LABEL DDB MUST BE DESTROYED
+	  TI.SOP==1B6			;SPECIAL OPEN BIT (OPEN AGAIN FOR
+					; SWITCH UNITS)
+	  TI.OAV==1B7			;DEVICE OPENED FOR AVR I/O
+	  TI.ABO==1B8			;ABORT CURRENT OPERATION
+	  TI.LET==1B9			;LAST OPERATION SAW LOGICAL EOT
+	  TI.LTP==1B10			;LAST TAPE IN VOLUME SET
+;FILOP. block for reading and writing
+TCB.FB::! BLOCK	.FOBRH+1		;Space for a FILOP block
+TCB.FU==:TCB.FB+.FOFNC			;Function, chan, bits word
+	  TF.DVH==FO.CHN		;Device handle (extended channel #)
+TCB.FI==:TCB.FB+.FOIOS			;The I/O status word (also dump mode
+					;   command list)
+TCB.DN==:TCB.FB+.FODEV			;NAME RETURNED BY LABEL GET
+	FLPLEN==.-TCB.FB		;Length of the FILOP area
+;End of FILOP. block
+
+	CHP8WD==^D<36/8>		;8-bit chars per word
+	BFRSIZ==<<^D80+CHP8WD-1>/CHP8WD>   ;Number of data words in buffer
+
+TCB.IC::! BLOCK	2			;TAPE INPUT CCW
+TCB.OC::! BLOCK	2			;TAPE OUTPUT CCW
+TCB.IB::! BLOCK	BFRSIZ+1		;ALLOCATE INPUT BUFFER+1
+TCB.WB::! BLOCK	BFRSIZ+1		;ALLOCATE OUTPUT BUFFER+1
+
+TCB.DS::! BLOCK	1			;UNIT TO BE DESTROYED AFER REEL SWITCH
+TCB.SN::! BLOCK	1			;FILE SECTION NUMBER
+TCB.PS::! BLOCK	1			;DENSITY AND POSITION WORD
+	TP.DEN==-1,,0			;MAG TAPE DENSITY
+	TP.POS==0,,-1			;FILE POSITION(ACTUAL OR DESIRED)
+TCB.RP::! BLOCK	1			;REQUESTED POSITION FROM /POSITION ON MOUNT
+	TP.RQP==0,,-1			;REQUESTED POSITION IS RH
+TCB.DT::! BLOCK	1			;EXPIRATION DATE
+TCB.PT::! BLOCK	1			;PROTECTION AND WRITE STATUS FROM MOUNT
+	TP.RWL==1B0			;BIT FOR /WL SWITCH (=1 IF USER SAID /WL)
+	TP.PRT==0,,-1			;PROTECTION
+TCB.LT::! BLOCK	1			;LABEL TYPE
+TCB.RF::! BLOCK	1			;RECORD FORMAT WORD
+	TF.RFM==0,,-1			;FORMAT CODE(SEE TAPOP. DOCUMENTATION)
+		;.TRFDF==0		;SYSTEM DEFAULT
+		;.TRFFX==1		;FIXED
+		;.TRFVR==2		;VARIABLE
+		;.TRFSP==3		;SPANNED
+		;.TRFUN==4		;UNDEFINED
+		.TRFMX==.TRFUN		;Biggest so far
+		.RFDEF==.TRFDF		;Our default
+	TF.FCT==-1,,0			;Forms control code
+		;.TFCNO==1		;Record contains NO forms control
+		;.TFCAS==2		;1st char of record is ASA forms control
+		;.TFCAM==3		;Records contain All forms control
+		.TFCMX==.TFCAM		;Biggest so far
+TCB.EX::! BLOCK	1			;EXPIRATION DATE FROM TAPOP.(IF SET)
+	TE.EXP==RHMASK			;EXPIRATION DATE (15 BIT FORMAT)
+	TE.CRE==LHMASK			;CREATION DATE (15 BIT FORMAT)
+TCB.GV::! BLOCK	1			;GENERATION AND VERSION NUMBER
+	TG.GEN==RHMASK			;GENERATION NUMBER
+	TG.VER==LHMASK			;VERSION NUMBER
+TCB.LN::! BLOCK	1			;RECORD AND BLOCK LENGTHS
+	TL.REC==-1,,0			;RECORD SIZE IN CHARACTERS
+	TL.BLK==0,,-1			;BLOCK SIZE IN CHARACTERS
+TCB.BC::! BLOCK	1			;BLOCK COUNT WORD
+TCB.PR::! BLOCK	1			;PROTECTION FROM TAPOP.
+TCB.JB::! BLOCK	1			;OWNER'S JOB NUMBER
+TCB.OW::! BLOCK	1			;OWNER'S PPN
+TCB.LI::! BLOCK	1			;JOB'S UNIVERSAL LOGIN TIME
+TCB.FN::! BLOCK	4			;FILE NAME FROM TAPOP.
+					;FORM ='FILE.EXT' IN 7 BIT ASCII
+TCB.ST::! BLOCK	1			;LABELING STATUS BITS
+	TS.VLV==1B0			;VOLUME LABELS HAVE BEEN VERIFIED
+	TS.PSN==1B1			;TAPE NEEDS POSITIONING
+	TS.INP==1B2			;TAPE HAS DONE INPUT
+	TS.OUT==1B3			;TAPE HAS DONE OUTPUT
+	TS.NTP==1B4			;NO TAPE PRESENT
+	TS.INI==1B5			;TAPE IS INITIALIZING LABELS
+	TS.NOW==1B6			;TAPE CAN'T BE WRITTEN ON
+	TS.WLK==1B7			;FILE IS WRITE-PROTECTED
+	TS.EXP==1B8			;FILE IS NOT EXPIRED
+	TS.D1A==1B9			;FILE IS TO BE DEC-10 ACCESS CHECKED
+	TS.FFF==1B11			;FIRST FILE FLAG(INDICATES FIRST FILE ON REEL)
+	TS.ERR==1B12			;ERROR INTERLOCK-MUST BE CLEAR BY
+					;USER-REQUEST TAPOP. TO CONTINUE
+	TS.NFI==1B13			;SAYS TO SUPRESS FIRST INPUT CHECKING
+	TS.NFO==1B14			;SAYS TO SUPPRESS FIRST OUTPUT
+	TS.PSF==1B15			;TAPE NEEDS POSITIONED BY FILE NAME
+					; MAY ALSO HAVE TS.PSN SET
+	TS.KIL==1B16			;DELETE THIS TCB
+	TS.SLR==1B17			;SKIP LABEL RELEASE CALL
+	TS.POS==0,,-1			;TAPE LABELER POSITION INFORMATION
+	  TS.IHL==1B35			;TAPE IS IN HEADER LABELS
+	  TS.ATM==1B33			;TAPE IS POSITIONED AFTER A TAPE MARK
+					;  THIS IMPLIES WE DON'T KNOW WHAT IS
+					;AFTER THE TAPE MARK -- MIGHT BE HEADER LABELS
+					;OR ANOTHER TAPE MARK (LOGICAL EOT)
+	  TS.IUD==1B32			;TAPE IS IN USER DATA
+					;  USED WHEN EQUIVALENT CHECKING
+					;  HAS BEEN DONE FOR A POSITIONING
+					; REQUEST
+	  TS.ILC==1B31			;INHIBIT LABEL PARAMETER CLEARING
+					; AFTER POSITIONING OPERATION.  USED
+					; BY ROUTINES THAT BACKSPACE INTO A
+					; FILE FOR THE PURPOSES OF APPENDING
+					; TO THAT FILE.  HENCE LABEL DATA IS
+					; STILL VALID.
+TCB.S2::! BLOCK 1			;SECOND TAPE STATUS WORD
+	TS.VPC==3B2			;VOLUME PROTECTION CHECK
+	   .TSASK==0			   ;ASK OPERATOR
+	   .TSABO==1			   ;ALWAYS ABORT
+	   .TSPRO==2			   ;ALWAYS PROCEED
+	TS.FSE==1B1			;FILE SEQUENCE ERROR PROCESSING
+TCB.SF::! BLOCK	1			;STRUCTURE FLAG WORD
+	TS.BOP==1B0			;BAD OWNER PPN
+	TS.HWP==1B1			;HARWARE WRITE PROTECTED
+	TS.HWC==1B2			;DOING HWP CHECKING
+	TS.NCK==1B3			;/NOCHECK SPECIFIED ON DISMOUNT
+	TS.OSN==1B4			;OVERRIDE DISK SET NUMBER ON MOUNT
+	TS.NRQ==7777B35			;NUMBER OF QUEUE REQUESTS
+TCB.PV::! BLOCK	1			;PSI CONDITIONS,,VECTOR ADDRESS
+TCB.PI::! BLOCK	1			;MASK OF INTERRUPTED CONDITIONS
+TCB.EC::! BLOCK	1			;ERROR CODES
+	TE.TRM==777			;TERMINATION CODE
+					;MUST MATCH PDVESE BYTE SIZE IN MONITOR
+TCB.IN::! BLOCK	1			;INFO FROM TS.INF IN TLM.ST 
+					; ON TAPE LABEL MESSAGE
+TCB.AK::! BLOCK	1			;WTOR ack code
+TCB.CH::! BLOCK	1			;Characteristics, parameters
+	  TC.TYP==77B5			;Device type code
+		%TAPE==1		;Magnetic tape
+		%DISK==2		;Disk drive
+		%DTAP==3		;DECtape
+	  TC.DN1==TF.DN1		;200 bpi supported
+	  TC.DN2==TF.DN2		;556 bpi supported
+	  TC.DN3==TF.DN3		;800 bpi supported
+	  TC.DN4==TF.DN4		;1600 bpi supported
+	  TC.DN5==TF.DN5		;6250 bpi supported
+	  TC.PDN==37			;Mask for all the bits
+
+	CHPVLD==6			;Six chars in a VOLID
+	CHPAWD==^D<36/7>		;7-bit (ASCII) chars per word
+	WP8VLD==<CHPVLD+CHP8WD-1>/CHP8WD   ;Words Per 8-bit VoLiD
+	WPAVLD==<CHPVLD+1+CHPAWD-1>/CHPAWD ;Words Per Asciz VoLiD
+	MAXVOL==^D8			;Max # of volumes in a disk file structure
+TCB.VO:! BLOCK	1			;Volume owner (PPN) from tape label
+TCB.FV::! BLOCK	WP8VLD			;Space for the first volume in the set
+TCB.VL::! BLOCK	MAXVOL			;Space for all the volids
+					;Note: For tape, we only use the first
+					; two words for the 'current' volid
+TCB.DU::! BLOCK	MAXVOL			;Space for unit names for disk volumes
+TCB.UN::! BLOCK	<^D12+5>/6		;Space for the user's name
+;The rest of the TCB is specific to Disk TCBs (DCBs)
+TCB.HO::! BLOCK	1			;IOWD to HOMe block
+TCB.SA::! BLOCK	1			;IOWD to SAT block
+TCB.RI::! BLOCK	1			;IOWD to RIB block
+TCB.BU::! BLOCK	1			;Blocks/unit (nominal)
+;Obsolete - Use TCB.DV instead
+TCB.FS::! BLOCK	1			;SIXBIT file str name being built
+TCB.NV::! BLOCK	1			;Number of units in str
+TCB.SP::! BLOCK	1			;STRUUO pointer
+TCB.UL::! BLOCK	1			;List handle for Unit Parameter blocks
+TCB.SL::! BLOCK	1			;List handle for SPT list, this
+					; list is parallel to TCB.UL
+;The next piece is for use during SET TAP INITIALIZE only
+TCB.IL::! BLOCK 1			;Initialize info word
+	TV.LBT==77B35			;Label type to initialize
+	TV.DEN==77B29			;Density code
+	TV.CNT==7777B23			;# of volumes to do
+	TV.NOE==1B4			;DRIVE CANNOT DO DATA SECURITY ERASE
+	TV.ERA==1B3			;ERASE THE TAPE IF POSSIBLE
+	TV.HLD==1B2			;Keep tape up after initialize
+	TV.OVR==1B1			;Override expriation check
+	TV.NEW==1B0			;/NEW-VOLUME (RE-INIT AN EXISTING TAPE)
+TCB.II::! BLOCK 1			;INITIALIZE INCREMENT FOR NEXT REELID
+TCB.OI::! BLOCK	1			;Owner ID (PPN)
+TCB.IP::! BLOCK	1			;Initialization protection
+TCB.IV::! BLOCK	1			;Current (or only) volid
+TCB.VP::! BLOCK 1			;POINTER TO LIST OF REELIDS
+TCB.VC::! BLOCK 1			;AOBJN POINTER TO CURRENT REELID
+TCB.IR::! BLOCK	1			;REQUEST-ID (/NEW)
+;End of intialization data area
+
+TCB.SZ::!
+TCB.LZ==:TCB.SZ-1			;Last loc to zero
+
+	DEPHASE
+SUBTTL	TLM -- Tape Labeling Message 
+
+;	!=======================================================!
+;	!          Length           !       Function Code       !
+;	!-------------------------------------------------------!
+;	!                      Device Name                      !
+;	!-------------------------------------------------------!
+;	!              ! Job Number  !  Info  !Type !Term !LBTYP!
+;	!=======================================================!
+
+	PHASE	0			;ALWAYS INDEXED BY M
+
+TLM.HD:! BLOCK	1			;HEADER WORD
+	TH.LEN==-1,,0			;LENGTH OF MESSAGE
+	TH.FUN==0,,-1			;FUNCTION CODE
+TLH.SZ:!				;Length of the tape labelling header
+TLM.DV:! BLOCK	1			;DEVICE NAME
+TLM.ST:! BLOCK	1			;MESSAGE STATUS
+	TS.JOB==777,,0			;JOB NUMBER OWNING TAPE
+	TS.INF==770000			;EXTRA INFO -- MTAPE CODE ON MTAPE
+					; OR FUNCTION CODE ON "USER REQUEST
+		TF.CLE==1		;CLEAR ERROR FUNCTION OF USER REQUEST
+	TS.RQT==7400			;REQUEST TYPE
+		LR.MOU==0		;MOUNT REQUEST
+		LR.FIN==1		;FIRST INPUT
+		LR.FOU==2		;FIRST OUTPUT
+		LR.POS==3		;POSITIONING REQUEST
+		LR.TM==4		;TAPE MARK SEEN
+		LR.EOT==5		;EOT (PHYSICAL) SEEN
+		LR.CLI==6		;CLOSE INPUT DONE
+		LR.CLO==7		;CLOSE OUTPUT DONE
+		LR.EOV==10		;FORCE END OF VOLUME
+		LR.URQ==11		;USER REQUEST
+		LR.ABO==12		;ABORT CURRENT OPERATION
+		LR.MAX==12		;MAX LABEL REQUEST CODE
+	TS.TRM==360			;TERMINATION CODE
+		LE.CON==IONOP%		;USED TO ASK TAPSER TO DO POSITIONING
+					; REQUEST
+		LE.EOF==IOEOF%		;RETURN EOF
+		LE.LTE==IOLTE%		;LABEL TYPE ERROR
+		LE.HDE==IOHLE%		;HEADER LABEL ERROR
+		LE.TRE==IOTLE%		;TRAILER LABEL ERROR
+		LE.VLE==IOVLE%		;VOLUME LABEL ERROR
+		LE.DER==IODER%		;DEVICE ERROR
+		LE.DTE==IOPAR%		;DATA ERROR
+		LE.WLK==IOWLE%		;WRITE LOCKED
+		LE.PSE==IOIPO%		;POSITIONING LABEL ERROR -- RETURNED
+					; FOR ILLEGAL POSITIONING REQUESTED
+		LE.BOT==IOBOT%		;BEGINNING OF TAPE
+		LE.IOP==IOIOP%		;ILLEGAL OPERATION
+		LE.FNF==IOFNF%		;FILE NOT FOUND
+		LE.CAN==IOCAN%		;OPR CANCELLED VOLUME SWITCH
+		LE.TMV==IOTMV%		;TOO MANY VOLS IN VOLUME SET
+		LE.LRA==IOLRA%		;LABELER REQUEST ABORTED BY RESET UUO
+		LE.VPF==IOVPF%		;VOLUME PROTECTION FAILURE
+		LE.FPF==IOFPF%		;FILE PROTECTION FAILURE
+		LE.UEF==IOUEF%		;UNEXPIRED FILE
+		CONT.
+	TS.LT==17			;LABEL TYPE
+		LT.BLP==0		;BYPASS LABEL PROCESSING
+		LT.SL==1		;STANDARD DEC (ANSI)
+		LT.SUL==2		;STANDARD WITH USER LABELS
+		LT.IL==3		;IBM STANDARD
+		LT.IUL==4		;IBM WITH USER LABELS
+		LT.LTM==5		;LEADING TAPE MARK
+		LT.NSL==6		;NON-STANDARD LABELS
+		LT.NL==7		;NO LABLELS
+	IFN FTCOBOL,<
+		LT.CBA==10		;OLD DEC COBOL ASCII LABELS
+		LT.CBS==11		;OLD DEC COBOL SIXBIT LABELS
+	>;END IFN FTCOBOL
+		LT.NLV==12		;No labels, user EOV (EOT) processing
+		LT.MAX==12		;MAXIMUM DEFINED LABEL TYPE
+
+	DEPHASE
+SUBTTL	MDC	--	Automatic Volume Recognition (MDC)
+
+;	!=======================================================!
+;	!          Length           !       Function Code       !
+;	!-------------------------------------------------------!
+;	!                      Device Name                      !
+;	!-------------------------------------------------------!
+;	!					  ! Device Type !
+;	!=======================================================!
+
+;	PHASE	TLH.SZ			;ALWAYS INDEXED BY M
+;
+;MDC.DV:! BLOCK	1			;DEVICE NAME
+;MDC.ST:! BLOCK	1			;DEVICE TYPE
+;	MD.TYP==77			;DEVICE TYPE
+;	DEPHASE
+SUBTTL	MOUNT Message
+
+COMMENT	\
+The MOUNT message is sent  to  PULSAR  by  OMOUNT  once  the
+operator  has  successfully answered OMOUNT's mount request.
+Upon receipt of this  message  PULSAR  builds  its  database
+(TCB)  for  the  specified drive and prepares for receipt of
+the VOLID message(s).
+\
+
+;	!=======================================================!
+;	!          Length           !       Function Code       !
+;	!-------------------------------------------------------!
+;	!                      Device Name                      !
+;	!-------------------------------------------------------!
+;	!               Job Number Mounting Tape                !
+;	!-------------------------------------------------------!
+;	!                       Owner PPN                       !
+;	!-------------------------------------------------------!
+;	!                      Label Type                       !
+;	!-------------------------------------------------------!
+;	!          Density          !         Position          !
+;	!-------------------------------------------------------!
+;	!                    Expiration Date                    !
+;	!-------------------------------------------------------!
+;	!                    File Protection                    !
+;	!-------------------------------------------------------!
+;	!                   Number of Volumes                   !
+;	!-------------------------------------------------------!
+;	!                     Write Status                      !
+;	!-------------------------------------------------------!
+;	!                          ITN                          !
+;	!=======================================================!
+
+;	PHASE	0			;POINTED TO BY M
+;
+;MOU.HD:! BLOCK	1			;HEADER WORD LIKE TLM.HD
+;	MO.LEN==LHMASK			;Length of the message
+;	MO.FUN==RHMASK			;Function (MOUNT of VOLID)
+;		FN.MOU==1		;FUNCTION CODE FOR MOUNT MESSAGE
+;		FN.VOL==2		;Function code for VOLID message
+;MOUHSZ:!				;Size of the MOUNT message header
+;
+;MOU.DV:! BLOCK	1			;DEVICE NAME
+;MOU.JB:! BLOCK	1			;JOB NUMBER MOUNTING TAPE
+;MOU.OW:! BLOCK	1			;PPN OF JOB
+;MOU.LT:! BLOCK	1			;LABEL TYPE
+;MOU.PS:! BLOCK	1			;POSITION REQUESTED AND DENSITY
+;	MP.DEN==-1,,0			;DENSITY
+;	MP.POS==0,,-1			;REQUESTED FILE POSITION ON VOLUME SET
+;MOU.DT:! BLOCK	1			;EXPIRATION DATE
+;MOU.PT:! BLOCK	1			;PROTECTION FOR FILES
+;MOU.NV:! BLOCK	1			;NUMBER OF VOLUMES IN VOLUME SET
+;MOU.WS:! BLOCK	1			;REQUESTED WRITE STATUS FOR THIS DEVICE
+;					; =1 IF /WL, =0 IF /WE
+;MOU.IT:! BLOCK	1			;ITN FOR THIS REQUEST
+;
+;MOU.SZ==.-MOU.HD			;LENGTH OF MOUNT MESSAGE
+;
+;	DEPHASE
+SUBTTL	VOLID Message
+
+COMMENT	\
+tHE VOLID message is  sent  by  OMOUNT  TO  PULSAR.   PULSAR
+determines which TCB to store the VOLID's in by matching the
+ITN in the VOLID message (VOL.IT) to a TCB with the same ITN
+(note that the ITN is only a temporary handle in the TCB and
+is  stored  in  VOL.VL  until  all  the  VOLID's  have  been
+received).
+\
+
+;	!=======================================================!
+;	!          Length           !       Function Code       !
+;	!-------------------------------------------------------!
+;	!                          ITN                          !
+;	!-------------------------------------------------------!
+;	!                                                       !
+;	\                                                       \
+;	\            list of VOLID's, two words each            \
+;	\                written in 8-bit ASCII                 \
+;	!                                                       !
+;	!=======================================================!
+
+;	PHASE	MOUHSZ		;POINTED TO BY M
+;
+;
+;VOL.IT:! BLOCK	1		;ITN FOR THIS REQUEST
+;
+;PKT.SZ==12			;MAXIMUM PACKET SIZE
+;VOL.VL:! BLOCK	PKT.SZ-VOL.VL	;VOLID STORAGE. NOTE THAT VOLID'S ARE
+;				;WRITTEN IN 8-BIT FORMAT AND ARE A
+;				;MAXIMUM OF 6 CHARACTERS EACH. THEREFORE
+;				;THERE IS AN IMPLIED MAXIMUM HERE OF 4
+;				;VOLID'S PER PACKET.
+;
+;
+;VOL.SZ:!			;LENGTH OF VOLID MESSAGE
+;
+;	DEPHASE
+SUBTTL	MACROs
+
+;Macro to see if the label type is generic unlabeled.
+;Note: this macro is NOT skippable
+DEFINE	JMPUNL	(AC,WHERE),<
+	CAXE	AC,LT.BLP
+	CAXN	AC,LT.LTM
+	JRST	WHERE
+	CAXE	AC,LT.NL
+	CAXN	AC,LT.NLV
+	JRST	WHERE
+>;END DEFINE JMPUNL
+
+;Macro to force a scheduling pass
+DEFINE	DOSCHD,<
+IFNDEF G$SCHD,<EXTERN G$SCHD>
+	SETOM	G$SCHD
+>;End define DOSCHD
+SUBTTL	ASCII8 Macro
+
+;MACRO TO GENERATE 8 BIT ASCII STRING CONSTANTS
+
+DEFINE	ASCII8(A,B,C)<
+		..X==0
+		..Z==1
+		..W==0
+		IRPC A,<
+			IFE ..Z-1,<..W==..W!<"A"B7>>
+			IFE ..Z-2,<..W==..W!<"A"B15>>
+			IFE ..Z-3,<..W==..W!<"A"B23>>
+			IFE ..Z-4,<..W==..W!<"A"B31>>
+			IFE ..Z-5,<
+				IFE ..X,<
+				B:
+				..X==1
+				>
+				EXP	..W
+				   ..Z==1
+				   ..W=="A"B7
+				>
+			..Z==..Z+1
+			>
+		IFE ..X,<B:>
+		EXP	..W
+C:	POINT	8,B
+		>
+IFN FTTRACE,<
+	DEFINE	$TRACE	(NAME,LEVEL,SIXWRD,CODE,%A),<
+	XLIST
+	IF2,<IFNDEF G$DEBUG,<EXTERN G$DEBUG>
+		IFNDEF STSD.L,<EXTERNAL STSD.L>>
+	SKIPN	G$DEBUG			;;Is debugging turned on?
+	JRST	%A			;;No
+	MOVX	TF,LEV'LEVEL'		;;Get the level bit
+	TDNN	TF,G$DEBUG		;;This level enabled?
+	JRST	%A			;;No, skip the type out
+	$TEXT	(,<'NAME' Device: ^W/TCB.DV(B)/ ^A>)
+	PUSHJ	P,STSD.L		;;Type out the status bits
+IFNB <SIXWRD>,<
+	$TEXT	(,<^W/SIXWRD/^A>)
+>;;END IFNB SIXWRD
+	$TEXT	(,<>)			;;CRLF
+IFNB <CODE>,<CODE>			;;Assemble the code, if any
+%A:!
+	LIST
+>;;END DEFINE $TRACE
+
+DEFINE MACLEV(X),<LEV'X'==1B'X'>
+	X==1
+REPEAT 6,<
+	MACLEV	(\X)			;Define the level symbols
+	X==X+1
+>
+>;;END IFN FTTRACE
+
+;Just NO-OP the $TRACE macro if we're not debugging
+IFE FTTRACE,<
+DEFINE $TRACE(A,B,C,D),<
+>
+>
+	SUBTTL	CPTR, CPTRI macros
+
+;These macro allow the easy access of any byte in a given label record
+; Each takes 2 arguments: 1) the desired CP in the record, and 2) the base
+;  address of the record.
+; One form of the macro generates a byte pointer to the desired CP
+; for use in a LDB context.  The other form generates a pointer for
+; use in an ILDB context.
+
+DEFINE MOD (I,N),<<I>-<<<I>/<N>>*<N>>>
+
+DEFINE CPTR(I,BASE),<POINT 8,<<<I>+CHP8WD-1>/CHP8WD>-1+BASE,<<<MOD(<I>+CHP8WD-1,CHP8WD)>+1>*8>-1>
+
+DEFINE CPTRI(I,BASE),<CPTR (<I>-1,<BASE>)>
+	SUBTTL 	ERROR SYMBOLS INTERNAL TO PULSAR
+
+	PLR%AB==1			;Abort typed by OPR
+	PLR%TY==2			;OPR confused, retype error line
+	PLR%ES==3			;End of volume set on vol switch
+	PLR%TM==4			;Too many volumes in volume set
+	PLR%CN==5			;OPR cancelled volume switch request
+	PLR%RT==6			;RETRY TYPED BY OPR
+	PLR%PR==7			;PROCCEED TYPED BY OPR
+
+	SUBTTL	More internal symbols
+
+	BLOKLN==100			;Length of the G$BLOK
+
+DEFINE	CHKLN(ALLOC,DESIRE),<IFL <ALLOC-DESIRE>,<
+	PRINTX ALLOCATED BLOCK SIZE ALLOC IS TO SMALL FOR DESIRED DESIRE>>
+
+;SYMBOLS USED DURING SHOW SYSTEM-LISTS
+	DS.CDL==1B0			;SHOW CRASH DUMP LIST
+	DS.ASL==1B1			;SHOW ACTIVE SWAP LIST
+	DS.SSL==1B2			;SHOW SYSTEM SEARCH LIST
+	DS.ALL==7B2			;ALL OF 'EM
+	SUBTTL	CHARACTER SET EQUIVALENCES	23-DEC-74	/ACK
+
+
+	IFNDEF	CKRDF.,<CKRDF.==0>	;DEFAULT IS DON'T PRINT A
+					; MESSAGE IF WE TRY TO
+					; REDEFINE SOMETHING.
+
+COMMENT	\
+
+	THIS ROUTINE DEFINES THE EQUIVALENCES BETWEEN THE ASCII,
+SIXBIT AND EBCDIC CHARACTER SETS.  IT DOES THIS BY DEFINING A SET
+OF SYMBOLS FOR EACH CHARACTER SET.  THE FORM OF A SYMBOL IS:
+
+	<LETTER 1><LETTER 2>%<NUMBER>
+WHERE:
+	LETTER 1	INDICATES THE CHARACTER SET TO WHICH THIS
+			 SYMBOL BELONGS.
+	LETTER 2	INDICATES THE CHARACTER SET TO WHICH THE
+			 VALUE OF THIS SYMBOL BELONGS.
+	NUMBER		INDICATES THE PARTICULAR CHARACTER TO WHICH
+			 THIS SYMBOL BELONGS.
+	THE VALUE OF THE SYMBOL IS THE CHARACTER, IN THE CHARACTER SET
+INDICATED BY <LETTER 2>, TO WHICH THE CHARACTER REPRESENTED BY THE
+SYMBOL IS EQUIVALENT.
+
+	THE CHARACTER SETS AND THE LETTERS USED TO REPRESENT THEM ARE:
+		SIXBIT	S
+		ASCII	A
+		EBCDIC	E
+
+EXAMPLES:
+
+	SYMBOL	VALUE			EXPLANATION
+
+	SA%20	 60	SIXBIT 20 ("0") IS EQUIVALENT TO ASCII 60 ("0").
+	SE%20	 360	SIXBIT 20 ("0") IS EQUIVALENT TO EBCDIC 360 ("0").
+	AS%60	 20	ASCII 60 ("0") IS EQUIVALENT TO SIXBIT 20 ("0").
+	ES%360	 20	EBCDIC 360 ("0") IS EQUIVALENT TO SIXBIT 20 ("0").
+
+	IF A SYMBOL IS ASSIGNED A DEFAULT VALUE BECAUSE IT HAS NO
+EQUIVALENT IN THE CHARACTER SET, THE VALUE WILL HAVE BIT 18 SET TO 1.
+
+\
+	SUBTTL	MACROS USED TO DEFINE THE EQUIVALENCES.
+
+;;NAME:		SET
+;;PURPOSE:	DEFINE ALL MACROS USED FOR EQUATING SYMBOLS.
+;;CALL:		SET <LETTER 1>,<LETTER 2>,<DEFAULT CHAR 1>,<DEFAULT CHAR 2>
+
+	DEFINE	SET	(L1, L2, D1, D2)<
+
+;;NAME:		E
+;;PURPOSE:	EQUATE TWO SYMBOLS TO THEIR VALUES.
+;;CALL:		E <VALUE 1>,<VALUE 2>
+
+	DEFINE	E	(V1, V2)<
+	V1A==V1
+	V2A==V2
+	%E1	\V1A,\V2A
+>;; END OF DEFINITION OF E.
+
+	DEFINE	%E1	(V1, V2)<
+	IFDEF	L1''L2'%'V1,<
+		IFN	L1''L2'%'V1-V2,<
+		%RDF	L1''L2'%'V1',\L1''L2'%'V1',\V2>>
+	IFNDEF	L1''L2'%'V1,<L1''L2'%'V1==V2>
+	IFDEF	L2''L1'%'V2,<
+		IFN	L2''L1'%'V2-V1,<
+		%RDF	L2''L1'%'V2',\L2''L1'%'V2',\V1>>
+	IFNDEF	L2''L1'%'V2,<L2''L1'%'V2==V1>
+>;; END OF DEFINITION OF %E1.
+;;NAME:		D<LETTER 1><LETTER 2>
+;;PURPOSE:	DEFAULT A RANGE OF SYMBOLS.
+;;CALL:		D<LETTER 1><LETTER 2>	<FIRST>,<LAST>
+
+	DEFINE	D'L1''L2	(F, L)<
+	%%T1==F
+	REPEAT	L-F+1,<%D'L1''L2	\%%T1,\D1
+	%%T1==%%T1+1>
+>;; END OF DEFINITION OF D'L1''L2'.
+
+	DEFINE	%D'L1''L2	(T1,T2)<
+	IFNDEF L1''L2'%'T1,<L1''L2'%'T1==T2!1B18>
+>;; END OF DEFINITION OF %D'L1''L2'.
+
+;;NAME:		D<LETTER 2><LETTER 1>
+;;PURPOSE:	DEFAULT A RANGE OF SYMBOLS.
+;;CALL:		D<LETTER 2><LETTER 1>	<FIRST>,<LAST>
+
+	DEFINE	D'L2''L1	(F, L)<
+	%%T1==F
+	REPEAT	L-F+1,<%D'L2''L1	\%%T1,\D2
+	%%T1==%%T1+1>
+>;; END OF DEFINITION OF D'L2''L1.
+
+	DEFINE	%D'L2''L1	(T1,T2)<
+	IFNDEF L2''L1'%'T1,<L2''L1'%'T1==T2!1B18>
+>;; END OF DEFINITION OF %D'L2''L1.
+;;NAME:		DS<LETTER 1><LETTER 2>
+;;PURPOSE:	DEFAULT A SINGLE SYMBOL TO A NON-STANDARD DEFAULT CHAR.
+;;CALL:		DS<LETTER 1><LETTER 2>	<VALUE>,<CHAR>
+
+	DEFINE	DS'L1''L2	(V, C)<
+	%D'L1''L2	\V,\C
+>;;END OF DEFINITION OF DS'L1''L2
+
+;;NAME:		DS<LETTER 2><LETTER 1>
+;;PURPOSE:	DEFAULT A SINGLE SYMBOL TO A NON-STANDARD DEFAULT CHAR.
+;;CALL:		DS<LETTER 2><LETTER 1>	<VALUE>,<CHAR>
+
+	DEFINE	DS'L2''L1	(V, C)<
+	%D'L2''L1	\V,\C
+>;;END OF DEFINITION OF DS'L2''L1'.
+
+;;NAME:		C<LETTER 1><LETTER 2>
+;;PURPOSE:	CHECK THAT ALL SYMBOLS IN A CHARACTER SET ARE DEFINED.
+;;CALL:		C<LETTER 1><LETTER 2>
+
+	DEFINE	C'L1''L2	<
+	%CHK	L1,L2
+	C'L1''L2
+>;;END OF DEFINITION OF C'L1''L2'.
+
+;;NAME:		C<LETTER 2><LETTER 1>
+;;PURPOSE	CHECK THAT ALL SYMBOLS IN A CHARACTER SET ARE DEFINED.
+;;CALL:		C<LETTER 2><LETTER 1>
+
+	DEFINE	C'L2''L1	<
+	%CHK	L2,L1
+	C'L2''L1
+>;;END OF DEFINITION OF C'L2''L1'.
+
+>;;END OF DEFINITION OF SET.
+;MISCELLANIOUS MACROS USED BY SET:
+
+	DEFINE	%RDF	(SYMBOL, V1, V2)<
+	IFN	CKRDF.,<
+	PRINTX	%ATTEMPT TO REDEFINE SYMBOL FROM V1 TO V2'.
+>>;END OF DEFINITION OF %RDF.
+
+	DEFINE	%CHK	(L1, L2)<
+	DEFINE	C'L1''L2	<
+	%%T1==0
+	IFIDN	<L1> <S>,<%%T1==77>
+	IFIDN	<L1> <A>,<%%T1==177>
+	IFIDN	<L1> <E>,<%%T1==377>
+	IFE	%%T1,<
+	PRINTX	?BAD CALL TO MACRO "SET".
+	PASS2
+	END
+>;;END OF IFE %%T1.
+	%%T2==0
+	REPEAT	%%T1+1,<%C'L1''L2	\%%T2
+	%%T2==%%T2+1>
+>;;END OF DEFINITION OF C'L1''L2'.
+
+	DEFINE	%C'L1''L2	(VALUE)<
+	IFNDEF	L1''L2'%'VALUE,<
+	PRINTX	%	L1''L2'%'VALUE IS NOT DEFINED.
+>>;;END OF DEFINITION OF %C'L1''L2'.
+>;;END OF DEFINITION OF %CHK.
+SUBTTL		  TABLE OF ASCII/EBCDIC EQUIVALENCES
+
+IF1,<	;ONLY DEFINE THE SYMBOLS ONCE.
+
+	SET	A,E,0,134
+
+;CONTROL CHARACTERS
+
+;	      ASCII,EBCDIC		ASCII		EBCDIC
+
+	E	000,000		;	<NULL>		<NULL>
+	E	001,001		;	<SOH>
+	E	002,002		;	<STX>
+	E	003,003		;	<ETX>
+	E	004,067		;	<EOT>		<EOT>
+	E	005,055		;	<ENQ>
+	E	006,056		;	<ACK>
+	E	007,057		;	<BELL>
+
+	E	010,026		;	<BS>		<BS>
+	E	011,005		;	<HT>		<HT>
+	E	012,045		;	<LF>		<LF>
+	E	013,013		;	<VT>
+	E	014,014		;	<FF>
+	E	015,025		;	<CR>		<NL>
+	E	016,006		;	<SO>		<LC>
+	E	017,066		;	<SI>		<UC>
+
+	E	020,044		;	<DLE>		<BYP>
+	E	021,024		;	<DC1>		<RES>
+	E	022,064		;	<DC2>		<PN>
+	E	023,065		;	<DC3>		<RS>
+	E	024,004		;	<DC4>		<PF>
+	E	025,075		;	<NAK>
+	E	026,027		;	<SYN>		<IL>
+	E	027,046		;	<ETB>		<EOB>
+
+	E	030,052		;	<CAN>		<SM>
+	E	031,031		;	<EM>
+	E	032,032		;	<SUB>		<CC>
+	E	033,047		;	<ESC>		<PRE>
+	E	034,023		;	<FS>		<TM>
+	E	035,041		;	<GS>		<SOS>
+	E	036,040		;	<RS>		<DS>
+	E	037,042		;	<US>		<FS>
+;GRAPHICS:
+
+;	      ASCII,EBCDIC		GRAPHIC
+
+	E	040,100		;	<SPACE>
+	E	041,132		;	!
+	E	042,177		;	"
+	E	043,173		;	#
+	E	044,133		;	$
+	E	045,154		;	%
+	E	046,120		;	&
+	E	047,175		;	'
+
+	E	050,115		;	(
+	E	051,135		;	)
+	E	052,134		;	*
+	E	053,116		;	+
+	E	054,153		;	,
+	E	055,140		;	-
+	E	056,113		;	.
+	E	057,141		;	/
+
+	E	060,360		;	0
+	E	061,361		;	1
+	E	062,362		;	2
+	E	063,363		;	3
+	E	064,364		;	4
+	E	065,365		;	5
+	E	066,366		;	6
+	E	067,367		;	7
+
+	E	070,370		;	8
+	E	071,371		;	9
+	E	072,172		;	:
+	E	073,136		;	;
+	E	074,114		;	<
+	E	075,176		;	=
+	E	076,156		;	>
+	E	077,157		;	?
+;	      ASCII,EBCDIC		GRAPHIC
+
+	E	100,174		;	@
+	E	101,301		;	A
+	E	102,302		;	B
+	E	103,303		;	C
+	E	104,304		;	D
+	E	105,305		;	E
+	E	106,306		;	F
+	E	107,307		;	G
+
+	E	110,310		;	H
+	E	111,311		;	I
+	E	112,321		;	J
+	E	113,322		;	K
+	E	114,323		;	L
+	E	115,324		;	M
+	E	116,325		;	N
+	E	117,326		;	O
+
+	E	120,327		;	P
+	E	121,330		;	Q
+	E	122,331		;	R
+	E	123,342		;	S
+	E	124,343		;	T
+	E	125,344		;	U
+	E	126,345		;	V
+	E	127,346		;	W
+
+	E	130,347		;	X
+	E	131,350		;	Y
+	E	132,351		;	Z
+	E	133,340		;	[	[THIS IS NOT REALLY
+				;	  EQUIVALENT, IT IS EBCDIC'S
+				;	  "+0".]
+	;	134		;	\	[NO EBCDIC EQUIVALENT.]
+	E	135,320		;	]	[THIS IS NOT REALLY
+				;	  EQUIVALENT, IT IS EBCDIC'S
+				;	  "-0".]
+	;	136		;	^	[NO EBCDIC EQUIVALENT.]
+	E	137,155		;	_
+;	      ASCII,EBCDIC		GRAPHIC
+
+	;	140		;	`	[NO EBCIDC EQUIVALENT.]
+	E	141,201		;	a
+	E	142,202		;	b
+	E	143,203		;	c
+	E	144,204		;	d
+	E	145,205		;	e
+	E	146,206		;	f
+	E	147,207		;	g
+
+	E	150,210		;	h
+	E	151,211		;	i
+	E	152,221		;	j
+	E	153,222		;	k
+	E	154,223		;	l
+	E	155,224		;	m
+	E	156,225		;	n
+	E	157,226		;	o
+
+	E	160,227		;	p
+	E	161,230		;	q
+	E	162,231		;	r
+	E	163,242		;	s
+	E	164,243		;	t
+	E	165,244		;	u
+	E	166,245		;	v
+	E	167,246		;	w
+
+	E	170,247		;	x
+	E	171,250		;	y
+	E	172,251		;	z
+	E	173,300		;	{	[THIS IS NOT REALLY
+				;	 EQUIVALENT, IT IS EBCIDC'S
+				;	 "+0".]
+	E	174,117		;	|
+	E	175,260		;	}	[THIS IS NOT REALLY
+				;	 EQUIVALENT, IT IS EBCIDC'S
+				;	 "-0".]
+	;	176		;	~	[NO EBCDIC EQUIVALENT.]
+	E	177,007		;	<DEL>
+;DEFAULT THE ASCII CHARACTERS WHICH HAVE NO EBCDIC EQUIVALENTS.
+
+;					ASCII		EBCDIC
+
+	DSAE	134,155		;	\		_
+	DSAE	136,117		;	^		|
+	DSAE	140,174		;	`		@
+	DSAE	176,155		;	~		_
+
+;MAKE SURE ALL ASCII CHARS ARE DEFINED.
+
+	CAE
+
+;DEFAULT EBCDIC CHARS WHICH HAVE NO ASCII EQUIVALENT TO "\".
+
+	DEA	0,377
+
+;MAKE SURE ALL EBCDIC CHARS ARE DEFINED.
+
+	CEA
+
+>	;END OF IF1 CONDITIONAL.
+	SUBTTL	ASCII/SIXBIT CHARACTER EQUIVALENCES.
+
+IF1,<	;ONLY DEFINE THE SYMBOLS ONCE.
+
+	SET	A,S,74,0
+
+;DEFINE THE NORMAL ASCII TO SIXBIT EQUIVALENCES.
+
+	I==40
+	REPEAT 100,<
+	E	I,I-40
+	I==I+1
+>
+
+;EQUATE THE LOWER CASE ASCII LETTERS TO THE UPPER CASE SIXBIT LETTERS.
+
+	I==141
+	REPEAT 32,<
+	E	I,I-100
+	I==I+1
+>
+
+;MAKE SURE ALL THE SIXBIT CHARS ARE DEFINED.
+
+	CSA
+
+;DEFAULT ASCII CHARACTERS WHICH HAVE NO SIXBIT EQUIVALENT.
+
+;						ASCII	SIXBIT
+
+	DSAS	11,0			;	<TAB>	<BLANK>
+	DSAS	173,73			;	{	[
+	DSAS	175,75			;	}	]
+
+	DAS	0,177			; EVERYTHING ELSE BECOMES "\".
+
+;MAKE SURE ALL THE ASCII CHARS ARE DEFINED.
+
+	CAS
+
+>	;END OF IF1 CONDITIONAL.
+	SUBTTL	EBCDIC/SIXBIT CHARACTER EQUIVALENCES.
+
+IF1,<	;ONLY DEFINE THE SYMBOLS ONCE.
+
+	SET	E,S,0,0
+
+;DO THIS BY USING EBCDIC TO ASCII AND ASCII TO SIXBIT EQUIVALENCES SO
+; THAT WE KEEP THINGS CONSISTANT.
+
+;MACROS:
+
+	DEFINE	A0 (A, B)<
+	%A0A==A&777
+	%A0B==B&777
+	A1	\%A0A,\%A0B
+>
+
+	DEFINE	A1 (A, B)<
+	%A1A==EA%'A'&777
+	%A1B==B&777
+	A2	\%A1A,\%A1B
+>
+
+	DEFINE	A2 (A, B)<
+	%A2A==AS%'A'&777
+	%A2B==B&777
+	E	\%A2B,\%A2A
+>
+;GENERATE THE EQUIVALENCES:
+
+;DEFAULT THE SIXBIT CHARS WHICH HAVE NO EBCDIC EQUIVALENT.
+
+;					SIXBIT		EBCDIC
+
+	DSSE	74,155		;	\		_
+	DSSE	76,177		;	^		.
+
+;DO THE UPPER CASE LETTERS FIRST OTHERWISE SIXBIT LETTERS WILL
+; BE CONVERTED TO LOWER CASE EBCDIC LETTERS.
+
+	I==301
+	REPEAT 77,<
+	A0	\I,I
+	I==I+1
+>
+
+;THE SAME PROBLEM OCCURS WITH SIXBIT BLANKS AND EBCDIC TABS.
+
+	A0	100,100
+
+;NOW DO THE REST.
+
+	I==0
+	REPEAT 301,<
+	A0	\I,I
+	I==I+1
+>
+
+
+;MAKE SURE ALL THE SIXBIT CHARS ARE DEFINED.
+
+	CSE
+
+;MAKE SURE ALL THE EBCDIC CHARS ARE DEFINED.
+
+	CES
+
+>	;END OF IF1 CONDITIONAL.
+; HERE IS A MACRO TO GIVE AN EBCDIC CHARACTER CODE BASED UPON ASCII 
+; LITERAL
+;		CALL:	EBC.CH("$")
+;
+;		GIVES THE EBCDIC CHARACTER CODE AS A VALUE
+
+DEFINE	SYM79(CH)<AE%'CH>
+
+DEFINE	EBC.CH(CH)<SYM79(\CH)>
+
+
+	SUBTTL	PLRHOM Home block definitions for PULSAR
+
+	;This was stolen from COMMOD !
+
+;PREFIX "HOM"
+;EACH FILE STRUCTURE HAS ONE HOME FILE HOME.SYS.  IT IS A "SPARSE FILE"
+;WITH RETRIEVAL INFORMATION IN FIRST BLOCK OF EACH GROUP.  HOWEVER ONLY
+;THE SECOND BLOCK OF EACH GROUP (1 CLUSTER) HAS DATA, THE REMAINING ONES
+;(IF  ANY) ARE 0, THE HOME FILE IS CONSTRUCTED SO THAT EACH GROUP IS ON A
+;SEPARATE UNIT WHERE 'UNIT' IS A SIDE OF A BRYANT MDF DISK, ONE OUT OF UP TO
+;FOUR BURROUGHS FIXED HEAD DISKS, ETC.
+
+;	INTERN	HOMNAM,HOMHID,HOMPHY,HOMSNM,HOMNXT,HOMPRV,HOMLOG
+;	INTERN	HOMLUN,HOMPPN,HOMHOM,HOMGRP,HOMSAT,HOMMFD,HOMSWP,HOMCRS,HOMMNT
+;	INTERN	HOMBAD,HOMPT1,HOMCNP,HOMCKP,HOMCLP,HOMK4S,HOMUTP
+;	INTERN	HOMBPC,HOMBSC,HOMSCU,HOMREF,HOMSIC,HOMSID,HOMSUN,HOMOVR
+;	INTERN	HOMGAR,HOMSLB,HOMCFS,HOMSPU,HOMCOD,CODHOM,HOMSLF,HOMTAB,HOMLEN
+;	INTERN	HOMSNP,HOMRCV,HOMSUF,HOMPUF,HOMUN1,HOMSRC,HOMK4C,HOMEND
+;	INTERN	HOMBTS,HOMSDL,HOMOPP
+;
+;IFN FTPSTR,<
+;	INTERN	HOMPVS,HOPPVS
+;>
+
+;DATA LOCATIONS IN HOME BLOCK:
+;WRITTEN BY MAP PROGRAM:
+
+HOMNAM==BLKNAM	;"HOM" IN SIXBIT (WRITTEN BY MAP PROGRAM)
+HOMHID==1	;SIXBIT UNIT ID (WRITTEN BY MAP PROGRAM)
+HOMPHY==2	;LH=PHYSICAL ADDRESS OF THIS HOME BLOCK ON THIS UNIT
+		;RH=PHYSICAL ADDRESS OF OTHER HOME BLOCK ON THIS UNIT
+		; BYTE (8) CYL ADR, (5) SURFACE, SECTOR ADR.
+		; (WRITTEN AND USED BY MAP PROGRAM)
+		; NO WORDS BELOW ARE CHANGED BY THE MAP PROGRAM
+;WRITTEN BY OPTIONAL ONCE ONLY DIALOG:
+
+HOMSRC==3	;LOCICAL POSITION OF THIS STR IN "SYS" SEARCH LIST(0...N)
+		; -1 MEANS NOT IN SYS SEARCH LIST
+HOMSNM==4	;SIXBIT FILE STRUCTURE NAME THIS UNIT BELONGS TO
+		; 0 INDICATES NOT IN A FILE STRUCTURE
+		; [IGNORED BY MONITOR WHEN A PACK IS MOUNTED
+		; FILE STRLST.SYS IS FINAL AUTHORITY FOR THE STR NAME]
+HOMNXT==5	;SIXBIT UNIT ID OF NEXT UNIT IN THIS FILE STRUCTURE.
+		; 0 IF THIS UNIT IS LAST OR ONLY UNIT IN FILE STRUCTURE.
+		; [CHECKED BY MONITOR AND OMOUNT CUSP WHENEVER PACK IS MOUNTED]
+HOMPRV==6	;SIXBIT UNIT ID OF PREVIOUS UNIT IN THIS FILE STRUCTURE.
+		; 0 IF THIS UNIT IS ONLY UNIT IN FILE STRUCTURE.
+		; [CHECKED BY MONITOR & OMOUNT CUSP WHENEVER PACK IS MOUNTED]
+HOMLOG==7	;SIXBIT LOGICAL UNIT NUMBER WITHIN FILE STRUCTURE OF THIS UNIT
+		; (E.G. DSKA0,DSKC12)
+HOMLUN==10	;LOGICAL UNIT NUMBER WITHIN FILE STRUCTURE OF THIS UNIT
+		; [CHECKED BY MONITOR AND OMOUNT CUSP WHENEVER PACK IS MOUNTED]
+HOMPPN==11	;PROJECT PROGRAMMER NUMBER OF USER WHO REFRESHED DISK
+		; UNDER TIME SHARING OR 0.
+HOMHOM==12	;LH=LOGICAL BLOCK NUMBER WITHIN UNIT(NOT STR)
+		; FOR 1ST. "HOME" BLOCK.  RH=LOGICAL BLOCK NO. WITHIN UNIT OF
+		; REDUNDANT HOME BLOCK(IN CASE FIRST HOME BLOCK IS BAD)
+		; NOTE: RESTRICTION THAT HOME BLOCKS ARE RESTRICETED TO FIRST
+		; 262,000 BLOCKS ON A UNIT.  KNOWING LOGICAL BLOCK ADR. OF
+		; HOME BLOCKS IS USEFUL ONLY TO RECOVERY PROGRAMS WHEN FILE
+		; STRUCTURE HAS BEEN CLOBBERRED.  MOST PROGRAMS WILL READ HOME
+		; BLOCKS VIA FILE HOME.SYS
+HOMGRP==13	;NO. OF BLOCKS (NOT CLUSTERS) PER GROUP TO TRY FOR
+		; ON SEQUENTIAL OUTPUT ALLOCATION
+HOMBSC==14	;# BLOCKS PER SUPER CLUSTER IN THIS STR
+HOMSCU==15	;# SUPER CLUSTERS PER UNIT
+HOMCNP==16	;BYTE POINTER FOR CLUSTER COUNT IN A RETRIEVAL POINTER
+HOMCKP==17	;BYTE POINTER FOR CHECKSUM IN A RETRIEVAL POINTER
+HOMCLP==20	;BYTE POINTER FOR CLUSTER ADDRESS IN A RETRIEVAL POINTER
+HOMBPC==21	;# BLOCKS PER CLUSTER(SAME FOR ALL UNITS IN AN STR)
+HOMK4S==22	;# OF K WORDS OF THIS UNIT USED FOR SWAPPING
+		; 0 MEANS NO SWAPPING SPACE ALLOCATED
+HOMREF==23	;NON-ZERO IF FILE STRUCTURE MUST BE REFRESHED
+		; BECAUSE SOME PARAMETER FOR THIS UNIT HAS BEEN CHANGED
+		; SET BY DISK ONCE ONLY CODE,CHECKED WHEN SYSTEM IS STARTED
+		; AND BY OMOUNT WHEN PACK MOUNTED
+
+HOMSIC==24	;# SAT BLOCKS IN CORE
+HOMSID==25	;SWAPPING ID - SIXBIT UNIT ID OF NEXT UNIT IN ACTIVE SWAPPING LIST
+		; 0 IF LAST UNIT( OR UNIT NOT IN ACTIVE SWAPPING LIST)
+HOMSUN==26	;LOGICAL UNIT # IN ACTIVE SWAPPING LIST(0,...,7).
+		; -1 INDICATES UNIT IS NOT IN ACTIVE SWAPPING LIST.
+		; (MAYBE CHANGED AT ONCE TIME WITHOUT REQUIRING REFRESHING
+		; PROVIDED SWAPPING SPACE ALLOCATED AT REFRESH TIME.)
+HOMSLB==27	;1ST. LOGICAL BLOCK ON UNIT FOR SWAPPING
+HOMCFS==30	;SWAPPING CLASS FOR UNIT
+HOMSPU==31	;# SAT BLOCKS PER UNIT
+HOMOVR==32	;-# OF BLOCKS OF OVERDRAW ALLOWED A USER ON THIS STR BEFORE
+		; NO MORE OUTPUTS ALLOWED.
+HOMGAR==33	;UPPER BOUND ON # OF BLOCKS GUARRANTEED TO USERS BY RESERVED
+		; QUOTAS.
+;WORDS WRITTEN BY REFRESHER:
+
+HOMTAB==34	;FIRST LOC OF TABLE OF LOG. BLOCK NOS OF SYSTEM FILES
+HOMSAT==HOMTAB	;LOGICAL BLOCK NO. WITHIN STR(NOT UNIT) OF 1ST RIB FOR SAT.SYS
+HOMHMS==35	; " FOR HOME.SYS
+HOMSWP==36	; " FOR SWAP.SYS
+HOMMNT==37	; " MAINT.SYS
+HOMBAD==40	; " BADBLK.SYS
+HOMCRS==41	; " FOR CRASH.SAV
+HOMSNP==42	; " SNAP.SYS
+HOMRCV==43	; " RECOV.SYS
+HOMSUF==44	; " SYS UFD
+HOMPUF==45	; " PRINTR UFD
+HOMMFD==46	; " FOR MFD [1,1].UFD
+HOMPT1==47	; COPY OF 1ST RETRIEVAL POINTER FOR MFD FOR STR THIS UNIT IS IN
+
+HOMUN1=50	;LOGICAL UNIT NUMBER OF UNIT ON WHICH MFD BEGINS
+HOMLEN==51	;FIRST ADDRESS OF TABLE OF LENGTHS OF FILES CREATED BY REFRESH
+		; LENGTHS NEEDED ARE FOR CRS,SNP,RCV, AND UFDS (IN THAT ORDER)
+
+		;57 IS LAST FILE LENGTH
+
+HOMUTP==57	;UNIT TYPE ON WHICH HOME BLOCK WAS WRITTEN (SEE UNYUTP)
+HOMRIP==60	;USED BY RIPOFF
+HOMKLB==61	;20 WORDS USED BY PDP-11 IN KL10 SYSTEMS
+HOMFEB==:61	;BLOCK NO OF FE.SYS (1ST DATA BLOCK)
+   FEVALID==:100000	;VALID ADR IF ON
+HOMFEL==:62	;LENGTH OF FE.SYS
+HOMFEA==101	;FE-FILE ADDRESS FOR KS10
+HOMFES==102	;FE-FILE LENGTH FOR KS10
+HOMTCS==103	;TRACK/CYL/SECTOR FOR KS10
+HOMKLE==104	;TO FIND FILES FOR BOOTSTRAP/DUMP
+HOMK4C==105
+HOMBTS==106	;BITS IN THE HOME BLOCK
+;IFN FTPSTR,<
+HOMPVS==HOMBTS	;WORD CONTAINING BIT WHICH SAYS PRIVATE STR
+;HOPPVS==1B35	;ON IF THIS UNIT IS CONTAINED IN A PRIVATE STR
+;HOSPVS==1	;BYTE SIZE
+;HONPVS==^D35	;BYTE PTR POS.
+;	$HIGH
+;HOYPVS::POINT	HOSPVS,HOMPVS(P1),HONPVS  ;BYTE POINTER TO BIT WHICH
+;		; IF 1 SAYS THIS UNIT IS IN A PRIVATE STR
+;	$LOW
+;>
+;IFN FTSETS,<
+HOMSET==HOMBTS	;WORD CONTAINING BYTE WHICH SPECIFIES WHICH SET THIS STRUCTURE
+		; BELONGS TO
+HOSSET==6	;BYTE SIZE
+HONSET==^D32	;BYTE POINTER POSITION
+;	$HIGH
+;HOYSET::POINT	HOSSET,HOMSET(P1),HONSET ;BYTE POINTER TO BYTE WHICH SPECIFIES
+;		; WHICH SET THIS STRUCTURE BELONGS TO
+;	$LOW
+;>; END IFN FTSETS
+HOMSDL==107	;POSITION OF THIS STR IN SYSTEM DUMP LIST (1...N)
+		;-1 OR 0 MEANS NOT IN SDL (0 FOR COMPATABILITY)
+HOMOPP==110	;OWNER PPN OF THIS STRUCTURE
+HOMMSU==:111	;FOR FUTURE USE
+HOMCUS==:112	;4 WORDS RESERVED TO CUSTOMERS
+HOMCUL==:115	;LAST WORD IN THE HOME BLOCK RESERVED TO CUSTOMERS
+HOMEND==115	;LAST WORD CONTAINING VALID DATA IN HOME BLOCK
+HOMVID==:165	;VOLUME ID (3 WORDS, 12 PDP-11 BYTES)
+HOMOKC==:170	;K FOR CRASH.SAV FILE
+HOMVSY==:173	;SYSTEM TYPE (TOPS-10)
+HOMCOD==176	;CONTAINS UNLIKELY CODE, LH=0
+CODHOM==707070  ;THE UNLIKELY CODE FOR THE HOME BLOCK
+HOMSLF==177	;LH=0, RH=THIS BLOCK (NO.T CLUSTER) ADR. WITHIN UNIT (SELF)
+HOMOWN==:170	;OWNER NAME
+
+;HOMFLG::0		;COUNT OF UNITS NEEDING HOME BLOCKS REREAD
+;RHBIOW::-10,,HOMBUF-1	;IOWD TO READ HOME BLOCKS AFTER FREE INTERRUPT
+;	0
+;HOMBUF::BLOCK	10
+;HOMBID=:HOMBUF+HOMHID
+;HOMBLG=:HOMBUF+HOMLOG
+SUBTTL	Definitions not in COMMOD
+
+	BLKNAM==0			;Offset to name word of HOM block
+	HOMEB1==1			;Logical block # of 1st home block
+	HOMEB2==^D10			;Logical block # of 2nd home block
+	BLKLEN==^D128			;Length of a disk block
+	END
+ 

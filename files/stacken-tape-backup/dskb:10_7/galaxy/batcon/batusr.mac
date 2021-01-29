@@ -1,0 +1,301 @@
+TITLE	BATUSR	- GALAXY-10 Batch controller user interface
+SUBTTL	C.D.O'Toole, D.P.Mastrovito /CDO/DPM 12-SEP-85
+
+
+;
+;
+;	      COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION
+;     1974,1975,1976,1977,1978,1979,1980,1981,1982,1983,1984,1986.
+;			ALL RIGHTS RESERVED.
+;			  
+;                    
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+
+
+	SEARCH	BATMAC			;BATCON SYMBOLS
+	SEARCH	GLXMAC			;GALAXY SYMBOLS
+	SEARCH	QSRMAC			;QUASAR SYMBOLS
+	SEARCH	ORNMAC			;ORION SYMBOLS
+
+	PROLOG	(BATUSR)		;SET UP
+
+	%%.BAT==:%%.BAT			;FORCE VERSION INTO SYMBOL TABLE
+
+TOPS10	<IF1,<PRINTX [Assembling GALAXY-10 BATUSR]>>
+TOPS20	<IF1,<PRINTX [Assembling GALAXY-20 BATUSR]>>
+SUBTTL	Table of contents
+
+
+;               TABLE OF CONTENTS FOR BATUSR
+;
+;
+;                        SECTION                                   PAGE
+;    1. Table of contents.........................................   2
+;    2. Introduction..............................................   3
+;    3. Initialization............................................   4
+;    4. Job scheduler.............................................   5
+;    5. IPCF message processing...................................   6
+;    6. Start of job..............................................   7
+;    7. Log file header...........................................   8
+;    8. LOGIN a job...............................................   9
+;    9. Post LOGIN processing.....................................  10
+;   10. Honor a job's input request...............................  11
+;   11. KJOB processing...........................................  12
+;   12. End of job processing.....................................  13
+;   13. End.......................................................  14
+SUBTTL	Introduction
+
+
+; This module contains user (customer) exit code.  By putting  all
+; customer  modifications  in  this  module,  changes to supported
+; BATCON  modules  will  be  minimized.   Each   routine   has   a
+; description of the calling sequences, the ACs available and when
+; they are called.  In addition, many routines  show  examples  of
+; how to use BATCON facilities to make log file entries, send text
+; to PTYs, etc.  Only the BATCON hooks are supported.  An  attempt
+; was  made to provide calls to BATUSR from places in BATCON where
+; the customer would be most likely to make  local  modifications.
+; Please do not take this as a commitment on DEC's part to provide
+; subroutine calls in every major BATCON routine.  This module  is
+; completely   unsupported.    Any  suggestions  to  improve  it's
+; usefulness will be accepted, but do not expect  all  suggestions
+; to be implemented.
+SUBTTL	Initialization
+
+
+; Initialization code called at BATCON startup.  This routine will
+; be  called  after  all  normal  BATCON  initialization  has been
+; performed.  All comunication with QUASAR has  been  set  up  and
+; BATCON is ready to enter its toplevel job scheduler loop.
+;
+; Context:	BATCON
+; ACs setup:	None
+; AC usage:	None need to be preserved
+; Return:	CPOPJ
+;
+U$INIT::POPJ	P,			;RETURN
+SUBTTL	Job scheduler
+
+
+; Job scheduler code  will  be  called  at  the  begining  of  the
+; scheduling  loop  prior to any other calls.  Here, global checks
+; may be made similar to the check in BATCON for killing all  jobs
+; due to a major Galaxy disaster.
+;
+; Context:	BATCON
+; ACs setup:	None
+; AC usage:	None need to be preserved
+; Return:	CPOPJ
+;
+U$SCHD::POPJ	P,			;RETURN
+SUBTTL	IPCF message processing
+
+
+; The IPCF message processor will be called after BATCON verrifies
+; that the message came from QUASAR or ORION, and  has  determined
+; the message type (be it known or unknown).
+;
+; Context:	BATCON
+; ACs setup:	None
+; AC usage:	None
+; Return:	CPOPJ/CPOPJ1
+;
+U$IPCF::JRST	.POPJ1			;RETURN
+SUBTTL	Fireup processing
+
+
+; This routine will be called by FIREUP near the  end  of  NEXTJOB
+; processing.   Here  any  customer  defined  fields  in the EQ of
+; interest to BATCON may be copied into the stream's data base.
+;
+; Context:	Stream
+; ACs setup:	P1:= base address of NEXTJOB message
+;		R:= stream relocation
+;		F:= stream flags
+; AC usage:	ACs P1, R and F must be preserved
+; Return:	CPOPJ
+;
+U$FIRE::POPJ	P,			;RETURN
+SUBTTL	Start of job
+
+
+; This routine will be  called  at  the  begining  of  normal  job
+; processing.   At  this  point all normal job data base locations
+; will be setup (via a previous call to  FIREUP  by  NEXTJB).   At
+; this  point,  a site may wish to change some stream defaults.  A
+; popular local  modification  is  operator  character  defaulting
+; (effectively  doing a .OPERATOR $) See the code under the REPEAT
+; 0 for an example.
+;
+; Context:	Stream
+; ACs setup:	R:= stream relocation
+;		F:= stream flags
+; AC usage:	ACs R and F must be preserved
+; Return:	CPOPJ
+;
+U$STJB::
+REPEAT	0,<				;EXAMPLE
+	MOVEI	S1,"$"			;GET DEFAULT .OPERATOR CHARACTER
+	MOVEM	S1,.JBOCH(R)		;STORE IT
+>					;END OF REPEAT 0
+	POPJ	P,			;RETURN
+SUBTTL	Log file header
+
+
+; This routine  will  all  the  customer  to  append  any  special
+; information  to  the  end of the standard batch log file header.
+; Remember, to cause a time stamped and identified line to  appear
+; in the log file header, a $IDHDR macro must be used.  The normal
+; $IDENT won't work.  An example of how to  put  information  into
+; the log file header (spooled output limits) follows.
+;
+; Context:	Stream
+; ACs setup:	R:= stream relocation
+;		F:= stream flags
+; AC usage:	ACs R and F must be preserved
+; Return:	CPOPJ
+;
+U$LOGH::
+REPEAT	0,<				;EXAMPLE
+	GETLIM	T1,.JQLIM(R),SLPT	;GET SPOOLED LPT LIMIT
+	GETLIM	T2,.JQLIM(R),SCDP	;GET SPOOLED CDP LIMIT
+	GETLIM	T3,.JQLIM(R),SPTP	;GET SPOOLED PTP LIMIT
+	GETLIM	T4,.JQLIM(R),SPLT	;GET SPOOLED PLT LIMIT
+	$TEXT	(L$PHDR##,<
+		Spooled output limits
+	LPT:	^D6R /T1/		CDP:	^D6R /T2/
+	PTP:	^D6R /T3/		PLT:	^D6R /T4/
+>)
+>					;END OF REPEAT 0
+	POPJ	P,			;RETURN
+SUBTTL	LOGIN a job
+
+
+; This routine is called after all normal LOGIN command processing
+; is  completed.  At this point, a terminating carriage-return has
+; not been sent to the job, so a site may add any  LOGIN  switches
+; that  are  not  normally  added by BATCON.  Two character output
+; routines are available for this  purpose.   The  first  the  the
+; normal  output  routine  B$CPUT,  used to send any character but
+; double quotes.  Should a switch argument require  quotes  around
+; the  string,  the second routine, B$CQUO must be used.  Examples
+; of both are REPEAT 0'd out below.  Make sure that no terminating
+; carriage-return is sent.  That will be handled by BATCON.
+;
+; Context:	Stream
+; ACs setup:	R:= stream relocation
+;		F:= stream flags
+;		J:= job status word
+; AC usage:	ACs R, F and J must be preserved
+; Return:	CPOPJ
+;
+U$LOGI::
+REPEAT	0,<				;EXAMPLE
+	$TEXT	(B$CPUT##,</WATCH:VERSION^A>) ;APPEND /WATCH:VERSION TO LINE
+>					;END OF REPEAT 0
+
+REPEAT	0,<				;EXAMPLE
+	$TEXT	(B$CPUT##,</REMARK:">)	;SEND SWITCH AND STARTING QUOTE
+	$TEXT	(B$CQUO##,<THIS IS "QUOTED" TEXT^A>) ;SEND THE QUOTED TEXT
+	MOVEI	S1,""""			;GET A TERMINATING QUOTE
+	PUSHJ	P,B$CPUT##		;SEND IT
+>					;END OF REPEAT 0
+	POPJ	P,			;RETURN
+SUBTTL	Post LOGIN processing
+
+
+; When this routine is called, the batch job has sucessfully  been
+; logged  in.   Had  the  LOGIN  failed,  the  normal  LOGIN error
+; analysis would have been performed and the  stream  terminiated.
+; This is a good point to cause any special programs to run or set
+; special terminal parameters.  Remember, the  LOGIN  process  has
+; been  completed  by  the  time  this  routine  is called, so any
+; programs that are usually run as a result of LOGIN (via /RUN  in
+; SWITCH.INI) has already taken place.
+;
+; Context:	Stream
+; ACs setup:	R:= stream relocation
+;		F:= stream flags
+;		J:= job status word
+; AC usage:	ACs R, F and J must be preserved
+; Return:	CPOPJ/CPOPJ1
+;
+U$PLGN::JRST	.POPJ1			;RETURN
+	SUBTTL	Honor a job's input request
+
+
+; This routine will be  called  (from  HONORJ)  at  the  start  of
+; processing a new command line.  Prior to being called, all error
+; checking has taken place and I/O completed.  A new command  line
+; has not been read in yet.
+;
+; Context:	Stream
+; ACs setup:	R:= stream relocation
+;		F:= stream flags
+;		J:= job status word
+; AC usage:	ACs R, F and J must be preserved
+; Return:	CPOPJ/CPOPJ1
+;
+U$HNRJ::JRST	.POPJ1			;RETURN
+SUBTTL	KJOB processing
+
+
+; Any pre-KJOB processing  is  performed  here.   At  this  point,
+; BATCON  has determined that the job must be logged out.  The job
+; has been put at monitor level.  All that remains is to send  the
+; KJOB command.  This is a good place th run any programs or issue
+; commands that might inform the batch  user  of  such  things  as
+; charges  accumulated since LOGIN time.  The example below (under
+; the REPEAT 0) does just that.
+;
+; Context:	Stream
+; ACs setup:	R:= stream relocation
+;		F:= stream flags
+;		J:= job status word
+; AC usage:	ACs R, F and J must be preserved
+; Return:	CPOPJ
+;
+U$KJOB::
+REPEAT	0,<				;EXAMPLE
+	PUSHJ	P,B$CINI##		;INITIALIZE THE COMMAND BUFFER
+	$TEXT	(B$CPUT##,<R CHARGE>)	;RUN THE "CHARGE" PROGRAM
+	PUSHJ	P,B$SETB##		;RESET THE COMMAND BUFFER BYTE POINTER
+	PUSHJ	P,B$XFER##		;TRANSFER THE BUFFER TO THE PTY
+	PUSHJ	P,IOWAIT##		;WAIT FOR I/O COMPLETION
+>					;END OF REPEAT 0
+	POPJ	P,			;RETURN
+SUBTTL	End of job processing
+
+
+; This routine is called from B$CLOS after the job has been logged
+; out.   All  that  remains  is to prepare the release message and
+; sned it to QUASAR.  Only a few  thing  could  be  modified  now.
+; They  include  log  file disposition (/OUTPUT:[ERROR!LOG!SPOOL])
+; and spooled input file deletion (TOPS-20 only).
+;
+; Context:	Stream
+; ACs setup:	R:= stream relocation
+;		F:= stream flags
+;		J:= job status word
+; AC usage:	ACs R, F and J must be preserved
+; Return:	CPOPJ
+;
+U$CLOS::POPJ	P,			;RETURN
+SUBTTL	End
+
+
+	End

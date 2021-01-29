@@ -1,0 +1,377 @@
+ 	TITLE	STOPCD		Type out stopcd type information
+	SUBTTL	Tarl Neustaedter
+	SEARCH	UUOSYM,SCNMAC,MACTEN
+	.REQUE	REL:SCAN
+	EXTERN	.TYOCH
+	TWOSEG
+	RELOC	400000
+	RELOC
+	OPDEF	CALL	[PUSHJ	P,]
+		.NODDT	CALL
+
+T4=1+<T3=1+<T2=1+<T1=1>>>
+P4=1+<P3=1+<P2=1+<P1=5>>>
+P=17
+
+
+
+GTBDST:
+CONFIG:	BLOCK	5
+SYSDAT:	BLOCK	2
+UPTIME:	BLOCK	1
+SYSNDS:	BLOCK	1		;Number of debug stopcds
+SYSNJS:	BLOCK	1		;number of job stopcds
+SYSNCS:	BLOCK	1		;Number of CPU stopcodes
+SYSNIS:	BLOCK	1		;Number of BUGINFs
+CNFWHY:	BLOCK	1		;why reload
+CNFDBG:	BLOCK	1		;debugf
+SYSPC:	BLOCK	1		;stopcd pc
+SYSCD:	BLOCK	1		;stopcd name
+SYSJN:	BLOCK	1		;stopcd job
+SYSTN:	BLOCK	1		;stopcd tty
+SYSPN:	BLOCK	1		;stopcd program
+SYSUU:	BLOCK	1		;stopcd uuo
+SYSUP:	BLOCK	1		;stopcd PC
+SYSPP:	BLOCK	1		;stopcd ppn
+SYSUD:	BLOCK	1		;stopcd UDT
+SYSCP:	BLOCK	1		;stopcd CPU
+SYSTY:	BLOCK	1		;stopcd type
+NOW:	BLOCK	1		;Current UDT
+STOPTN:	BLOCK	1		;Startup option
+STRMON:	BLOCK	1		;Bootstrap structure
+FILMON:	BLOCK	1		;Bootstrap file name
+EXTMON:	BLOCK	1		;Bootstrap file extension
+PPNMON:	BLOCK	1		;Bootstrap UFD
+SFDMON:	BLOCK	5		;Bootstrap SFD list
+
+;End of GTBTAB storage
+
+UPDIFF:	BLOCK	1		;Offset from NOW back to reload time
+STACK:	BLOCK	100		;stack
+
+RELOC
+
+PDL:	IOWD	100,STACK	;pointer to stack
+GTBTAB:	%CNFG0			;CONFIG string
+	%CNFG1
+	%CNFG2
+	%CNFG3
+	%CNFG4
+	%CNDT0			;SYSDAT string
+	%CNDT1
+	%CNSUP			;System uptime
+        %SYNDS                  ;Number of debug stopcds
+        %SYNJS                  ;Number of job stopcds
+	%SYNCS			;Number of CPU stopcodes
+	%SYNIS			;Number of BUGINF's
+        %CNWHY                  ;why reload
+        %CNDBG                  ;debugf
+        %SYSPC		        ;stopcd pc
+        %SYSCD		        ;stopcd name
+        %SYSJN		        ;stopcd job
+        %SYSTN		        ;stopcd tty
+        %SYSPN		        ;stopcd program
+        %SYSUU		        ;stopcd uuo
+        %SYSUP		        ;stopcd PC
+	%SYSPP			;stopcd ppn
+	%SYSUD			;stopcd UDT
+	%SYSCP			;stopcd CPU
+	%SYSTY			;stopcd type
+	%CNDTM			;Current UDT
+	%CNOPT			;Startup option
+	%CNMBS			;Bootstrap STR
+	%CNMBF			;Bootstrap file name
+	%CNMBX			;Bootstrap file extension
+	%CNMBD			;Bootstrap UFD
+	%CNSF1			;Bootstrap first SFD
+	%CNSF2			;Bootstrap second SFD
+	%CNSF3			;Bootstrap third SFD
+	%CNSF4			;Bootstrap fourth SFD
+	%CNSF5			;Bootstrap last SFD
+GTBIOD:	XWD GTBTAB-.,GTBTAB	;iowd to gettabs to do
+
+TIMTAB:	[ASCIZ \week\]
+	[ASCIZ \day\]
+	[ASCIZ \hour\]
+	[ASCIZ \minute\]
+	[ASCIZ \second\]
+
+DBFTAB:	[ASCIZ \System being debugged\]
+	[ASCIZ \Reload on debug stopcd's\]
+	[ASCIZ \Reload on job errors\]
+	[ASCIZ \No auto reloads\]
+	[ASCIZ \Stop system on cpu stopcd on any cpu\]
+	[ASCIZ \Don't do continuable stopcd dump on debug stopcds\]
+	[ASCIZ \Don't do continuable stopcd dump on job stopcds\]
+	[ASCIZ \Don't do continuable stopcd dump on cpu stopcds\]
+	[ASCIZ \Call CRSCPY on next clock tick on boot cpu\]
+	[ASCIZ \Call KDPLDR on next clock tick\]
+	[ASCIZ \Copy output to FRCLIN to system cty\]
+	[ASCIZ \Disable next CRSCPY request\]
+	[ASCIZ \Reload in progress (RECON. function .RCRLD)\]
+	[ASCIZ \Reload after dump (don't dump twice in MONBTS)\]
+	[ASCIZ \?illegal bit set\]
+	[ASCIZ \?illegal bit set\]
+	[ASCIZ \?illegal bit set\]
+	[ASCIZ \?illegal bit set\]
+	[ASCIZ \Can enter EDDT on CPU0 using XCT .C0DDT\]
+	[ASCIZ \Can enter EDDT on CPU1 using XCT .C1DDT\]
+	[ASCIZ \Can enter EDDT on CPU2 using XCT .C2DDT\]
+	[ASCIZ \Can enter EDDT on CPU3 using XCT .C3DDT\]
+	[ASCIZ \Can enter EDDT on CPU4 using XCT .C4DDT\]
+	[ASCIZ \Can enter EDDT on CPU5 using XCT .C5DDT\]
+DBGIOD:	XWD DBFTAB-.,DBFTAB
+
+STYTAB:	SIXBIT	/HALT/
+	SIXBIT	/STOP/
+	SIXBIT	/JOB/
+	SIXBIT	/DEBUG/
+	SIXBIT	/CPU/
+	SIXBIT	/INFO/
+	SIXBIT	/EVENT/
+STYIOD:	XWD STYTAB-.,STYTAB
+
+
+START:	PORTAL	.+2		;Allow protected entry
+	PORTAL	.+2		;Ditto
+	JFCL			;No CCL entry defined
+	RESET			;Close down IO
+	MOVE	P,PDL
+	MOVE	P2,GTBIOD	;Gettab IOWD
+	MOVEI	P3,GTBDST	;Place to store GETTAB info
+GTCNFG:	MOVE	P1,(P2)		;Get gettab request
+	GETTAB	P1,		;Get it
+	  SETZ	P1,		;not there, use default
+	MOVEM	P1,(P3)		;Stash result
+	AOS	P3		;increment pointer
+	AOBJN	P2,GTCNFG	;and loop
+
+
+TYPOUT:	CALL	.TCRLF##	;Blank space
+	OUTSTR	CONFIG		;Type out monitor name
+	OUTCHR	[.CHTAB]	;seperate
+	OUTSTR	SYSDAT		;Type out creation date
+	CALL	.TCRLF##
+	SKIPN	PPNMON		;Were we really loaded from somewhere?
+	JRST	TFILE0		;No--skip this
+	OUTSTR	[ASCIZ /Loaded from file:  /] ;Introduction
+	SKIPE	T1,STRMON	;Get structure
+	CALL	.TSIXN##	;Type it
+	CALL	.TCOLN##	;Punctuate it
+	SKIPE	T1,FILMON	;Get file name
+	CALL	.TSIXN##	;Type it
+	MOVE	T1,EXTMON	;Get ('EXE')
+	LSH	T1,-6		;Make room for the dot
+	TLO	T1,'.  '	;Insert it
+	CALL	.TSIXN##	;Type the extension
+	MOVE	T1,[TS.DRP,,PPNMON] ;Point to path list
+	CALL	.TDIRB##	;Type the path block
+	CALL	.TCRLF##	;End the line
+TFILE0:	CALL	.TCRLF##	;Separate sections
+;uptime
+	MOVE	T1,UPTIME	;Get uptime
+	IDIV	T1,[^D<24*60*60*60>] ;Convert to days & fraction
+	SETZ	T3,		;Doubleword for DIV
+	DIV	T2,[^D<24*60*60*60>] ;Convert to binary fraction
+	ASHC	T1,^D18		;Shift over to UDT format
+	MOVEM	T1,UPDIFF	;Save for typing reload date-time
+	OUTSTR	[ASCIZ \Current time:  \]
+	MOVE	T1,NOW		;UDT
+	PUSHJ	P,.TDTTM##	;Give date-time
+	PUSHJ	P,.TCRLF##	;Next line
+	OUTSTR	[ASCIZ \Last reload:  \]
+	MOVE	T1,NOW		;Current UDT
+	SUB	T1,UPDIFF	;Offset back to reload UDT
+	PUSHJ	P,.TDTTM##	;Give another date-time
+	PUSHJ	P,.TCRLF##	;End line
+	MOVE	P1,UPTIME	;Get uptime
+	IDIVI	P1,^D60		;convert to seconds
+	IDIVI	P1,^D60		;
+	PUSH	P,P2		;save seconds
+	IDIVI	P1,^D60		;
+	PUSH	P,P2		;save minutes
+	IDIVI	P1,^D24		;
+	PUSH	P,P2		;save hours
+	IDIVI	P1,^D7		;
+	PUSH	P,P2		;save days
+	PUSH	P,P1		;save weeks
+	MOVE	P2,[XWD -5,TIMTAB] ;Pointer to names of times
+	SETO	P3,		;number of numbers we have printed
+	OUTSTR	[ASCIZ \Uptime: \]
+UPTIM1:	POP	P,P1		;restore a quantity
+	JUMPE	P1,UPTIM2	;if nothing, don't type this out
+	AOSE	P3		;printed anything yet?
+	OUTSTR	[ASCIZ \, \]	;seperate
+	MOVE	T1,P1		;number
+	CALL	.TDECW##	;type it out in decimal
+	OUTCHR	[" "]		;space
+	OUTSTR	@(P2)		;type out name
+	CAIE	P1,1		;was it singular?
+	OUTCHR	["s"]		;no, make it plural
+UPTIM2:	AOBJN	P2,UPTIM1	;and loop
+	CALL	.TCRLF##	;eol
+;Why reload
+	OUTSTR	[ASCIZ /Reason for last reload: /]
+	MOVE	T1,CNFWHY	;get it
+	CALL	.TSIXN##	;and type it out
+;stopcds
+	MOVE	T3,SYSNDS	;Start with debug stopcodes
+	ADD	T3,SYSNJS	;Add in job stopcodes
+	ADD	T3,SYSNCS	;Plus CPU stopcodes
+	ADD	T3,SYSNIS	;And BUGINFs
+;Check for validity of "Why reload" comment
+	MOVE	T1,[.GTWHY,,.GTSLF] ;Set for address of WHYTXT
+	GETTAB	T1,		;Find it
+	  HALT			;Has to be there
+	MOVE	T2,[.GTCNF,,.GTSLF] ;Set for address of CNFTBL
+	GETTAB	T2,		;Find it
+	  HALT			;Can't fail
+	HRRZS	T1		;Isolate WHYTXT address
+	CAIGE	T1,(T2)		;If in .C0CDB, STOPCDs are relevant
+	JUMPN	T3,STPCOD	;So go do it
+;why reload comment
+WHYCM0:	OUTCHR	[" "]		;seperating space
+	MOVEI	P1,.GTWHY	;Gettab table with why reload comment
+WHYCM1:	MOVE	T1,P1		;Copy gettab request
+	GETTAB	T1,		;ask for the value
+	 JRST	WHYCM4		;Must be end of comment
+	MOVEI	P3,5		;5 characters to output
+	MOVE	P4,[POINT 7,T1]	;byte pointer to text
+WHYCM2:	ILDB	P2,P4		;Get a character
+	JUMPE	P2,WHYCM4	;Terminate string on zero character
+	OUTCHR	P2		;type it out
+	SOJG	P3,WHYCM2	;loop
+	ADD	P1,[1,,0]	;Set up for next gettab request
+	JRST	WHYCM1		;loop
+WHYCM4:	CALL	.TCRLF##	;eol
+	SKIPN	T1,STOPTN	;Do we have a startup option?
+	JRST	TOPTN0		;No--skip this
+	PUSH	P,T3		;Yes--save STOPCD count
+	OUTSTR	[ASCIZ /Startup option: /] ;Label this
+	CALL	.TSIXN##	;Type it
+	CALL	.TCRLF##	;End the line
+	POP	P,T3		;Restore STOPCD count
+TOPTN0:	JUMPN	T3,STPCOD	;Type out stopcode info if needed
+	CALL	.TCRLF##
+	OUTSTR	[ASCIZ \No STOPCDs since last reload.\]
+	CALL	.TCRLF##
+	JRST	DEBUGF		;type out debugf bits
+
+;last stopcd typeout
+STPCOD:	CALL	.TCRLF##	;terminate why reload line
+	SETO	P2,		;No stopcodes yet
+STPINF:	SKIPN	T1,SYSNIS	;Any debug stopcodes?
+	JRST	STPCPU		;no, check job stopcodes
+	CALL	.TDECW##	;type number out
+	OUTSTR	[ASCIZ \ BUGINF\]
+	MOVE	T1,SYSNIS	;re-fetch
+	CAIE	T1,1		;was it singular?
+	OUTCHR	["s"]		;no, make it plural
+	AOS	P2		;Bump stopcode counter
+STPCPU:	SKIPN	T1,SYSNCS	;Any debug stopcodes?
+	JRST	STPDEB		;no, check job stopcodes
+	AOSE	P2		;Bump stopcode counter
+	OUTSTR	[ASCIZ \, \]	;Yes, a seperator
+	CALL	.TDECW##	;type number in decimal
+	OUTSTR	[ASCIZ \ CPU stopcd\]
+	MOVE	T1,SYSNCS	;re-fetch
+	CAIE	T1,1		;was it singular?
+	OUTCHR	["s"]		;no, make it plural
+STPDEB:	SKIPN	T1,SYSNDS	;any debug stopcds?
+	JRST	STPJOB		;no, go to descriptor part
+	AOSE	P2		;Bump stopcode counter
+	OUTSTR	[ASCIZ \, \]	;Yes, a seperator
+	CALL	.TDECW##	;type number out
+	OUTSTR	[ASCIZ \ DEBUG stopcd\]
+	MOVE	T1,SYSNDS	;re-fetch
+	CAIE	T1,1		;was it singular?
+	OUTCHR	["s"]		;no, make it plural
+STPJOB:	SKIPN	T1,SYSNJS	;any job stopcds?
+	JRST	STPDSC		;no, go to descriptor part
+	AOSE	P2		;Bump stopcode counter
+	OUTSTR	[ASCIZ \, \]	;Yes, a seperator
+	CALL	.TDECW##	;type out
+	OUTSTR	[ASCIZ \ JOB stopcd\]
+	MOVE	T1,SYSNJS	;re-fetch
+	CAIE	T1,1		;was it singular
+	OUTCHR	["s"]		;no, make it plural
+STPDSC:	OUTSTR	[ASCIZ \.\]	;terminate line.
+	CALL	.TCRLF##
+	OUTSTR	[ASCIZ \Last stopcd name was \]
+	SKIPN	T1,SYSCD	;stopcode name
+	HLLZ	T1,SYSPC	;If old monitor, might be here.
+	CALL	.TSIXN##	;in sixbit
+	SKIPN	SYSUD		;New monitor?
+	JRST	STPWHR		;No, can't do this
+	OUTSTR	[ASCIZ \ (type \] ;Yes, introduce type
+	MOVE	T1,SYSTY	;Get type
+	MOVE	T1,STYTAB(T1)	;Convert to type name
+	PUSHJ	P,.TSIXN##	;Spit it out
+	OUTCHR	[")"]		;End comment
+STPWHR:	OUTSTR	[ASCIZ \ called from exec PC \]
+	MOVE	P1,SYSPC	;get the pc
+	TLZ	P1,777740	;blow away flag bits
+	SUBI	P1,1		;Decrement to point at XCT
+	CALL	PCTYPE		;type it out as a PC
+	PUSHJ	P,.TCRLF##	;eol
+	SKIPN	SYSUD		;Did we get the UDT?
+	JRST	STPWHO		;No, forget this
+	OUTSTR	[ASCIZ \ on CPU\] ;Yes, introduce CPU number
+	MOVE	T1,SYSCP	;Fetch it
+	ADDI	T1,"0"		;Convert
+	OUTCHR	T1		;Type it
+	OUTSTR	[ASCIZ \ at \]	;Introduce the UDT
+	MOVE	T1,SYSUD	;Fetch it
+	PUSHJ	P,.TDTTM##	;Type it
+	PUSHJ	P,.TCRLF##	;Next line
+STPWHO:				;Who did it?
+	SKIPN	P1,SYSJN	;job number - was there one?
+	JRST	DEBUGF		;nope, skip over this stuff
+	OUTSTR	[ASCIZ \Job \]
+	MOVE	T1,P1		;Job numer
+	CALL	.TDECW##	;type job number
+	MOVE	T1,SYSPP	;user PPN
+	CALL	.TPPNW##	;in ppn format
+	OUTSTR	[ASCIZ \ on \]
+	MOVE	T1,SYSTN	;tty name
+	CALL	.TSIXN##	;in sixbit
+	OUTSTR	[ASCIZ \ running \]
+	MOVE	T1,SYSPN	;program name
+	CALL	.TSIXN##
+	CALL	.TCRLF##	;eol
+;what called it
+	OUTSTR	[ASCIZ \UUO was \]
+	MOVE	T1,SYSUU	;UUO
+	CALL	.TXWDW##	;Type out as XWD
+	OUTSTR	[ASCIZ \ at user PC \]
+	MOVE	P1,SYSUP	;User pc
+	CALL	PCTYPE		;type it out as a PC
+	CALL	.TCRLF##	;eol
+
+DEBUGF:	SKIPN	P1,CNFDBG	;Anything in DEBUGF?
+	JRST	DONE		;Nope.
+	OUTSTR	[ASCIZ \Debugging status:\]
+	CALL	.TCRLF##	;put on a seperate line
+	MOVSI	P2,400000	;Bit 0
+	MOVE	P3,DBGIOD	;iowd for debugf bit names
+DEBUG0:	TDNN	P2,P1		;Is this bit lit?
+	JRST	DEBUG1		;no, keep on going
+	OUTCHR	[.CHTAB]	;indent
+	OUTSTR	@(P3)		;type out the funny text
+	CALL	.TCRLF##	;and new line
+DEBUG1:	ROT	P2,-1		;shift bit around...
+	AOBJN	P3,DEBUG0	;loop on all the bits
+
+DONE:	MONRT.			;exit
+	JRST	START		;and do it all again
+
+PCTYPE:	MOVE	T1,P1		;copy to usefull place
+	TLZ	T1,^-37		;Mask down to valid section
+	TLNN	T1,-1		;is it a fullword or a half word?
+	JRST	PCTYP1		;halfword
+	CALL	.TXWDW##	;Fullword
+	TRNA			;and return
+PCTYP1:	CALL	.TOCTW##	;type PC out in octal
+	POPJ	P,		;and return
+
+	END	START

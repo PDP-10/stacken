@@ -1,0 +1,222 @@
+.f;.j;.lm 0;.rm 72
+.bl 10
+.c;SOS.DOC - changes from SOS V23(220) to SOS V23E(77)
+.bl 5;This is an attempt to describe and compare the two
+existing versions of SOS.  However, this is not a complete
+document describing both editors in detail; its goal is to
+explain the important differences and enhancements of the new
+SOS.
+.ch incompatibilities with the old sos
+.hl 1 Assumed dot on FIND and SUBSTITUTE commands
+Before, a null range specifier (just a CR after the ESC), on the
+F and S commands would start with the current line, and continue to
+the end of file to the first occurrence of the string. (e.g., start with
+_.:EF). The new SOS starts with the following line (e.g., .+1:EF). So, if
+you have printed line 100 and you give the command SA$B$ under the new
+SOS it will not make the change starting with line 100. In order to
+specify that you want the current line you must specify "." at the end of
+your F and S commands.
+.hl 1 Insert n lines syntax
+The syntax for inserting n lines starting at line m has changed from
+Im;!n to Im!n (the semicolon is now illegal).
+.hl 1 implied dot as a page specifier
+The implied dot as a page specifier has been removed. However,
+the implied dot as a line specifier still exists.  Thus P/ is
+illegal and P/. must be used instead.
+.hl 1 escape as a command
+In display mode _<ESC_> no longer jumps up a line to save space
+on display terminals.  This was thought to be confusing, as
+what appeared to be contiguous lines would be in reverse order.
+.HL 1 Display mode
+The new SOS tries to do fancy things with display terminals. In order
+to take advantage of this feature, your terminal type must be set correctly,
+or the display will not correctly reflect the state of the line. Your
+terminal type can be set by the command ".TERMINAL xxx", or by putting
+LOGIN/TERMINAL:TYPE:xxx in SWITCH.INI or by putting TYPE:xxx in SYS:TTY.INI.
+XXX is the terminal type (VT05, VT52, VT100, LA36, LA120, etc.). To read
+the terminal type, type ".INITIA TTY" and read the output under TYPE:.
+In addition, all terminal name specific switches such as /VT52 /VT05
+etc have been removed. SOS now reads your terminal type as set by
+the monitor, and does the display processing as best it can for
+the terminal type it thinks you are on.
+.hl 1 SWITCH.INI
+A great many extensions have been added to SWITCH.INI.
+Note now, SWITCH.INI is looked for under your logged in PPN, even
+if you have pivoted into another area or changed your default path
+into an SFD.
+Also, the /CORE:N switch has been removed, /WINDOW:N is nearly the same.
+.hl 1 special match characters
+The special match characters available with the FIND and SEARCH
+commands have been expanded.  A complete list of the special match
+characters appear below. Note that the C128 representation of some
+of these special match characters has been removed. It is hoped that
+these are more consistent and easily remembered.
+They are all entered as a control-E followed by a character, as described
+below:
+.S
+_^E equiv	meaning
+.BR;   char
+.S;.NF
+_^EC	match any character
+_^EA	match any alphanumeric (A-Z, a-z, 0-9)
+_^EL	match any letter (A-Z, a-z)
+_^EVU	match any upper case letter (A-Z)
+_^EVL	match any lower case letter (a-z)
+_^ED	match any digit (0-9)
+_^ES	match a separator
+_^E_<space_>  match a space or tab
+_^EZ	match end of line
+_^EB	match beginning of line
+.S
+_^EN	not the following character
+_^E*	zero or more of the following character
+_^E+	one or more of the following character
+_^EQ	quote the next character literally
+.S
+and on s output strings:
+.S
+_^EX	next match string from input side
+_^EnM	n-th match string from input side
+_^EnVU	Upper case equivalent n-th match string from input side
+_^EnVL	Lower case equivalent n-th match string from input side
+.F
+.HL 1 CONTROL-C DIALOG
+The options in the _^C dialog message now require that the action
+character be typed, and followed with a carriage return. To allow
+automatic exit without the dialog mode, use the switch /CCEXIT, which
+will allow you to _^C.
+.HL 1 EXIT AND DELETE
+The ED exit option is now illegal, unless the file you are editing
+is in readonly mode. A confirmation to delete the file will be required,
+unless /DELETE is set.
+.HL 1 EXACT CASE ON ALTER COMMANDS
+The alter commands to search for a character or string require exact
+case match by default. This may be overridden by the switch /NOAEXACT.
+Note that Find and Substitute strings still do not require exact case
+match.
+.HL 1 R SOS- CONSTRUCTION
+Before, given the construction ".R SOS-" SOS would prompt for a new file
+name, and "R SOS" would use the name of the previous file, if any. Now,
+either mode will use the name of the previous file. However, the 
+construction ".R SOS-file" will still edit "file", and is equivalent to
+the prefered syntax of simply ".SOS file".
+.ch New features of SOS 
+.hl 1 Fancy ALTER mode
+On display terminals (ADDS, INFOTON, REGENT 100, VT52 and VT05, VT100)
+a fancy alter mode is available.  This mode updates the line being
+altered continuously as characters are added, deleted or searched for.
+Also, many new character, word, and line altering commands have been
+added.  For more information on these, refer to the SOS manual.
+.hl 1 Parameters and SWITCH.INI
+A large number of parameters controlling the edit can be set
+interactively, or in SWITCH.INI under SOS.  Again, please refer
+to the SOS manual for more information.
+.hl 1 Display terminals
+SOS handles rubouts, _^H, _^U, _^R correctly on all display
+terminals by overprinting or deleting characters to produce
+an error free line.  The following is a list of SOS supported terminals:
+ADDS, INFOTON, REGENT 100, VT52, and VT05.  To set SOS
+to work with one of these terminals, use the set parameter command
+(i.e., __DISPLAY) or include the switch /DISPLAY in the SOS line in
+SWITCH.INI. (note that this parameter is set by default)
+.hl 1 Improved speed
+SOS is considerably faster than the older SOS in file I/O.
+This makes a significant difference when working with larger files
+or when exiting the editor.  Some of the parameters that can
+control SOS speed are /WINDOW/BUFFER/WRATIO/WMAXIMUM/WMINIMUM.
+.hl 1 HELP command
+The help command has an important extension.  H,C will type
+out information about the C command, H/S will type out information
+on switch/parameter S.
+.hl 1 Bug fixes
+SOS fixes a lot of bugs with the current SOS.
+.hl 1 P command
+The P command (print PLINE lines) now does not cross page
+boundaries.
+.hl 1 Co-edit capability
+SOS has the capability to edit two files simultaneously.
+The user can switch between files with the CX command, copy lines
+from one file to the other with the CC command, or transfer lines
+from one file to the other with the CT command.
+.hl 1 File names and exiting
+Upon leaving the editor (with E or G commands) the user has
+the option of changing the filename.  By appending the string
+":file" to the exit command, the updated file is written to _<file_>
+instead of the original file name at the start of the edit.
+.bl 1;In addition, appending a "R:file" to the exit command, will
+cause SOS to exit the first file, and begin editing the second
+file.  This is useful as all of the parameters of the first edit
+(search strings, switch settings, etc.) are retained.
+.bl 1;A new command O:file,range will write out _<range_> to a new
+file called _<file_> with the option of superseding or appending
+to the output file.
+.hl 2 expanded Find and substitute options
+Options (including the repeat count) may now be specified in any order,
+separated by commas, following the FIND or SUBSTITUTE command.
+.bl 1;The following FIND options are available:
+.bl 1;.ts 10
+.br;A	ALTER the found lines
+.br;D	DELETE the found lines
+.br;N	ONLY print out line numbers of specified lines
+.br;-	find lines not containing specified find strings
+.br;*	INFINITE repeat (like ,10000)
+.bl 1;The following SUBSTITUTE options are available:
+.bl 1;D	enter DECIDE mode on substitute confirm
+.br;S	SILENCE, do not print out specified lines at all
+.bl 1;The following options are available to both the FIND
+and SUBSTITUTE commands:
+.bl 1;E	require EXACT case match of strings
+.br;T	give a TOTAL lines summary at the end
+.br;U	print specified lines UNSEQUENCED
+.hl 2 indirect command file repeat
+Previously, the only way to repeat a sequence of commands in a command
+was to repeat the commands N times in the command file, or to
+nest the command file to call itself.  The first method was
+impractical in the general case, and the second incurs a lot of
+monitor and disk overhead, reading the command file for each
+time it is repeated.  To avoid these problems, a comma followed by a number
+may be specified at the end of the indirect command file specification
+which is the number of times to repeat the command file.
+Or, optionally the number can be "*" to repeat the command file
+indefinitely (until some command in it fails).  It should be
+noted that under this command file repeat there is a restriction
+that the command file fit in 1 disk block (128 words or 640 characters).
+.ch compatibility mode (/OLDCOMMAND)
+.hl 1 Setting and clearing 
+By default, SOS is in compatibility (/OLDCOMMAND) mode.  This may be
+overridden by the /NEWCOMMAND switch placed in SWITCH.INI
+or as a switch/settable parameter in SOS command mode.
+/OLDCOMMAND mode makes SOS work like the old SOS as much as possible.
+.hl 1 Description
+The following is a list of changes that are enabled when compatibility mode (/OLDCOMMAND)
+is set:
+.ls 1
+.le;/QZBAK is the default. This writes *.Q?? and *.Z?? backup files.
+.le;/EXPERT defaults /NOINFORM, /NOVICE defaults /INFORM.
+.le;Exit options S and B mean unsequence and nobackup respectively.
+.le;N is treated like NF (renumber file) instead of renumbering the
+current page only.
+.le;The default STEP and START are 100, and not 10.
+.le;In alter mode V means invert case of word, _# means invert
+case to end of line, and X means replace current word, T means
+extend the line.
+.els
+.ch Building and Installation Instructions
+.hl 1 Building from sources
+SOS.CTL will rebuild the entire
+product from sources, including the production of .LST files.  It also uses
+RUNOFF to create various .DOC, .MAN, and .HLP files.  Note that ENDECR.MAC
+is not provided with SOS - it is part of BACKUP too, and it may be
+necessary to copy this file from the BACKUP sources in order to rebuild.
+.sk
+In addition, we have provided SOSGLB.MIC which can be used to create
+both .MAP and .GLB files.  This is not normally called from SOS.CTL,
+but by changing the !.DO SOSGLB to .DO SOSGLB (remove the "!" in SOS.CTL),
+one can get these produced as a part of the full rebuild process.
+Note that both of these control files use SOSLOD.CCL.
+.hl 1 Installation
+There are five files which should be installed.  SOS.EXE belongs on
+SYS: (or NEW:), SOS.HLP belongs on HLP:, and there are three files
+(SOS.DOC, SOS.MAN, and SOS23.MAN) which belong on DOC:.  Also, you
+may wish to put SOSREF.MEM (a brief reference manual) and SOSMCR.DOC
+(a guide to using the new SOS MACRO facility) on DOC:.

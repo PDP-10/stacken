@@ -1,0 +1,30 @@
+POLY
+----
+
+Med monitorkommandot "DO GAM:POLY N", d{r "N" {r ett heltal mellan
+4 och 35 s} f}r man en polygon uppritat p} sin grafiska terminal
+(typ Tektronix 4010). Exempel:
+
+.DO GAM:POLY 15
+
+OBS att CPU-tiden f|r polygonber{kningen v{xer med antalet h|rn
+man v{ljer i polygonet.
+
+Polygonet ritas med hj{lp av det kraftfulla systemet MLAB. MLAB
+anv{nds bl a f|r att interaktivt g|ra matematisk kurvanpassning.
+Man har till sin hj{lp ett speciellt kommandospr}k och {ven inbyggt
+interpreterande programspr}k. Resultat kan bl a tas ut p} olika
+grafiska sk{rmar. I exemplet ovan exekveras f|ljande lilla
+MLAB-program:
+
+.R MLAB
+ TYPE "TYPE IN:N_[VERTICES"; DO "TTY:";
+ D_0:359:360/N; M_(SIND ON D)&'(COSD ON D);
+ FUNCTION GCD(X,Y)=IF X<Y THEN GCD(X,X)
+ ELSE IF MOD(X,Y)=0 THEN Y ELSE GCD(Y,MOD(X,Y));
+ FOR S_2:INT(N/2) DO (C_GCD(S,N); FOR J_0:(C-1) DO
+ (M_M&(M ROW (1+(MOD ON ((J+S*(0:N/C))&'N))))));
+ WINDOW W, 2.1 BY 2.1, AT -1.05,-1.05;
+ DRAW M IN W;
+
+	<Slut p} GAM:POLY.HLP - 810225/SO>

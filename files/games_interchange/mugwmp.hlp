@@ -1,0 +1,34 @@
+     M  U  G  W  M  P     Rules and Instructions
+
+	Written by:  Jeff Bunce    Jan  1978
+
+   This is the game of MUGWMP.  The object of MUGWMP
+is to find out where the mugwump is hiding.
+
+
+   To make a guess,  type the gridpoint  coordinates
+where you think the mugwump is hiding. Home-base  is
+at point 0,0 on the grid (the south-west corner).  A
+guess is a pair of numbers(whole numbers)  separated
+by a comma.  The first number is the distance to the
+right of home-base,and the second number is the dis-
+tance above home-base.
+
+
+	For example:
+	   If you think the mugwump is hiding five up
+	   and seven to the right,you would type 5,7
+	   when you enter the spot,  then you punch
+	   the 'RETURN' key.
+
+     After each guess, I will tell you the distance
+you are, in a direct line,from the mugwump.
+
+
+		Good Luck and Happy Hunting!
+
+
+
+
+
+

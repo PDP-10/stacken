@@ -1,0 +1,13 @@
+fur.mac		Source file for FUR version 2O
+fur.pub		Source file for FUR documentation
+fur.doc		Printable file for FUR documentation*print06
+fur.hlp		Help file for FUR
+fur.exe		Runnable version of FUR for KI-10s and KL-10s
+fur.cmd		Command file for loading FUR
+scn7bf.mac	Source file for SCAN version 7B modified for FUR
+scn7bf.rel	Relocatable file for modified SCAN 7B
+fur.ccl		LINK-10 command file used to load fur at Catholic University
+fursym.ccl	LINK-10 command file used to create symbol table file to be used with VMDDT
+fur.mic		Control file used at NIH to compile and load FUR and save symbol table file
+fur.sym		Symbol table for FUR.EXE for use with VMDDT
+*.include	PUB SYS

@@ -1,0 +1,237 @@
+	TITLE	PLRDSP - Display routines for PULSAR
+	SUBTTL	D Cornelius 3-Aug-83
+
+;
+;
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1975,1976,1977,1978,1979,
+;1980,1981,1982,1983,1984,1985,1986,1987.  ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+
+	SEARCH	GLXMAC
+	SEARCH	PLRMAC
+	SEARCH	ORNMAC			;FOR WTO, ACK SYMBOLS
+	PROLOG(PLRDSP)
+
+;A MACRO to easily type out straight ASCII text to
+; the message page
+;Clobbers S1
+	DEFINE	$ASCII(TEXT,%X),<
+	SKIPA	S1,[[ASCIZ@TEXT@]]
+	JRST	%X
+	PUSHJ	P,P$TEXT
+%X:
+	.XCREF	%X
+	SUPPRESS %X
+>;END DEFINE $ASCII
+	SUBTTL	P$SLST - SHOW SYSTEM LISTS
+
+;This is the routine which will display the system
+; lists following an OPR command SHOW SYSTEM-LISTS
+;Call -
+;	S1/	flags, DS.SSL,DS.CDL,DS.ASL, to display
+;			the corresponding  lists
+;	M/	Adrs of incoming message
+;Returns -
+;	$ACK to the OPR who asked
+
+P$SLST::
+	$SAVE	<P1,P2>			;Some work space
+	MOVE	P1,S1			;Save the flags
+	$CALL	M%GPAG			;Get a display page
+	MOVE	P2,S1			;Save its adrs
+	PUSHJ	P,DSPINI		;Init the text buffer
+	PUSHJ	P,P$CRLF		;A BLANK LINE TO START
+	TXNE	P1,DS.CDL		;Want to show crash dump list?
+	PUSHJ	P,P$SCDL		;Yes, put it in
+	TXNE	P1,DS.ASL		;Want to see the active swap list?
+	PUSHJ	P,P$SASL		;Yes, add that on
+	TXNE	P1,DS.SSL		;Want to see system search list?
+	PUSHJ	P,P$SSSL		;Yes, add that on, too
+	SETZ	S1,			;Done, get a null
+	IDPB	S1,DSPPTR		;Terminate the text
+	$ACK	(<System lists>,<^T/0(P2)/>,,.MSCOD(M),$WTFLG(WT.NFO))
+	MOVE	S1,P2			;Get back message page adrs
+	$CALL	M%RPAG			;Return the space
+	$RETT
+	SUBTTL	P$SCDL - ROUTINE TO DUMP THE CRASH DUMP LIST
+
+;CALL -
+;	Setup a pointer in DSPPTR
+;RETURNS-
+;	Text into the message, and updated pointer
+
+	MAXSTR==^D36			;Max # of file structures
+					; that can be spinning at once
+
+P$SCDL:
+	$SAVE	<P1,P2,P3>
+	$ASCII	(<Crash Dump List:	>)
+	MOVEI	S1,MAXSTR		;Size neede for table
+	$CALL	M%GMEM			;Get the space
+	MOVE	P1,S2			;Save addr of space
+	SETZ	P2,			;Initially- first str
+SCDL.1:	SYSSTR	P2,			;Get next str in sys list
+	 JRST	SCDL.2			;Error, say end of list
+	JUMPE	P2,SCDL.2		;Quit when monitor returns 0
+	MOVE	S1,P2			;Copy the str name
+	PUSHJ	P,D$PCDL##		;Find its position in crash dump list
+	JUMPF	SCDL.1			;Not in there, try the next
+	CAIL	S1,MAXSTR		;Is it in range 0 to N-1?
+	JRST	[$WTO(<Structure ^W/P2/:>,<Claims to be in position ^D/S1/ in crash dump list
+but MAXSTR = ^D/[MAXSTR]/>,,$WTFLG(WT.SJI))
+		JRST	SCDL.1]		;Try next str
+	ADDI	S1,0(P1)		;Aim at table entry
+	SKIPE	0(S1)			;Anyone there now?
+	$WTO	(<Structure ^W/P2/:>,<Occupies same position in crash dump list as structure ^W/0(S1)/>,,$WTFLG(WT.SJI))
+	MOVEM	P2,0(S1)		;Put this one in
+	JRST	SCDL.1			;Try the next one
+
+SCDL.2:	MOVSI	S2,-MAXSTR		;Make count in LH
+	HRRI	S2,0(P1)		;And addr in RH
+	SETO	P3,			;Set 'first time' flag
+SCDL.3:	SKIPN	S1,0(S2)		;Is there a str at this position?
+	JRST	SCDL.4			;No, try next
+	SKIPN	P3			;First time?
+	PUSHJ	P,P$DLIM		;No, delimit the last one
+	PUSHJ	P,P$STRC		;Print the str name
+	SETZ	P3,			;Clear the flag
+SCDL.4:	AOBJN	S2,SCDL.3		;Check each slot
+	SKIPE	P3			;Anything in at all?
+	$ASCII	(<Empty>)		;Nope
+	MOVEI	S1,MAXSTR		;Size of space we got
+	MOVE	S2,P1			;Addr of space
+	$CALL	M%RMEM			;Return the space
+	PJRST	P$CRLF			;Finish line, return
+	SUBTTL	P$SSSL - DISPLAY SYSTEM SEARCH LIST
+
+;CALL -
+;	Setup a pointer in DSPPTR
+;RETURNS -
+;	Text of the system search list via the pointer
+
+P$SSSL:
+	$ASCII	(<System Search List:	>)
+	SETZ	S1,			;Indicate job 0
+	PUSHJ	P,D$RDSL##		;Get the search list
+	JUMPF	[$ASCII (<Unavailable>)
+		PJRST	P$CRLF]		;Sigh
+	MOVEI	S2,.FSDSO(S1)		;Aim at the first block
+	SKIPN	S1,.DFJNM(S2)		;Is it empty?
+	JRST	[$ASCII	(<Empty>)
+		PJRST	P$CRLF]		;Strange, but true
+SSSL.1:	PUSHJ	P,P$UNIT		;Put that in the message
+	ADDI	S2,.DFJBL		;Step to next entry
+	SKIPN	S1,.DFJNM(S2)		;Is there another?
+	JRST	SSSL.2			;No
+	PUSHJ	P,P$DLIM		;Yes, delimit it
+	JRST	SSSL.1			;Do the rest
+
+SSSL.2:	PJRST	P$CRLF			;Finish the line
+	SUBTTL	P$SASL - SHOW THE ACTIVE SWAPPING LIST
+
+;This routine finds out how many entries the Monitor's swap
+; table has.  It gets that much space, and checks each disk
+; drive in the system for holding a place in the ASL
+; each one is entered at its appropriate position in out table
+; Then the table is dumped out
+
+P$SASL:
+	$SAVE	<P1,P2,P3>		;Some work space
+	$ASCII	(<Active Swapping List:	>)
+	MOVX	P1,%LDMSL		;Level-D SWPMAX
+	GETTAB	P1,			;Hom many are possible?
+	 MOVEI	P1,^D8			;Default is 8
+	MOVE	S1,P1			;Copy it over
+	PUSHJ	P,M%GMEM		;Get that much space
+	MOVE	P2,S2			;Save pointer to it
+	SETZ	P3,			;Start with the first unit
+SASL.1:	SYSPHY	P3,			;Get the next disk unit
+	 JRST	SASL.2			;;Error??? say no more
+	JUMPE	P3,SASL.2		;Quit when list exhausts
+	MOVE	S1,P3			;Copy the unit name
+	PUSHJ	P,D$PASL##		;Find out where it lives
+	JUMPF	SASL.1			;Not in,, try the next
+	CAML	S1,P1			;Reasonable position??
+	JRST	[$WTO(<Unit ^W/P3/:>,<Claims to be in position ^O/S1/in Active Swapping List
+but SWAPMAX = ^O/P1/>,,$WTFLG(WT.SJI))
+		JRST	SASL.1]		;And leave it out of our table
+	ADDI	S1,0(P2)		;Aim at correct slot
+	SKIPE	0(S1)			;Is someone already there?
+	$WTO	(<Unit ^W/P3/:>,<Occupies same position in Active Swapping List as Unit ^W/0(S1)/:>,,$WTFLG(WT.SJI))
+	MOVEM	P3,0(S1)		;Move over, you impostor
+	JRST	SASL.1			;Try the next
+
+SASL.2:	MOVN	S2,P1			;Get neg # of table slots
+	MOVSS	S2			;To LH
+	HRRI	S2,0(P2)		;Aim at our table
+	SETO	P3,			;Note we haven't printed any yet
+SASL.3:	SKIPN	S1,0(S2)		;Is there one here?
+	JRST	SASL.4			;Nope, try next slot
+	SKIPN	P3			;Don't delimit first attempt
+	PUSHJ	P,P$DLIM		;add the delimiter
+	PUSHJ	P,P$UNIT		;Add that
+	SETZ	P3,			;Note we've been here
+SASL.4:	AOBJN	S2,SASL.3		;Check all of our table
+	SKIPE	P3			;Printed anything?
+	$ASCII	(<Empty>)		;No, say so
+	DMOVE	S1,P1			;Get back length,, addrs of space
+	$CALL	M%RMEM			;Returns the space
+	PJRST	P$CRLF			;Tie off the len, return
+	SUBTTL	Text output routines
+
+;Make a new line in the buffer
+P$CRLF:	$SAVE	<S1>
+	MOVEI	S1,.CHCRT		;Get a carriage return
+	PUSHJ	P,DSPDPB		;Dump it into the message
+	MOVEI	S1,.CHLFD		;Get a line feed
+	PJRST	DSPDPB			;Dump it, and return
+
+;Add a unit name to the message
+;Call -
+;	S1/	SIXBIT 	unit name
+P$STRC:
+P$UNIT:	$TEXT	(DSPDPB,<^W/S1/:^A>)	;Put out the unit
+	$RETT				;And return
+
+;Delimit unit or structure names
+P$DLIM:	$SAVE	<S1>			;Save our work AC
+	MOVEI	S1,","			;Get a comma
+	PUSHJ	P,DSPDPB		;Add it
+	MOVEI	S1," "			;And a space
+	PJRST	DSPDPB			;Add it, and return
+
+;A routine (called by the $ASCII macro) to put
+; straight text into the output page
+; N.B. No CRLF is added to the text passed
+;Call -
+;	S1/	Addr of text (ASCIZ)
+P$TEXT:	$TEXT	(DSPDPB,<^T/0(S1)/^A>)
+	$RETT
+
+;Routine to initialize the output routine
+;Call -
+;	S1/	Adrs of buffer page
+DSPINI:	HRLI	S1,(POINT 7,)		;Make a pointer to the page
+	MOVEM	S1,DSPPTR		;Save in $TEXT output pointer
+	$RETT				;Return
+
+;A $TEXT output co-routine
+DSPDPB:	IDPB	S1,DSPPTR		;Dump the character
+	$RETT				;Return
+
+DSPPTR:	BLOCK	1			;Space for a pointer
+	END

@@ -1,0 +1,1969 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                PLM for NRT.MAC
+                                                                     Page 2
+
+
+     Copyright (C) 1982
+     Digital Equipment Corporation, Maynard, Massachusetts, U.S.A.
+
+     This software is furnished under a license and may be used and  copied
+     only  in  accordance  with  the  terms  of  such  license and with the
+     inclusion of the above copyright notice.  This software or  any  other
+     copies  thereof may not be provided or otherwise made available to any
+     other person.  No title to and ownership of  the  software  is  hereby
+     transferred.
+
+     The information in this software is subject to change  without  notice
+     and  should  not  be  construed  as  a commitment by Digital Equipment
+     Corporation.
+
+     Digital assumes no responsibility for the use or  reliability  of  its
+     software on equipment which is not supplied by Digital.
+
+
+
+
+
+
+
+
+
+
+
+
+                                CHAPTER 1
+
+                               INTRODUCTION
+
+
+
+     This is the PLM for NRT.MAC.  It is intended to document  the  purpose
+of each section of code in the NRT program.  It is NOT intended to give the                                                   ___
+general flow through NRT.  For the general flow, the reader is referred  to
+the NRT.MAN file.
+
+
+
+
+
+
+
+
+
+
+
+
+                                CHAPTER 2
+
+                   OPERATING SYSTEM INDEPENDENT SUPPORT
+
+
+
+     This first section of source is to set up all  the  definitions.   The
+following are defined here:
+
+     1.  UUO and monitor interface symbols
+
+     2.  Flag bits
+
+     3.  AC definitions
+
+     4.  Feature tests
+
+     5.  Assembly parameters
+
+
+
+
+2.1  AC DEFINITIONS
+
+     The ACs  are  defined  with  two  sets  of  4:   T1  through  T4  (the
+"temporary"  ACs)  and  P1  through  P4  (the  "preserved" ACs).  The names
+"temporary" and "preserved" are somewhat of misnomers, as they are  in  the
+monitor,  although the convention is generally followed.  These are defined
+as ACs 1-4 and ACs 5-10 (octal)  respectively.   They  may  be  moved,  but
+should  be  kept  so  that the T ACs are consecutive and the P ACs are also
+consecutive.  CX, defined as AC 11 (octal) is a temporary AC used by macros
+and  a  general  scratch AC.  It is never preserved.  ACs 12 through 16 are
+used as NSP.  UUO argument  blocks.   Each  AC  takes  its  name  from  the
+corresponding  .NSxxx  offset  in  a  NSP.   UUO  argument block, minus the
+leading ".".  These ACs are not considered to be  preserved,  except  NSACH
+once  the link is up and running;  and only the channel part of it, not the
+status.  AC 17 is the pushdown pointer, P.  AC 0 is  used  for  flag  bits.
+Bits  in  AC  F are defined with symbols of the form F$xxxx.  Note that NRT
+has four sets of ACs:  the "UUO level" ACs, the TTY:  service ACs, the  NSP
+service  ACs,  and  the  timer  service  ACs.   NRT  also  has four PDLs to
+correspond to the four AC sets.   Upon  entry  to  each  of  the  interrupt
+service routines, NRT exchanges the current set of ACs for the set which is
+to be  used  for  the  current  interrupt  routine.   Note  therefore  that
+interrupt routines are NOT reentrant.  Note also that AC F is global and is                       ___
+NOT exchanged as are the other ACs.___
+OPERATING SYSTEM INDEPENDENT SUPPORT                               Page 2-2
+
+
+     The following MACROS are defined for use in NRT:
+
+     1.  The PLM MACRO controls listing of the PLM in the  source  listing,
+         as dictated by feature test switch LSTPLM.
+
+     2.  The FALL MACRO is used to insure that the  contiguity  assumptions
+         about  routine  addresses (so that the extra JRST is not required)
+         are correct.  FALL will print an error message if  the  assumption
+         is incorrect.
+
+     3.  PJRST is defined elsewhere with an OPDEF unless FTDBUG  is  turned
+         on.   This  is  so  that  PJRSTs  become  traceable in a dump if a
+         problem  is  being  debugged.   The  PJRST  macro  turns  off  the
+         optimization of turning a PUSHJ followed by a POPJ into a JRST.
+
+     4.  The ERR MACRO is used to define a fatal error condition  for  NRT.
+         It  assembles  with  a  three  letter  mneumonic which expands the
+         location calling the ERR MACRO into the symbol "E..sym".  It calls
+         the  error  routine  specifying a prefix and a message for output.
+         The error routine saves context for a possible dump and exits.
+
+     5.  ERRMAC is used to make the standard DECnet error message table.
+
+     6.  FCNMAC is called to make the NSP.  UUO function description table.
+
+     7.  There are three MACROS for various forms of typeout:
+
+         1.  TYPE is called to output an ASCIZ string  to  the  controlling
+             terminal.
+
+         2.  TYPCRLF is called to output a carriage return-line feed to the
+             controlling terminal.
+
+         3.  TSIX is called to output a SIXBIT string  to  the  controlling
+             terminal.
+
+
+     8.  There are  many  AC  saving  MACROS  which  call  the  appropriate
+         routines.  All of these macros use AC CX as a temporary AC:
+
+         1.  SAVE1 saves P1
+
+         2.  SAVE2 saves P1 and P2
+
+         3.  SAVE4 saves P1 through P4
+
+         4.  SAVET1 saves T1
+
+         There is also a routine, not called by a MACRO, to save all T  ACs
+         (SAVT).
+
+     9.  The BRKMSK MACRO is used to define a break mask for usage by  NRT.
+         The two arguments are a string of control characters to use as the
+         mask (except for convenience the user types in the string with all
+         the  characters  "uncontrolified",  e.g.,  to put "A" in the break
+OPERATING SYSTEM INDEPENDENT SUPPORT                               Page 2-3
+
+
+         mask, specify "A" as a character of  the  first  argument  to  the
+         MACRO)  and  the  "regular"  character  string,  which inclues all
+         characters which are not control characters.
+
+    10.  The ASSUME MACRO is analagous to the FALL MACRO but  is  used  for
+         values rather than addresses.
+
+    11.  The NETOCH MACRO is used to output one character to  the  network.
+         It  takes  as  arguments  the  AC containing the character and the
+         address of the error routine if there is insufficient room in  the
+         current  buffer.   The default action taken if no error address is
+         given is to queue the network buffer  without  outputting  it  and
+         allocate a new buffer in which to continue depositing characters.
+
+    12.  The NETALC MACRO is used to allocate space in the  network  output
+         buffer  without  actually  outputting  anything.  If the requested
+         amount cannot be allocated in the current buffer, it is queued for
+         output  (but  not  output)  and  a  new  buffer is allocated.  The
+         requested allocated space is taken from the new buffer.  Note that
+         NETALC  should  not  be called with a size bigger than the maximum
+         buffer size.  If this occurs, an error message will be output.
+
+    13.  The OSDSP MACRO is used to create a dispatch vector for the  OSJMP
+         table.   The arguments to the OSDSP MACRO include the addresses of
+         the operating specific  initialization  routine,  network  service
+         routine, and TTY:  service routine.
+
+    14.  The NAMTAB MACRO is used to generate a table of SIXBIT names  with
+         appropriate  symbols  for the beginning and length of the list (in
+         words).  It is used to generate  tables  for  use  by  the  .LKNAM
+         routine.   This routine is called when RESCANning the command line
+         (to parse the possible commands by which  NRT  can  be  run),  the
+         SWITCH.INI  support  (to parse switches), and the exit dialogue in
+         NOVICE mode.
+
+    15.  The  TRMCHR  MACRO  is  used   to   define   a   table   of   TTY:
+         characteristics to save/restore/set.
+
+    16.  The VTTCHR MACRO is used to define a VAX  terminal  characteristic
+         word.   This  word consists of the terminal type in the right half
+         and the high order byte of the TT2  characteristics  word  in  the
+         left  half.   This  assumes  the ANSI/DEC CRT bit is in that byte.
+         The args for the MACRO are the ANSI/DEC CRT bit to use and the (up
+         to)  three  character suffix to the DT$xxx symbol for the terminal
+         type.
+
+    17.  ASCII8 makes eight-bit ASCII strings.
+
+OPERATING SYSTEM INDEPENDENT SUPPORT                               Page 2-4
+
+
+     2.1.1  Section From GO To LPROMPT
+
+     This section contains the first part of the initialization logic.   It
+first  sets up basic defaults and flags that this is the first time through
+(sets variable RSTFLG to -1).  It then enters RESTRT, which  is  where  the
+program  restarts  itself  if  fatal  errors  occur or the user attempts to
+continue the program from a non-continuable state.  RESTRT (the label where
+restarting  begins)  sets  up  the  pushdown  list  and  reads  the  user's
+SWITCH.INI file (if present), resetting any defaults to those  values.   If
+restarting, we then go to label PROMPT for the short dialogue, otherwise we
+attempt to rescan the line and either take  arguments  from  the  rescanned
+line  if  successful or go to LPROMPT for the long dialogue if not.  If the
+rescan is successful, we call INITDB to initialize NRT's database here  and
+proceed directly to CHKPMR to attempt to set up the connection.
+
+
+
+     2.1.2  Routine LPROMPT
+
+     Routine LPROMPT is resposible for the long dialogue.  Upon  displaying
+the  current  "escape character" (which may be the assembled default or the
+default as obtained from the user's SWITCH.INI) and accepting a new one (if
+requested  to  by  the  user  by  typing a character other than <CR> to the
+question), we proceed to fall into the short dialogue (routine PROMPT).
+
+
+
+     2.1.3  Routine PROMPT
+
+     Routine PROMPT handles the short initialization dialogue.   Note  that
+the  short  dialogue  is  a  subset  of the long dialogue (which falls into
+here).  After requesting the desired remote host's name from the  user  and
+inputting  it,  we fall into CHKPMR which establishes the connection.  Note
+that we also initialize NRT's data base here.
+
+
+
+     2.1.4  Section From CHKPMR To DOPMR
+
+     We enter this section from a number  of  points;   most  obviously  by
+falling  in  from  the short dialogue.  However, we come here with the data
+base initialize and all values for escape character and initial  node  name
+set up.  We check for Poor Man's Routing here;  if the user specified it we
+go and parse the string before establishing the  connection,  otherwise  we
+just  establish  the  connection.   We  cue  on  the  user  having actually
+specified a double colon as the key to whether he  specified  PMR  or  not.
+The  special  case of the user specifying a double colon followed by a <CR>
+is checked for at DOPMR if FTPMR is turned off so that we  don't  bomb  out
+the  user on this special case.  This routine is entered with T2 containing
+the name of the first remote node.
+OPERATING SYSTEM INDEPENDENT SUPPORT                               Page 2-5
+
+
+     2.1.5  Routine DOPMR
+
+     Routine DOPMR is fallen into when CHKPMR decides  that  the  user  may
+have  specified  Poor  Man's routing.  If NRT has been assembled with FTPMR
+turned off, we check for the special case of the user typing a double colon
+followed  by  a  carriage return.  If this is the case, we proceed with the
+connection;  if not we output an error message and exit.  FTPMR  is  turned
+on,  we parse the node names in the string and store them as sixbit values,
+one to a word, in the table starting at location RNODE.  After parsing  the
+string,  we  proceed  to BLDPMR to actually build the string to send to the
+remote PSTHRU task.
+
+
+
+     2.1.6  Routine BLDPMR
+
+     Routine BLDPMR translates the node string which was  parsed  by  DOPMR
+and  stored  as  SIXBIT  nodes  in  the RNODE table into an eight-bit ASCII
+string suitable for sending to the first node's PSTHRU task.  It is entered
+from  DOPMR  only with P1 containing the maximum index into the RNODE table
+at which a node name was stored.  This is equivalent to the number of nodes
+in the string minus one.
+
+
+
+     2.1.7  Section From DOCONN To MAIN
+
+     We enter here with  all  of  NRT's  data  base  set  up  to  do  final
+initialization  and initiate the connection to the remote system.  We first
+OPEN device TT:  and initialize the core manager.  We check to see  if  the
+user  is attempting to connect to the same node on which he is running;  if
+so we issue a warning before proceeding.  We set up the network I/O buffers
+and  call  CONECT  to  initiate the connection to the remote node.  After a
+[successful] return from CONECT, we read the configuration message.  We add
+all the appropriate things the software interrupt system, set up C trapping
+through .JBINT (we actually trap on any job error or  control-C;   although
+the  terminal is slaved one can use a FRCUUO function of .HALT to force the
+program to trap in case it  gets  stuck;   this  is  useful  for  debugging
+purposes).    We   then   use   the  information  from  the  remote  host's
+configuration message (in particular the operating system type) to set  the
+addresses  of the operating system specific network and TTY:  routines.  We
+then call the operating system specific  initialization  routine  and  call
+FRCTTY to get things started.
+
+
+
+     2.1.8  MAIN Loop (section From MAIN To FRCTTY)
+
+     The MAIN loop is simply a HIBER UUO.  We expect to  be  woken  by  PSI
+interrupts when any events of any significance occur.
+
+     The exception to this is a break mask change.  This most often  occurs
+at  network  interrupt  level.   Unfortunately,  if type-ahead in the input
+buffer does not satisfy the current break mask, but the break mask is  then
+changed so that the existing type-ahead now fulfils the current break mask,
+OPERATING SYSTEM INDEPENDENT SUPPORT                               Page 2-6
+
+
+the monitor does not grant a PSI interrupt.  Therefore, NRT traps for  WAKE
+UUOs  as well as any other conditions and WAKEs itself and sets F$USRV (via
+a call to FRCTTY) if it wishes to force a  TTY:   interrupt.   MAIN  always
+returns to sleep if woken.
+
+
+
+     2.1.9  Routines FRCTTY And FRCTTI
+
+     As mentioned above, since changing the break mask doesn't cause a  PSI
+interrupt  if  input  is  done,  we  need to wake ourselves and set F$USRV.
+Routine FRCTTY is called to do this, or any other time we wish to act as if
+a  TTY:  service PSI occured.  Enter at label FRCTTI to be sure PS.RID gets
+set in TTYSTS, or call FRCTTO to be sure PS.ROD gets  set  in  TTYSTS.   It
+uses T1.
+
+
+
+     2.1.10  OSJMP Table
+
+     The OSJMP table uses the OSDSP MACRO to define  the  transfer  vectors
+for  each  type  of  operating  system.  See the documentation of the OSDSP
+MACRO for further details.  The OSJMP table is a  table  of  OSDSP  vectors
+indexed by operating system type.
+
+
+
+     2.1.11  Routine INITDB
+
+     The INITDB subroutine is called at initialization time to  initializae
+the  low  segment  data  base.   It is also this routine's responsiblity to
+intialize the software interrupt system.   It  sets  up  the  AC  sets  and
+pushdown  lists  for  the  interrupt level routines.  It turns of control-C
+trapping (in case this was a restart) so that the user can easily  exit  at
+this  time.   It  figures  the  bit  mask  position and word for the escape
+character so that it can be added easily to any  break  mask  at  interrupt
+level.  It destroys only AC CX.
+
+
+
+     2.1.12  Routine DORSCN
+
+     The DORSCN routine parses input as RESCANed  from  the  command  line.
+NRT may be run with a variety of command forms;  this is so that those used
+to different conventions may find it easy to HOST out  to  another  system.
+The  exact  commands  which  may be used are defined with the NAMTAB MACRO.
+The ways NRT may be run include:
+
+     1.  SET HOSTESS node
+
+     2.  HOST node
+
+     3.  NRT node
+OPERATING SYSTEM INDEPENDENT SUPPORT                               Page 2-7
+
+
+     4.  TO node
+
+     5.  R or RUN NRT
+
+     6.  START
+
+
+
+
+     2.1.13  Routine FNDFNC
+
+     The FNDFNC routine is provided to dispatch to an address  based  on  a
+value  which  must  not be consecutive.  It is called with the table's base
+address in P1 and the value to match on in T1.  The format of the table  it
+uses is:
+
+                        TABLE:  value,,address
+                                value,,address
+                                    .
+                                    .
+                                    .
+                                    0
+
+     It returns CPOPJ if  the  function  was  not  found  or  CPOPJ1  (after
+     dispatching)                 if                 it                was.
+
+
+
+     2.1.14  Routine NETCHR
+
+          The NETCHR routine is used by the  TOPS-10  and  TOPS-20  network
+     service.   It  takes  all characters from the network input buffer and
+     outputs then on the TTY:.  It also calls  RECRSP  to  record  response
+     times  if  the  user is running a performance analysis experiment.  It
+     exits through DOOUT1 to force out the last buffer  to  the  TTY:.   It
+     uses  T1,  CX, and the NSP.  ACs.  NETCHR will grant a TTY:  interrupt
+     via TTYPS1 if it notices F$USRV is on.
+
+
+
+          2.1.15  Routine MONITO
+
+          MONITO is responsible for handling the exit  dialogue.   It  uses
+     all T ACs and CX.  It is called by the operating system dependent TTY:
+     service routine when the user types the break character.   It  outputs
+     the appropriate exit dialogue based on the setting of the user's /MODE
+     switch (which translates into flag F$XPT and location  NOTICH:   F$XPT
+     only  is  non-zero  for  /MODE:EXPERT  and  both  F$XPT and NOTICH are
+     non-zero for /MODE:NOTIFY, and both are zero  for  /MODE:NOVICE).   In
+     the case of the "M[onitor]/(CONTINue,REENTEr)", "P[ass]", "O[bscure]",
+     "R[econnect]", or "C[hange]" commands, MONITO returns  to  the  caller
+     with  the  escape  character  in T1.  For the "P[ass]" command, MONITO
+     returns CPOPJ1 to flag to the caller  to  pass  the  escape  character
+     through  to  the  remote host.  For the other commands, MONITO returns
+     CPOPJ to inform the caller to proceed as if the escape  character  had
+OPERATING SYSTEM INDEPENDENT SUPPORT                               Page 2-8
+
+
+     not been typed.  It is, however, the caller's responsibility to remove
+     the break  character  from  any  internal  input  stream  if  that  is
+     applicable.
+
+
+
+          2.1.16  Exit Routine Dispatch Tables
+
+          This set of tables associates the exit routine keywords with  the
+     appropriate  dispatch  vectors.   It  is  assembled  to be scanned via
+     .LKNAM.  The dispatch vectors table entries consist of the address  of
+     the  routine  in the right half, and the sign bit in the left half iff
+     the routine does not want the echo mode changed  before  execution  of
+     the  actual command (the echo mode may have been explicitly turned off
+     due to the setting of F$XPT).
+
+
+
+          2.1.17  Routine EXCHLP
+
+          This routine outputs the appropriate help text ("H[elp]" command)
+     and re-enters the exit dialogue.
+
+
+
+          2.1.18  Routine FLUSH
+
+          FLUSH is called to flush network messages  ("O[bscure]"  command;
+     TOPS-10/20  only).   This  is  in  lieu  of  O working "correctly" for
+     TOPS-10/20 connections.
+
+
+
+          2.1.19  Routine EXCOP3
+
+          EXCOP3 is used to return to monitor level ("M[onitor]" command).
+
+
+
+          2.1.20  Section From G0 To REENTR
+
+          This section is entered when the  user  wishes  to  continue  the
+     program  from  the  exit  dialogue.  Enter at label G0 with F$PERF set
+     appropriately for entering performance analysis mode.  Enter at GX  to
+     pass  the  break  character  through  to  the host (i.e.  to give skip
+     return to the caller).  This routine outputs  the  necessary  messages
+     and  returns  to  the caller (of MONITO) with T1 containing the escape
+     character.
+OPERATING SYSTEM INDEPENDENT SUPPORT                               Page 2-9
+
+
+          2.1.21  Routine REENTR
+
+          This section is entered when the user wishes to change the escape
+     character.   This  is if the user either enters the "C[hange]" command
+     to the exit dialogue or REENTErs after a "M[onitor]"  command  to  the
+     exit  dialogue.   We  output  the  correct prompt here and perhaps the
+     option of entering performance analysis mode, if the user is logged in
+     and  NRT  is  assembled  with  FTPERF turned on.  We exit with the new
+     escape character set to label  G0  (or  through  DOPERF  if  the  user
+     requests  performance  analysis).  If the escape character is changed,
+     we compute the new bit mask and word position here.
+
+
+
+          2.1.22  Routine DOPERF
+
+          This routine  is  entered  when  performance  analysis  has  been
+     requested.   It  opens  the  file DSK:NETRSP.DAT for append access and
+     asks the user for the comment string for the record and the number  of
+     times  to  send the performance analysis string.  It checks to be sure
+     we are talking to a TOPS-10 or TOPS-20 remote host and returns to  the
+     exit  dialogue if so as performance analysis only works to those types
+     of systems.  We output the comment string  and  various  environmental
+     information  to the data file, set F$PERF and return to G0 to continue
+     the link.
+
+
+
+          2.1.23  Routine STTRSP
+
+          This  routine  is  called  to  record  a  beginning  time  for  a
+     performance  analysis  measurement.  It records the current daytime in
+     UDT format and the current MSTIME  in  variables  TSTTIM  and  TSTBEG,
+     respectively.
+
+
+
+          2.1.24  Routine RECRSP
+
+          RECRSP gets the current MSTIME and stores the difference  between
+     it  and  the MSTIME taken at the time STTRSP was called (from variable
+     TSTBEG) in variable TSTTOT.
+
+
+
+          2.1.25  Routine TSTRET
+
+          TSTRET is called either when the performance string has been sent
+     the specified number of times, or when the user aborts the performance
+     analysis experiment by typing the escape  character.   It  closes  the
+     performance  analysis  file  and  proceeds to MONITO to enter the exit
+     dialogue again.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-10
+
+
+          2.1.26  Performance String
+
+          The performance string is a simple thirty character string  which
+     is  sent  to  the  remote  host.  It begins with an exclamation point,
+     which is a comment character on TOPS-10 and TOPS-20.
+
+
+
+          2.1.27  Routine GETSTR
+
+          GETSTR reads the comment  string  for  the  performance  analysis
+     record  from  the  controlling  TTY:.  The maximum length of a comment
+     string is 250 (decimal) characters (this is hard coded).   The  string
+     is stored at location COMREC;  P1 contains the number of characters in
+     the record.
+
+
+
+          2.1.28  Routine GETPRC
+
+          GETPRC is called to begin a response measurement and return  with
+     the  next  character  from  the performance analysis string.  It calls
+     STTRSP to begin the measurement.  The character is returned in AC  T1.
+     It  uses only T1.  It returns CPOPJ with the character or CPOPJ1 if no
+     more characters are to be sent.
+
+
+
+          2.1.29  Routine GETDEC
+
+          GETDEC is called to input a decimal number from  the  controlling
+     TTY:.   It returns with the number in P1 and waits until one is typed.
+     It uses T1, T2, and P1.
+
+
+
+          2.1.30  Routine COMOUT
+
+          COMOUT is called to output a comment record  to  the  performance
+     analysis file.  It is called with P1 containing the number of bytes in
+     the record and P2 containing the byte pointer ot the string.  Uses T1,
+     P1, and P2.
+
+
+
+          2.1.31  Routine DATOUT
+
+          DATOUT is called to output data  to  the  performance  file.   It
+     outputs  the  contents  of TSTTIM and TSTTOT to the file (the time the
+     character was sent and the time it took for the response).
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-11
+
+
+          2.1.32  Routine OUTPRF
+
+          OUTPRF outputs a single character  (in  T1)  to  the  performance
+     analysis file.
+
+
+
+          2.1.33  Routine NETICH
+
+          NETICH is called to get one character (returned in T1)  from  the
+     network.   It  returns  CPOPJ1 with the character if there is one.  If
+     there are no remaining characters, the action  taken  depends  on  the
+     setting  of  F$NEOM  (F$NEOM  is cleared regardless of which action is
+     taken).  If F$NEOM was clear, we take the error  return  (CPOPJ).   If
+     F$NEOM  was set, we call NSPIN which will dismiss any interrupt we are
+     in until data is actually available, at which point it will return  to
+     us with the new buffer.
+
+
+
+          2.1.34  Routine RBYTEC
+
+          RBYTEC is called to input one character from the network and stop
+     if  none  is available.  It calls NETICH and stops with a UED stopcode
+     if NETICH takes the error return.
+
+
+
+          2.1.35  Routine CONECT
+
+          CONECT is called at initialization time to set up a connection to
+     the remote host.  It will first call SETNOD to set up the node name to
+     connect to in the destination process descriptor block.  It will  call
+     NSPEA  to  decide  whether to enter object .OBHTH or .OBPST and do the
+     NSP.  UUO to perform the enter active function.  It will then send the
+     PMR string by exitting through SNDPMR if that is required.
+
+
+
+          2.1.36  Routine SNDPMR
+
+          SNDPMR is entered from CONECT if a PMR string must be sent.   The
+     PMR message has already been assembled by DOPMR at location PMRMSG.
+
+
+
+          2.1.37  Routine SETNER
+
+          SETNER is called with a NSP.  UUO error code in T1  to  store  it
+     for later analysis by the NSPERR routine.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-12
+
+
+          2.1.38  Routine NSPERR
+
+          NSPERR is called when any NSP.  UUO error  code  is  encountered.
+     The  code  has  been previously stored in location NSPECD, probably by
+     the SETNER routine.  If the current state of the connection in DR,  we
+     output  the  message "[Connection to remote node aborted]";  otherwise
+     we output a standard DECnet error message with the numeric code of the
+     error.  The program is exitted and set up to not continue.
+
+
+
+          2.1.39  Routine DOERR
+
+          DOERR is called via the ERR MACRO.  Its purpose is to output  the
+     text  and  prefix  part  of  the  message.   DOERR  is responsible for
+     observing the user's verbosity bit settings.  It is called  with  text
+     of  the error at (P)+1 and the prefix at (P)+2.  The program cannot be
+     continued.
+
+
+
+          2.1.40  Table NSPERC
+
+          The NSPERC table uses the ERRMAC MACRO to  assemble  a  table  of
+     text and prefixes for standard DECnet error codes.
+
+
+
+          2.1.41  Table FCNTAB
+
+          FCNTAB is the table of text descriptions of each function to  the
+     NSP.  UUO.  Its primary purpose is for the typeout of functions if NRT
+     is assembled with FTFUNCTION turned on;  however, the  maximum  offset
+     is also considered to be the maximum NSP.  function we should be doing
+     and is used as a legality check in the error routines.
+
+
+
+          2.1.42  Routines XMTMSG And XMTMSS
+
+          These routines are called to send output to the network.   XMTMSG
+     is  called  with  T1 pointing to a message block which consists of the
+     number of bytes in the message located in the first word, followed  by
+     the  message.   XMTMSS  is  used  to force out current network output.
+     XMTMSS merely calls NSPOUT and stopcodes on any error.
+
+
+
+          2.1.43  Routine TTYOPN
+
+          TTYOPN is called to open device TT:.  This is normally  the  same
+     as  device  TTY:, except it can be reassigned away to another terminal
+     to aid debugging.  Note that the feature of hitting  the  break  twice
+     can  have inconsistent results if TT:  is assigned to a terminal other
+     than TTY:.  We remember the UDX of the terminal here in  the  variable
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-13
+
+
+     TTYUDX and the UDX position in various other TRMOP.  blocks.  The TTY:
+     is OPENed in ASCII line mode with  asynchronous  I/O.   The  TTY:   is
+     added to the sofware interrupt system at this point.  We also save the
+     TTY:  characteristics specified in table TTYSAV here.   We  also  read
+     the  TTY:   baud  rate  here  so  we can do the fancy segment size and
+     quotas/goals code later for those systems which want it.  Finally,  we
+     read the type of TTY:  this is and save it for any fancy configuration
+     messages which may have to be sent (e.g.  VMS).
+
+
+
+          2.1.44  Routine SETTTY
+
+          SETTTY  is   called   at   initialization   time   to   set   any
+     characteristics  we  desire  to  be  set  on  the  user's  TTY:.   The
+     characteristics should have previously been saved.   This  routine  is
+     table driven through the TTYSET table.
+
+
+
+          2.1.45  Routine TTYRST
+
+          TTYRST is called upon returning to monitor level or executing the
+     exit  dialogue.   It  restores the characteristics saved in the TTYSAV
+     table.  Enter at TTYRS1 if only the TRMOP.  characteristics are to  be
+     done and the TTY:  is not to be set to normal ASCII line mode.
+
+
+
+          2.1.46  TTY: Output And Echo Routines
+
+          This section contains routines to output characters  and  strings
+     to the TTY:
+
+     1.  STROUT accepts the address of an ASCIZ string in  T4  and  outputs
+         the string to the TTY:.  It uses T1 and T4.
+
+     2.  OUTTTY accepts a character in T1 to output to the TTY:.  AC CX  is
+         used.
+
+     3.  EKOBRK does break string echoing.  Call with T4=AOBJN  pointer  to
+         break  table  and T1 containing the break character to echo.  Uses
+         T1, T2, and T4.
+
+     4.  DOOUT1 is called to force out any remaining  output  to  the  TTY:
+         The  buffer  is  queued  for output and we allocate a new one.  We
+         then fall into TOOUT to try to push data out to the TTY:.   AC  CX
+         is  used.   Note that if location BUFQUO becomes zero or negative,
+         DOOUT1 willcall TOBLOK to sleep until a buffer is available.
+
+     5.  TOOUT is called either at interrupt level to try  to  output  more
+         data  to  the TTY:, or we fall into it from DOOUT1 to try to force
+         out data.  It dequeues TTY:  buffers queued  for  output.   AC  CX
+         used.  If entered at TOOUTA, T1-T4 are used also.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-14
+
+
+     6.  CLRTOQ is called to clear all output  in  progress;   both  queued
+         buffers  and  that  currently being output.  CLRTOQ does NOT clear
+         buffers which have the $TOICL bit on in the  buffer  status  word.
+         CLRTOQ DOES do a Clear Output Buffer TRMOP.  It uses nothing.
+
+
+
+
+          2.1.47  Horizontal Position Tables And Routines
+
+     These routines are called to set and compute the  horizontal  position
+     correctly.  They all use only CX.
+
+     1.  DOHPOS and STHPOS DOHPOS does the "right" thing to  variable  HPOS
+         given  the  character in T1.  It should be called when a character
+         is put in the TTY:  output  buffer.   STHPOS  sets  the  monitor's
+         value  of  HPOS  to  ours.   This  should  be  called  just before
+         outputting a buffer.  This is done because image mode  doesn't  do
+         the right thing for us.
+
+     2.  HPSTBL is the dispatch table, in half word addresses,  indexed  by
+         character,  of  what  to do to HPOS for a given character.  A zero
+         entry means do nothing.
+
+     3.  CHHPOS sets HPOS for a backspace.  CMHPOS zeroes HPOS for a <CR>.
+
+     4.  CIHPOS sets HPOS for a <TAB>.
+
+
+
+
+          2.1.48  Routine OUTCRL
+
+          OUTCRL is called to output a <CR><LF> to the TTY:
+
+
+
+          2.1.49  Routine INCHR
+
+          INCHR is called to get a character from the  input  buffer.   The
+     characters  have  actually  already been input in the operating system
+     independent interrupt service routine;  we are here just  taking  them
+     from  our  internal  buffers.  Returns CPOPJ1 with character in T1, or
+     CPOPJ if there are no  more.   If  a  character  has  been  stored  in
+     variable  INPCHR, this is read instead.  This is a method of forcing a
+     character to be processed immediately.  Note that ICHCNT  is  only  an
+     upper  bound  on  the number of characters available;  this is because
+     SCNSER in reality returns a word count rather than a byte count.  This
+     routine uses T1-T2.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-15
+
+
+          2.1.50  Routine .TSIX
+
+          .TSIX is called by th TSIX MACRO.  The MACRO pushes the  argument
+     onto the stack and calls .TSIX.  No ACs are used.
+
+
+
+          2.1.51  Routines TNODE And TNDLST
+
+          These routines are used to output a single node (supplied in  T2)
+     and  a  list  of  nodes  (for Poor Man's Routing;  supplied from table
+     RNODE), respectively.  TNODE expects the node name in T2 and does  not
+     use an ACs;  TNDLST uses CX and T2.
+
+
+
+          2.1.52  SIXBIT Input Routines: SIXIN, SIXINW, And SIXINA
+
+          These routines all input a SIXBIT value from the controlling TTY:
+     in  AC  T2.   They  return  with  T3 trashed, T2 containing the SIXBIT
+     value, and T1 containing the terminating character.  SIXIN expects the
+     input to be already waiting to be read from the monitor.  SIXINW waits
+     until a line is typed before beginning to input.  SIXINA expects T2 to
+     have  been  set  up  with the first character of the argument already.
+     The argument is returned left-justified.
+
+
+
+          2.1.53  Routine .LKNAM
+
+          .LKNAM is called to search a command table for a  match.   It  is
+     called  with  T1  containing the AOBJN pointer to the defined commands
+     table and T2 containing the SIXBIT command name to search for.  .LKNAM
+     will  allow  abbreviation  to  uniqueness.   It  returns  CPOPJ if the
+     specified command is a duplicate or is not found  in  the  table.   It
+     returns  CPOPJ1  with  the right half of T1 containing the offset from
+     the beginning of the command table to the specified entry.   The  left
+     half  of  T1  is returned as zero if the specified command word was an
+     abbreviation or less than zero if it was an exact match.  .LKNAM  uses
+     T3 and T4 but preserves T2.
+
+
+
+          2.1.54  Routine .MKMSK
+
+          Routine .MKMSK is called to make a mask  (returned  in  T1)  with
+     "77"  (octal) in word positions which are non-blank in the SIXBIT word
+     specified in T3.  It also uses T2.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-16
+
+
+          2.1.55  Routine CORGET
+
+          CORGET is the allocation portion of the memory  manager.   It  is
+     called  with  T1  containing the size (in words) of the block desired.
+     It exits CPOPJ with T1 containing the address of the  obtained  block.
+     It  will  stopcode if the core is not available and the program cannot
+     expand.  CORGET preserves all ACs except T1.
+
+
+
+          2.1.56  Routine CORFRE
+
+          CORFRE is the de-allocation portion of the memory manager.  Enter
+     it  iwth  T1  containing  the  address  of  the  block to free and the
+     absolute value of T2 containing the number of words to  free.   Blocks
+     which  are  freed are placed on a linked list of free blocks for later
+     re-use.  Address space is never  shrunk  when  core  is  de-allocated.
+     CORFRE preserves all ACs but destroys the setting of F$P2.
+
+
+
+          2.1.57  Routine SWTINI
+
+          SWTINI is the main routine  which  provides  support  of  reading
+     SWITCH.INI.   It  looks  up  DSK:SWITCH.INI[,]  and  parses  each line
+     searching for a line which begins with  "NRT".   It  will  attempt  to
+     parse each switch on the line;  if a switch parses incorrectly, SWTINI
+     will abort scanning the line and return to the  caller.   SWTINI  uses
+     all T ACs.
+
+
+
+          2.1.58  Switch Handling Routines
+
+          The following routines handle individual switches:
+
+     1.  ESCSWT handles the /ESCAPE:character switch.
+
+     2.  MODSWT handles the /MODE switch.  Non-understandable  settings  of
+         /MODE are equivalent to /MODE:NOVICE.
+
+
+
+
+          2.1.59  Miscellaneous SWITCH.INI Support Routines
+
+          The following  routines  are  used  to  support  the  reading  of
+     SWITCH.INI:
+
+     1.  SIXDSK returns an alphanumeric SIXBIT  token  in  T2,  terminating
+         character in P1.  It uses T2 and P1.
+
+     2.  DSKEAL eats characters until a <LF> is seen.  It uses P1.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-17
+
+
+     3.  DSKCH returns with the next character from the  file  in  P1.   It
+         returns  CPOPJ1  if no errors;  CPOPJ and P1 zero if error or EOF.
+         It uses P1 only.
+
+
+
+
+          2.1.60  Tables SWTA And SWTDSP
+
+          These are the tables which define legal switches  and  correspond
+     them  with  appropriate  actions.   SWTA  is generated with the NAMTAB
+     MACRO.  SWTDSP is the list of addresses.  The offset of  each  address
+     corresponds to the offset of the affiliated command from the beginning
+     of the SWTA table.
+
+
+
+          2.1.61  Tables MODA, MODTB2, And MODTAB
+
+          These tables define the legal settings of the  /MODE  switch  and
+     the  corresponding  bit  setting  of  F$XPT  the value of NOTICH.  The
+     offset into MODA defined by  the  input  keyword  corresponds  to  the
+     offset into MODTAB to obtain the correct flag and MODTB2 to obtain the
+     value of NOTICH.
+
+
+
+          2.1.62  Data Block FILHGH
+
+          FILHGH is the  prototype  FILOP.   argument  block  used  by  the
+     performance analysis routines.
+
+
+
+          2.1.63  Routine GETCFG
+
+          GETCFG is called to  read  the  configuration  message  from  the
+     remote terminal server.  It will read the PMR message and confirm that
+     it is a positive response (first byte=1) if  that  is  necessary.   It
+     will  then  read  and store OSTYPE and PROTMD (the protocol modifier).
+     It will type the connect confirmation and escape character reminder
+
+          messages before returning to the user.  Enter at TYPESC  to  just
+     type the escape character reminder message.
+
+
+
+          2.1.64  Routine CMPESC
+
+          CMPESC is called to compute the offset  bit  and  word  from  the
+     beginning  of  a  mask.   These values are stored in ESCBIT and ESCWRD
+     respectively.  This is for fast adding of the escape character to  the
+     break set at interrupt level when using break masks.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-18
+
+
+          2.1.65  Routine ERRTRP
+
+          The ERRTRP routine is entered if the program  ever  gets  a  trap
+     through  .JBINT.  .JBINT traps are enabled for any kind of fatal error
+     (such as illegal memory  references,  pushdown  overflows,  etc.)  and
+     control-C  interrupts.  These things are specifically not enabled with
+     PSISER because the PSI system may be turned off when the error occurs.
+     This  routine  saves  the  ACs in location CRSACS and loads up a crash
+     pushdown pointer.  It then attempts to restore the state of  the  TTY:
+     (unslave  it,  in particular) and exit.  The program may then be SAVEd
+     and the dump analyzed later with FILDDT.
+
+
+
+          2.1.66  Routine DATPSI
+
+     DATPSI handles an ATTACH/DETACH PSI interrupt.   This  is  so  we  can
+     reset  the old terminal and init the new terminal.  Note that anything
+     set after initialization time will not be preserved  over  an  ATTACH.
+     Note  that  ATTACH/DETACH  PSIs occur at a higher PSI level than other
+     interrupts.
+
+
+
+          2.1.67  Routine DCNPSI
+
+          DCNPSI  is  the  operating  system  independent  NSP.   interrupt
+     service  routine.   It  calls EXCACS to set up the NSP.  ACs.  It then
+     decides if this is more data available for a previously not completely
+     read  network  message.   If so, in dispatches to NSPCON to finish the
+     read.  Otherwise, it checks the state of the connection, and, if it it
+     is  DR,  it  outputs the "[Connection to remote node aborted]" message
+     and exits through NSPER1.  If neither of the above is true, it  checks
+     for  network input and inputs any available, then attempts to push out
+     any pending network output.  If any network input now exists, it calls
+     the  operating  system  dependent  network  interrupt  service routine
+     (whose address was stored at initialization in OSNSP).  Upon return it
+     loops  to  check  for  more  input  and to attempt to send out pending
+     output.  When no input is available, it restores the ACs in use before
+     the interrupt and dismisses the interrupt.
+
+
+
+          2.1.68  Routine TMRPSI
+
+          This is the operating system independent  PITMR.   trap  routine.
+     It  first  loads  up  the timer service ACs.  If OSTMR is non-zero, it
+     treats it as the address  of  the  operating  system  dependent  timer
+     service  routine  and  dispatches  there.  Upon return, or if OSTMR is
+     zero, it loads up the AC set in use at the time of the  interrupt  and
+     dismisses the interrupt.  The check for non-zero OSTMR is because this
+     routine is not used by all operating systems, and, even then, not  all
+     the  time.   Although  we  should  not  take  a  trap  unless OSTMR is
+     non-zero, it is probably not harmful to dismiss any interrupt  we  may
+     get.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-19
+
+
+          2.1.69  Routine WAKPSI
+
+          WAKPSI is the WAKE UUO PSI service routine.  This consists merely
+     of  checking to see if F$USRV is set.  If it is, we proceed to TTYPSI;
+     if not we just dismiss the interrupt.
+
+
+
+          2.1.70  Routine TTYPSI
+
+          TTYPSI is entered via a PSI interrupt for I/O done  to  the  TTY:
+     or  via  a WAKE UUO.  TTY:  I/O PSIs happen at a higher interrupt than
+     other PSIs (except ATTACH/DETACH PSIs).  If another  interrupt  is  in
+     progress,  the  location  INTLVL is non-negative and TTYPSI will store
+     the status bits for the requesting  interrupt,  queue  a  forced  TTY:
+     interrupt  via  FRCTTY,  and dismiss the higher level interrupt.  Like
+     all interrupt service routines, it first loads up its own AC set.   If
+     in  PIM  mode,  TTYPSI proceeds to directly read input.  Otherwise, it
+     checks to see if there is  an  outstanding  read.   If  there  is,  it
+     proceeds  to read, first checking to be sure the TTY:  is echoed if it
+     should be.  If there is not read outstanding, we make  sure  the  TTY:
+     is  not  echoed.   This  is  to  simulate  the ECHO DEFERed mode which
+     systems such as VMS expect.  We then attempt to read TTY:  input.   If
+     the IN fails, be check if IO.EOF or any error bits are set.  If IO.EOF
+     is set, we CLOSE the TTY:  and try the read again.  If any error  bits
+     are  set, we stopcode.  If neither is true, we restore ACs and dismiss
+     the interrupt.  We then check to be sure OSTTY is  non-zero  (in  case
+     this  came  in  before  we  were set up).  If zero, we restore ACs and
+     dismiss the interrupt.  Otherwise, we allocate an internal buffer  for
+     the  input  and  chain  it  off  of any existing buffers.  We move the
+     haracters to the input buffer and call the operating system  dependent
+     TTY:   service  routine.   Upon return, we loop back to check for more
+     input.
+
+
+
+          2.1.71  Routine FLSTAH
+
+          FLSTAH is called to flush all type-ahead, both in internal chunks
+     and monitor chunks.  It uses no ACs.
+
+
+
+          2.1.72  Routine TTYSST
+
+          TTYSST is  the  general  routine  to  change  the  state  of  the
+     terminal.   It  will  set  the  data  mode  to .IOPIM if F$PIM is set,
+     otherwise it sets it to .IOASL with IO.ABS set so break masks  may  be
+     enabled.   Location IMASK is used as the argument to the .TOSBS TRMOP.
+     TTYSST guarantees that the escape character is part of the break mask.
+     TTYSST  also  includes  or  excludes  Q/S in the mask depending on the
+     setting of the page mode bit for the TTY:  (.TOPAG TRMOP.) TTYSST uses
+     no ACs.  TTYSST will clear buffers if the terminal mode changes and it
+     will change the pointers in the buffer header blocks.   It  will  also
+     attempt  to wait (read "BLOCK") for all output buffers to finish being
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-20
+
+
+     output to the TTY:  if the data mode (byte size) changes.
+
+
+
+          2.1.73  Routine CHKLED
+
+          CHKLED is called to see if line  editing  needs  to  be  done  on
+     type-ahead we haven't yet seen.  Return CPOPJ if something needs to be
+     done;  CPOPJ1 if not.  **THE BREAK SET IN USE IS ALTERED HERE AND  NOT
+     CHANGED  BACK,  BUT  IMASK  IS  LEFT  AS THE "DESIRED" MASK**.  AND IS
+     ALTERED BACK ONLY IF THERE IS NO LINE EDITING TO DO.  IMASK IS LEFT AS
+     THE "DESIRED" MASK IN ALL CASES, HOWEVER.** It uses nothing.
+
+
+
+          2.1.74  Routines CHKCTO, SETCTO, And CLRCTO
+
+          These routines handle the control-O bit  in  relation  to  F$CTO.
+     CHKCTO sets F$CTO according to the bit as the monitor sees it.  SETCTO
+     sets the output suppression bit if F$CTO is set.  **IT DOES NOTHING IF
+     F$CTO  IS  CLEAR**.  CLRCTO clears both F$CTO and the monitor's output
+     suppression bit.  These routines use CX.
+
+
+
+          2.1.75  Routine WATOUT
+
+          This routine is called when we must block until TTY:   output  is
+     complete.  This routine should be called only in extreme circumstances
+     (such as changing data mode).  It uses nothing.
+
+
+
+          2.1.76  Routines TOBLOK And TOHIBR
+
+          Call TOBLOK to sleep until a buffer ready.  TOBLOK uses  no  ACs.
+     Note  that  TOBLOK  only  waits  for  one  buffer  to become available
+     (although more may in fact be available.  TOHIBR is used by TOBLOK and
+     WATOUT  to  HIBER  using  the  bits  specified in T1 to HIBER with PSI
+     turned off (HIBER doesn't hiber if this is not true and  an  interrupt
+     is pending).  TOHIBR destroys nothing.
+
+
+
+          2.1.77  Routine SCNSPC
+
+          Call SCNSPC to scan the input  queue  for  "special"  characters.
+     Enter  with  T2  pointing to the appropriate "special" character table
+     Returns CPOPJ1 if a special character is not found.  Returns CPOPJ  if
+     one  is  found, with P4 pointing to the input buffer the character was
+     found in (or  0  if  in  INPCHR),  P1  containing  the  character,  P3
+     containing  the  number of characters left in the buffer pointed to by
+     P4, and P2 containing the LDB pointer  to  the  character  found  (NOT
+     ILDB!)  Table  CHRTAB  is  the  bit  mask to the "special" characters.
+     SCNSPC will also set F$BRK if a break character (as defined by  LMASK)
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-21
+
+
+     is  seen  during  the scan (i.e.  before a special character if one is
+     seen or in the whole string if no special  characters).   ICHCNT  will
+     also  be updated to be "correct" (no nulls counted) up to the point of
+     scan termination.  Note that SCNSPC should NOT be  called  if  not  in
+     "line" mode (as specified by F$PIM).  If neither a break nor a special
+     character is found, P1 contains the last non-null  character  scanned.
+     SCNSPC uses ALL ACs.
+
+
+
+          2.1.78  Routine SPCRMV
+
+          SPCRMV is a routine to remove  a  "special"  character  from  the
+     input  stream  and  shuffle succeeding characters down.  Call with P2,
+     P3, P4 as returned from SCNSPC.  It uses P1-P3 and CX.
+
+
+
+          2.1.79  Routine SPCFLS
+
+          SPCFLS is a routine to FLUSH input up  to  the  special  chracter
+     found  by  SCNSPC.   Call with P2, P3, P4 as returned from SCNSPC.  It
+     uses T1-T2.
+
+
+
+          2.1.80  Routine SPCCHK
+
+          This is a routine to check if character  in  P1  is  a  "special"
+     character.   Return  CPOPJ1 if it's special, CPOPJ otherwise.  It uses
+     T1-T3.
+
+
+
+          2.1.81  Routine CNTESC
+
+          CNTESC is called to count the number of escape characters in  the
+     input stream and set BRKNUM to that number.
+
+
+
+          2.1.82  Routines SCNINI SCNCHR, SCNLBK And SCNLCH
+
+          These routines are used to  scan  the  input  queue  for  certain
+     conditions  being  met.  You must preserve all "P" ACs across calls to
+     these routines in order to use these routines.
+
+     1.  SCNINI - Set up "P" ACs for an input scan.   SCNINI  uses  no  ACs
+         other than the "P"s.
+
+     2.  SCNCHR - Return with next input character in T1.  Return CPOPJ1 if
+         a character is present, CPOPJ if done.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-22
+
+
+     3.  SCNPOS - Given ACs as returned from SCNSPC, figure the position in
+         the input stream of the special character.  It uses T1-T2.
+
+     4.  SCNLBK - Scan to last break character before character pointed  to
+         by P2.  It uses T1-T4 also.
+
+     5.  SCNLCH  -  Scan  to  immediately  preceding  character.   Scan  to
+         character preceding that pointed to by P4.  Return with Ps intact,
+         and Ts set to values from SCNINI/SCNCHR.
+
+     6.  SETICH - Set ICHCNT to be accurate (toss nulls).
+
+
+
+
+          2.1.83  Routines CHKBRK And CHKBR1
+
+          Enter at CHKBRK with the character in question in P1;   enter  at
+     CHKBR1 with character in T1 to save T1 (RH only saved) Return CPOPJ if
+     character IS in the break set, CPOPJ1 otherwise
+
+
+                                      NOTE
+
+         Location BRKSIZ is incremented each  time  a  compenent  of  a
+         break is passed.  ***IT IS THE RESPONSIBILITY OF THE CALLER TO
+         BE SURE LOCATION BRKSIZ IS ZEROED AT THE RIGHT TIME***
+
+
+     Both routines use T1-T4 and CX, except that  CHKBR1  saves  the  right
+     half  of T1.  If the character in T1 IS a break character, CHKBR1 will
+     store it in the left half of location BRKCHR.
+
+
+
+          2.1.84  Control-H Processing
+
+     CHKCTH uses T1 and is called to see  if  the  character  in  P1  is  a
+     control-H and if so, see if we should output one to the TTY:.  This is
+     for the benefit of those operating systems from whom control-H doesn't
+     function as a rubout and isn't a break.
+
+
+
+          2.1.85  Escape Sequence Processing
+
+     CHKESC is called to check  if  an  escape  sequence  is  beginning  or
+     ending.   If  the  escape sequence finishes, then F$BRK is set.  If an
+     escape sequence begins, then F$ESA is set.   If  a  bad  character  is
+     encountered  during  processing, then F$BAD is set.  CHKBRK/CHKBR1 and
+     EKOTAH use this routine.  It will increment  BRKSIZ  appropriately  to
+     the  size  of the escape sequence.  An <ESC> will be stored in BRKCHR.
+     The table driven  routine  for  validating  the  escape  sequences  is
+     rumoured  to  let  a  few bad sequences through, but should definitely
+     pass all good ones.  It was obtained from WSM of ISWS who borrowed  it
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-23
+
+
+     from  another  ISWSite who modified it from VMS' TTDRIVER (friend of a
+     friend of a friend...).
+
+
+                                      NOTE
+
+         ***Note that it is the caller's responsibility  to  initialize
+         the  appropriate parts of the data base, in particular, F$ESA.
+         Note also that in general the base must be re-inited  at  each
+         read  request  because of multiple scanning passes of the same
+         stream with each read request,  so  all  bets  are  off  if  a
+         partial  escape  sequence  has  to be stored (i.e.  the escape
+         sequence  gets  split  over  a  read  request).   VMS  doesn't
+         guarantee  integrity across such anyway and RSX states nothing
+         about it.  The processing uses T1-T4 and CX.
+
+
+
+
+
+          2.1.86  Table ESCTAB
+
+          ESCTAB is the rule table used by CHKESC to define what is a legal
+     ANSI escape sequence.
+
+
+
+          2.1.87  Routine EKOTAH
+
+          EKOTAH is called to echo all characters in the input  queue.   It
+     should,  of  course, only be called once for a given input stream.  It
+     uses T1-T4.
+
+
+
+          2.1.88  Routine DORUB
+
+          DORUB is called to do the "normal" thing on a  rubout,  that  is,
+     rub  out  the  last character.  It uses T1-T4 and P1-P4.  Call it with
+     P1-P4 set from SCNSPC.
+
+
+
+          2.1.89  Routines RUBCHR And VIDRUB
+
+          RUBCHR is called with  the  rubbed  out  character  in  T1.   Its
+     purpose is to do the "right" think on the screen.  VIDRUB is called if
+     we are on a CRT;  it uses a table indexed by TTY:  type to decide  the
+     sequence to rubout the character on the screen.  Otherwise, the rubbed
+     out character is delimeted by backslashes (consecutive characters  get
+     two backslashes between them).
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-24
+
+
+          2.1.90  Routine DOCTU
+
+          DOCTU is called to do "normal"  Control-U  processing.   Call  it
+     with P1-P4 set from SCNSPC.  It uses P1-P4 and T1-T4.
+
+
+
+          2.1.91  Routine DOCTR
+
+          DOCTR is called to handle a Control-R.  Call it with P1-P4 set up
+     from  SCNSPC and T1 set to address of routine to call after outputting
+     "R<CR><LF>", or zero if none..  It uses P1-P4 and T1-T4.
+
+
+
+          2.1.92  Routine STRURB
+
+          STRURB is called to set up masks and the  TTY:   to  be  sure  we
+     handle Ctl-U, Ctl-R, and Rubout ourselves.  It uses T1.
+
+
+
+          2.1.93  Routines UNRURB And UNRALL
+
+          UNRURB and UNRALL clear  NRT's  handling  of  Ctl-R,  Ctl-U,  and
+     Rubout.   Call  UNRALL  to  clear checking of Ctl-R, Ctl-U, and Rubout
+     unconditionally.  Call UNRURB to clear "specialness" of UNRURB but not
+     in  the  mask  if  they  are  supposed  to  be reak characters.  These
+     routines use T1 and T2.  Call them with T3 containing the field  width
+     to  be set (field width gets set to one so we can handle Ctl-U, Ctl-R,
+     and Rubout correctly).
+
+
+
+          2.1.94  Routines PSIOFF, PSION, And PIOSAV
+
+          These routines are used  to  manipulate  the  software  interrupt
+     system.   PSIOFF  turns the interrupt system of and PSION turns it on.
+     PIOSAV is a co-routine called to be sure the interrupt system  is  off
+     for a subroutine and automatically turn it back on (if it was on entry
+     to the subroutine) on exit from the subroutine.  All routines use only
+     CX.
+
+
+
+          2.1.95  Routine NSPEA
+
+          NSPEA does an enter active to a remote's NRTSRV.  We are assuming
+     that  CONBLK  has  been set up already.  NSPEA decides to enter either
+     .OBHTH or .OBPST depending  on  the  number  of  nodes  the  user  has
+     specified.   NSPEA  uses CX.  NSPEA returns CPOPJ with the NSP.  error
+     code set up by SETNER on error, or returns CPOPJ1 with the  connection
+     set  up.   If  FTPMR is on, NSPEA calls PMR, an external subroutine to
+     actually do the connection so.  PMR  handles  "automatic"  Poor  Man's
+     Routing as specified in the file DCN:DNHOST.TXT.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-25
+
+
+          2.1.96  Routine SETQUO
+
+          This routine is called to set the link quotas of the  link  based
+     on  the  controlling  TTY:'s  baud rate.  This is so that if functions
+     (such as O to TOPS-10 or  TOPS-20,  for  example)  which  are  handled
+     remotely  are  requested,  they  will not take too long due to network
+     messages which have already been buffered ahead.   Can't  do  anything
+     Get the baud rate Up to a certain point only Set quotas and goals Note
+     that the below could be done in one NSP.  UUO.  It is done in  two  so
+     that  if the setting of the goal fails, the %input will still get set.
+     We assume that the goal may fail due to  privilege  violation  if  the
+     default  goal is set to a low value (at this point the monitor doesn't
+     privilege check at all;  the goal at this point in time is to make the
+     monitor fail if the user tries to set the goal higher than the default
+     but not lower.  This may change,  however).   Get  %  to  allocate  No
+     change Oh well Get goal No change +
+
+
+
+     2.1.97  Routines NSPIN And NSPINW
+
+          NSPIN is called to input  data  from  the  network.   It  returns
+     CPOPJ1  on  success, or through SETNER on failure.  On success, INPBUF
+     will contain the network data, IBFCNT will contain the byte count, and
+     IBFPTR is the ILDB pointer to the data stored at INPBUF.  If called at
+     NSPINW, the routine will block until a complete message is read or the
+     buffer  is full.  If called at NSPIN and an incomplete message is only
+     available (and the buffer isn't filled), then it will restore ACs  and
+     dismiss the interrupt in progress.  
+
+
+                                 ***WARNING***
+
+         NOTE THAT BECAUSE OF THE ABOVE, NSPIN SHOULD BE CALLED ONLY AT
+         NETWORK INTERRUPT LEVEL.
+
+
+     When a network interrupt signals more data is ready, network interrupt
+     service will return here to complete the message.  When it is complete
+     (or the buffer is full), NSPIN  will  return  to  the  caller.   These
+     routines use CX and the NSP ACs.
+
+
+
+          2.1.98  Routine NSPOUT
+
+          NSPOUT is called to output the buffer pointer to by OBFPTR to the
+     network.   This  routine  call QUEOUT to output buffer, and falls into
+     NSPO which attempts to output the buffer.   NSPO  is  also  called  at
+     network  interrupt level to force out any buffers which had previously
+     been queued (via calling  NSPOUT)  but  could  not  be  output.   When
+     buffers  are  completely  output,  they  are returned to the free core
+     pool.  NSPOUT uses no ACs (other than the NSP ACs);  NSPO uses  T1-T4.
+     The  buffer  will  be  sent  with EOM unless the sign bit is on in the
+     count field of the buffer header, or F$NEOM is set and this is NOT the
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-26
+
+
+     last buffer in the queue.
+
+
+
+          2.1.99  Routines NETQUE And QUEOUT
+
+          NETQUE and QUEOUT are called to queue the buffer  pointed  to  by
+     OTPBUF  into the network output queue, where it will be pushed out via
+     NSPO.  NETQUE uses no ACs;  QUEOUT uses  T1-T4.   Both  use  the  byte
+     pointer  in  the  buffer  header to compute the number of bytes in the
+     buffer.  If the sign bit of OTPBUF is on, the buffer will  be  flagged
+     to be output without EOM.  This is done by setting the sign bit of the
+     count word of the buffer.   These  routines  also  call  INOBUF  after
+     queueing the current buffer to initialize a new one.
+
+
+
+          2.1.100  Routine SETNOD
+
+          SETNOD is called to translate the  SIXBIT  node  name  stored  at
+     RNODE  into an eight-bit ASCII name in the connect block, suitable for
+     use in the NSP.  .NSFEA function.  It falls into SIX2SB and  therefore
+     uses T1-T2 and P1-P2.
+
+
+
+          2.1.101  Routine SIX2SB
+
+          SIX2SB takes a SIXBIT string in T1 and translates it to eight-bit
+     ASCII,  placing  the  result  in  the  string  block pointed to by T2.
+     SIX2SB uses P1-P2 as well.
+
+
+
+          2.1.102  Routines INIOBF And INOBUF
+
+          These  routines  are  called  to  initialize  IBFPTR/IBFCNT,  and
+     OBFCNT/OBFPTR.   INIOBF  initializes  both  input  and output buffers;
+     INOBUF initializes only output buffers.  They use  T1-T2.   The  input
+     buffer  is  fixed;   the output buffers are allocated dynamically from
+     the free core pool.
+
+
+
+          2.1.103  Routine BPLENG
+
+          BPLENG is called to compute the number of bytes  in  the  buffer.
+     It  is  called with the byte pointer to the beginning of the buffer in
+     T1 and the byte pointer to the end of the buffer in T2.  Both pointers
+     must  specify  eight-bit  bytes and the beginning pointer must be word
+     aligned.  BPLENG returns with the number of bytes in T1.   T1  and  T2
+     are used.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-27
+
+
+          2.1.104  Routine CPYMSK
+
+          CPYMSK is called to take a mask from the current position of  the
+     network  input  buffer  and copy it to the place specified by the byte
+     pointer in T3.  Enter with T4 containing the count for the  mask;   T4
+     must be non-zero.
+
+          This routine is provided for  systems  like  RSX  and  VMS  which
+     provide  a  break mask for input termination where the bytes appear in
+     the network buffer from low-order to high order and the correspondance
+     of  bits  to  ASCII  character values (in each byte) proceeds with the
+     high order bit representing the highest character value.   In  TOPS-10
+     format we translate the following into the B0-B32 format:
+
+       B7,B6,B5,B4,B3,B2,B1,B0   B15,B14,B13,B12,B11,B10,B9,B8  ...
+       \_____first  byte_____/   \________second byte________/   ...
+     CPYMSK uses T1-T4.
+
+
+
+          2.1.105  Routines GETWRD, PUTWRD, GETLWD, And PUTLWD
+
+          These routines are for -11 flavoured machines which have bytes in
+     reversed  order.  The GETxxx routines input the appropriate quanity (2
+     bytes for WRD and 4 bytes for LWD) into T1 from the  current  position
+     in  the  network  input buffer;  the PUTxxx routines output from P1 to
+     the current position in the output buffer.  These routines use CX  and
+     the  appropriate  argument AC.  The PUTxxx routines do not destroy the
+     argument.
+
+
+
+          2.1.106  AC Saving Routines
+
+          These are the AC saving/restoring routines/co-routines.  Most  of
+     them are called by MACROS.  This is shown in the following table:
+
+          Routine             MACRO     Call      Function          _______             _____     ____      ________
+
+          .SAVT1              SAVT1     JSP       Save/restore T1
+          SAVT                ---       PUSHJ     Save/restore T1-T4
+          REST                ---       JRST      Restore T1-T4
+          .SAV1               SAVE1     JSP       Save/restore P1
+          TPOPJ               ---       JRST      Restore T1
+          P1POJ1              ---       JRST      Restore P1/skip return
+          P1POPJ              ---       JRST      Restore P1
+          .SAV2               SAVE2     JSP       Save/restore P1-P2
+          .SAV4               SAVE4     JSP       Save/restore P1-P4
+          .RES4               ---       JRST      Restore P1-P4
+
+     In the above, JSP calls use AC CX.  Restoration routines  restore  ACs
+     from the stack.
+OPERATING SYSTEM INDEPENDENT SUPPORT                              Page 2-28
+
+
+          2.1.107  Routines TPOPJ1, CPOPJ1, And CPOPJ
+
+          These are return routines which are JRSTed to:   TPOPJ1  restores
+     T1  from  the  stack  and  skips,  CPOPJ1 skip returns, and CPOPJ just
+     returns.
+
+
+
+          2.1.108  Routine EXCACS
+
+          EXCACS is called by the interrupt service routines to exchange AC
+     sets.  Call is:
+
+        PUSHJ   P,EXCACS        ;Call
+        EXP     ACset           ;Block of 20 locations with which to
+                                ;exchange current ACs
+
+     AC F is not altered.
+
+
+
+
+
+
+
+
+
+
+
+
+                                CHAPTER 3
+
+                     OPERATING SYSTEM SPECIFIC SUPPORT
+
+
+
+3.1  OVERVIEW
+
+     The rest of the code in NRT  is  concerned  with  supporting  specific
+operating  system's  remote  terminal  servers.   This  section contains an
+overview of the general requirements for supporting an operating system.
+
+     Each operating system requires an initialization  routine,  a  network
+interrupt service routine, and a TTY:  service interrupt routine.
+
+     The initialization routine is called  when  NRT  knows  what  type  of
+operating  system  the  remote  host is.  This information is passed in the
+configuration message from the remote host.  The initialization routine  is
+responsible  for setting flags as to which data mode the TTY:  should be in
+(PIM or ASCII line) and  calling  TTYSST  to  set  that  up.   It  is  also
+responsible  for  sending  the appropriate return configuration message and
+any  other  messages  which  should  be  sent  to  the   remote   host   at
+initialization  time  (e.g.   the  unsolicited interrupt to VMS to simulate
+typing a <CR> on a terminal).
+
+     The network interrupt routine is responsible for handling any messages
+sent by the remote host over DECnet.  This can range from simply outputting
+the data to the  TTY:   (as  is  the  case  for  TOPS-10  and  TOPS-20)  or
+processing the messages as various flavours of I/O requests (as is the case
+for VMS and RSX).  The network interrupt service is called by  DCNPSI,  the
+operating  system  independent  network  interrupt  service routine, when a
+complete message is available or the network input buffer is full.
+
+     The  TTY:   interrupt  service  has  the  responsiblity  of   handling
+characters  typed  by  the user.  It is responsible for noticing the escape
+character  was  typed  and  calling   MONITO.    Other   than   that,   its
+responsibilities may be simply to ship the characters typed by the user out
+to the network (as is the case  for  TOPS-10  and  TOPS-20),  or  they  may
+include  local processing and buffering of characters until the remote host
+requests them (VMS and RSX).  The TTY:  interrupt service is called by  the
+operating  system  independent TTY:  service routine (TTYPSI) when new TTY:
+input is available.
+
+     Currently there are two basic types of protocols used.  The first type
+is  referred  to  henceforth  as  a  TRANSPARENT protocol;  the second as a
+MESSAGE protocol.  Some operating systems combine elements from  each  type
+OPERATING SYSTEM SPECIFIC SUPPORT                                  Page 3-2
+
+
+of protocol.
+
+     A transparent protocol is one in  which  the  DECnet  messages  passed
+between  the  local and remote hosts consist simply of the characters typed
+by the user and  sent  from  the  programs  running  on  the  remote  host.
+Messages  are passed when the connection is established to confirm that the
+correct protocol is being used, but from that  point  forward  any  message
+sent  is  considered to be data to be input by the remote host or displayed
+on the terminal by the local  host.   All  echoing  and  special  character
+handling  is  handled  by  the  remote host.  Generally, type-ahead is also
+handled by the remote host.  Transparent protocols are usually  handled  by
+doing  terminal  I/O in PIM mode and simply passing the characters directly
+through to the remote host.  Any characters sent from the remote  host  are
+sent  immediately to the terminal.  Since all echoing is done by the remote
+host, the remote host is also responsible for handling echo deferring, etc.
+
+     A message protocol exists where the DECnet messages passed between the
+local  and  remote  host  consist of requests for characters or information
+(generally  sent  only  from  the   remote   to   the   local   host)   and
+acknowledgements  fulfillments of the above mentioned requests (may be sent
+in either direction).  In general, in a message protocol, typed  characters
+are  not sent from the local to the remote host until they are requested by
+the remote host.  Echoing and special character handling are normally  done
+by  the  local host in a message protocol.  Type-ahead is the responsiblity
+of the local host.  A message protocol is handled by not  transferring  the
+user's  typed characters from NRT's internal buffers to the network until a
+request is received from  the  remote  host  for  them.   The  remote  host
+provides  a  break  mask  (or utilizes an implied mask) and a maximum count
+with each request.  At this point, characters will be  transferred  to  the
+remote  host as dictated by the specific request.  If the characters arrive
+after the request, NRT will have allowed the monitor to echo them (assuming
+they  are to be echoed).  If the characters are typed before the request is
+received, NRT will not allow the monitor to echo them and  will  echo  them
+when they are sent out over the network.
+
+     Rather than describe each routine in detail, the rest of the PLM  will
+consist of a general description of each operating system type and pointers
+to appropriate reference manuals.  The general description will outline the
+type  of protocol which is used to communicate with the remote host and any
+peculiarities of the particular operating system.  This  lack  of  detailed
+documentation  is  in  part intentional.  The user should NOT try to repair
+any operating system specific routines  unless  he  thoroughly  understands
+both  NRT's  general  approach  (as  described  in  in this manual) AND the
+appropriate internals (not just the  external  appearance)  of  the  remote
+host.  To this effect, lists of appropriate documents will be provided, but
+it is the user's responsibility to read the suggested references.
+
+     In debugging NRT, it is very helpful to  utilize  the  DNSNUP  program
+provided on the DECnet Tools Tape.  This program is invaluable in providing
+a trace of what the remote operating system is  actually  sending  you  (as
+opposed to what the spec says).
+
+     I repeat for emphasis:
+OPERATING SYSTEM SPECIFIC SUPPORT                                  Page 3-3
+
+
+                        ***WARNING*** ***WARNING***
+
+               DO NOT TRY  TO  "FIX"  ANY  OPERATING  SYSTEM
+               SPECIFIC    CODE    UNLESS   YOU   THOROUGHLY
+               UNDERSTAND THE REMOTE HOST OPERATING  SYSTEM,
+               UNDER  PENALTY  OF  GETTING BOTH NRT AND YOUR
+               FINGERS BROKEN.
+
+
+
+
+
+     3.1.1  RSTS Support
+
+     RSTS  is  implemented  by  a  protocol  which  is  a  combination   of
+transparent and message protocols.  Characters are passed from the local to
+the remote host as they are  typed,  but  they  are  bound  in  a  message.
+Echoing is done on the local host.
+
+     RSTS supports five types of messages:
+
+     1.  Configuration message (Type 1):  This is the normal  configuration
+         message.  This is passed only when the link is being established.
+
+     2.  Control message (Type 2):  This is sent to  request  a  change  of
+         various terminal states, such as to turn of echoing.
+
+     3.  Unsupported protocol message (Type 3):  This message is sent  when
+         one  end requests a function which the other end does not support.
+         It should never be sent during the normal course of events.
+
+     4.  Reserved for DEC (Type 4)
+
+     5.  Data message (Type 5):   This  message  passes  characters  to  be
+         displayed  (from the remote to the local host) or characters typed
+         by the user (from the local to the remote host).
+
+
+     Reference documents:
+
+     1.  DECnet/E Virtual Terminal Protocol (VTP) Version 1.0 - This  memo,         ________ _______ ________ ________ _____ _______ ___
+         dated  20-Jan-79,  describes  the types of messages which comprise
+         RSTS' protocol.  A difference between the memo and reality is that
+         the  data  message  is  Type  5  rather  than Type 4.  It was also
+         distributed on the TOPS-20 version 5 SWSKIT tape.
+
+
+
+
+     3.1.2  RSX Support
+
+     RSX utilizes a message protocol.  There are twelve  types  of  message
+requests which may be passed, including the configuration message.  In most
+cases, a request is generated in the remote host.  The local host  responds
+when  able  to complete the request with a complementary message containing
+OPERATING SYSTEM SPECIFIC SUPPORT                                  Page 3-4
+
+
+the same operation code.  There also a reference identifier which  is  sent
+in  the  original  message;  this must also be returned when the request is
+acknowledged.
+
+     There are two exceptions to the above protocol:
+
+     1.  Exception condition message  (Message  Type  12  (decimal)  or  14
+         (octal)):   This message is only sent from the local to the remote
+         host and is sent when the user types  certain  special  characters
+         that could require immediate attention, for example, C.
+
+     2.  Write operation with No-Write-Complete modifier:  Like  any  other
+         message,  a  Write  message  should  be  acknowledged  when  it is
+         completed.  It is  possible,  however,  for  the  remote  host  to
+         specify that the Write request is not to be acknowledged.  If this
+         is the case, then the local host should perform the Write  request
+         but not acknowledge it.
+
+
+     Reference documents:
+
+     1.  RSX I/O Users Guide - This gives a general idea  of  what  an  RSX         ___ ___ _____ _____
+         program expects to see.
+
+     2.  RMT Protocol Specification for RMT/RMHACP version 1.08 - This memo         ___ ________ _____________ ___ __________ _______ ____
+         specifies  the  RSX  remote  terminal  protocol.  It describes the
+         types of messages passed and the appropriate  responses.   Author:
+         S.   Goldfarb;   reviewed  by S.  Seufert, J.  Schriesheim, and J.
+         Forecast
+
+
+     A further current peculiarity of RSX is its inability to handle having
+the  link turned off.  This is actually done within the monitor, as TOPS-10
+does optimistic buffering and will occasionally  have  to  request  that  a
+remote  host  send  no more DECnet messages.  For RSX, if this happens, the
+link will shut off but will never turn on again when the  monitor  requests
+the remote host to begin sending messages again.  This is handled in NRT by
+turning off the optimistic buffering during initialization.   This  feature
+is currently under FTCROCK.
+
+     RSX seems to have a further peculiarity in tossing  characters  during
+unsolicted  input  if  only  the  break  character is typed (and it's not a
+<CR>).  This is implemented for unsolicited input by first breaking on  all
+characters, and then breaking under a complete request.
+
+
+
+     3.1.3  VMS Support
+
+     VMS also uses a message protocol.  It is perhaps  most  important  for
+VMS  that the user understand the internals of the remote operating system.
+This is due to the fact  that  the  program  which  communicates  with  VMS
+becomes, in essence, an equivalent of TTDRIVER.
+OPERATING SYSTEM SPECIFIC SUPPORT                                  Page 3-5
+
+
+     A further peculiarity of VMS is the "free line feed" logic.   This  is
+part  of  VMS  such  that the user doesn't over-write a just-typed out line
+with echoed characters.  The basic rules are:
+
+     1.  If the last write or broadcast operation ended  with  a  <CR>  not
+         followed by a <LF> (remember that a VMS "record" is <LF>data<CR>),
+         then the next read operation generates a  "free"  line  feed.   If
+         there  is  a  leading  line feed in the prompt, that is the "free"
+         line feed.
+
+     2.  If the last read operation  was  terminated  by  <CR>,  then  <CR>
+         echoes  as <CR><LF> and the "free" line feed is "canceled" for the
+         next read request (assuming no writing is done in between).   This
+         means  if  there  is a leading <LF> in the prompt, it is eaten and
+         not displayed.
+
+     3.  The above is not through for any  flavour  of  physical  only  I/O
+         (IO$_READPBLK, IO$_READALL, PASSALL mode, etc.).
+
+
+     Reference documents:
+
+     1.  VAX/VMS Network Command Terminal Protocol - This memo by Scott  G.         _______ _______ _______ ________ ________
+         Davis describes the pre-release 3.x protocol.
+
+     2.  VMS V3.0 Remote Terminal Protocol - This  memo  by  Darrell  Duffy         ___ ____ ______ ________ ________
+         specifies the updates to the above memo for VMS V3.x.
+
+     3.  VAX/VMS I/O Users' Guide - Since the VAX expects  NRT  to  be  the         _______ ___ ______ _____
+         equivalent  of  the  terminal driver, it is useful to know what is
+         expected of a terminal driver.
+
+
+
+
+     3.1.4  TOPS-10/TOPS-20 Support
+
+     TOPS-10 and TOPS-20 are implemented via a  transparent  protocol.   As
+such,  all  characters  typed  by  the  user  are read in PIM mode from the
+terminal and queued immediately for network output.   All  characters  sent
+from the remote host are displayed on the terminal.
+
+
+
+
+
+
+
+
+
+
+
+
+                                CHAPTER 4
+
+                                DATA TABLES
+
+
+
+4.1  
+
+     The rest of  the  program  is  concerned  with  the  data  tables  and
+variables used by the program:
+
+     1.  Table OSNAME is a  list  of  SIXBIT  text  names  indexed  by  the
+         operating system type as returned in the configuration message.
+
+     2.  The following are the protocol dispatch blocks for  each  type  of
+         operating  system type.  They defined the legal functions for each
+         operating  system.   The  format  of  an  entry  in  a  table   is
+         "dispatch-address,,function-key-value".
+
+         1.  RSSFNC is the protocol block for RSTS.
+
+         2.  RSXFNC is the protocol block for RSX.
+
+         3.  VMSFNC is the protocol block for VMS.
+
+
+     3.  HILOST is the start of a section of initializing data for the  low
+         segment.
+
+         1.  CONBLK, SRCPDB, DSTPDB, and SRCNAM are the prototype parts  of
+             NSP.  argument blocks.
+
+         2.  TOBUF is the header for the terminal output buffer.  Flags  to
+             include  when buffer queued Number of output buffers which can
+             be queued Used by us Used by OUT UUO Output buffer queue
+
+         3.  HPSTRM is the argument block for the maintenance of horizontal
+             position data
+
+         4.  ECCTRM is for checking if characters are pending to be echoed.
+
+         5.  PAGTRM is for checking the setting of the page bit.
+
+         6.  CTOTRM is used to check the O bit;  CTOTRS is for setting  the
+             O bit.
+DATA TABLES                                                        Page 4-2
+
+
+         7.  BMASK is the default (TOPS-10) break mask.
+
+         8.  TTYBLK is the OPEN block for device TT:.
+
+         9.  TTYSAV is the table of TTY:  characteristics to  be  saved  on
+             entering NRT and restored later.
+
+        10.  TTYSET is a table of terminal characterstics which NRT  wishes
+             to  be  set a particular way while it runs.  Entries in TTYSET
+             should also be in TTYSAV.
+
+        11.  VMTTCH is  storage  for  VMS  terminal  characteristics.   The
+             default type of terminal we set is a TTY:.
+
+        12.  RXCHTB is storage for the RSX terminal characteristics.
+
+        13.  LEDTRM and  LEDUDX  are  used  to  check  to  see  if,  during
+             type-ahead, the user typed some line editing characters.
+
+
+     4.  Default break masks:
+
+         1.  VXDMSK is the VAX default break mask.
+
+         2.  RXDMSK is the default RSX break mask.
+
+         3.  RSTDMK is the default RSTS break mask
+
+
+     5.  The next set of tables are TTY:  type tables.  This is so  we  can
+         pass intelligently the type of terminal we are to the remote host.
+         The index into each table should yield the corresponding  terminal
+         type for the appropriate operating system.
+
+         1.  TTPTB is the TOPS-10 version of the table.
+
+         2.  VTPTB is the VMS terminal type table.
+
+
+     6.  QUOTBL is the link quota and percentage  goal  table,  indexed  by
+         TTY:  baud rate.  The left half of each entry is the percentage to
+         allocate for input;  the right half is the goal.
+
+     7.  SEGTBL is the segment size table, also based on baud rate.
+
+     8.  RUBS1 is the rubout string table, indexed by terminal  type  (same
+         as the terminal type tables above).
+
+
+     The rest of the low segment data should be reasonably well  documented
+in the comments in the source and hence will not be documented here.

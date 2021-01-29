@@ -1,0 +1,729 @@
+	UNIVERSAL SOSSYM
+	SEARCH	SOSTCS
+
+; SOS -- Line editor for editing disk files.
+; 
+;  This version works by re-copying, as do other versions  of  SOS.
+;  Unlike  other versions, however, the temporary files are created
+;  only once and are reused on subsequent passes through the  file.
+;  This  substantially  improves  the speed of the editor since the
+;  relatively slow operations  of  DELETE,  RENAME  and  ENTER  are
+;  replaced  with  the  fast operation of USETx.  This version also
+;  does all binary IO in dump mode,  which  allows  a  smaller  low
+;  segment and substantially improves the running speed.
+;
+;  Included in the version are many  new  features,  including  the
+;  co-edit commands (CX), output command (O:filename,range), change
+;  case (VU, VL and VV), plus numerous switches.  Also added  is  a
+;  special  VT52  mode  for intended for VT52 running on fast lines
+;  that take special advantages of the display  features  in  alter
+;  mode.
+;  
+;  All  of  the  standard  SOS  version  22 (University of Arizona)
+;  features have been included, and many commands have been cleaned
+;  up  to make them more convenient.  Also included are some of the
+;  DEC SOS features  that  were  missing  for  version  22.   These
+;  include  control-C  trapping,  the 'lines deleted' message, .Qxx
+;  and .Zxx  backup  files,  provision  for  editing  files  a  2xx
+;  protection  and SFD support.  Most  of these are included  under
+;  controllable switch so that they can be enabled or  disabled  as
+;  desired.
+
+.VNCCL==SOSEDT	; Change this each time the /CCL part of SOSDAT
+		; is changed to avoid junk CCL files.
+	SUBTTL	Feature tests and installation parameters
+;		-----------------------------------------
+
+
+	MLON		; Multi-line thingies
+	SALL		; Suppress macro xpansions
+
+; Assembly time parameters
+
+IFNDEF I.LNSZ,<I.LNSZ==^D500>	; Maximum line length
+IFNDEF I.SSLS,<I.SSLS==^D400>	; Maximum search string length
+IFNDEF I.NSSS,<I.NSSS==^D20>	; Maximum simultaneous search strings
+IFNDEF I.PGSZ,<I.PGSZ==^D55>	; Number of text lines per page
+IFNDEF I.PLPP,<I.PLPP==^D66>	; Physical length of a page in lines
+IFNDEF I.LPPP,<I.LPPP==^D56>	; Lines printed per page by L command
+
+;Installation parameters
+
+%UACCL==0	; Support of the fancy /CCL features
+%UAPRT==0	; For default file protection by PPN (Requires U of A
+		; special GETTAB tables)
+%UAHPQ==0	; For selective insertion in HPQ 1. 
+
+;Feature tests
+
+LSTSW==1	; For L and O commands
+VCMDSW==-1	; On for V command (change case over range)
+JUSTSW==1	; For text justification
+RENTSW==1	; For re-entrant version (off is not supported)
+CCLSW==1	; For ccl features
+TEMPC==1	; For tempcore feature
+CRYPSW==1	; For encrypted files
+EXTEND==1	; For extended features
+XSARSW==0	; Turn this on if /EXPERT should suppress the 
+		;[Accepted] and [Rejected] messages from decide mode
+		; substitute.
+BACKSW==-1	; On if /BACKSPACE should be default
+INFSW==-1	; On if /INFORM should be default
+CKPSW==0	; On if supporting checkpoint file
+		;** Do not turn on.  Calls routines that are not
+		; currently supplied with sos.  this is part of a
+		; research project.
+OPTNAM==<SIXBIT/SOS/>		;Tag to find in option file SWITCH.INI
+KIONLY==0	; For KI only instructions.  Set to zero if for KA 00.
+KLONLY==1	; For KL only instructions.  Set to zero for KI
+IFN KLONLY,<KIONLY==1>		; Same here
+
+FTVDDT==1	; Special core UUO simulation for VMDDT usage
+		; Highly recommended for using customized page fault
+		; handler or VM DDT.
+	SUBTTL	Processor Dependent Macro Definitions
+
+
+;***Caution--to conserve space, the DMOVE instructions have been
+;	used for KI/KL processors.  For a KA version of SOS, DMOVE
+;	and DMOVEM are redefined to be macros that perform the same
+;	functions.  Since these expand into two instructions, DO NOT
+;	use a DMOVE or DMOVEM as an instruction that may be skipped
+;	by a test or subroutine call.
+
+IFE KIONLY,<		; Redefine DMOVE/DMOVEM for KA-10's
+	DEFINE DMOVE(AC,ADDR),<
+	MOVE	AC,ADDR
+	MOVE	<AC+1>,1+ADDR
+	>
+	DEFINE DMOVEM(AC,ADDR),<
+	MOVEM	AC,ADDR
+	MOVEM	<AC+1>,1+ADDR
+	>
+>
+
+;*** Note, the following macro differs from the ADJSP instruction
+;    in two essential ways:  It does not check for overflow, and
+;    the adjustment must completely evaluated at assembly time.
+
+IFE KLONLY,<		; Define ADJSP macro for KI/KA processors
+	DEFINE ADJSP(R,N),<
+IFG N,<
+	ADD	R,[N,,N]
+>
+IFL N,<
+	SUB	R,[-<N>,,-<N>]
+>
+>>
+
+	SUBTTL	Processor Independent Macro Definitions
+
+
+DEFINE	OCRLF,<
+	OUTSTR CRLF##
+>
+DEFINE	ONECHO,<
+	TRZE	FL,NECHO		;;ECHO OFF?
+	 STSTS.	TTY,IO.LEM!IO.ASL	;;YES--TURN BACK ON
+>
+DEFINE	OFFECHO,<
+	TRON	FL,NECHO		;;ECHO ON?
+	 STSTS.	TTY,IO.LEM!IO.ASL!IO.SUP;;YES--TURN IT OFF
+>
+DEFINE	DELETE(CHN),<
+	RENAME	CHN,NULFIL##
+>
+DEFINE	CLRBFI,<
+	IF1, <	PUSHJ	P,CTTBFI>
+	IF2, <	IFNDEF CTTBFI,<EXTERN CTTBFI>
+		PUSHJ	P,CTTBFI>
+>
+DEFINE	CHKREN(XFR),<
+	TLZE	FL2,RENTF	; Have we re-entered?
+	JRST	XFR
+>
+
+DEFINE CLEARM(FOO),
+<
+	IRP FOO<
+	SETZM	FOO
+>
+>
+
+	DEFINE	CONT.<LALL
+
+			   PAGE	;(Continued on next page)
+			   SALL	;(Continued from previous page)
+>
+
+; I/O channels
+
+TTY==1		; Channel for TTY
+IN==2
+OUT==3
+LPT==4
+ALTDV==5	; The other input device (copy and transfer)
+IND==6		; Indirect chl for "@" cmd
+OPT==7		; Chl for option file
+CXOUT==10	; Input channel during CX type co-edit
+CXIN==11	; Output channel during CX type co-edit
+
+; Acs used
+
+T1=1	; Temp registers
+T2=2
+T3=3
+T4=4
+T5=5
+CN=7
+
+LPNTR=6		; Low buffer pointer.  Do not reference outside of
+		; SOSBUF except to save/restore it.
+FL=10		; Flag register
+FL2=11
+ALTP=12		; Pointer for alter mode
+CS=13		; Character table bits
+SINDEX=14	; Line to find, used also by the various routines
+PNTR=15		; Points at current place in buffer
+C=16		; Character returned here by gnch
+P=17		; Pushdown list
+
+; Special ac's
+
+D==PNTR
+S1==PNTR
+S2==SINDEX
+	SUBTTL	Flag Definitions
+
+; Flags  (Right half of FL)
+
+BOF==1		; Now on first record of file
+EOF==2		; Have read end of file but not necessarily in buffer
+SSBGSN==4	; Suppress setting of BGSN.  Set by OCOMPL, cleared
+		; by FIND.  Indicates CPG is not setup correctly.
+ADDL==10	; Used in command scanning--line number + inc
+SUBL==20	; Line number - inc
+IDF==40		; Scan has seen an identifier
+NUMF==100	; Scan has seen a number
+TERMF==200	; Scan saw a terminator (lf or altmode)
+LINSN==400	; The command input routines saw a line number
+PGSN==1000	; They saw a page number
+NEWFL==2000	; This edit is creating a new file
+WNEWFL==4000	; End code has seen a new file name
+BGSN==10000	; Biggest page has been seen
+CURPRT==20000	; Use direct cursor addressing in OUTLIN print
+CNTF==40000	; Command using !
+TERMFF==100000	;<FF> TERMINATOR (USED FOR DONT GO UP WITH P CMD)
+READOF==200000	; This file is being used in read only mode
+NECHO==400000	; ON IF ECHO IS TURNED OFF
+
+; Special flags for parse code (Right half of FL)
+
+F.LAHD==1
+F.PER==2
+F.SLSH==4
+F.CDSN==10
+F.PPN==20
+F.COLN==400
+F.PROT==100000
+
+P.FLGS==F.LAHD!F.PER!F.SLSH!F.CDSN!F.PPN!F.COLN!F.PROT
+
+DEV==0		; Device offset
+NAME==1		; Name offset
+EXT==2		; Extension offset
+PPN==5		; Ppn offset
+SFD==PPN+1	; First SFD name in parse
+CODE==14	; Follows PPN and PATH block (.PTMAX+3)
+CODMAX==^D20	; Max chars in code
+
+; Flags (Left half of FL)
+
+NEGF==1		; Search has seen a 
+DEMCHR==2	; Search must see another character
+ASSMF==4	; Search has assumed search continuation
+ALTSRF==10	; He wants to do a search and edit
+NUMSRF==20	; He only wants numbers of lines found
+ARBITG==40	; We are doing  currently, do not allow another
+EXCTSR==100	; Wants to search exactly (not ignore case)
+COPFIL==200	; We are copying from another file
+L1.NNL==400	; Need a new line (Used for sequencing TECO files)
+NOPRN==1000	; Do not print while doing substitute
+DECID==2000	; Allow user to decide if line is OK
+EXCTS1==4000	; Another exact search flag for subs
+			; 10000 is free
+GCOM==20000	; Doing a g command instead of e
+SRCOP==40000	; Doing a search of second file
+L1.MCM==100000	;MARK COMMAND USED TO FLAG *+1 OK W/O NLN ERROR
+TECOF==200000	; This is a teco file
+L1.NCR==400000	; Need a carriage return at next line.  User just
+		; typed line feed instead of <CR><LF> to end last line.
+
+; Flags in FL2 (right)
+
+STARF==1	; We have seen a * for the last line
+RUBF==2		; We are doing rubout in intra-line edit
+ALTDUP==4	; Duplex characters in alter mode
+RUBF2==10	; Doing delete type rubout in alter mode
+R2.CCI==20	; User has a ^C^C request pending
+PDFL1==40	; Process dependent
+PDFL2==100	; J does right justify
+PDFL3==200	; 
+PDFL4==400	; 
+SUPN==1000	; Suppress line numbers on printing
+PDFL5==2000	; 
+PDFL6==4000	; 
+QSEPF==10000	; Treat . % $ as separators
+R2.DSW==20000	; If /DECRYPT was selected
+PDFL7==40000	; J does fill words only
+ENTALT==100000	; Enter alter mode on this line from insert
+R2.PSW==200000	; If /ENCRYPT was selected
+R2.TSC==400000	; Temporary SAV file created
+
+ALLPDF==PDFL1!PDFL2!PDFL3!PDFL4!PDFL5!PDFL6!PDFL7
+
+; Flags in FL2 (left)
+
+PDECID==1	; Perm decide mode for S
+UARWF==2	; Up arrow (^) seen for first line
+HPQF==4		; SOS in running in HPQ
+NORENT==10	; Don't allow reenter
+RENTF==20	; Reenter command typed
+BELLF==40	; Allow <bell><bell>
+BELLSN==100	; <bell> seen
+AUTOF==200	; Auto save in progress
+L2.SSI==400	; Suppress search increment.  For F & G in ALTER mode.
+		; 1000 is free
+DOENDF==2000	; E cmd requested
+INOPTF==4000	; Reading option file
+INPARS==10000	; Doing initial parse
+		; 20000 is free
+L2.NAB==40000	; No Altmode Break (Tells TTY scanner about ESC usage)
+INSF==100000	; On if currently doing a line insert
+LNUMF==200000	; On if printing line numbers
+BKSPF==400000	; On if treating backspace like rubout
+	IFN BACKSW,<DFBKSW==BKSPF>
+	IFE BACKSW,<DFBKSW==0>
+
+; Magic charater bits -- used to see if next character could start
+; a line number specifier.  Does not contain "^" or the digits.
+; Digits will set NUMF (in FL), ^ must be check specially since its
+; code is too large to fit in even a whole word.
+
+BK==40		; Suitable bias so all fit in a halfword
+NUMCHR=1B<"+"-BK>!1B<"-"-BK>!1B<"*"-BK>!1B<"!"-BK>!1B<"/"-BK>!1B<":"-BK>!1B<"#"-BK>!1B<"%"-BK>
+	SUBTTL	IO UUO Definitions
+
+; Give DEC UUO new names so we can still reference them
+
+IF1,<			; Only do this on pass one to get old values
+OPDEF CORE.	[CORE]
+OPDEF RLEAS.	[RELEAS]
+OPDEF INBUF.	[INBUF]
+OPDEF OUTBF.	[OUTBUF]
+OPDEF USETI.	[USETI]
+OPDEF USETO.	[USETO]
+OPDEF IN.	[IN]
+OPDEF INPUT.	[INPUT]
+OPDEF OUPUT.	[OUTPUT]
+OPDEF OUT.	[OUT]
+OPDEF STATZ.	[STATZ]
+OPDEF STATO.	[STATO]
+OPDEF OPEN.	[OPEN]
+OPDEF CLOSE.	[CLOSE]
+OPDEF LOOKP.	[LOOKUP]
+OPDEF ENTER.	[ENTER]
+OPDEF RENAM.	[RENAME]
+OPDEF GTSTS.	[GETSTS]
+OPDEF STSTS.	[SETSTS]
+>
+
+; These trap to the SOS UUO handler so the correct channel
+; can be inserted before the UUO is executed.  The LOOKUP UUO
+; is redefined substantially
+
+FIOUUO==13		; First one used
+
+OPDEF XENTER	[13B8]  ; Extended ENTER
+OPDEF OPNDSK	[14B8]
+IFN FTVDDT,<
+OPDEF CORE	[15B8]
+>
+OPDEF RELEAS	[16B8]
+OPDEF INBUF	[17B8]
+OPDEF OUTBUF	[20B8]
+OPDEF USETI	[21B8]
+OPDEF USETO	[22B8]
+OPDEF INUUO	[23B8]
+OPDEF INPUT	[24B8]
+OPDEF OUTUUO	[25B8]
+OPDEF OUTPUT	[26B8]
+OPDEF STATZ	[27B8]
+OPDEF STATO	[30B8]
+OPDEF OPEN	[31B8]
+OPDEF CLOSE	[32B8]
+OPDEF XLOOKP	[33B8]
+OPDEF ENTER	[34B8]
+OPDEF RENAME	[35B8]
+OPDEF GETSTS	[36B8]
+OPDEF SETSTS	[37B8]
+	SUBTTL	Error Definitions
+
+OPDEF ERROR [1B8]	; Error uuos fatal error
+OPDEF NERROR [2B8]	; Non-fatal error
+OPDEF RERROR [3B8]	; Print message and return
+OPDEF PJRST  [JRST]	; Mnemonic OPDEF
+
+; Error numbers
+
+ICN==1		; Internal editro confusion
+DIE==2		; Device input error
+DDE==3		; Device output error
+ILC==4		; Illegal command
+ILUUO==5	; Protection. someone executed an illegal uuo
+LTL==6		; Line is too lognng
+NLN==7		; Null comand range
+NSP==10		; No such page (delete)
+ORDER==11	; Lines out of order
+ACF==12		; Already changed the file
+ILR==13		; Illegal replacement with insert
+WAR==14		; Wrap around in renumbering
+TMS==15		; Too many search strings given
+STL==16		; Too many total string chrs
+ISS==17		; Illegal search string
+ILFMT==20	; Illegal line format detected
+NSG==21		; No string given
+FNF==22		; File not found (copy)
+DNA==23		; Disk not available (copy)
+NEC==24		; Not enough core (copy)
+IRS==25		; Illegal replacement string
+STC==26		; Search string too complex (got pdlov)
+ITD==27		; Illegal transfer destination (place no longer there)
+NNN==30		; No next line (from join type commands)
+SRF==31		; Search fail (f and s commands)
+CMERR==32	; Error in command file
+CMEND==33	; Eof seen in command file
+MAR==34		; Rmar must be greater than lmar and pmar
+BBF==35		; Funny stuff in "basic" mode (fatal)
+MEC==36		; Must exit co-file first
+TMC==37		; Too many co-files
+BFS==40		; Bad file specification
+IBM==41		; Illegal in Basic mode
+ELL==42		; Excessively Long Line
+IRO==43		; Illegal when read-only
+APN==44		; Ambiguous parameter name
+NPN==45		; No such parameter
+CFB==46		; Command file too big
+PMI==47		; Page mark inserted to prevent wrap around
+URT==50		; Unrecognized terminal type
+IMN==51		; ILLEGAL MACRO NAME
+TMM==52		; TOO MANY MACRO NAMES
+MDL==53		; MACRO DEFINITION TOO LONG
+MTD==54		; MACROS NESTED TOO DEEP
+ISW==55		; Illegal Switch
+FIQ==56		; Filespec Illegal on Quit
+	SUBTTL	Miscellaneous Definitions
+
+LINSIZ==I.LNSZ	; Number of characters allowed in a line
+IFG LINSIZ-^D630,<PRINTX ?LINSIZ is too large.  ^D630 will be used
+	LINSIZ==^D630
+>
+SRBLG==I.SSLS	; Number of chrs allowed in search string
+SRNUM==I.NSSS	; Number of search strings allowed
+PDLSIZ==200	; Pushdown list size
+MXWPL==LINSIZ/5	; Max number of words per line
+MINDSK==^D5	; Minimum disk space to try output
+OVRDRW==^D100	; Over draw allowance
+IFN EXTEND,<LSNUM==1	; Number of nested line searches allowed>
+%LPP==I.LPPP	; Lines/page for "L" cmd
+PGSZ==I.PGSZ	; Lines / page
+FULLPG==I.PLPP	; Lines to next page
+BLKSIZ==^D128	; Disk block size
+B2WLSH==7	; Blocks to words conversion
+W2BLSH==-B2WLSH	; Words to blocks
+RTPLSZ==50	; Size of push down list for read teco co-routine
+
+.TOLCT==1003	; Lower case TTY
+
+%LDSTP==12,,16	; Index into .GTLVD table for default protection
+%LDFFA==2,,16	; Index into .GTLVD table for Full File Access PPN
+IFN %UAPRT,<
+.GTPRV==6	; Privilege table index
+JP.LJT==1	; Local JACCT  (Project leader)
+>
+.GTPRG==3	; Program name
+.GTDFL==140	; Default parameters table
+	JD.PRT==777B8	;Default protection
+	JD.SDP==1B9	;Default was specified
+
+; Flags used in character table
+
+OPF==10		; This is a special character
+SNUMF==4	; This is part of a number
+LETF==2		; This is a letter
+TERM==1		; This is a terminator
+M37==400000	; This chr is printed as itself on model 37
+NSEPF==200000	; This is not a seperator (used on $,%,and.)
+
+; Special characters for find and substitute commands
+
+;	These have been moved to table in SOSFAS.MAC
+
+;	Extended LOOKUP and ENTER parameters
+; Special SOS symbols (extension to the block placed before the
+; monitors block have the form XRB???.  All have negative indices.
+
+; --------
+XRBBIG==-3		; Number of SOS entries in the LOOKUP block
+XRBNOR==-3		; -1 if file not open in update mode.
+			; greater or equal to zero otherwise
+XRBTFX==-2		; Temporary file extension
+XRBMWL==-1		; Maximum written length of file
+; ---
+.RBCNT==0			; Length of the lookup block
+	RB.NSE==1B18		;(ENTER only) non-superseding enter
+.RBPPN==1			; PPN or path pointer for the file
+.RBNAM==2			; Name of the file
+.RBEXT==3			; Extension for the file
+.RBPRV==4			; Protection of the file
+.RBSIZ==5			; Size of the file
+.RBVER==6			; Version number for the file
+.RBSPL==7			; Spooled name for the file
+.RBEST==10
+.RBALC==11
+.RBPOS==12			; Position for ENTER
+.RBDEV==16
+.RBBIG==16		; Last argument referenced in SOS
+
+; Words in the OPEN block
+
+UU.PHS==1B0	; Sign bit in OPEN block implies physical
+UU.PHY==1B19	; Bit 19 .NE. bit 18 of CALLI implies physical only
+
+.OPMOD==0		; Mode
+	.IOASL==1		; ASCII line
+	.IOASC==0		; ASCII
+	.IODMP==17		; DUMP mode
+
+	IO.ERR==17B21		; IO error bits
+	IO.EOF==1B22		; End of file bit
+	IO.LEM==1B29		; Special line editor mode
+	IO.SUP==1B28		; Suppress echo mode
+	IO.ASL==1B35		; ASCII Line
+.OPDEV==1		; Device name
+.OPBUF==2		; Buffer header pointer
+
+; Words in the Buffer Header Block
+
+.BFADR==0		; Header word
+.BFPTR==1		; Buffer byte pointer
+.BFCTR==2		; Count of bytes remaining
+
+; Close bits
+
+CL.DAT==1B29	; Delete access table from disk data base
+CL.RST==1B30	; Inhibit creating a new file (or superseding
+		; An old one) on output close
+CL.NMB==1B31	;Inhibit deleting name block on a
+		; Close with only a lookup done
+CL.ACS==1B32	; Inhibit updating access date
+CL.DLL==1B33	; Inhibit deallocation of allocated
+		; But unwritten blocks
+CL.IN==1B34	; Inhibit closing input
+CL.OUT==1B35	; Inhibit closing output
+
+; Some GETTAB bits
+
+%CNSTS==<17,,11>		; States word
+%CNPGS==115,,11			; Unit of core allocation
+	ST%IND==<1B10>		; INDPPN=-1 if this bit is on
+%LDNDB==30,,16			;Default disk buffers in ring
+
+
+	SUBTTL	MISC. NON-I/O -- HIBER
+
+HB.SWP==1B0	;FORCE IMMEDIATE SWAP OUT
+HB.IPC==1B10	;IPCF
+HB.RIO==1B11	;I/O
+HB.RPT==1B12	;PTY ACTIVITY
+HB.RTL==1B13	;TTY LINE ACTIVITY
+HB.RTC==1B14	;TTY CHARACTER ACTIVITY
+HB.RWJ==1B15	;THIS JOB
+HB.RWP==1B16	;THIS PROGRAMMER
+HB.RWT==1B17	;THIS PROJECT
+
+	SUBTTL	Miscellaneous I/O -- DEVCHR
+
+DV.DRI==1B0	; Dta with directory in core
+DV.DSK==1B1	; Device is a file structure
+DV.CDR==1B2	; If dvout=1 device is a cdp
+		; If dvin=1 device is a cdr
+DV.LPT==1B3	; Device is a line printer
+DV.TTA==1B4	; Device is a TTY controling a job
+DV.TTU==1B5	; Tty ddb is in use
+DV.TTB==1B6	; Free bit left from scnsrf
+DV.DIS==1B7	; Device is a display
+DV.LNG==1B8	; Device has a long dispatch table
+DV.PTP==1B9	; Device is a paper tape punch
+DV.PTR==1B10	; Device is a paper tape reader
+DV.DTA==1B11	; Device is a DEC-tape
+DV.AVL==1B12	; Device is available to this job
+DV.MTA==1B13	; Device is a magnetic tape
+DV.TTY==1B14	; Device is a TTY
+DV.DIR==1B15	; Device has a directory
+DV.IN==1B16	; Device can do input
+DV.OUT==1B17	; Device can do output
+DV.ASC==1B18	; Device assigned by assign command
+DV.ASP==1B19	; Device assigned by INIT or OPEN uuo
+DV.M17==1B20	; Device can do mode 17
+DV.M16==1B21	; Device can do mode 16
+DV.M15==1B22	; Device can do mode 15
+DV.M14==1B23	; Device can do mode 14
+DV.M13==1B24	; Device can do mode 13
+DV.M12==1B25	; Device can do mode 12
+DV.M11==1B26	; Device can do mode 11
+DV.M10==1B27	; Device can do mode 10
+DV.M7==1B28	; Device can do mode 7
+DV.M6==1B29	; Device can do mode 6
+DV.M5==1B30	; Device can do mode 5
+DV.M4==1B31	; Device can do mode 4
+DV.M3==1B32	; Device can do mode 3
+DV.M2==1B33	; Device can do mode 2
+DV.M1==1B34	; Device can do mode 1
+DV.M0==1B35	; Device can do mode 0
+	SUBTTL	Disk UUOS -- PATH.
+
+.PTFCN==0	; Job #,,function or argument channel or device
+		.PTFRD==-1	; Read default
+		.PTFSD==-2	; Set default path
+		.PTFSL==-3	; Set LIB, NEW, SYS
+		.PTFRL==-4	; Read LIB, NEW, SYS
+.PTSTR==0	; Answer has STR name
+.PTSWT==1	; Switches and flags
+	PT.SLT==7B29	; Type of search list
+		.PTSLJ==1	; Job
+		.PTSLA==2	; All
+		.PTSLS==3	; SYS
+	PT.IPP==1B30	; Implied PPN (forced)
+	PT.LIB==1B31	; /LIB
+	PT.SYS==1B32	; /SYS
+	PT.NEW==1B33	; /NEW
+	PT.SCN==3B35	; Scan switch
+		.PTSCN==1	; No (off)
+		.PTSCY==2	; Yes (on)
+	PT.SNW==1B34	; /NEW on .PTFSL/.PTFRL
+	PT.SSY==1B35	; /SYS on .PTFSL/.PTFRL
+.PTPPN==2	; PPN (UFD) of path
+.PTMAX==11	; Last possible 0 after last SFD +1
+
+SFDLIM==5
+		; (ie, length of path block)
+
+	SUBTTL	DISK UUOS -- CHKACC
+
+.ACCPR==0	;CHANGE PROTECTION
+.ACREN==1	;RENAME
+.ACWRI==2	;WRITE
+.ACUPD==3	;UPDATE
+.ACAPP==4	;APPEND
+.ACRED==5	;READ
+.ACEXO==6	;EXECUTE
+.ACCRE==7	;CREATE
+.ACSRC==10	;SEARCH DIRECTORY
+; LOOKUP/ENTER/RENAME/GETSEG/RUN error codes
+
+ERFNF%==0	; File not found
+ERIPP%==1	; Incorrect PPN
+ERPRT%==2	; Protection failure
+ERFBM%==3	; File being modified
+ERAEF%==4	; Already existing file name
+ERISU%==5	; Illegal sequence of UUOS
+ERTRN%==6	; Transmission error
+ERNSF%==7	; Not a save file
+ERNEC%==10	; Not enough core
+ERDNA%==11	; Device not available
+ERNSD%==12	; No such device
+ERILU%==13	; Illegal uuo
+ERNRM%==14	; No room
+ERWLK%==15	; Write-locked
+ERNET%==16	; Not enough table space
+ERPOA%==17	; Patial allocation
+ERBNF%==20	; Block not free
+ERCSD%==21	; Can't supersede a directory
+ERDNE%==22	; Can't delete non-empty directory
+ERSNF%==23	; SFD not found
+ERSLE%==24	; Search list empty
+ERLVL%==25	; SFD nest level too deep
+ERNCE%==26	; No-create for all S/L
+ERSNS%==27	; Segment not on swap space
+ERFCU%==30	; Can't update file
+ERLOH%==31	; Low seg overlaps hi seg (GETSEG)
+ERNLI%==32	; Not logged in (RUN)
+
+; File protection codes
+
+.PTCPR==0	; Change protection
+.PTREN==1	; Rename
+.PTWRI==2	; Write
+.PTUPD==3	; Update
+.PTAPP==4	; Append
+.PTRED==5	; Read
+.PTEXO==6	; Execute
+.PTNON==7	; No-access
+
+; Directory protection codes
+
+PT.LOK==4	; Allow lookups
+PT.CRE==2	; Allow creates
+PT.SRC==1	; Search directory
+	SUBTTL	External Declarations
+
+DEFINE	EXDATA<		;; Macro to declare externals
+IFN RENTSW,<TWOSEG
+	RELOC	400000 >
+;; EXTERNal locations
+
+EXTERN	CMFFLG,COMFRP
+EXTERN	TMFCUR,TMFCR
+EXTERN	CTBL,DATAB,DATABL,INDEVI,OUDEVI,ALDEVI,TTDEVI,INDDVI,OPTDVI
+EXTERN	OPTFIL,LSBUFN,LSPTR,LSPTT,PGMK,PGMKW2,SQBUF,PGHS,PGHD,LPDEVI
+EXTERN	ERRHD,ASCZ1,PRNTO1,ASCIZ2,PRNTO2,PMAR,LMAR,RMAR,MAXL,MAXLN
+EXTERN	WTBL,JFLOP,PAGESZ,PLINES,COMESS,COMCNT,LINOUT,T.HEAD,T.IOWD
+EXTERN	RPGR,CNCBLK,CNCLOK,DATAE,IPATH,OPATH,APATH,SVPATH,UUONOM
+EXTERN	FTYPE,STOPGF,XCMDF,SAVPDP,SUPSNF,RTIPDP,BUFSAI,XFLAG,ERDEV
+EXTERN	ZEROB,BAKF,SVWD,SVWD2,TMPT1,BASICF,UNSEQF,RPGSW,TMPNAM,TMPCOD,PMIFLG,UNPAGF
+EXTERN	TMPDEV,NEWNAM,NEWEXT,PZBEG,PNAMI,ICODE,PNAMO,OCODE,DELCNT
+EXTERN	CODBUF,PZEND,BUFFIR,BUFLAS,BUFLIM,BUFHSZ,OUTSIZ,REMSIZ,SSW
+EXTERN	RSW
+EXTERN	EDNAM,DFXSW,SVDFX,CHNTAB,BAKF1,LPPATH,NPATH,VT52FL,COMFLF
+EXTERN	RDTPDL,RDTPDP,TECLIN,LSTBLK,SVJFF2,PNTNMO,PNTNMI,EXACTF,AEXACF
+EXTERN	AUTALT,UNSQIF,TOTCHG,.BAKF,.UNSQF,RDTBFP,OUTNAM,OUTEXT,OUTPTH
+EXTERN	CLN,INCR,CPG,CPGL,OLDLIN,SSAVEN,CHNIN,CHNOUT,NEWDEV,CHGCNT
+EXTERN	SAVEN,SISAVN,ISAVEN,ALTSN,ALTINC,ALTFLG,CASEBT,BGPG,ACCUM
+EXTERN	SVT1E,SVERN,SAVCHR,TECINC,TECFST,TEMINC,REINC,INCST,ALTCNT
+EXTERN	LOGPG,LSTCNT,SVCCNT,SAVC,LSHIPG,LSHILN,LSCNT,LSPG,LSBUF,LSPNT
+EXTERN	LOBUF,LIMBO,CHIN,SVCCIN,SVPCIN,TTOBUF,TTOCNT,TTOPNT,OBUF,IBUF
+EXTERN	NAMEO,AUXFIL,PDL,P.TEXT,CMDBUF,LIBUF,CRSX,LIBUF2,SVPT,RNPATH
+EXTERN	CODEBF,BUFSAV,STRNAM,STRSBN,ARBBUF,ARBCNT,SRHIPG,SRHILN,SRCNT
+EXTERN	SRBUF,SRPG,SRPNT,BOTLIN,PGDELS,STARTD,ENDD,TRANST,PGINSD,DESTLN
+EXTERN	DESTPG,FINCR,SINCR,SVLNUM,LSTPG,SVJRL,COPDL,PMTSTR,CMDPMT
+EXTERN	FNDPMT,STDPMT,QUITSW,DPYFLG,EXPFLG,OPNOUF,FRCPAG,WFLG,ERSCTW
+EXTERN	NLIN1,NLIN2,DESTN,LSTLN,PARCNT,RPPG,RPCNT,FNDFLG,R1BUF,R2BUF
+EXTERN	RPHILN,RPHIPG,R1PNT,R2PNT,CCNT,RSTRCT,OCNT1,OPTR,LINL,LWRD
+EXTERN	WRDL,TPNT,ELIN,TCHR,WCNT,BPW,REM,BLIN,INDNT,SVOCIN,OPTION
+EXTERN	OPTBHD,COMBUF,INDFIL,INDEXT,INDBUF,SVALTP,DPG,SVINC,EWNFNF
+EXTERN	SVCNT,OCNT,NCNT,SRCALP,SVPBTS,FFFLAG,GIFEXT,GIFDEV,CMPATH,PRTCOD
+EXTERN	ZEROE,ORGNAM,ORGEXT,ORGPTH,NAMEI,HILN,HIPG,LOLN,LOPG,IMPEND
+EXTERN	ORGDEV,OUTLEB,WINDOW,WINRAT,WINMIN,WINMAX,CXFCOR,CXFPDP,CXFPTR
+EXTERN	LSGLEN,CXFMNE,CCEXIT,SVTSTS,FDELLN,LDELLN,FDELPG,QZBAKF,INFFLG
+EXTERN	CTIBUF,TIBUF,TBUF,LINEW,HLPBUF,DELBAK,BUFBDY,BUFLOW,NEWPTH,LINEW
+EXTERN	CXSUPF,ENDFLG,ERSW,MYPPN,COCOPY,ISCOP,TRANFL,REFDLY,START2
+EXTERN	TMFCLR,TMFCTE,TMFCLN,TMFCUP,TMFFIR,TMFLAS,LSLOLN,CURINS,LSLOPG
+EXTERN	CURINP,CAUNIT,CRLFSW,DELETF,NOAINF,SVCRLF,QMDFLG,BUFBLL
+EXTERN	TABCUR,TABINI,MYUDX
+EXTERN	NEWCMD,BAUD,TSPEED
+EXTERN	TERMNM
+>
+	ASUPPRESS
+	LIST
+	END

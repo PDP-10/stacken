@@ -1,0 +1,563 @@
+	UNIVERSAL DTSPRM - Parameters for DTS/DTR
+	SUBTTL W. Nichols	May, 1981
+
+
+	FTEXTRA==0		;Non-zero to allow extra commands
+	FTNCP==0		;Non-zero to include NCP command
+	FTUSRMODE==0		;Non-zero if loaded with test-bed
+	FTTRACE==0		;Non-zero to include trace code
+	FTLIST==0		;Non-zero to list $XLISTed text
+	FTNSPDCP==0		;Non-zero to include NSP. LUUO library
+
+	HIBTIM==^D30000		;MILLISECS FOR DTS TO HIBER
+				; BETWEEN READ STATUS FCNS
+
+	SEARCH	JOBDAT,UUOSYM,SWIL
+
+	SALL
+
+
+;	This program conforms to the DTS specification version 1.1
+;	published on 22 April 1981.
+	SUBTTL	- Make Global Symbols Global
+
+;Call GLOBAL EXTERNAL,INTERNAL in DTS and DTR
+;Call GLOBAL INTERNAL,EXTERNAL in DTSCOM
+
+DEFINE GLOBAL(common,notcommon),<
+
+	common TIMSTP,STRLOG,STPLOG,CLSLOG,NSPREL,.STATUS,TYPSTA,TYPFLO
+	common ERRCMD,ERRMSG,WRNMSG,INFMSG,NSPERR,NSPERL,NSPSTS
+	common UNKCMD,RDDSDT,RDCNDT,RCVMSG,PRCVMSG,STYPOU,STYPIN
+	common PDLIOW,USERDATA,CNTUSR,FILSTD,CMPSTD,CMPSTB
+	common CCLF1,TYPBOL,TYPRCS,INIFF,INICOR,CURCMD,RSNTXT
+	common CHANEL,LOGSPC,LOGFOP,LOGBRH,LOGENT,LOGPTH
+	common PUT1BY,PUT2BY,PUTNBY,ASC2ST,SIX2ST,.TSTRB
+	common GET1BY,GET2BY,GETNBY,GETTIM,SETQTA
+	common ALWPRI,PSTATS
+IFN FTEXTRA,common USLINK,TRCMSG
+
+	notcommon PRGID,PRGABR,LOGFLG,PRINT
+	notcommon BAUD,MSGSIZ,SNDCNT,RCVCNT,RERRCNT
+	notcommon SERRCNT,SNDCNT,ELPTIM
+
+	;;Make a null USRSAV macro for SAVEAC macro to call.  This will
+	;;prevent it calling the SCAN save routines with the wrong args.
+
+	DEFINE USRSAV,<>
+	DEFINE	RETSKP,<JRST .POPJ1>	;REDEFINE MACSYM'S MACRO
+
+>;END OF DEFINE GLOBAL
+	SUBTTL	Compile-Time Variables
+
+DEFINE ND(name,val),<IFNDEF name,<name==val>>
+DEFINE XP(name,val),<name==:val>
+
+;Block lengths
+
+ND	LN$PDL,	^D300		;LENGTH OF PUSH DOWN LIST
+ND	FOPLEN, .FOMAX		;LENGTH OF NON-PRIV FILOP. BLOCK
+ND	LN$ENT,	.RBMAX		;LENGTH OF EXTENDED ENTER BLOCK
+ND	LN$LKP,	.RBMAX		;LENGTH OF EXTENDED LOOKUP BLOCK
+
+ND	LN$DAT,	^D100		;MAX LENGTH OF USER DATA (8-BIT BYTES)
+
+ND	MAXSGM,^D1024		;NUMBER OF BYTES IN MAX DATA SEGMENT
+ND	MAXMSG,^D5000		;MAX SIZE MESSAGE WE'LL SEND (BYTES)
+	MAXMGW==<<MAXMSG+3>/4>+1 ;LENGTH OF SUCH A STRING IN WORDS
+ND	STRLEN, ^D39		;MAX STRING WE'LL COPY TO A STRING BLK
+	STRLNW==<<STRLEN+3>/4>+1 ;LENGTH OF SUCH A STRING IN WORDS
+				;+1 FOR COUNT WORD
+
+ND	SEQLEN,4		;LENGTH OF A MESSAGE SEQUENCE NUMBER
+
+;I/O Channel Allocations
+
+ND	LOGCHN,1		;THE LOG FILE'S I/O CHANNEL
+	SUBTTL	Macro used to call NSP. (L)UUO
+
+DEFINE CALNSP(function,lstarg,wait<0>,%temp),<
+   IFB  <lstarg>,%temp==NSACH
+   IFNB <lstarg>,%temp==lstarg
+	MOVE	NSAFN,[EXP wait ! <function>B17 ! 1+%temp-NSAFN]
+	MOVE	NSACH,CHANEL
+	MOVX	T1,NSAFN
+	NSP.	T1,
+   PURGE %temp
+>
+
+;Macro to define a string block, puts the length (words) in the
+;right half of the first word, as a string block is supposed to have.
+
+DEFINE STRBLK(length),<
+	EXP	length+1
+	BLOCK	length
+>
+	SUBTTL	Matching Definitions for DTS's Parse Macros
+
+
+;Definitions for the PRINT:xxx switch
+
+	PRI.AL==1		;ALL
+	PRI.NO==2		;NONE
+	PRI.ER==3		;ERROR
+
+	FLAG=:0			;FLAGS, CONTINUOUS THROUGH ALL CALLS
+
+	T1=:1			;WORK... T1 AND T2 MUST BE 1 & 2
+	T2=:2
+	T3=:3			;AND T3 AND T4 MUST BE 3 & 4
+	T4=:4			;FOR COMPATIBILITY WITH SCAN & WILD
+
+	P1=:5
+	P2=:6
+
+	N=:7			;SAME AS IN SCAN
+	C=:10			;SAME AS IN SCAN
+
+	NSAFN=:11
+	NSACH=:12
+	NSAA1=:13
+	NSAA2=:14
+	NSAA3=:15
+NSALN==5			;LENGTH OF NSA?? ARGUMENT BLOCK
+
+	CX=:16			;SUPER-TEMP AC FOR LOAD/STOR/ETC
+	.SAC==CX		; AND ITS ALIAS USED BY MACSYM MACROS
+
+	P=:17			;STACK POINTER
+	SUBTTL	Useful Macros and Initializations
+
+	EXTERN	.POPJ,.POPJ1
+
+	OPDEF	PJRST	[JRST]
+	OPDEF	CALL	[PUSHJ P,]
+	OPDEF	RET	[POPJ P,]
+
+
+DEFINE $XLIST,<
+IFE FTLIST,<IFN ..LIST,<XLIST>
+	..LIST==0
+>>
+DEFINE $LIST,<
+IFE FTLIST,<IFE ..LIST,<LIST>
+	..LIST==1
+>>
+	..LIST==1			;INITIALIZE THE $XLIST MACROS
+
+;Macro to build an 8-bit string from a literal text string.
+
+DEFINE BYTE8(string),<
+	%LEN==0
+	%WRD==0
+
+	IRPC string,<
+	  %WRD==<%WRD_10>+<"string"_4>
+	  %LEN=%LEN+1
+	  IFE %LEN-4,<
+	    EXP %WRD
+	    %WRD==0
+	    %LEN==0
+	>>
+
+	IFN %LEN,<
+	  %WRD==%WRD_<<4-%LEN>*10>
+	  EXP %WRD
+	>
+>
+DEFINE ERROR(message,crlf),<
+	CALL	[	SAVEAC <T1,T2,T3,T4>
+		IFNB <crlf>,<
+			MOVEI	T1,[ASCIZ |message
+|]
+		>
+		IFB <crlf>,<
+			MOVEI	T1,[ASCIZ |message|]
+		>
+			PJRST	ERRMSG
+		]
+>;END OF ERROR MACRO
+
+DEFINE WARN(message,crlf),<
+	CALL	[	SAVEAC <T1,T2,T3,T4>
+		IFNB <crlf>,<
+			MOVEI	T1,[ASCIZ |message
+|]
+		>
+		IFB <crlf>,<
+			MOVEI	T1,[ASCIZ |message|]
+		>
+			PJRST	WRNMSG
+		]
+>;END OF WARN MACRO
+
+DEFINE INFO(message,crlf),<
+	CALL	[	SAVEAC <T1,T2,T3,T4>
+		IFNB <crlf>,<
+			MOVEI	T1,[ASCIZ |message]
+|]
+		>
+		IFB <crlf>,<
+			MOVEI	T1,[ASCIZ |message|]
+		>
+			PJRST	INFMSG
+		]
+>;END OF INFO MACRO
+
+DEFINE TRACE(message,crlf),<
+   IFN FTTRACE,<
+	CALL	[	SAVEAC <T1,T2,T3,T4>
+		IFNB <crlf>,<
+			MOVEI	T1,[ASCIZ |message]
+|]
+		>
+		IFB <crlf>,<
+			MOVEI	T1,[ASCIZ |message|]
+		>
+			PJRST	TRCMSG
+		]
+   >;END OF IFN FTTRACE
+>;END OF TRACE MACRO
+;MACROS TO PUT CODE IN THE LOW OR HIGH SEGMENT
+
+	DEFINE $RELOC(A)<
+	IFNDEF HIORG,HIORG==400000
+	TWOSEG	HIORG
+	RELOC	HIORG
+	LOCFLG==-1		;0=LOW SEG
+				;-1=HIGH SEG
+				;+1=ABSOLUTE LOW SEGMENT
+	HILOC==HIORG
+	LOLOC==0
+	ABSLOC==0
+>;END OF $RELOC
+
+	DEFINE $LOW(A)<
+	IFL LOCFLG,<HILOC==.
+		LOCFLG==0
+		RELOC	LOLOC>
+	IFG LOCFLG,<ABSLOC==.
+		LOCFLG==0
+		RELOC	LOLOC>
+>;END OF $LOW
+	DEFINE $HIGH(A)<
+	IFE LOCFLG,<LOLOC==.
+		LOCFLG==-1
+		RELOC	HILOC>
+	IFG LOCFLG,<ABSLOC==.
+		LOCFLG==-1
+		RELOC	HILOC>
+>;END OF $HIGH
+
+	DEFINE $ABS(A)<
+	IFL LOCFLG,<HILOC==.
+		LOCFLG==1
+		LOC	ABSLOC>
+	IFE LOCFLG,<LOLOC==.
+		LOCFLG==1
+		LOC	ABSLOC>
+>;END OF $ABS
+	SUBTTL	DTS/DTR Protocol Definitions
+
+;The DTR Object Type Code
+
+	XP	OBJDTR,^O77		;THE DTR OBJECT TYPE
+
+;All test sequences consist of a TEST TYPE and a TEST DESCriptor
+
+;	+---------------+---------------+
+;	|    TESTTYPE   |   TESTDESC    |
+;	+---------------+---------------+
+
+;The TESTTYPE byte is
+
+;	     7          6      5                     0
+;	+----------+----------+-----------------------+
+;	| PRINTOPT | ERRPROPT |          TYPE         |
+;	+----------+----------+-----------------------+
+
+
+;The TestType Codes
+
+	XP	.TCPRI,200		;TEST RESULTS TO BE TYPED BY DTR
+	XP	.TCERR,100		;ERRORS TO BE TYPED BY DTR
+
+	XP	.TCCON,0		;CONNECT TEST
+	XP	.TCDAT,1		;DATA TEST
+	XP	.TCDSC,2		;DISCONNECT TEST
+	XP	.TCINT,3		;INTERRUPT TEST
+
+;		4-15			;RESERVED FOR INTRA-SYSTEM TESTS
+;		16-31			;RESERVED FOR INTER-SYSTEM TESTS
+;		32-63			;RESERVED FOR USER-DEFINED TESTS
+	XP	.TCMAX,3		;LARGEST KNOWN TEST CODE
+
+
+;The Error Codes from the DTR
+
+;	+----------+------------------+
+;	|    15    |  ERRONEOUS FIELD |
+;	+----------+------------------+
+
+
+	XP	.ECUKT,^D15		;UNKNOWN TEST CODE
+
+;	ERRONEOUS FIELD is the sequence number of field in error
+;	with TESTTYPE being field number 0
+;The Connect Test Types (CONTYPE)
+
+;	+---------+----------+
+;	| CONTYPE | USERDATA |
+;	+---------+----------+
+
+	XP	.CCRJN,0		;CONNECT REJECT, NO DATA
+	XP	.CCACN,1		;CONNECT ACCEPT, NO DATA
+	XP	.CCRJS,2		;CONNECT REJECT, STANDARD DATA
+	XP	.CCACS,3		;CONNECT ACCEPT, STANDARD DATA
+	XP	.CCRJR,4		;CONNECT REJECT, RETURN DATA
+	XP	.CCACR,5		;CONNECT ACCEPT, RETURN DATA
+	XP	.CCMAX,5		;MAX DEFINED VALUE
+
+;The Disconnect Test Types (DISTYPE)
+
+;	+---------+----------+
+;	| DISTYPE | USERDATA |
+;	+---------+----------+
+
+	XP	.SCSDN,0		;SYNCHRONOUS DISCONNECT, NO DATA
+	XP	.SCADN,1		;ABORT DISCONNECT, NO DATA
+	XP	.SCSDS,2		;SYNCHRONOUS DISCONNECT, STANDARD DATA
+	XP	.SCADS,3		;ABORT DISCONNECT, STANDARD DATA
+	XP	.SCSDR,4		;SYNCHRONOUS DISCONNECT, RETURN DATA
+	XP	.SCADR,5		;ABORT DISCONNECT, RETURN DATA
+	XP	.SCMAX,5		;MAX DEFINED VALUE
+;The Data Test Types (DATTYPE)
+
+;	+---------+-------+--------+------+-----+-----+----+
+;	| DATTYPE | RFLOW | RQUEUE |  RESERVED  |  MSGLEN  |
+;	+---------+-------+--------+------+-----+-----+----+
+
+	XP	.DCSNK,0		;SINK DATA TEST
+	XP	.DCSEQ,1		;SEQUENCE DATA TEST
+	XP	.DCPAT,2		;PATTERN DATA TEST
+	XP	.DCECH,3		;ECHO DATA TEST
+;		4-63			;RESERVED FOR DEC
+;		64-255			;RESERVED FOR THE USER
+	XP	.DCMAX,3		;MAX FIELD WE HAVE DEFINED
+
+;Flow Control Types
+
+	XP	.NSFC0,1		;NO FLOW CONTROL
+	XP	.NSFCS,2		;SEGMENT FLOW CONTROL
+	XP	.NSFCM,3		;MESSAGE FLOW CONTROL
+	XP	.FCMAX,3		;MAX FIELD WE HAVE DEFINED
+
+;The Interrupt Test Types (INTTYPE)
+
+;	+---------+--------+------+-----+
+;	| INTTYPE | RQUEUE |   MSGLEN   |
+;	+---------+--------+------+-----+
+
+
+	XP	.ICSNK,0		;SINK INTERRUPT TEST
+	XP	.ICSEQ,1		;SEQUENCE INTERRUPT TEST
+	XP	.ICPAT,2		;PATTERN INTERRUPT TEST
+	XP	.ICECH,3		;ECHO INTERRUPT TEST
+	XP	.ICESQ,4		;ECHO SEQUENCE INTERRUPT TEST
+	XP	.ICEPT,5		;ECHO PATTERN INTERRUPT TEST
+	XP	.ICMAX,5		;MAX FIELD WE HAVE DEFINED
+	SUBTTL DECnet Standard Parameters
+
+;The REASON values for a Disconnect Initiate or Disconnect Confirm message
+
+	..RDX==10		;SAVE PRESENT RADIX
+	RADIX 10		;USE DECIMAL FOR THE REASONS
+
+	RSNRBO==0		;REJECTED BY OBJECT
+	RSNDBO==0		;DISCONNECTED BY OBJECT (WHEN RUNNING)
+	RSNRES==1		;NO RESOURCES
+	RSNUNN==2		;UNRECOGNIZED NODE NAME
+	RSNRNS==3		;REMOTE NODE SHUT DOWN
+	RSNURO==4		;UNRECOGNIZED OBJECT
+	RSNIOF==5		;INVALID OBJECT NAME FORMAT
+	RSNOTB==6		;OBJECT TOO BUSY
+	RSNABM==8		;ABORT BY MANAGEMENT
+	RSNABO==9		;ABORT BY OBJECT
+	RSNINF==10		;INVALID NODE NAME FORMAT
+	RSNLNS==11		;LOCAL NODE SHUT DOWN
+	RSNACR==34		;ACCESS CONTROL REJECTION
+	RSNRNO==38		;NO RESPONSE FROM OBJECT
+	RSNNUR==39		;NODE UNREACHABLE
+	RSNNLK==41		;NO LINK
+	RSNDSC==42		;DISCONNECT COMPLETE
+	RSNIMG==43		;IMAGE FIELD TOO LONG
+
+	RADIX ..RDX		;RESTORE PREVIOUS RADIX
+	SUBTTL Special Macro for Calling SCAN
+
+;When DTS/DTR is loaded with the user-mode test-bed, it must
+;call the scan typout routines with a special call that turns off
+;PSI interrupts around the call.  SCAN is not re-entrant.
+
+
+DEFINE	CALLSCAN(routine),<
+   IFE FTUSRMODE,CALL routine
+   IFN FTUSRMODE,<
+	CALL [	CALL PSIOFF##	;;DON'T ALLOW PSI INTERRUPTS DURING SCAN
+		CALL routine
+		   TRNA
+		 AOS (P)
+		CALLRET PSION##]
+   >
+>
+
+
+DEFINE PROMPT(msg),<
+	MOVEI T1,[ASCIZ \msg \]
+	CALLSCAN .TSTRG##
+	>
+
+DEFINE REDLIN(proc),<
+	CALL .CLRBF##
+	MOVEI T1,0
+	CALLSCAN .PSCAN##
+	  JFCL		;;PROMPT ALREADY GIVEN
+	EXT proc
+	CALLSCAN proc
+	>
+	SUBTTL SAVEAC - Save AC List
+
+;SAVEAC is a macro to generate a JSP .SAC,xxx call to an AC saving
+;co-routine and to generate the routine also, if necessary.  SAVEAC
+;generates the routines as literals so that MACRO will compress as
+;many as possible.  SAVEAC sorts the arguments so that routines which
+;save the same ACs will always look the same to MACRO.
+
+;When the there are four or more ACs to be saved, SAVEAC assumes that
+;at least two of them will be adjacent and changes from multiple
+;PUSHes and POPs to and ADJSP and MOVEMs or, if possible, DMOVEMs for
+;efficiency.
+
+;If .SAC is among the ACs being saved, it is saved before the JSP
+;.SAC,xxx and then restored in the co-routine literal.
+
+;ACs may be refered to by any currently valid name and in any order.
+;A given set of ACs will always be recognized if its literal code has
+;been generated before or if it is a special set handled by a system
+;routine.
+
+;If an AC is mentioned more than once, it will only be saved/restored
+;once.
+
+;Provision is made for detecting standard AC sets which are handled by
+;user or system routines.  The routines, if defined, must be entered
+;with JSP .SAC,xxx.  For example, SAVEAC <P1,P2> will call the system
+;routine .SAV2 instead of generating local code to do the same thing.
+;See SPCMAC below.  By redefining the macro USRSAV, the user can
+;control the tests made for standard routines.
+
+;The following definition of USRSAV is the default.  Redefine it if
+;you want.  The calls to SPCSAV have two arguments: the routine name
+;and a list of ACs saved by that routine.
+
+DEFINE USRSAV,<>
+
+DEFINE SAVEAC(ACS),<
+
+..DONE==0
+..SACC==0
+..NAC==0
+..MASK==0
+
+IRP <ACS>,<
+	IFG ACS-^D15,<PRINTX ?SAVEAC(ACS) IS ILLEGAL,
+		      PRINTX ?SAVEAC CAN ONLY BE USED ON ACCUMULATORS>
+	IFE ACS-.SAC,<..SACC==1>
+	IFN ACS-.SAC,<IFE ..MASK&1B<ACS>,<
+		..MASK==..MASK!1B<ACS>
+		..NAC==..NAC+1>>
+	>
+IFE ..SACC,<USRSAV>		;;..DONE SET BY SPCSAV IF IT SUCCEEDS
+IFE ..DONE,<
+  IFLE ..SACC,<JSP .SAC,[>
+  IFG ..SACC,<CALL [EXCH .SAC,(P)>
+		    IFG  ..NAC-3,<DSAVAC>
+		    IFLE ..NAC-3,<IFG ..NAC,<PSAVAC>>
+		    PUSHJ P,(.SAC)
+		      TRNA
+		    AOS -..NAC-..SACC(P)
+		    IFG  ..NAC-3,<DRSTAC>
+		    IFLE ..NAC-3,<IFG ..NAC,<PRSTAC>>
+		    IFG ..SACC,<POP P,.SAC>
+		    POPJ P,]
+>
+PURGE ..NAC,..TNAC,..MASK,..TMSK,..SACC,..NUM,..SMSK,..DONE
+>;END OF DEFINE SAVEAC
+
+;Helper macros for SAVEAC
+
+DEFINE SPCSAV(ADDR,ACS),<
+	IFE ..DONE,<
+		..SMSK==0
+		IRP <ACS>,<..SMSK==..SMSK!1B<ACS>>
+		IFE ..MASK-..SMSK,<JSP .SAC,ADDR
+				   ..DONE==1>
+	>
+>;END OF SPCSAV
+
+
+DEFINE DSAVAC,<
+IFG ..NAC,<ADJSP P,..NAC>
+..TMSK==..MASK
+..TNAC==..NAC-1
+REPEAT ..NAC,<
+   IFN ..TMSK,<
+	..NUM==^L<..TMSK>
+	..TMSK==..TMSK-1B<..NUM>
+	IFE ..TMSK & 1B<..NUM+1>,<
+		MOVEM ..NUM,-..TNAC(P)
+		..TNAC==..TNAC-1>
+	IFN ..TMSK & 1B<..NUM+1>,<
+		DMOVEM ..NUM,-..TNAC(P)
+		..TNAC==..TNAC-2
+		..TMSK==..TMSK-1B<..NUM+1>>
+	>>
+>;END OF DEFINE DSAVAC
+
+DEFINE DRSTAC,<
+..TMSK==..MASK
+..TNAC==..NAC-1
+REPEAT ..NAC,<
+   IFN ..TMSK,<
+	..NUM==^L<..TMSK>
+	..TMSK==..TMSK-1B<..NUM>
+	IFE ..TMSK & 1B<..NUM+1>,<
+		MOVE ..NUM,-..TNAC(P)
+		..TNAC==..TNAC-1>
+	IFN ..TMSK & 1B<..NUM+1>,<
+		DMOVE ..NUM,-..TNAC(P)
+		..TNAC==..TNAC-2
+		..TMSK==..TMSK-1B<..NUM+1>>
+	>>
+IFG ..NAC,<ADJSP P,-..NAC>
+>;END OF DEFINE DRSTAC
+
+DEFINE PSAVAC,<
+	..TMSK==..MASK
+	REPEAT ..NAC,<
+		..NUM==^L<..TMSK>
+		..TMSK==..TMSK-1B<..NUM>
+		PUSH P,..NUM
+	>
+>
+DEFINE PRSTAC,<
+	..NUM==^D15
+	REPEAT ^D16,<
+		IFN ..MASK & 1B<..NUM>,<
+		POP P,..NUM>
+		..NUM==..NUM-1
+	>
+>
+	SUBTTL	End of Universal
+
+	END

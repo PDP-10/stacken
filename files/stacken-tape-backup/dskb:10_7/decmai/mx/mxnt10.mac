@@ -1,0 +1,631 @@
+
+; NMUT10 - TOPS10 specific utility functions
+;	   LSG DECnet Network Management
+
+;
+;			  COPYRIGHT (c) 1980
+;                    DIGITAL EQUIPMENT CORPORATION
+;
+;     This software is furnished under a license and may  be  used
+;     and copied only in accordance with the terms of such license
+;     and with the inclusion of the above copyright notice.   This
+;     software  or any other copies thereof may not be provided or
+;     otherwise made available to any other person.  No  title  to
+;     and ownership of the software is hereby transferred.
+;
+;     The information  in  this  software  is  subject  to  change
+;     without  notice  and should not be construed as a commitment
+;     by DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL assumes no responsibility for the use or reliability
+;     of  its  software  on  equipment  which  is  not supplied by
+;     DIGITAL.
+;
+	TITLE	NMUT10 - TOPS10 specific utility functions
+	SUBTTL	Introduction
+
+Comment	&
+
+	This set of routines implements the TOPS10 versions
+	of utility functions required.  There are two cases
+	for these functions:
+
+	   (A)	TOPS10 only functions.  These are  functions
+		that are required  for TOPS10  only, and  no
+		other operating system uses them.
+
+	   (B)	Generic system  specific  functions.   These
+		functions  are  required  of  all  operating
+		system interfaces, have  a standard  calling
+		convention, but have different code sets  to
+		implement them.
+
+	&
+	SUBTTL	Definitions
+
+;External references
+
+	EXTERN MXLOGF			; File-id of the log file
+	EXTERN MXLOGM			; A dummy address
+	EXTERN UF%CLO			; MX$FILE_CLOSE routine
+
+	SALL				; Suppress macro expansions
+					; for a clean listing
+
+	SEARCH	JOBDAT			; Job data area
+	SEARCH	UUOSYM			; Monitor symbol definitions
+	SEARCH	MACTEN			; Useful macros
+
+; Register definitions
+
+	T0==0				; Temporaries (scratchable)
+	T1==1
+	T2==2
+	T3==3
+	T4==4
+	P1==5				; Something a little more permanent
+	P==17				; Stack pointer
+
+
+	TWOSEG	400000			; Put this into the high seg
+
+define OFF%INTERRUPT
+<	MOVX	T1,PS.FOF
+	PISYS.	T1,
+	 HALT	 .
+	AOS	INTNST##>
+
+define ON%INTERRUPT(%LAB)
+<	SOSLE	INTNST##
+	 JRST	 %LAB
+	MOVX	T1,PS.FON
+	PISYS.	T1,
+	 HALT	 .
+%LAB:			>
+
+	SUBTTL	NMLCHK
+
+; Routine - NMLCHK
+;
+; Function - This routine checks the monitor load number, and
+;	     runs SYS:NMLXXX.EXE if running 702
+;	     or earlier.
+;
+; Arguments - none.
+;
+; Value - none.
+
+	ENTRY	NMLCHK
+
+NMLCHK:	MOVE	T1,[%CNDAE]	;Use same GETTAB that DAEMON does
+	GETTAB	T1,		;To determine version
+	  HALT	.		;and quit if earlier than 702
+	HLRZ	T2,T1		;Save SIXBIT version number
+	HRRZS	T1		;isolate version
+	CAIL	T1,703		;If monitor is new
+	  POPJ	P,		;We're just fine
+	HRLI	T2,'NML'	;Else, create the program name to run
+	MOVSI	T1,'SYS'	;from SYS
+	SETZB	T3,T4		;Don't need extension or PPN
+	DMOVEM	T3,T4+1		;Or any other trash
+	MOVEI	0,T1
+	RUN	0,
+	  HALT	.
+	HALT	.
+	SUBTTL	DETACH
+
+; Routine - DETACH
+;
+; Function - This routine will detach the job if it is started on the Force
+;	      line.
+;
+; Arguments - none.
+;
+; Value - none.
+;
+
+	ENTRY	DETACH
+
+DETACH:	SETZM	.JBSA		; NML is not (may NEVER be!) restartable
+	PUSH	P,T1		; Save an AC
+	PUSH	P,T2		; Save another AC
+	MOVEI	T1,RENTER	; Get the REENTER address for crashes
+	MOVEM	T1,.JBREN	; Install it
+	MOVE	T1,[%CNFLN]	; Get the number of the FRCLIN
+	GETTAB	T1,		; Get it
+	 JRST	 GOVIRT		; Return, restoring T1
+	SETO	T2,		; Prepare to
+	TRMNO.	T2,		; get the number of this tty
+	 JRST	 GOVIRT		;  Probably detached already
+	SUBI	T2,.UXTRM	; Turn the udx into a tty number
+	CAME	T1,T2		; Are we on the FRCLIN???
+	 JRST	 GOVIRT		;  No, don't detach us
+	HRLZI	T1,-1		; Get a -1 as the tty number
+	ATTACH	T1,		; Detach us
+	 JFCL			;  Sigh...
+
+; Here when we want to go virtual
+
+GOVIRT:	MOVE	T2,[.STTVM,,^D500] ; Set virtual timer trap interval
+	SETUUO	T2,		; Set it
+	 JFCL			;  ???
+	SUBTTL	See if monitor has DECnet.  Complain and log out if not
+
+;	MOVE	T1,[%CNST2]	; Get the DECnet feature test bit
+;	GETTAB	T1,		; Load the AC
+;	 SETZ	 T1,		;  ?!?
+;	TLNE	T1,(ST%D36)	; Does the monitor have DECnet???
+;	 JRST	 T2POPJ		;  Yes, all's fine
+;	PUSH	P,[[ASCIZ |?
+;?NML - Monitor does not have DECnet.|]]
+;	PUSHJ	P,OTSTR		; Print out the string
+;	PUSHJ	P,CHKDET	; Are we detached?
+;	 JRST	 ATTXIT		;  No, just exit
+;	PUSH	P,[[ASCIZ |  NML is logging out.
+;|]]
+;	PUSHJ	P,OTSTR		; Print out the string
+;	PUSHJ	P,OUTFIN	; Flush the buffer
+;	MOVE	T1,LGOARG	; And log us out
+;	RUN	T1,UU.PHY	; By running LOGOUT
+;	 EXIT	 1,		;  !?!
+;	JRST	.-1		; Not really continuable
+
+;ATTXIT:	PUSH	P,[[ASCIZ |
+;|]]
+;	PUSHJ	P,OTSTR		; Print a <CRLF> on OPR
+;	PUSHJ	P,OUTFIN	; Flush the buffer
+;	EXIT	1,		; And exit peacefully
+;	JRST	.-1		; Not really continuable
+
+T2POPJ:	POP	P,T2		; Restore T2
+TPOPJ:	POP	P,T1		;    "    T1
+.POPJ:	POPJ	P,
+
+CHKDET:	SETO	T1,		; Set up for TRMNO. of my tty
+	TRMNO.	T1,		; Are we detached?
+	 AOS	 (P)		;  Yes, give a skip
+	POPJ	P,		; No, just return
+
+CHKATT:	SETO	T1,		; Set up for TRMNO. of my TTY
+	TRMNO.	T1,		; Are we detached?
+	 POPJ	 P,		;  Yes, no skip
+	AOS	(P)		; We are attached, give a skip
+	POPJ	P,
+
+LGOARG:	EXP	.+1		; AC for RUN uuo
+	SIXBIT	|SYS|
+	SIXBIT	|LOGOUT|
+	SIXBIT	|EXE|
+	EXP	0
+	EXP	0
+	EXP	0
+	SUBTTL	NMLDIE	Stopcode processing for NML
+
+; NMLDIE is where all stopcode processing ends up in NML.  It will save
+; all AC's, .JBOPC, and then save itself for crash analysis.  The file names
+; are all unique, and have the form NMLnnn, where nnn is the first number
+; that makes NMLnnn a unique filename.  A call to NMLDIE never returns.
+;
+; NML will only save itself if the logical name DUMP: is defined.  The name
+; should just contain the device and path of where to dump.  Ie: a command
+; of the form  ".PATH DUMP:=DSKB:[12,3456,SFD1,SFDn]"  will make NML save
+; itself in the specified area under the names described above.  In addition
+; to this, if the logical name RUN: is defined, NML will run the program
+; specified by RUN: if it can be found.  A command of the form
+; ".PATH RUN:/OVERRIDE=SYS:NML.EXE"  will define RUN: correctly.  Note that
+; the filename must be specified, and that PT.OVR (/OVERRIDE) must also be
+; on.
+;
+;
+; Call:	PUSHJ	P,NMLDIE	; No arguments
+;	<Never returns>
+;
+
+; Here on a REENTER command
+RENTER:	PUSHJ	P,NMLDIE	; So we can tell where we came from
+
+; Here on any trap type errors
+NMLTRP::
+
+NMLDIE::		; Here from main program, when fatal error detected
+	SKIPN	.JBREN		; Have we been here before?
+	 HALT	 .		;  Recursion in error handler
+	SETZM	.JBREN		; Can only do this once
+	EXCH	0,CRSACS	; Save 0, get BLT AC
+	BLT	0,CRSACS+17	; Save all the AC's
+	MOVE	T1,.JBOPC	; Get the old PC
+	MOVEM	T1,CRSPC	; Save that too
+
+	PUSH P,MXLOGF		;File-id of the log file
+	PUSH P,[0]		;Keep the file
+	MOVEI T1,MXLOGM		;Address for an error code
+	PUSH P,T1
+	PUSHJ P,UF%CLO		;Close the logfile...
+	ADJSP -3
+	SETZ T1
+
+	HRRZ	T1,.JBDDT	; Get start addr of DDT
+	JUMPN	T1,(T1)		; Jump if it exists
+
+	SETZ	P1,		; Indicate we should run new copy
+SAVLOP:	MOVE	T1,SAVFLP	; Get ac for FILOP.
+	FILOP.	T1,		; Does the file exist?
+	 JRST	 CHKERR		;  No, go check for errors
+
+	MOVE	T1,LKEBLK+.RBNAM; Get name
+	AOJ	T1,		; Increment the name
+	TRZE	T1, 000010	; Did field overflow?
+	 ADDI	 T1,000100	;  Yes, increment next digit
+	TRZE	T1, 001000	; Did that field overflow??
+	 ADDI	 T1,010000	;  Yes, increment that field
+	TRNE	T1, 100000	; Did the third digit overflow???
+	 JRST	 EXTERR		;  Yes, there sure are a lot of dumps out there
+	MOVEM	T1,LKEBLK+.RBNAM; Put new name back
+	JRST	SAVLOP		; And try again
+
+CHKERR:	CAIE	T1,ERFNF%	; File Not Found?
+	 JRST	 FLPERR		;  Dunno, we got a strange error
+	MOVE	T1,LKEBLK+.RBNAM ; Get name
+	MOVEM	T1,SAVARG+1	; Put it in SAVE. uuo arg block
+	MOVEI	T1,SAVARG	; Get AC for SAVE. uuo
+	SAVE.	T1,		; Save ourselves
+	 HALT	 .		;  Stop now, don't make it worse
+	  MOVEI	  T2,SAVMSG	;   Tell user we saved gracefully
+SAVTYP:	MOVE	P,TMPSTK	; Get the stack back
+	PUSH	P,T2		; Put addr of text on stack
+	PUSHJ	P,OTSTR		; Type it out
+	PUSHJ	P,OUTFIN	; Flush the buffer
+
+	SKIPN	P1		; Should we run a new copy??
+	 JRST	 RUNNEW		;  Yes, go to it
+	EXIT	1,		; No, die gracefully
+	JRST	.-1		; Hardly restartable at this point
+
+RUNNEW:	SETO	P1,		; Indicate we should give up in case of error
+	SETZB	T1,T3		; Clear I/O status and buffer pointers
+	MOVE	T2,RUNARG+0	; Get device name into OPEN block
+	OPEN	T1		; Open the device
+	 JRST	 RUNERR
+	SETZ	T2,		; Clear name
+	LOOKUP	T1		; Lookup the program
+	 JRST	 RUNERR
+
+	MOVEI	T1,RUNARG	; Set up AC for RUN uuo
+	RUN	T1,		; Try runnung the program
+	 HALT	 .		;  We'll probably never get here, but...
+	HALT	.		; We should NEVER get here!
+
+RUNARG:	SIXBIT	/RUNMX/
+	SIXBIT	/FOO/
+	EXP	0
+	EXP	0
+	EXP	0
+	EXP	0
+	EXP	0
+
+SAVERR:	ASCIZ	|?
+?MX - SAVE. uuo failed.
+|
+SAVMSG:	ASCIZ	|
+MX saved on DUMP:MXDnnn.EXE
+
+.R MX
+|
+BADERR:	ASCIZ	|?
+?MX - Bad FILOP. error while trying to dump program
+|
+
+EXTDIE:	ASCIZ	|?
+?MX -  Can't save MX, too many crashes saved!
+|
+DIEMSG:	ASCIZ	|?
+?MX - MX stopping program
+|
+
+FLPERR:	SETO	P1,			; Prevent running of new copy
+	CAIN	T1,ERNSD%		; No such device???
+RUNERR:	 SKIPA	 T2,[DIEMSG]		;  Get death message
+	  MOVEI	  T2,BADERR		;   Get addr of message
+	JRST	SAVTYP
+
+EXTERR:	SETO	P1,			; Prevent running of new copy
+	MOVEI	T2,EXTDIE		; Get addr of message
+	JRST	SAVTYP
+	SUBTTL	SS%SWITCH
+
+; Routine - SS%SWITCH
+;
+; Function - This routine is called with the address of two task
+;	     blocks.  One is the "current" task, the other is for
+;	     the "future" task.  When this routine completes a
+;	     context switch between the two tasks will have been
+;	     done.
+;
+; Parameters -
+;
+;	-1(P)	  Future task block address
+;	CURTSK/	  Address of current task's task block
+
+	ENTRY	SS%SWITCH
+	INTERN	CURTSK, PRVTSK
+
+	RELOC				; Put this in low seg
+CURTSK:	BLOCK	1			; Current task block address
+PRVTSK:	BLOCK	1			; Previous task block address
+
+	RELOC				; Back in the high seg
+SS%SWITCH:
+	EXCH	T1,CURTSK		; Save register and get task blk addr
+	MOVEM	T1,PRVTSK		; Save as the previous task
+	JUMPE	T1,SSS.1		; If no task ... just run new one
+	MOVEM	T0,TB.CTX##+T0(T1)	; Save register 0 in context block
+	MOVE	T0,CURTSK		; Get contents of register 1
+	MOVEM	T0,TB.CTX##+T1(T1)	; Save register 1 in context block
+	MOVEI	T0,TB.CTX##+P(T1)	; Calculate end of context block
+	ADD	T1,[T2,,TB.CTX##+T2]	; Start of registers to BLT
+	BLT	T1,@T0			; Copy into context block
+
+SSS.1:	HRLZ	T0,-1(P)		; Get new task block address
+	HLRZM	T0,CURTSK		; Save current task block address
+	ADD	T0,[TB.CTX##+T1,,T1]	; Offset to saved registers
+	BLT	T0,P			; Copy back registers
+	MOVE	T0,CURTSK		; Get current task block address
+	ADDI	T0,TB.CTX##+T0		; Offset to register 0
+	MOVE	T0,@T0			; Get register 0
+	POPJ	P,			; Return to new task
+
+	SUBTTL	SS%TINIT
+
+; Routine - SS%TINIT
+;
+; Function - This routine sets up a task block for running it
+;	the first time.  It does not start the task, only
+;	initializes the task block stack.
+;
+; Parameters -
+;
+;	-1(P)	Size of task's stack
+;	-2(P)	Task block to initialize
+
+	ENTRY	SS%TINIT
+
+SS%TINIT:
+	MOVE	T1,-2(P)		; Get address of task block
+	MOVEI	T2,TB.STK##(T1)		; Copy it for a stack pointer
+	MOVN	T3,-1(P)		; Get length of stack
+	HRL	T2,T3			; Make initial stack pointer
+	PUSH	T2,[US%FINI##]		; Put task exit routine onto stack
+	HRRZ	T3,TB.STR##(T1)		; Get starting address
+	PUSH	T2,T3			; Put starting address onto stack
+	MOVEM	T2,TB.CTX##+P(T1)	; Set initial stack pointer for task
+	POPJ	P,			; Return
+	SUBTTL	SS%MESSAGE
+
+; Routine - SS%MESSAGE
+;
+; Function - This routine outputs a message to the operator
+;	or console.
+;
+; Parameters -
+;
+;	-1(P)	Byte pointer to error message string
+
+	ENTRY	SS%MESSAGE
+        ENTRY   SS%CMESSAGE
+	ENTRY	SS%CLMESSAGE
+
+; Here to simulate an outstr
+OTSTR:	MOVEI	T1,440700		; Get magic num
+	HRLM	T1,-1(P)		; Install it in the pointer
+
+SS%CLMESSAGE:
+	PUSHJ	P,NOINT			; Turn off interrupts for entire string
+SS%CL2:	ILDB	T1,-1(P)		; Get byte
+	JUMPE	T1,YESINT		; Return if no more
+	PUSHJ	P,OUTC			; Output the character
+	JRST	SS%CL2			; And keep going
+
+
+
+SS%CMESSAGE:
+	PUSHJ	P,NOINT			; Turn off interrupts for a sec
+	PUSH	P,[[BYTE (7)15,12]]	; Start message on a new line
+	PUSHJ	P,OTSTR			; Simulate an outstr
+	ADJSP	P,-1			; Fix the stack
+	SETZ	T4,			; Output all the alignment spaces
+	PJRST	SS%MS2			; Go print message
+
+
+SS%MESSAGE:
+
+	PUSHJ	P,NOINT			; Turn off interrupts
+	JRST	SS%MS4			;$
+	PUSH	P,[[ASCIZ |%% MX - |]]	; Get prefix
+	PUSHJ	P,OTSTR			; Output it
+	ADJSP	P,-1			; Fix the stack
+
+	SKIPE	ATINTL##		; Are we at interrupt level???
+	 JRST	 [PUSH	P,[[ASCIZ |[(Interrupt)]:|]] ; Yes, use this one
+		  PUSHJ	P,OTSTR		; Simulate an outstr
+		  ADJSP	P,-1		; Fix the stack
+		  MOVEI	T4,^d15		; Get spacing factor
+		  JRST	SS%MS2]		; And continue on happily
+
+	SKIPN	T2,CURTSK		; Get address of current task block
+	 JRST	[PUSH	P,[[ASCIZ |[(none)]:|]]
+		 PUSHJ	P,OTSTR		; Simulate an outstr
+		 ADJSP	P,-1		; Fix the stack
+		 MOVEI T4,^d10
+		 JRST SS%MS2]
+
+	PUSH	P,[[ASCIZ |[|]]		; Start task name output
+	PUSHJ	P,OTSTR			; Simulate an outstr
+	ADJSP	P,-1			; Fix the stack
+
+	MOVEI	T4,^d16			; Get the maximum number of chars
+	MOVEI	T2,TB.NAM##(T2)		; Point to name of task
+        HRLI	T2,440700
+SS%MS1:	ILDB	T1,T2			; Get next character in name
+	SKIPN	T1			; Check for null character
+	 JRST	 SS%MS3			;  Null, quit now
+	PUSHJ	P,OUTC			; Output the character
+	SOJG	T4,SS%MS1		; .. increment count and loop
+SS%MS3:
+	MOVEI	T3,^D16			; Get the starting number of chars
+	SUBM	T3,T4			; T4 now equals the length of the name
+
+	PUSH	P,[[ASCIZ |]:|]] 	; Terminate the task name
+	PUSHJ	P,OTSTR			; Simulate an outstr
+	ADJSP	P,-1			; Fix the stack
+	ADDI	T4,4			; Add " [", "]:" to count
+
+SS%MS2:	MOVE	T1,[POINT 7,[ASCIZ \                     \]]
+	EXCH	T1,T4
+	ADJBP	T1,T4
+	PUSH	P,T1			; Save byte pointer
+	PUSHJ	P,SS%CLMESSAGE		; Output alignment spaces
+	ADJSP	P,-1			; .. restore stack
+
+SS%MS4:	PUSH	P,-1(P)			; Do a silly thing
+	PUSHJ	P,SS%CLMESSAGE		; Go output supplied message
+	ADJSP	P,-1			; Fix the stack
+	PUSH	P,[[BYTE (7)15,12]]	; Finish off message with a <CRLF>
+	PUSHJ	P,OTSTR			; Simulate an outstr
+	ADJSP	P,-1			; Fix the stack
+	PUSHJ	P,OUTFIN		; and flush out the buffer
+	PJRST	YESINT			; and re-enable interrupts
+
+
+	NMU$FATAL==:SS%TFATAL
+SS%TFATAL::
+	PUSH	P,[[ASCIZ |? Fatal error - |]]
+	PUSHJ	P,OTSTR			; Simulate an outstr
+	ADJSP	P,-1			; Fix the stack
+	PUSH	P,-1(P)
+	PUSHJ	P,SS%MESSAGE
+	PUSHJ	P,OUTFIN		; And flush the buffer
+	EXIT	1,			; Stop execution
+	JRST	.-1
+
+	SUBTTL	OUTC	Output character buffering and lowest level tty I/O
+
+; OUTC		- Output the character in T1
+; OUTFIN	- Flush out the remaining buffer
+
+OUTS:	PUSHJ	P,OUTFIN		; Call the string putter outter
+
+OUTC:	SOSGE	OUTCNT			; Any room left?
+	 JRST	 OUTS			;  Nope, dump out the buffer
+	IDPB	T1,OUTPTR		; Yes, install the character
+	POPJ	P,			; And return happily
+
+OUTFIN:	PUSH	P,T1			; Save T1
+	SETZ	T1,			; Get a null
+	IDPB	T1,OUTPTR		; Tie off the end of the buffer
+	SETO	T1,			; We want to know about this jobs'
+	TRMNO.	T1,			;  controlling terminal
+	 JRST	 TELOPR			;  Detached -- tell OPR
+OUTOUT:	OUTSTR	OUTBFR			; Output the buffer to the tty
+FINOUT:	MOVEI	T1,^D80			; Line buffer is 80 characters
+	MOVEM	T1,OUTCNT		; Buffer is now officially empty
+	MOVE	T1,[POINT 7,OUTBFR]	; Get the buffer pointer
+	MOVEM	T1,OUTPTR		; Install it
+	POP	P,T1			; Restore the work AC
+	POPJ	P,			; And return
+
+TELOPR:	MOVX	T1,QF.PIP!QF.NBR!.QUWTO	; Get WTO function
+	MOVEM	T1,QUEBLK+.QUFNC	; Save in QUEUE. arg block
+	SETZM	QUEBLK+.QUNOD		; Set for central node
+	SETZM	QUEBLK+.QURSP		; No response desired
+	MOVE	T1,[^D80/5+1,,.QBMSG]	; Argument block is WTO message
+	MOVEM	T1,QUEBLK+.QUARG	; ...
+	MOVEI	T1,OUTBFR		; Argument is WTO buffer address
+	MOVEM	T1,QUEBLK+.QUARV	; ...
+	MOVE	T1,[^D80/5+1,,.QBTYP]	; Argument block is WTO message type
+	MOVEM	T1,QUEBLK+.QUARG+2	; ...
+	MOVEI	T1,[ASCIZ |Message from MX|]
+	MOVEM	T1,QUEBLK+.QUARV+2	; ...
+	MOVE	T1,[7,,QUEBLK]		; Get QUEUE. argument pointer
+	QUEUE.	T1,			; Send message to OPR
+	  SKIPA				; Failed, use TRMOP.
+	JRST	FINOUT			; Success, go reset the buffer
+	MOVSI	T1,'OPR'		; Get the device name
+	IONDX.	T1,			; Get it's UDX
+	 JRST	 OUTOUT			;  Well, what can I do!
+	MOVEM	T1,TRMBLK+1		; Install the udx
+	MOVEI	T1,[ASCIZ |--  Message from MX --
+|]
+	MOVEM	T1,TRMBLK+2		; Output header string first
+	MOVE	T1,[XWD 3,TRMBLK]	; Set up for the TRMOP.
+	TRMOP.	T1,			; Output to OPR
+	  JFCL				; Ignore error
+	MOVEI	T1,OUTBFR		; Get address of message
+	MOVEM	T1,TRMBLK+2		; Store in TRMOP. block
+	MOVE	T1,[XWD 3,TRMBLK]	; Set up for the TRMOP.
+	TRMOP.	T1,			; Output to OPR
+	 JRST	 OUTOUT			;  Might as well hang in TO
+	JRST	FINOUT			; SUCCESS! Go clean up the buffer
+	SUBTTL	NOINT Turn off interrupts in a recursive manner
+
+NOINT:	AOSE	INTOFF			; Been here already???
+	 POPJ	 P,			;  Yes, don't bother
+	PUSH	P,T1			; Preserve this AC
+	MOVX	T1,PS.FOF		; Function is PIOFF
+	PISYS.	T1,			; Disable interrupts
+	 JFCL				;  Maybe no PSIs yet???
+	POP	P,T1			; Restore work ac
+	POPJ	P,
+
+YESINT:	SOSL	INTOFF			; Should we enable interrupts
+	 POPJ	P,			;  No, not now
+	MOVX	T1,PS.FON		; Function is PION
+	PISYS.	T1,			; Enable interrupts
+	 JFCL				;  Who cares
+	POPJ	P,			; Return
+	RELOC				; Low seg stuff
+OUTCNT:	^D80				; Lotsa room to begin with
+OUTPTR:	POINT	7,OUTBFR		; Output buffer pointer
+OUTBFR:	BLOCK	^D80/5+1		; The buffer itself
+
+QUEBLK:	BLOCK	7			; QUEUE. arg block for WTO functions
+
+TRMBLK:	.TOOUS				; Output asciz string
+	0				; No udx yet
+	OUTBFR				; Point to the buffer
+
+INTOFF:	-1				; NOINT interlock
+CRSACS::XWD	1,.+1			; AC for BLT to save context
+	BLOCK	17			; Place to save AC's on a reenter
+CRSPC:	BLOCK	1			; Death PC
+TMPSTK:	IOWD	TMPLEN,.+1		; Temporary PDL for death processing
+	BLOCK	10			; Doesn't need to be very long
+	TMPLEN==.-TMPSTK
+
+SAVFLP:	XWD	FLPLEN,.+1		; AC for FILOP. for save of dead NML
+	XWD	0,.FORED		; Channel 0, Lookup a file
+	Z				; Don't care about I/O mode
+	SIXBIT	|DUMP|			; Device
+	XWD	0,0			; No I/O, no buffer headers
+	XWD	0,0			; Don't allocate any buffers
+	XWD	0,LKEBLK		; Point to LOOKUP/ENTER block
+	FLPLEN==.-SAVFLP-1
+
+LKEBLK:	EXP	3			; Length of this block
+	EXP	0			; Default PPN from device
+	SIXBIT	|MXD000|		; Filename
+	XWD	'EXE',0			; Extension,,path block
+
+SAVARG:	SIXBIT	|DUMP|
+	SIXBIT	|MXD000|
+	SIXBIT	|EXE|
+	EXP	0
+	EXP	0
+	EXP	0
+	EXP	0
+	SUBTTL	Literals
+
+	XLIST				; Suppress uninteresting stuff
+	RELOC				; Back into the high seg
+	LIT				; Put the literals here
+	LIST				; Enable listing again
+	END

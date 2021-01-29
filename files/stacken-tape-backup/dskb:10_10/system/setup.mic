@@ -1,0 +1,5 @@
+.path decsrc:=[10,7,mon]
+.path decsrc:/search
+.path ks:=    [10,10,system,ks]
+.path topsy:= [10,10,system,ks,topsy]
+.path iptest:=[10,10,system,ks,topsy,iptest]

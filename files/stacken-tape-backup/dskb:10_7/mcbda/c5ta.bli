@@ -1,0 +1,197 @@
+MODULE C5TA (					!Convert RAD50 to ASCII
+		IDENT = '001010',
+		LANGUAGE (BLISS16, BLISS36) %BLISS36 (, ENTRY ($C5TA))
+		) =
+BEGIN
+!
+!
+!
+! COPYRIGHT (C) 1978 BY
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+! COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: SYSTEM LIBRARY
+!
+! ABSTRACT:
+!
+!
+! THIS MODULE CONTAINS RAD50 TO ASCII CONVERION.
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 25-AUG-78
+!
+! MODIFIED BY:
+!
+!	, : VERSION
+! 01	-
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    $C5TA,					!Convert RAD50 to 3-character ASCII
+    CVTC;					!RAD50 conversion sub-routine
+
+!
+! INCLUDE FILES
+!
+!	NONE
+!
+! MACROS:
+!
+!	NONE
+!
+! EQUATED SYMBOLS:
+!
+!	NONE
+!
+! OWN STORAGE:
+!
+!	NONE
+!
+! EXTERNAL REFERENCES:
+!
+!	NONE
+!
+!<BLF/PAGE>
+
+GLOBAL ROUTINE $C5TA (BUF_PTR_ADR, VALUE) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to receive
+!						!text.
+!	.VALUE					!The value to convert.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the information inserted.
+!
+! ROUTINE VALUE:
+!
+!	A count of the number of characters inserted is returned.
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	BUF_PTR,
+	CHAR : VECTOR [3],			!Temporary holding area for characters
+	CHAR_ADR,				!Current character being worked on
+	WORKING_VALUE;
+
+    BUF_PTR = ..BUF_PTR_ADR;
+    WORKING_VALUE = .VALUE;
+
+    INCRA CHAR_ADR FROM CHAR [0] TO CHAR [2] DO 	!Extract 3 characters
+	.CHAR_ADR = CVTC (WORKING_VALUE);	!from the given binary word
+
+    DECRA CHAR_ADR FROM CHAR [2] TO CHAR [0] DO 	!and place them in the output buffer
+	CH$WCHAR_A (..CHAR_ADR, BUF_PTR);	!in reverse order.
+
+    .BUF_PTR_ADR = .BUF_PTR;			!Return updated buffer pointer
+    3						!and number of characters converted.
+    END;					!OF $C5TA
+
+ROUTINE CVTC (VALUE_ADR) = 			!Reduce RAD50 value to components
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.VALUE_ADR				!Address of RAD50 value to reduce
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	..VALUE_ADR				!Returned with one character removed
+!
+! ROUTINE VALUE:
+!
+!	The next character extracted from ..VALUE_ADR
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	CHAR;					!Intermidediate character value
+
+    CHAR = ..VALUE_ADR MOD 40;			!Pull the next character
+    .VALUE_ADR = ..VALUE_ADR/40;		!And divide it out.
+
+    SELECTONE .CHAR OF
+	SET
+
+	[0] :
+	    %C' ';
+
+	[1 TO 26] :
+	    %C'A' + .CHAR - 1;
+
+	[27] :
+	    %C'$';
+
+	[28] :
+	    %C'.';
+
+	[30 TO 39] :
+	    %C'0' + .CHAR - 30;
+
+	[OTHERWISE] :
+	    %C'_';
+	TES
+
+    END;					!OF CVTC
+END
+
+ELUDOM

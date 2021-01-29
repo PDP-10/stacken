@@ -1,0 +1,57 @@
+title	foo
+
+.text	"/symseg:low/locals"
+
+search jobdat, uuosym, macten
+
+t1==1
+t2==2
+
+p==17
+
+vector:	exp	timint
+	block	3
+
+foo:	jfcl
+	reset
+	movei	1,vector
+	piini.	1,
+	 halt
+	move	1,[
+		ps.fac+ps.fon+[
+			exp	.pctmr
+			xwd	0,0
+			exp	0]]
+	pisys.	1,
+	 halt
+	movei	1,^D10
+	pitmr.	1,
+	 halt
+loop:	movx	1,<sleep 1,>
+	movem	1,hibloc
+	skipe	timflg
+	 jrst[	setzm	timflg
+		movei	1,2
+		pitmr.	1,
+		 jfcl
+		jrst	.+1]
+	outstr[	asciz "data data data data
+"]
+	movei	1,1
+	xct	hibloc
+	jrst	loop
+
+hibloc:	sleep	1,		;Or JFCL
+timflg:	exp	0		;Timint flag.
+
+timint:	outstr[	asciz "Interrupt!
+"]
+	setom	timflg
+	movem	1,hibloc
+	movsi	1,(jfcl)
+	exch	1,hibloc
+	debrk.
+	 jfcl
+	halt
+
+end	foo

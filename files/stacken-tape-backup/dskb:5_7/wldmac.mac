@@ -1,0 +1,35 @@
+UNIVERSAL WLDMAC - Symbols for GLXWLD (i.e. WLDPAR and WLDSCN)
+;
+;   Written by Sven Erik Enblom in December 1985
+;
+.DIRECTIVE .NOBINARY
+
+; Argument flags for W$NEW (in S2)
+;
+WF$VER==1B0				; Always verify file
+WF$FOB==1B1				; Do F%IOPN using supplied FOB
+WF$LUP==1B2				; Do LOOKUP using supplied FILOP. block
+WF$RBC==1B3				; Return a RIB copy in
+					;  supplied extended LOOKUP block
+WF$DIR==1B4				; Return directory files too
+WF$ADR==777777B35			; Address of some block
+
+; PDB macro a'la $IFILE for parsing a wild file spec
+;
+DEFINE	$WFILE(NXTPDB,HLPTXT,KEYLST)<
+	IFNDEF	WLDBRK,<
+		WLDBRK=[EXP	-20
+			XWD	767524,520
+			SETZ	260
+			SETZ	760]>
+	.$RESET
+	$TYPE(.CMFLD)
+	$NEXT(NXTPDB)
+	IFIDN <HLPTXT> <>,<
+		$HELP(<wild file spec>)>
+	IFDIF <HLPTXT> <>,<
+		$HELP(<HLPTXT>)>
+	$BREAK(WLDBRK)
+	IRP KEYLST,<KEYLST>
+	.$BUILD>
+END

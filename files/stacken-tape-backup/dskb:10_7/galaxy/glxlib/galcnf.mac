@@ -1,0 +1,317 @@
+
+
+SUBTTL	GALCNF	Created by GALGEN Version 5(2124) at 23-Aug-88 10:46:19
+
+	UNIVERSAL GALCNF
+	.DIRECT	.NOBIN
+
+
+	DEFINE XP (SYM,VAL) <
+	SYM==:VAL>
+
+	G.%GLN==500002124		;STANDARD VERSION FOR GALGEN
+	G.GVER==5		;GALAXY VERSION NUMBER
+
+	RADIX 5+5
+
+
+	FTUUOS==-1			;-1 IF TOPS 10 ELSE 0
+	FTJSYS==0			;-1 IF TOPS 20 ELSE 0
+
+
+; 
+; In the following dialog, all questions are of the form:
+; 
+;   text of question (list or range of answers) [default answer]
+
+; 
+; The line starts with the actual text of the question.  Following
+; the question is a description  of the possible answers  enclosed
+; in parentheses.  This description might be a range of numbers, a
+; list of  keywords, or  a  textual description.   Following  this
+; description is the default answer, enclosed in square  brackets.
+; The default will be assumed if you only press the RETURN key.
+
+; 
+; You have the  choice of carrying  on a LONG  dialog in which  an
+; explanation of  each question  is provided  automatically, or  a
+; SHORT dialog in which it is  assumed that you are familiar  with
+; the GALAXY generation procedure.  In either case, you can always
+; obtain the help text by typing  a question mark (?) in  response
+; to any question.
+
+; 
+; 
+; Answer the  following  question with  either  LONG (for  a  long
+; dialog) or SHORT (for a short one).  Simply pressing the  RETURN
+; key will imply SHORT.
+; 
+
+;Dialog Length (SHORT,LONG) [SHORT] 		;Dialog length
+
+SUBTTL	Administrative Controls and Parameters
+
+
+;        Administrative Controls and Parameters       
+;        -------------- -------- --- ----------       
+; 
+
+	XP	G.OLOG,-1
+
+;Operator log filename (3-6 Characters) [OPERAT] 		;Operator log file name
+
+
+DEFINE G$$LGN <	X	OPERAT>
+
+;Do you want redundant master queue file (YES,NO) [NO] 		;Redundant master queue file
+
+
+	XP	FTRQUE,0
+
+;File structure to use for master queue (3-6 Characters) [SSL] 		;Master queue file structure
+
+
+	XP	G.QSTR,'SSL   '
+
+;Maximum priority non-privileged users may specify (1-63) [20] 		;Maximum priority for non-privileged users
+
+
+	XP	G.SPRI,20
+
+;Default for /PRIORITY on batch and spooling requests (1-63) [10] 		;Default priority
+
+
+	XP	G.DPRI,10
+SUBTTL	[SYSTEM]INFO Parameters
+
+
+;               [SYSTEM]INFO Parameters               
+;               ------------ ----------               
+; 
+
+	XP	FTINFO,-1	;Enable [SYSTEM]INFO support
+
+;Maximum length of a PID name (29-79 Characters) [39] 		;Maximum length of PID name
+
+
+	XP	SZ.INF,39
+SUBTTL	Applications
+
+
+;                     Applications                    
+;                     ------------                    
+; 
+
+;Do you wish to run optional applications? (YES,NO) [YES] YES		;Optional Applications
+
+
+;Include the LAT Control Protocol (LCP) commands?  (YES,NO) [YES] YES		;Yes, we want LCP
+
+
+;Include the DECnet Network Control Protocol (NCP) commands?  (YES,NO) [YES] YES		;Yes, we want NCP
+
+
+;Do you wish to run any installation-developed applications? (YES,NO) [NO] NO		;No installation-developed applications
+
+
+DEFINE G$$ATB <
+
+X	<CATALOG>,0,CATTAB,
+
+X	<CONFIG>,1,CNFTAB,CNFORN
+
+X	<LCP>,2,LCPTAB,LCPORN
+
+X	<NCP>,3,NCPTAB,
+
+X	<QUOTA>,4,QUOTAB,
+
+> ; END OF G$$ATB
+SUBTTL	Batch Job Defaults
+
+
+;                  Batch Job Defaults                 
+;                  ----- --- --------                 
+; 
+
+;Default batch job runtime limit (5-9999 seconds) [300] 		;Default batch job runtime
+
+
+	XP	G.ITIM,300
+
+;Line printer output limit (0-9999 pages) [200] 		;Default spooled LPT limit
+
+
+	XP	G.ILPT,200
+
+;Card punch output limit (0-9999 cards) [1000] 		;Default spooled CDP limit
+
+
+	XP	G.ICDP,1000
+
+;Paper tape punch output limit (0-5000 feet) [200] 		;Default spooled PTP limit
+
+
+	XP	G.IPTP,200
+
+;Plotter output limit (0-5000 minutes) [30] 		;Default spooled PLT limit
+
+
+	XP	G.IPLT,30
+
+;Default for SUBMIT/OUTPUT (LOG,NOLOG,ERROR) [LOG] 		;Default /OUTPUT
+
+
+	XP	G.ILOG,2
+
+;Should memory limits be enforced (YES,NO) [YES] 		;Core limit enforcement
+
+
+;Memory limit (24-16384 pages) [512] 		;Default core limit
+
+
+	XP	G.ICOR,512	;CORE LIMITS
+SUBTTL	Line Printer Defaults and Parameters
+
+
+;         Line Printer Defaults and Parameters        
+;         ---- ------- -------- --- ----------        
+; 
+
+;Number of job banner pages (0-5) [2] 		;Number of LPT banner pages
+
+
+	XP	G.LBAN,2
+
+;Number of job trailer pages (0-5) [2] 		;Number of LPT trailer pages
+
+
+	XP	G.LTRL,2
+
+;Number of file header pages (0-5) [2] 		;Number of LPT file header pages
+
+
+	XP	G.LHDR,2
+
+;Name for standard output forms (4-6 Characters) [NORMAL] 		;Standard output forms name
+
+
+	XP	G.DNOR,'NORMAL'
+
+;Number of characters which uniquely identifies form (2-6) [4] 		;Forms name uniqueness
+
+
+	XP	G.DNUC,4
+
+;Do you want to load any special printer drivers? (YES,NO) [NO] YES		;Special printer drivers
+
+
+DEFINE G$$LPT <
+
+	LL	LPTL01
+
+	LL	LPTL03
+
+	LL	LPTTTY
+
+> ; End of G$$LPT
+SUBTTL	Parameters for MDA
+
+
+;                  Parameters for MDA                 
+;                  ---------- --- ---                 
+; 
+
+;Enable deadlock avoidance? (YES,NO) [YES] YES		;MDA included
+
+
+	XP	G.DEAD,-1	;DEADLOCK AVOIDANCE
+
+
+	      %TRK7==1			      ; 7 TRACK
+	      %TRK9==2			      ; 9 TRACK
+	
+
+;Default tape label type (ANSI,BYPASS,IBM,USER-EOT,UNLABELED) [USER-EOT] 		;Default magtape label type
+
+
+	XP	DEFLBT,10
+
+;Default 9-track tape density (200,556,800,1600,6250) [1600] 		;Default 9-track magtape density
+
+
+	XP	DEF9TK,4
+
+;Default 7-track tape density (200,556,800) [800] 		;Default 7-track magtape density
+
+
+	XP	DEF7TK,3
+
+;Default track type (7,9) [9] 		;Default magtape track type
+
+
+	XP	DEFTRK,%TRK9
+
+;Allow bypassing for non-privileged users? (YES,NO) [NO] 		;BYPASS labels allowed for un-privileged users
+
+
+	XP	NPRTLB,0
+SUBTTL	Miscellaneous Defaults and Parameters
+
+
+;        Miscellaneous Defaults and Parameters        
+;        ------------- -------- --- ----------        
+; 
+
+;Do you want the standard limit computation (YES,NO) [YES] 		;Standard limit computation
+
+
+	XP	G.LPTM,6
+
+	XP	G.LPTD,8
+
+	XP	G.CDPM,33
+
+	XP	G.CDPD,4
+
+	XP	G.PLTM,7
+
+	XP	G.PLTD,100
+
+	XP	G.PTPM,7
+
+	XP	G.PTPD,4
+
+;Default output-limit-exceeded action (ABORT,ASK,PROCEED) [ASK] 		;Default output-limit-exceeded action
+
+
+	XP	G.FLEA,2
+
+;Default network-type for FAL streams (ANF-10,DECnet) [ANF-10] 		;Default FAL stream network
+
+
+	XP	G.FNTY,1
+
+;Number of minutes "demand" spoolers tolerate idleness (5-60) [10] 		;Use default number of minutes for idle spoolers
+
+
+	XP	G.IMIN,10
+
+	XP	FTDN60,-1	;Always include DN60 support
+
+	XP	FTFTS,0		;No FTS support
+
+	XP	FTDQS,0		;No DQS support
+
+	XP	FTRJE,0		;No DN200 support
+
+	XP	FTFACT,0	;FACT file support off
+
+;Do you wish to enter any site specific paramters? (YES,NO) [NO] YES		;We have site specific parameters
+
+
+	XP	FTDQS,-1		;Turn on DECnet printer service
+
+
+
+	END

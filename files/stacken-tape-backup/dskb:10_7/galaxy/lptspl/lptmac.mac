@@ -1,0 +1,1389 @@
+UNIVERSAL LPTMAC - LPTSPL-10 line printer driver definitons
+
+;
+;
+;		COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION
+;	       1975,1976,1977,1978,1979,1980,1981,1982,1986,1987,1988.
+;			ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+;
+
+	SEARCH	GALCNF			;GALAXY ASSEMBLY PARAMETERS
+	SEARCH	GLXMAC			;SEARCH GALAXY PARAMETERS
+	SEARCH	QSRMAC			;SEARCH QUASAR PARAMETERS
+	SEARCH	ORNMAC			;SEARCH ORION/OPR PARAMETERS
+	PROLOGUE(LPTSPL)
+
+	.DIRECT	FLBLST
+
+IF2,<PRINTX Assembling GALAXY-10 LPTMAC>
+
+	SALL				;SUPPRESS MACRO EXPANSIONS
+
+;VERSION INFORMATION
+	LPTVER==105			;MAJOR VERSION NUMBER
+	LPTMIN==0			;MINOR VERSION NUMBER
+	LPTEDT==4103			;EDIT LEVEL
+	LPTWHO==0			;WHO LAST PATCHED
+
+	%%.LPT==:<BYTE (3)LPTWHO(9)LPTVER(6)LPTMIN(18)LPTEDT>
+	IFDEF .MCRV.,<.VERSION <%%.LPT>>
+	SUBTTL	Revision History
+
+COMMENT \
+
+2550	Delete all references to user name and job number.
+	Replace them with ^R Library $Text Function.
+
+2551	Add code to support new QUASAR device status message.
+
+2552	Add RJE support
+
+2553	Fix a Restart page count bug by not including the job
+	headers and trailers in the final page count.
+
+2554	Replace ERRSTP ITEXT with LPERR ITEXT. Make sure when LPT comes
+	online or goes offline, the status is updated. Add a check to
+	ACTEND so that if the request had an invalid account string,
+	no USAGE entry is made.
+
+2555	Fix a bug in which INPOPN was doing a LOAD S1,EQ.PRV to get
+	the users privilge bits. This translated to MOVE S1,400
+	and 400 was SPLDIR (which was never 0). Given this, the
+	JUMPN S1,INPO.1 always jumped to INPO.1 and avoided the
+	access check. The LOAD was changed to LOAD S1,.EQSEQ(J),EQ.PRV.
+
+2556	Changed the IB to conform to the new IB/PIB structure.
+
+2557	Fix a bug in OUTOUT which caused to stack to be out of phase.
+	Basic re-write of OUTOUT, elimination of OUTINT, and
+	modification of $SOUT.
+
+2560	Change the scheduler loop to use P1 instead of T2.
+	Change the scheduler loop so that at MAIN.1 it
+	checks to see if the stream status needs to be updated,
+	and if so, it sends a status update and checkpoint
+	message to QUASAR.
+
+2561	Delete the flag bit HDRTRL and the supporting code.
+
+2562	Add Calls to S%SIXB & S%TBLK for WTOR response parsing.
+	Move the call to FILDIS from ENDJOB to QRELEASE.
+
+2563	Fix line count for narrow forms.
+	Fix DEVOUT to save S1 across OUTOUT call
+	Add code to cut off the header/trailer line at 'J$FWID' Length
+
+2564	Add DN60 Support.
+
+2565	Add 'Ignore Structure Accounting' MSTR JSYS.
+
+2566	Change the $WTOR's for killing OPR requests from $WTOR to $KWTOR.
+
+2567	Add spooling to mag tape support
+
+2570	Fix a page count problem (on restarts).
+	Spell cancelled right (canceled)
+
+2571	Spell Canceling correctly
+	add 40 (decimal) words to the context PDL
+
+2572	Fix a bug in which it was possible for LPTSPL to set the output
+	blocked scheduling bit and then deschedule for a page limit
+	exceeded error. When this happened, LPTSPL would wait for
+	the output done interrupt, which, of course, would never come.
+
+2573	Clear J$RNPP IN DOJOB Just before checkpointing the next file
+	Clear J$RNPP and checkpoint the number of copies in FILE.1
+
+2574	If a job is cancelled while in OPR response wait from LODVFU or
+	LODRAM then zero J$FORM to force the next job to go through
+	new forms processing.
+
+2575	Add DN60 operator response support (What a Crock !!)
+
+2576	Delete FTRMTE feature test.
+
+2577	At OUTERR move the PUSHJ P,.SAVET & MOVE T4,STREAM to OUTE.1
+	under TOPS-10 conditional.
+
+	Change the scheduler so that for both TOPS-10 & TOPS-20 we
+	check to see if we processed a message and if so, dont sleep.
+
+	Change OPRCHK so that as long as the output succeeds, we
+	continue printing operator messages.
+
+	For TOPS-10 make OUTDMP call OUTOUT BUFNUM+1 times.
+
+	Add Spooling to Tape support for TOPS-10.
+
+2600	Make LPTSPL sleep forever by removing the 60 second timer.
+
+2601	TOPS10 - Detect EOF on spool to magtape.  Ask OPR to mount next reel
+
+2602	Fix a bug in SHUTIN code. Get a new stack pointer if shutting
+	down from 'IN STREAM' context.
+
+2603	Fix a bug - reverse the compare in S$VFU which checks for
+	optical VFU.
+
+2604	Fix a bug - In OUTGET, if the default RAM and VFU are already set,
+	then, dont set them.
+
+2605	Fix a bug - if printing either the banner or header pages, dont
+	flush the buffers in KILL or OACCAN.
+
+2606	Add code to send a form feed if the printer VFU is ok and
+	we are about to load the VFU.
+
+2607	Delete the TOPS-20 mag tape code that assigns/deassigns the tape drive.
+	Also make sure that the mat tape is not already assigned to anyone.
+
+2610	Delete the RAM variable from the forms default macro and add
+	J$FRAM.
+
+2611	Change IPCF send/recieve quotas from max to 20.
+
+2612	Change DN60 D60OPN parameters for new port/line handle.
+
+2613	Fix a bug - prevent LPTSPL from deleting DN60'S link'd list.
+
+2614	Delete the Send/Recieve Quotas from the PIB.
+
+2615	Make OUTREL do a CLOSE instead of a RESDV. if we are spooling to tape
+
+2616	Pick up non-existant printer status bits on the -20.
+
+2617	Fix a bug in TAPGET; The correct value returned by the DVCHR for
+	unassigned devices is -1,,unit # - Not -1.
+
+2620	In SHUTDN, After the call to FNDOBJ check to see that the object
+	was actually found, and if not, just return.
+	In OPDINI, add a SETZM FMOPN and a $RETT at the end of the routine.
+	In OPEN.6 add a SETOM J$LINK(J) to indicate that there is no DN60
+	operator message list.
+	In CLOSE.6, change the MOVE S1,J$LINK(J) to a SKIPL S1,J$LINK(J) so
+	that we dont delete a list which may not exist.
+
+2621	TOPS-10: Delete the call to F%FCHN and use the stream number as the
+	channel number.
+
+2622	Fix a job restart problem which allows -pages to be printed.
+
+2623	Fix a -10 problem caused by converting to extended channels in the
+	library. Must re-write the load VFU and RAM sections for front
+	end lint printers
+
+2624	Fix a -10 problem - Clear the PSF%DO and PSF%OB bits in the
+	OUTGET routine since we may wait forever after resetting the channel.
+	Change all occurances of DC3 output to CRLF except for the ruler.
+
+2625	Add a CRLF to the end of the header page file info line.
+
+2626	Fix a bug in the /REPORT: code for COBOL report files.
+
+2627	Fix a bug in deleting files. Make F%DEL use an in your behalf FOB.
+
+2630	Delete the support for the old forms parameters.
+
+2631	Convert DN60 support to new SETUP message format.
+
+2632	Rework the Backspace /pages support to fix U.S. Railways QAR.
+
+2633	Finally get the backspace code right.
+
+2634	Add 8 bit input support. Also, make output byte sizes variable by
+	adding J$LBTZ to keep track of output byte size.
+
+2635	Add /FILE:ELEVEN support to print MACY11 files as standard ascii
+	Requires that a new FP bit or field be defined for 8-BIT
+
+2636	TOPS20 QAR (20-00608) Add code to OUTREL so that when closing
+	a device other then the line printer, we write out
+	trailing tape marks.
+
+2637	Fix a bug in which the ABORT bit was being lit in the NXTJOB code,
+	before the forms were set up. This caused the request to be trashed
+	without the headers or trailers being printed
+
+2640	Fix a bug - Make the TAPGET OPENF open the device in 7 bit Mode.
+
+2641	Fix Another bug - make OUTGET open device for 8 bit bytes.
+
+2642	Make PICTURE put out line feeds, not DC3's.
+
+2643	Fix a bug in OUTERR code so that is the OUTFLS call fails, then
+	send a Response-to-Setup message to QUASAR before shutting down.
+
+2644	Add support for /RAM: in LPFORM.INI for -10 & -20.
+
+2645	Fix an accounting problem in which usage accounting was being done
+	twice.
+
+2646	Fix QAR # 20-00805 such that multiple ALIGN commands do not
+	add to the sleep time of previous ALIGN commands
+
+2647	Add a SETZM T1 to the .MONOP MTOPR call in OUTDMP.
+	Add a .MONOP MTOPR call to TAPGET to wait for I/O to finish or
+	if a TTY, set the TTY page width to infinite.
+
+2650	Delete OBDLLC & OBDLUC attribute bits and return %LOWER & %UPPER for
+	the new device attributes
+
+2651	Add accounting support for TOPS10 (USAGE)
+
+2652	If NPRINT = 1 then accumulate cpu time used to process a request.
+
+2653	Move search for DN60 universal to FTDN60 conditional
+
+2654	Add code to interrupt routine to check for all error bits on and if
+	so, and this is a remote LPT, then don't change restart address. If
+	all error bits are on for a local LPT, then the CPU went down, so
+	just ignore the problem and wait for it to come back.
+
+2655	Delete the DSKOPN status bit and just check J$DIFN for non-zero.
+
+2656	Add DN60 Support
+
+2657	Force the align that is part of a forms type to occur immediately
+	after the form is set.  QAR # 10-04593
+
+2660	Add support for new style /DISPOSE:RENAME
+
+2661	Remove SETNAM that turned off JACCT since it also turns off x-only.
+	No LPTSPL needs to have JACCT so correct solution is to eventually
+	remove all GALAXY components from PRVTAB.
+
+2662	Use new feature IB.DET to detach from FRCLIN.
+
+2663	Fix CHKTIM to set SLEEPT if zero (not set)
+	Delete IB.DET (GLXLIB always detaches)
+
+2664	Remove the system text portion of the account record.  The system
+	text portion is to contain any disposition explanation.
+
+2665	Fix a bug in INPOPN and FILDIS so that spooled files are handled
+	correctly
+
+2666	QAR # 10-04856  Change all definitions of Z to ZZ to prevent
+	MACRO from getting confused during processing of $SAVE
+
+2667	Fix OUTFLS to only reset the line buffers for a DN60 error.
+
+2670	Do call to SHUTND instead of jrsting to SHUTDN since there is
+	no need to do the FNDOBJ and that may fail if the message is
+	already released.
+
+2671	Add a check in OPRCHK to make sure that a job is not being
+	printed before we output the OPR messages for the DN60.
+
+2672	Fix bit settings in CHTAB.  We are currently displacing into
+	DOFRAC routine.
+
+2673	Fix formfeed at trailer routine (SPR 20-14654)
+	Clear old report code in SETLST so other files work (SPR 20-14635)
+	Add indirect (@) to J$DFDA use in $TEXT (SPR 20-14817)
+	Fix backspace code (SPR 20-15172)
+
+2674	Clear J$WTOR(J) when it is used to overlaid messages.
+
+2675	Remove decision to do accounting as a runtime decision and make it
+	an assembly parameter based on the new feature test FTACNT.
+
+2676	Add check to CHKPNT verifying that the stream is active.
+
+2677	Work with checkpoint mechanism:
+		Break checkpoint into two parts, status, and job checkpoint
+		Create new status mechanism contained in DSTATUS
+		Cause checkpoints to occur internally without QUASAR requests
+	Add table of nonsense.
+	Reopen LPFORM.INI with every forms change to allow LPFORM.INI changes
+
+2700	Do not do accounting if debugging
+
+2701	Fix setting JOBUPD flag in the interrupt code
+
+2702	Misc. changes:
+		Be more clever on checking limits when printing files less than
+			one page
+		Clear trailer log
+		Remove DSTATUS call in dojo.4 since it happens anyway at next
+			file or is implied with release message
+
+2703	Fix stupid error where ^D100 was used to define a PDL size.
+	(Stupid since PDSIZE is defined in the symbols and is defined to be
+	100 octal
+
+2704	Add FACT file accounting support.
+
+2705	Add immediate forms change support which includes routines FORFOR
+	and DOFFOR.
+	Allow listings queued for a remote LPT be spooled to a special device
+
+2706	Fix context change so the PDL pointer is not clobbered.
+	Remove require for d60jsy and include it in lptspl.cmd so symbols
+	can be included
+	Do not set IO.SFF in open if not a real line printer
+
+2707	3/13/81  Force UPDATE routine to check for DN60 offline.
+	Request status update message in D60ER routine.
+	Increase size of PDL to 120 octal (PDSIZE)
+
+2710	3/19/81  Do NOT try to $CALL P,NNN.
+	Add an argument block to be used for D60OPN per stream since
+	MSGBLK (which was used formerly) got clobbered during DSCHD
+
+2711	3/24/81 Make LPFORM.INI /NOTE be an asciz string
+
+2712	3/26/81  Split DN60 errors so there is a different wait time for
+	NBR errors and DOL errors.
+
+2713	3/27/81 Use symbol FTFACT from GALGEN dialogue and remove references
+	to FTOACT.
+
+2714	4/14/81  Fix DOFFOR to call CHKALN.
+
+2715	4/16/81  Remove last reference to UPDTST replacing with call to DSTATUS.
+
+2716	5/1/81  Clear up any pending WTORs as part of the shutdown code.
+	Remove some jrst .+n's.
+	Make J$RNPP always our current location in pages with respect to
+	the file being printed.  Adjust it as we pass pages, not as part
+	of the forward space code.
+	Remove BUFSPC since it is not really used.
+	Fix bad test by changing TXNN to TXNE in CHKSP to clear J$XTOP
+	only when needed.
+	If suppressing when doing headers and trailers, don't believe J$XTOP.
+	If already processing VFU, do not allow additional VFU errors @OUTE.4.
+
+2717	5/15/81  Delete files in FILDIS only if they are spooled or if
+	they are /delete and have not been aborted.
+
+2720	5/15/81 Add 1 word to LPCNF and reorder ACTLST to make accounting work
+	on TOPS20.
+
+2721	5/21/81  Do the check for suppress before clearing J$XTOP and hope
+	that multiple form feeds will be always suppressed.
+
+2722	6/1/81  Use page length in calculating block size to use on header page.
+	Allow CKPTIM to be defined in GALGEN by using ND macro for definition.
+	Remove label FRMI4B since it is not referenced.
+	Remove the unneeded restriction of checking for LPT when checking actual
+	device names in parsing LPFORM.INI.
+	Send a warning if the forms requested is unknown which includes
+	having FRMINI return false if none found.
+	Set FCONV in bspace to indicate a backspace starts a new line.
+	Also in BSPACE check to see if the table is wrapped around.
+	Make GENDEV work for both T10 and T20.  Have it set J$LDEV.
+	Call GENDEV from the routine OUTGET on the 20.
+
+2723	6/9/81  Change GENDEV to always set J$LDEV even if it is a magtape.
+	Add a new status bit to indicate that we are processing a job.  The
+	purpose of this is to determine whether there is a need for a
+	checkpoint.  If forms are being mounted, for example, no checkpoint.
+	If the job is requeued before the operator responds to a forms
+	change, restore forms to their previous type.
+
+2724	6/12/81  Add LPTBAN, LPTTRL, and LPTHDR to try to use the GALGEN params.
+	For T10 only, change the countdown code at CNTDW1+7 to cause
+	a DSCHD if: we are forwardspacing and the number of pages is
+	evenly divisible by FRWSKP (which allows a DSCHD every FRWSKP pages.
+
+2725	6/22/81  Remote printers should only have one buffer since the network
+	only uses one buffer at a time (there is no great advantage) and since
+	having only one buffer allows OUTFLS to be skipped for remotes.(that
+	caused lots of problems)
+
+2726	6/23/81  Update job limit when backspacing.
+	Change size of fact accounting table to a symbol.
+	Only check for device assignment if it is a magtape in TAPGET.
+	Open LPFORM.INI with sequence numbers suppressed.
+	Fix edit 2711 by using AC TF in S$NOT2.
+	Make the header information a little more clever for narrow headers.
+
+2727	Use byte I/O instead of buffered I/O for input from LPFORM.INI so
+	sequence numbers are suppressed correctly.
+
+2730	7/7/81  Zero out IMESS @CHKQ.5 after releasing the message to
+	prevent releasing it twice.
+
+2731	9/10/81  Clear top of form if SUPFIL is set before clearing SUPFIL
+	@FILE.2.
+
+2732	9/24/81  In FRMINI return false if the OPNFRM fails.
+
+2733	9/29/81  Add IBM status message support (IBMSTS).
+	Remove the zeroing out of J$GNLN in NXTJOB since ZTABLE loop does it.
+	If IBMCOM abort, then requeue the job and shutdown the stream.
+
+2734	Made sure suppress mode also implies arrow mode as stated in the
+	manuals.
+
+2735	Fixed problem with BACKSPACE when printer goes off line, and
+	more than likely, even when it doesn't.
+
+2736	Fixed problem with trailers not being cleared from previous jobs.
+
+2737	11/25/81  Use a generalized routine EOF.6 for EOF on DN60.
+
+2740	12/7/81  Lots of changes...
+	1.  Make it so we don't run out of NBR errors unless we
+	are trying to shut things down.
+	2.  Save last DN60 error in J$D6ER.
+	3.  Generalize the CHKTIM routine.  Make it the only one that
+	sets SLEEPT.  Have it also check J$CWKT if DN60 opr mess. pending.
+	If we clear the sleeptime, clear also variable that started it all.
+	4.  DIE immediately if any bad errors in DN60.
+	5.  Use polling estimate from D60JSY (POLEST) for sleeptime.
+	6.  On TOPS20 have D60ER sleep instead of DSCHD since that version
+	is set up more for blocking types of output.
+	7.  Make SLEEPT -1 if none set, 0 if no sleep should occur, number
+	of seconds to sleep otherwise.
+
+2741	12/16/81  If we are in hasp, do not set operator output wait bit since
+	that blocks the print stream which shouldn't happen in HASP.
+
+2742	TJW Fix the continue command to clear the device offline bit.
+
+2743	1/4/82 Clarify all $WTORs to allow ABORT or PROCEED only
+		Dont do extra RUNTIM UUOs if NPRINT .GT. 1
+		as we zero the runtime in the account entry anyway
+
+2744	1/7/82  Restore T1 that is clobbered by IDIVI in CHKTIM before using
+	again.
+
+2745	2/26/82  Set sleep time to 0 if we are allowing sleeptime during
+	forwardspacing.
+	Never again will LPTSPL run out of DOL errors since I have removed
+	the counters.
+
+2746	3/26/82  Fix CPU failure interrupts and add hung device support.
+
+2747	4/6/82  Mount and dismount structures for files we processes. GCO 1302
+
+2750	5/18/82  Do not RESDV remote printers when shutting down @OUTREL.
+	GCO 4.2.1342
+
+2751	6/1/82 Correct the count of overhead lines at TRAI.4
+	GCO 4.2.1351
+
+2752	6/3/82 Make BACKSPACE/FILE work. GCO 1356
+
+2753	6/3/82  Handle false returns from GLXLNK routines in OPRD60.
+	GCO 4.2.1358
+
+2754	6/4/82 Correct definition of BUFCHR.  GCO 1365
+
+2755	6/4/82 Prevent line printer abuse by having differnt STARS text for
+	each width class.  GCO 1366
+
+2756	6/9/82 Check for write ring when spooling output to tape.
+	If the ring is missing, ask operator to insert it. PCO 20-LPTSPL-48
+
+2757	6/9/82 Add routine to check for eot when spooling to tape.
+	Add routine to unload tape and request next mount. PCO 20-LPTSPL-49
+
+2760	6/15/82 More of edit 2755.  GCO 1387
+
+2761	6/15/82 Fix up 2756/2757 to use new subroutines to write tape marks
+	and to unload tapes. GCO 1389
+
+2762	6/25/82 Don't update stream status bits on .OMRSP messages.  GCO 1398
+
+2763	6/28-82 Check for ABORT while off-line. GCO 1460 PCO 20-LPTSPL-56
+
+2764	7/6/82 Fix a problem with forms changes not notifying the operator.
+	GCO 1420
+
+2765	7/7/82 Fix 'System accounting failure' messages if the site does
+	not run ACTDAE, but it's own system. GCO: 1422
+
+2766	7/9/82	Fix edit 2764 so that it works right this time.
+	If forms type can be found it will just ask the operator to
+	mount them and type proceed. If they aren't however, the
+	operator will have the choice of aborting the request.
+
+2767	7/9/82 Resolve structure name before doing STRUUOs.  GCO 1430
+
+
+2770	15-FEB-83 Fix ruler text length problem. The STARSn text strings
+	are 130 instead of 132 characters long. SPR 10-33417/CTK
+
+2771	1-Aug-83 Fix alignment code in FRMINI to not do alignment until after
+	LPFORM.INI line is processed.  Symptom was an alignment with
+	/ALCNT and/or /ALSLP switch values incorrectly set.
+	RAW PCO/DPM
+
+2772	24-Oct-83 Before OPENing device for a stream, see if device has been
+	assigned or init'd by someone. This someone could be another
+	one of our streams.
+	SPR 10-33900 /LWS
+
+2773	25-Oct-83 Fix WTO concerning typeout of unrecognized LPFORM.INI switch.
+	SPR 10-34039 /LWS
+
+2774	25-Oct-83 Print spooled file name in LOG and header.
+	SPR 10-34149 /LWS
+
+2775	27-Oct-83 Recover from OUT UUO errors while loading VFUs a little better.
+	SPR 10-34141 /LWS
+
+2776	12/21/83 Fix coding error in hung device interrupt code. Change
+	J to S1 at LPIN.3. 
+	SPR 10-34397  /LWS
+
+2777	20-Jan-84 Two edits 2771. Make one of them this edit.
+	Handle comments properly in LPFORM.INI.
+	SPR 10-33584  /LWS
+
+3000	24-Jan-84 Fix IFN stopcode bug introduce in EDIT 2771. IFN occurs
+	if ALIGNment is specified in LPFORM.INI and the ".ALP" file
+	doesn't exist.
+	SPR 10-34461  /LWS
+
+3001	21-Mar-84 Fix problem in CPU Failure interrupt code. Code
+	assumed that CPU Failure interrupts would always happen in
+	the correct stream context...not so. Requires edit 2776.
+	SPR 10-34573 GCO 10013 /LWS
+
+3002	24-Mar-84 Fix confusing typeout in WTOR that tells operator
+	to switch reels when spooling to tape.
+	SPR 10-34572 GCO 10014 /LWS
+
+3003	Fix coding error at STRE.1, CAMN should be CAME.
+	13-Apr-84 GCO 10027 /LWS
+
+3004	When spooling to magtape, LPTSPL substitutes <CR><LF> for
+	<CR><DC3>. V2 did not do this. Save DEVCHR bits and treat LPT
+	and MTA the same in CR23.
+	This edit REQUIRES LPTSPL edit 2772.
+	SPR 10-34695 GCO 10039 11-May-84 /LWS
+
+3005	Fix bug in LPINTR where we were incorrectly testing for
+	'CPU failure' interrupt condition. Don't use file status
+	bits, use PS.RIE!PS.ROE!PS.RDO.
+	No SPR GCO 10042 21-May-84 /LWS
+
+3006	Edit 2772 was too cautious. Only check DV.ASP. OPEN will
+	fail if device was assigned by another job. Also, some
+	people do .ASSIGN commands in SYSJOB.INI for LPTSPL, for
+	various reasons.
+	No SPR GCO 10045 11-Jun-84 /LWS
+
+3007	When we get an 'online' interrupt for a printer, clear the
+	byte count in the buffer header in addition to clearing
+	'output blocked'. This will insure that we don't use
+	a the buffers again until I/O is done. (We can't guarantee
+	that we will never miss an 'output done' interrupt.)
+	Change OUTWON to display all printers that are offline.
+	SPR 10-34771 GCO 10068 10-AUG-84 /LWS
+
+3010	When the operator says ABORT PRINTER x /PURGE, don't RESDV.
+	the printer or try to send a formfeed. /PURGE means get rid
+	of the current job now.
+	SPR 10-34867 GCO 10096 19-Sep-84 /LWS
+
+3011	Fix problems when using tapes. Add check for write-locked
+	status. Don't continue after errors other than IO.IMP or
+	IO.EOT.
+	SPR 10-34877 GCO 10101 4-Oct-84 /LWS
+
+3012	If VFU error is encountered when outputting to a LP20
+	printer (LP26 especially) make LPTSPL load the RAM before
+	reloading the VFU. When the printer is powered up, we know
+	the VFU is bad, but it nothing indicates the RAM is bad.
+	Anyway, the VFU won't load correctly unless the RAM is loaded
+	first after power up. Also, check status of VFU before
+	each job. This will enable us to load the RAM and VFU if bad
+	and not bother the operator with a WTOR. We assume the paper
+	has not moved since we didn't do any output since last job
+	and thus doesn't require alignment. MCO 11592 should also
+	be installed in monitor, but is not required.
+	SPR 10-34952 GCO 10114 1-Nov-84 /LWS
+
+3013	Edit 3007 incomplete. We guarded against an offline interrupt
+	when not in stream context (rare) but after DEBRKing to OUTWON
+	and descheduling, we then continue at J$LIOA(J). But the J (job page)
+	we used	to store the continuation address is different than what
+	was saved when the interrupt occurred if not in stream context.
+	When processing	the offline interrupt, use the job page associated
+	with the current stream when storing the continuation address.
+	SPR 10-34771A GCO 10115 1-Nov-84 /LWS
+
+3014	Edit 3012 has problems. It prevents a different VFU from being
+	loaded on a form change. Sigh.
+	GCO 10127 4-Dec-84 /LWS
+4000	Begin Version 105.
+	Break up LPTSPL into two modules, a universal file and the
+	main module. This makes it easy to add extra device drivers
+	as needed.
+	GCO 10133 6-Jan-85 /NT
+
+4001	Add support for having LPTSPL load special driver modules via
+	GALGEN defined modules.
+	GCO 10139 22-Jan-85 /NT
+
+4002	Add module LPTL01 to implement LN01 support.
+	GCO 10140 22-Jan-85 /NT
+
+4003	Pass abort bit and operator abort text in release message to
+	QUASAR to make user job notification a little more useful.
+	Put user name in banner from .EQUSR if non-zero.  Put "Dist:"
+	in banner if .EQBOX non-zero.
+	GCO 10171  21-Mar-85  /DPM
+
+4004	Use RDH words to try and determine file carriage control type.
+	GC0 10202 26-Apr-85 /NT
+
+4005	Fix long standing FORWARDSPACING and /BEGIN:nn extra linefeed bugs.
+	GCO 10207 13-MAY-85 /CTK
+
+4006	Fix lots of little bugs in LPTL01 development code in an effort to
+	stabilize it for field test.
+	GCO none  14-MAY-85 /NT
+
+4007	Add DQS support to LPTSPL.  Add a .REQUI to force loading of
+	D60JSY if FTDN60 is true.
+	GCO 10236  20-Jun-85  /JAD
+
+4010	ZTABLE gets assembled wrong; larger PDL size causes attempt to
+	define a 7 character symbol which makes NXTJOB zero random locs
+	in the job page.
+	GCO 10239  26-Jun-85  /JAD
+
+4011	Make QUEUE FOO/UNIT:LN01 work.
+	GCO 10240  1-Jul-85  /DPM
+
+4012	Tell QUASAR the XEROX 8700 is a lower case printer.
+	GCO 10244  9-Jul-85  /DPM
+
+4013	Add support for spooling to TTYs (LA120 and LA180).  The
+	new driver module is LPTLAX.
+	GCO 10250  12-Jul-85  /DPM
+
+4014	Allow LPTSPL to initialize a stream if it is built without any
+	special drivers.
+	GCO 10257  22-Jul-85  /DPM
+
+4015	Extension missing on 8700 header pages due to wrong AC used in
+	LPTDQS at FILI.3.
+	GCO 10270  1-Aug-85  /JAD
+
+4016	Update copyright statements. 12-SEP-85 /LEO
+
+4017	Set maximum IPCF send and receive quotas at startup.
+	GCO 10301  8-Aug-85  /DPM
+
+4020	Isolate driver specific stuff from LPTSPL.  Reserve 'DRVWDS'
+	words in the job data base starting at J$DWDS for the various
+	device drivers.  Add lots of driver dispatch table entries.
+	Remove FTDQS and propagate all code to LPTDQS.  Likewise,
+	remove FTDN60 and propagate all code to LPTD60.  Put LP05
+	driver in LPTLP5.  By default, LPTSPL will always force
+	loading of LPTD60.REL and LPTLP5.REL modules.
+
+	Although LPTLAX (the terminal driver) is unsupported, it should
+	be used as the template for customers wanting to write their own
+	printer driver.  LPTLAX.MAC is documents each driver dispatch call,
+	how to define driver specifid words in the job data base, and the
+	use of the stream status bits reserved for the drivers.
+	GCO 10311  25-Aug-85  /DPM
+
+4021	.EQUSR and .EQBOX are now 8-bit ASCIZ quantities.
+	GCO 10326  19-Nov-85  /DPM
+
+4022	Add a word in the driver vector containing the address of a routine
+	to generate a status text string for CHKPNT.  For all except LPTDQS
+	this will be equated to LPTSTS.  LPTDQS will generate a status text
+	string of the form "tranferring file n of m".
+	GCO 10325  19-Nov-85  /JAD
+
+4023	Fix OUTERR to only test IO.EOT if we're using a magtape.  Don't
+	want to call IO.SVF or IO.ABS output errors.
+	GCO 10336  5-Dec-85  /RCB
+
+4024	Fix LPTOPN to get the UU.PHS and UU.AIO bits set correctly.
+	GCO 10339  6-Dec-85  /RCB
+
+4025	Fix bugs in magtape processing.  Move all magtape code into LPTLP5.
+	J$MTAP flag has been superseded by a device driver specific flag
+	called LP5MTA and is defined in the reserved-to-driver portion of
+	the job data base.  Add dispatch for device dependent error recovery
+	(J$OERR).  Change device positioning, form feed, and mountable form
+	flags so they may be set by the driver.
+	GCO 10341  17-Dec-85  /DPM
+
+4026	If a device doesn't exist, QUASAR is never told.  Returning the
+	'response to setup' code in S2 instead of S1 where it belongs.
+	GCO 10342  17-Dec-85  /DPM
+
+4027	DN60 printers don't work.  Dispatch never setup.
+	GCO 10343  17-Dec-85  /DPM
+
+4030	Improve error reporting for LPFORM.INI I/O errors and globalize
+	FH$xxx routines to allow them to be called by the drivers for
+	parsing other ASCII files.
+	GCO 10346  31-DEC-85  /DPM
+
+4031	Don't request checkpointing from QUASAR if a driver won't do file
+	positioning.  Don't set lower case flag if device is an LA180.
+	GCO 10351   6-Jan-86  /DPM
+
+4032	LA180s can't handle lower case.
+	GCO 10352   7-Jan-86  /DPM
+
+4033	Create a new driver for magtapes (LPTMTA).
+	GCO 10353   7-Jan-86  /DPM
+
+4034	Fix bad ACK with open fails and device will never be available
+	GCO 10358  13-Jan-86  /DPM
+
+4035	Fix bug in D60OPX where junk response-to-setup code was being
+	returned and add missing POP P,T1 in IBMSTS routine.
+	GCO 10364  17-Jan-85  /DPM
+
+4036	Delete symbol J$CRTF, it was not needed.
+	GCO 10369 21-Jan-86 /NT
+
+4037	LPTSPL	Fix ill mem ref at 000100. remember to restore
+		the stack if the device is not available.
+		GCO 10372 28-Jan-86 /NT
+
+4040	LPTMAC	Invent a new flag, J$ALNF, that will be used by drivers
+	LPTSPL	to specify that they do not do alingments.
+		GCO 10374 28-Jan-86 /NT
+
+4041	LPTSPL	Remove extraneous PUSH/POP in LPTOPN.
+		GCO 10338 13-Feb-86 /NT
+
+4042	LPTSPL	Make sure device flags J$ALNF, J$MNTF, J$FFDF and
+	LPTL01	J$POSF are properly set and tested by all modules.
+	LPTDQS	GCO 10381 21-Feb-86 /NT
+
+4043	LPTSPL	Fix hangs waiting for interrupt problem.
+		GCO 10382 24-Feb-85 /NT
+
+4044	LPTLP5	If DEVOP. returns unknown printer type, assume
+		it is an LP05 class. This keeps people who don't build
+		their remote nodes incorrectly printing.
+		GCO 10387 7-Mar-86 /NT
+
+4045	LPTSPL	If we get a device offline error, do a RETF from
+		LPTOER. LPTOUT will vector to LPTOEX.
+		GCO 10399 24-Apr-86 /NT
+
+4046	LPTMTA	Correct comments and description of setting magtape
+		parameters now that QUASAR and ORION have all the
+		necessary supporting code to do it right.
+		GCO 10409 20-May-86 /DPM
+
+4047	LPTMAC	Specify new variable for /FONT font.
+	LPTSPL	Call routine to specify header width on multicopy
+	LPTL01	printouts.  Don't reload loaded fonts.
+		GCO 10411 3-Jun-86 /NT
+
+4050	LPTSPL	Extend edit 4046 to include simulated RAM and VFU files.
+	LPTL01	GCO 10414 7-Jun-86 /TL
+	LPTMAC
+	LPTDQS
+	LPTD60
+	LPTMTA
+	LPTLP5
+	LPTLAX
+
+4051	LPTSPL	Make DC1 and DC2 always count down a constant number
+		of lines as opposed to a fraction of a page.
+		GCO 10425 26-Jun-86 /NT
+
+4052	LPTSPL	Convert $STOP macros to STOPCD macros. Do some version cleanup.
+	LPTMAC	GCO 10463 18-Nov-86 /BAH
+	LPTDQS
+
+4053	LPTD60	Make DN60-style LPTs get a name of the form LPTnnu like other
+		network printers so that LPFORM.INI entries can be made
+		that are specific to them.
+		GCO 10489 29-Jan-87 /JJF
+
+4054	LPTD60	LPTSPL reprints same portion of file many times on D60
+		printers and fails to output portion of last buffer.
+		GCO 10492 16-Feb-87 /BAH
+
+4055	LPTL01	Fix LN01 startup code so that if an asynch terminal line
+		is defined as 'LN01' all the right things happen.
+		GCO 10495 24-Feb-87 /JJF
+
+4056	LPTSPL	For TOPS-10, add .RBVER to file info line on file banner page.
+		Also, add .VERSIONs to all modules.
+		GCO 10499 12-Mar-87  /TL
+
+4057	LPTSPL	Fix bug in FH$CNV that prevented lower-case characters in
+		LPFORM.INI from working.
+		GCO 10500 13-Mar-87 /JJF
+
+4060	LPTL01	Fix bug in L01INX which turned off the 'mountable forms'
+		flag (J$MNTF(J)), when we really meant to light it.  Allows
+		mountable forms to work on LN01s.
+		GCO 10501 13-Mar-87 /JJF
+
+4061	LPTMAC	Add code to LPTSPL so it knows what type object processor
+	LPTSPL	(%ONCE, %STCMD, %DEMND) it is and do the necessary
+		things at the right time.
+		GCO 10517 27-Jun-87 /LWS
+
+4062	LPTSPL	Fix bugs in LODVFU and LODRAM where junk being returned in
+		S1 on a good return from the driver-specific VFU/RAM loaders
+		can cause an ILM on the effective address calculation on
+		the JUMPF instructions.  Change the JUMPFs to SKIPT, JRST
+		pairs.
+		GCO 10518 29-Jun-87 /JJF SPR: 35998
+
+4063	LPTLP5	When LP20 simulation is on, and we are running an ANF LPT,
+		suppress VFU simulation in the ANF node to prevent losing
+		track of page position. Also, fix PC 0 zero shutting down 
+		streams after edit 4061.
+		GCO 10521 2-Jul-87 /TL/LWS SPR: CSSC/CS report
+
+4064	LPTSPL	Active stream counter is getting cleared each time we
+		check a stream - wrong. Clear it only when we start
+		a new AOBJN loop thru the stream database.
+		GCO 10526 6-Jul-87 /LWS
+
+4065	LPTL01	Recognize terminal type LN01S as well as LN01.
+		GCO 10XXX  8-Jul-87 /DPM
+
+4066	LPTSPL	If debugging, set it so LPTSPL doesn't logout if idle
+		or shutdown.
+		GCO 10531 13-Jul-87 /LWS
+
+4067	LPTSPL	If we successfully startup a DN60 printer, set BYEUDT
+		to zero so LPTSPL doesn't logout when idle.
+		GCO 10540 24-Jul-87 /LWS
+
+4070	LPTMAC	Change SOPTYP args to new style.
+		GCO 10548  3-Aug-87 /LWS
+
+4071	LPTSPL	Fix problems with LPTSPL's error recovery.
+	LPTVFU
+		GCO 10566  2-Sep-87 SPR 10-35733  /LWS
+
+4072	LPTSPL	Return LP20 simulation flag in response-to-setup msg.
+	LPTLP5	Needs QUASAR edit 1475.
+	LPTMTA
+	LPTTTY
+	LPTLAX
+	LPTL01
+	LPTD60	GCO 10579  6-Oct-87 /LWS
+
+4073	LPTMAC	Add support for reverse LAT and LN03's.
+	LPTSPL	GCO 10599 2-Feb-88 /KDO
+	LPTL01
+	LPTL03
+	LPTTTY
+
+4074	LPTSPL	Fix LAT error recovery.
+	LPTL03	GCO 10600 4-Feb-88 /KDO
+
+4075	LPTSPL	Add code to use new DEVOP. function, .DFFRM, to read/set
+		forms type of printer.
+		GCO 10601 9-Feb-88 /LWS
+
+4076	LPTL03	Send reset sequence at end of job.
+		GCO 10602 16-Feb-88 /KDO
+
+4077	LPTMAC	LPTSPL insists on sending a WTOR for /NOTE: in LPFORM.INI
+	LPTSPL	even though we used the forms from printer DDB.
+		GCO 10605  2-Mar-88 /LWS
+
+4100	LPTL01	Use 8-bit ASCII for LN01's.
+		GCO 10607 23-Mar-88 /KDO
+
+4101	LPTL03	Allow the LN03 to do graphics output.
+		GCO 10608 23-Mar-88 /KDO
+
+4102	LPTSPL	Don't clear the forms type in the LPT DDB when
+		shutting down a stream.  That defeats the whole idea.
+		GCO 10630 15-May-88 /RCB
+
+4103	LPTSPL	Make sure we check that VFU is ok when setting up
+		forms.
+		GCO 10632 18-May-88 /LWS
+
+[End of Revision History]
+\
+	SUBTTL	AC and I/O Channel Definitions
+
+;ACCUMULATOR DEFINITIONS
+
+	M==12		;IPCF MESSAGE ADDRESS
+	S==13		;STATUS FLAGS
+	E==14		;POINTS TO CURRENT FILE
+	J==15		;JOB CONTEXT POINTER
+	C==16		;HOLDS A CHARACTER - ALMOST NEVER PRESERVED
+
+
+
+
+	SYSPRM	.MOEOF,16,.MOEOF
+	SYSPRM	ERRVFU,DF.LVE,MO%LVF
+	SUBTTL	Parameters
+
+;SET LPTSPL'S OBJECT PROCESSOR TYPE
+	SOPTYP	(LPTSPL,OPTYP%)
+
+;PARAMETERS WHICH MAY BE CHANGED AT ASSEMBLY TIME
+	ND	PDSIZE,^D100	;PDL SIZE
+	ND	LPTERR,2	;NUMBER OF LPT I/O ERRS BEFORE QUITTING
+	ND	LOGPAG,12	;PAGE LIMIT FOR LOG IF OVER QUOTA
+	ND	CKPTIM,^D60	;# of seconds between checkpoints
+	ND	LPTBAN,2	;Default number of banner pages
+	ND	LPTTRL,2	;Default number of trailer pages
+	ND	LPTHDR,2	;Default number of header pages
+	ND	FRWSKP,5	;DSCHD every n pages when forwardspacing
+	ND	DRVWDS,100	;Default number of words reserved for device
+				; drivers in the job data base
+	ND	INISIZ,^D132	;INIT FILE ATOM BUFFER SIZE IN CHARACTERS
+	   INIWDS==<INISIZ/5>+1	;INIT FILE ATOM BUFFER SIZE IN WORDS
+	ND	FTACNT,-1	;Turn on accounting
+	DEFINE	FACT,<IFN FTFACT>
+
+;CONSTANT PARAMETERS
+	XP	MSBSIZ,30		;SIZE OF A MESSAGE BLOCK
+	XP	AFDSIZ,10		;ALIGN FILE FD SIZE.
+	XP	DEVLNK,1		;DEVICE DRIVER LINKED LIST NUMBER
+
+;CHECKPOINT BLOCK OFFSETS
+	XP	CKFIL,0			;NUMBER OF FILES PRINTED
+	XP	CKCOP,1			;NUMBER OF COPIES OF LAST FILE
+	XP	CKPAG,2			;NUMBER OF PAGES OF LAST COPY
+	XP	CKTPP,3			;TOTAL PAGES PRINTED
+	XP	CKFLG,4			;FLAGS
+		XP CKFREQ,1B0		;JOB WAS REQUEUED BY OPR
+		XP CKFCHK,1B1		;JOB WAS CHECKPOINTED
+
+
+	SYSPRM	BUFNUM,4,1		;NUMBER OF BUFFERS
+	SYSPRM	BUFSIZ,<1000/BUFNUM>,<1000/BUFNUM>
+					;SIZE OF EACH BUFFER
+	SYSPRM	BUFCHR,<<BUFSIZ-3>*5>,<BUFSIZ*4>
+					;NUMBER OF CHARS PER BUFFER
+	SYSPRM	NPRINT,17,1		;NUMBER OF DEVICES THIS SPOOLER HANDLES
+
+	SYSPRM	(STRNUM,^D10,NPRINT)	;NUMBER OF STRS MAXIMUM
+	STRLEN==2*STRNUM		;LENGTH OF STRUCTURE TABLE
+	SYSPRM	(STRSLS,<.FSDSO+<3*STRNUM>+3>,5) ;SIZE OF SEARCH LIST BLOCK
+
+	SYSPRM	RAMNOR,SIXBIT/LP96/,SIXBIT/LP96/
+	SYSPRM	SERFLG,0,0		;SYSERR flag -- 0=no entries to be made
+	SYSPRM	NBRRT,2,2		;Non-blocking rest time
+	SYSPRM	DOLRT,10,10		;Device off-line rest time
+	SYSPRM	CONRT,3,3		;Console rest time
+	SYSPRM	NENBR,25,25		;# of errors allowed for NBR return
+					;  when shutting down
+	SUBTTL	MACROS
+
+DEFINE	DEVDSP	(PFX,TXT),<
+
+	XLIST
+
+PFX'DSP:PHASE	J$$DEV		;;THESE OFFSETS SHOULD BE COMMON TO ALL USERS
+DV$LNK::!XWD	0,0		;;(RESERVED),,LINKED LIST CHAIN ADDRESS
+	.LINK	DEVLNK,<PFX'DSP+<DV$LNK-J$$DEV>> ;;FILL IN CHAIN AT LINK TIME
+DV$NAM::!EXP	[ASCIZ"TXT"]	;;DRIVER NAME
+DV$INX::!EXP	PFX'INX		;;DEVICE INITIALIZATION
+DV$IPC::!EXP	PFX'IPC		;;SPECIAL IPCF MESSAGE PROCESSING
+DV$SCD::!EXP	PFX'SCD		;;SCHEDULER CALL
+DV$WAK::!EXP	PFX'WAK		;;WAKEUP TIME CHECK
+DV$OPX::!EXP	PFX'OPX		;;OPEN DEVICE
+DV$CLS::!EXP	PFX'CLS		;;CLOSE DEVICE
+DV$FLS::!EXP	PFX'FLS		;;FLUSH JOB
+DV$VFU::!EXP	PFX'VFU		;;LOAD VFU
+DV$RAM::!EXP	PFX'RAM		;;LOAD RAM
+DV$LER::!EXP	PFX'LER		;;FILE LOOKUP ERROR PROCESSING
+DV$IER::!EXP	PFX'IER		;;FILE INPUT ERROR PROCESSING
+DV$CHO::!EXP	PFX'CHO		;;OUTPUT A CHARACTER
+DV$OUT::!EXP	PFX'OUT		;;OUTPUT A BUFFER
+DV$OER::!EXP	PFX'OER		;;OUTPUT ERROR PROCESSING
+DV$EOX::!EXP	PFX'EOX		;;OUTPUT EOF PROCESSING
+DV$ALN::!EXP	0		;;DEVICE DOES NOT DO ALIGNMENTS
+DV$DPF::!EXP	0		;;DEVICE POSITIONING FLAG (SET BY DRIVER)
+DV$FFD::!EXP	0		;;FORM FEED FLAG (SET BY DRIVER)
+DV$D3F::!EXP	0		;;DEVICE SUPPORTS DC3 SPACING
+DV$MTF::!EXP	0		;;MOUNTABLE FORMS FLAG (SET BY DRIVER)
+DV$BJB::!EXP	PFX'BJB		;;BEGINING OF JOB
+DV$EJB::!EXP	PFX'EJB		;;END OF JOB
+DV$BFL::!EXP	PFX'BFL		;;BEGINING OF FILE
+DV$EFL::!EXP	PFX'EFL		;;END OF FILE
+DV$BAN::!EXP	PFX'BAN		;;BANNER INITIALIZATION
+DV$HDR::!EXP	PFX'HDR		;;HEADER INITIALIZATION
+DV$CHR::!EXP	PFX'CHR		;;CHARACTER TRANSLATION
+DV$RUL::!EXP	PFX'RUL		;;RULER PROCESSING
+DV$WID::!EXP	PFX'WID		;;HEADER WIDTH INITIALIZATION
+DV$SHT::!EXP	PFX'SHT		;;SHUTDOWN HANDLER
+DV$STS::!EXP	PFX'STS		;;GENERATE DEVICE STATUS TEXT
+J$$DND::!DEPHASE
+
+	LIST
+> ;END DEVDSP MACRO
+
+
+	;SYM IS DEFINED AS GLOBAL TO CATCH SKEWS BETWEEN LPTSPL AND THE DRIVERS
+DEFINE LP(SYM,VAL,FLAG),<
+	IF1,<
+		XLIST
+		IFNDEF J...X,<J...X==1000>
+		IFDEF SYM,<PRINTX  ?PARAM SYM USED TWICE>
+		SYM==:J...X
+		J...X==J...X+VAL
+		IFNDEF ...BP,<...BP==1B0>
+		IFNDEF ...WP,<...WP==0>
+		REPEAT VAL,<
+		IFIDN <FLAG><Z>,<LPZ(\...WP,...BP)>
+			...BP==...BP_<-1>
+			IFE ...BP,<
+				...BP==1B0
+				...WP==...WP+1
+			>  ;;END IFE ...BP
+		>  ;;END REPEAT VAL
+		LIST
+		SALL
+	>  ;END IF1
+
+	IF2,<
+	.XCREF
+	J...X==SYM
+	.CREF
+	SYM==J...X
+	>  ;END IF2
+>  ;END DEFINE LP
+
+
+	;MACRO DEFINES ZEROED STORAGE
+DEFINE LPZ(A,B),<
+	IFNDEF ..Z'A,<..Z'A==B>
+	IFDEF ..Z'A,<..Z'A==..Z'A!B>
+>  ;END DEFINE LPZ
+DEFINE F,<
+	FF	BANNER,LPTBAN
+	FF	TRAILER,LPTTRL
+	FF	HEADER,LPTHDR
+	FF	LINES,^D60
+	FF	WIDTH,^D132
+	FF	ALIGN,0
+	FF	ALCNT,5
+	FF	ALSLP,7
+	FF	RIBBON,FRMNOR
+	FF	TAPE,FRMNOR
+	FF	VFU,FRMNOR
+	FF	DRUM,FRMNOR
+	FF	CHAIN,FRMNOR
+	FF	NOTE,0
+	FF	RAM,-1
+DEFINE $DSCHD(FLAGS),<
+IF2,<IFNDEF DSCHD,<EXTERN DSCHD>>
+	PUSHJ	P,DSCHD
+	XLIST
+	JUMP	[EXP FLAGS]
+	LIST
+	SALL
+>  ;END DEFINE $DSCHD
+
+DEFINE $D60ER(ADD),<
+	PUSHJ	P,D60ER
+	XLIST
+	JUMP	ADD
+	LIST
+	SALL
+>  ;END DEFINE $D60ER
+DEFINE $D60OE(ADD),<
+	PUSHJ	P,D60OE
+	XLIST
+	JUMP	ADD
+	LIST
+	SALL
+>  ;END DEFINE $D60OE
+>
+	SUBTTL	Flag Definitions
+
+	ARROW==1B0		;ARROW MODE IN EFFECT
+	SUPFIL==1B1		;NO USER FORM CONTROL
+	FRMSOK==1B2		;FORMS ARE OK
+	RQB==1B3		;JOB HAS BEEN REQUED
+	SUPJOB==1B4		;SUPPRESS /JOB
+	ABORT==1B5		;THE SHIP IS SINKING
+	FCONV==1B6		;THE NEXT CHAR IS FORTRAN FORMAT DATA
+	NEWLIN==1B7		;FLAG FOR THE BEGINING OF LINE
+	SKPFIL==1B8		;SKIP FUTURE COPIES OF THIS FILE COMPLETELY
+	GOODBY==1B9		;IN JOB TERMINATION SEQUENCE
+	FBPTOV==1B10		;SPACING PAGE TABLE OVERFLOW BIT.
+	FORWRD==1B11		;FORWARD SPACING REQUEST IN PROGRESS.
+	INTRPT==1B12		;STREAM IS CONNECTED TO THE INTERRUPT SYSTEM
+	BCKFIL==1B13		;REQUEST WAS BACKSPACED 1 FILE
+	BANHDR==1B14		;PRINTING BANNER/HEADER PAGES
+	VFULOD==1B15		;VFU LOAD IS IN PROGRESS
+	INJOB==1B16		;In a print job (Checkpoint should be done)
+	FRMFND==1B17		;No such forms in LPFORM.INI
+	STSDRV==7B35		;BITS RESERVED TO THE DEVICE DRIVERS
+
+;SCHEDULER FLAGS
+	PSF%OB==1B1		;OUTPUT BLOCKED
+	PSF%DO==1B2		;DEVICE IS OFF-LINE
+	PSF%ST==1B3		;STOPPED BY OPERATOR
+	PSF%OR==1B4		;OPERATOR RESPONSE WAIT
+	PSF%AL==1B5		;ALIGNMENT TIMER WAIT STATE.
+	PSF%OO==1B6		;WAITING FOR 2780/3780 OPERATOR OUTPUT
+	PSF%MW==1B7		;MOUNT WAIT
+	SUBTTL	Macros -- DRVTAB device driver table
+
+;Make these definitions to keep LPTSPL from searching GALCNF.
+
+	DEFINE G..LPT,<G$$LPT>
+
+	DEFINE LL(XX)<
+	...LPT==...LPT+1
+>
+	...LPT==0
+
+	G..LPT
+
+	MAXDEV==...LPT
+	SUBTTL	Job Parameter Area
+
+	LP	J$$BEG,0		;BEGINNING OF PARAMETER AREA
+
+;	LP	J$JPAS,1		;Size of this job parameter block
+
+;REQUEST PARAMETERS
+	LP	J$RFLN,1		;NUMBER OF FILES IN REQUEST
+	LP	J$RLIM,1,Z		;JOB LIMIT IN PAGES
+	LP	J$RTIM,1		;START TIME OF JOB
+	LP	J$RLFS,1,Z		;ADR OF LOG FILE SPEC
+	LP	J$RNFP,1,Z		;NUMBER OF FILES PRINTED
+	LP	J$RNCP,1,Z		;NUMBER OF COPIES OF CURRENT FILE
+	LP	J$RNPP,1,Z		;NUMBER OF PAGES IN CURRENT COPY PRINTED
+	LP	J$RACS,20		;CONTEXT ACS
+	LP	J$RPDL,PDSIZE		;CONTEXT PUSHDOWN LIST
+
+;LPT PARAMETERS
+	LP	J$LBUF,1		;ADDRESS OF LPT BUFFER
+	LP	J$LBFR,PAGSIZ		;LINE PRINTER BUFFER
+	LP	J$LBRH,1		;BUFFER RING HEADER
+	LP	J$LBPT,1		;BYTE POINTER
+	LP	J$LBCT,1		;BYTE COUNT
+	LP	J$LDEV,1		;ACTUAL OUTPUT DEVICE NAME
+	LP	J$LION,1		;I/O INDEX
+	LP	J$LTYP,1		;SIXBIT UNIT TYPE
+	LP	J$LOUT,20		;OUTPUT NODE/DEVICE/UNIT TEXT
+	LP	J$LERR,1		;LPT ERROR DOWNCOUNTER
+	LP	J$LRAM,1		;DEFAULT RAM FILE NAME (LP64 or LP96)
+	LP	J$LLCL,1		;-1 IF UPPER/LOWER CASE PRINTER
+	LP	J$LDVF,1		;-1 IF DAVFU ON PRINTER
+	LP	J$LDRM,1		;-1 IF DEVICE HAS A LOADABLE RAM
+	LP	J$LPCR,1		;-1 IF DEVICE HAS A PAGE CNTR
+	LP	J$LREM,1		;Device index
+					; 0 = LOCAL LPT
+					;-1 = REMOTE LPT
+	LP	J$LLAT,1		;-1 = LAT SERVER LINE
+	LP	J$LCLS,1		;LPT CONTROLLER CLASS
+	LP	J$LIOA,1		;-1 IF WE ARE IN A SOUT OR OUT
+	LP	J$LLPT,1		;-1 IF DEVICE REALLY IS A LPT
+	LP	J$LIOS,1		;LPT IO ERROR STATUS
+	LP	J$XIOS,1		;EXTENDED ERROR STATUS
+	LP	J$LCHN,1		;LPT I/O CHANNEL
+	LP	J$LBTZ,1		;LPT OUTPUT BYTE SIZE
+	LP	J$LSTG,2		;DEVICE NAME STRING
+	LP	J$LIBC,1		;INITIAL BYTE COUNT
+	LP	J$LIBP,1		;INITIAL BYTE POINTER
+	LP	J$DCHR,1		;[3004] STREAM'S DEVICE CHARACTERISTICS
+
+	;CONTINUED ON NEXT PAGE
+
+	;CONTINUED FROM PREVIOUS PAGE
+
+;CURRENT FORMS PARAMETERS
+
+DEFINE	FF(X,Y),<
+	LP	J$F'X,1
+>
+
+	LP	J$FCUR,0		;START OF FORMS PARAMS
+	F				;CURRENT FORMS PARAMS
+
+	LP	J$FORM,1		;CURRENT FORMS TYPE
+	LP	J$FPFM,1		;PREVIOUS FORMS TYPE
+	LP	J$PDRU,1		;PREVIOUS LOADED DRUM
+	LP	J$PRIB,1		;PREVIOUS LOADED RIBBON
+	LP	J$PTAP,1		;PREVIOUS LOADED CARRAIGE CONTROL TAPE
+	LP	J$FMSP,1,Z		;FORMS WTO/WTOR PAGE ADDRESS
+	LP	J$FWCL,1		;CURRENT WIDTH CLASS
+	LP	J$FLCL,1		;Current length class
+	LP	J$FLVT,1		;CURRENTLY 'LOADED' VFU TYPE
+	LP	J$FLRM,1		;CURRENTLY 'LOADED' TRANSLATION RAM
+	LP	J$FVIF,1		;IFN OF VFU FILE ON -10
+	LP	J$FBYT,1,Z		;VFU INPUT BYTE COUNT.
+	LP	J$FPTR,1		;VFU INPUT BYTE POINTER.
+	LP	J$LVFF,1		;FIRST TIME THROUGH FLAG FOR LPT VFU'S
+	LP	J$CVFU,1		;-1 IF CHECKING VFU INSTEAD OF LOAD
+	LP	J$FNBK,INIWDS		;OPERATOR NOTE BLOCK
+
+IF2,<	PURGE	J$FVFU,J$FCHA		;DON'T USE THESE   >
+
+;ALIGN FILE PARAMETERS
+	LP	J$APRG,1		;-1 IF ALIGN IS IN PROGRESS
+	LP	J$AIFN,1		;ALIGN FILE IFN
+	LP	J$ABYT,1		;ALIGN BUFFER BYTE COUNT.
+	LP	J$APTR,1		;ALIGN BUFFER BYTE POINTER.
+	LP	J$ASLP,1,Z		;SECONDS TO SLEEP
+	LP	J$ACNT,1,Z		;LOOP COUNT
+	LP	J$AFD,AFDSIZ		;THE FD FOR THE ALIGN FILE
+
+;MISCELLANY
+	LP	J$XTOP,1		;WE ARE AT TOP OF FORM
+	LP	J$XFOB,FOB.SZ		;A FILE OPEN BLOCK
+	LP	J$XPOS,1		;CURRENT VERTICAL POSITION
+	LP	J$XHBF,<45>		;BUFFER TO BUILD HEADER LINE
+	LP	J$XCOD,<^D55>		;COMPILE A ROUTINE TO CHECK
+					; FOR MATCH ON /REPORT
+	LP	J$XFRC,1		;FORTRAN CHARACTER REPEAT COUNT
+	LP	J$XTBF,50		;$TEXT BUFFER FOR OUTPUT DEVICE
+	LP	J$XTBP,1		;BYTE POINTER FOR J$XTBF.
+	LP	J$RESP,2,Z		;OPERATOR RESPONSE BUFFER.
+	LP	J$WTOR,^D50		;WTOR MESSAGE BUFFER.
+;ACCOUNTING PARAMETERS.
+
+	LP	J$APRT,1,Z		;PAGE COUNT.
+	LP	J$ADRD,1,Z		;DISK BLOCKS READ.
+	LP	J$APRI,1,Z		;JOBS PRIORITY
+	LP	J$ARTM,1,Z		;JOBS RUN TIME (CPU)
+	LP	J$ASEQ,1,Z		;JOBS SEQUENCE NUMBER
+	LP	J$AFXC,1,Z		;TOTAL FILES PRINTED (FILES*COPIES)
+
+;FORWARD SPACE / BACK SPACE PARAMETERS
+
+	LP	J$FBPT,1		;CURRENT PAGE TABLE POSITION
+	LP	J$FPAG,PAGSIZ		;BACKSPACE PAGE TABLE
+	LP	J$FCBC,1,Z		;CURRENT INPUT BUFFER BYTE COUNT
+	LP	J$FTBC,1,Z		;TOTAL INPUT BYTE COUNT
+	LP	J$FPIG,1,Z		;NUMBER OF PAGES TO IGNORE
+
+;DISK FILE PARAMETERS
+
+	LP	J$DIFN,1		;THE IFN
+	LP	J$DFDA,1		;THE FD ADDRESS
+	LP	J$DBPT,1		;BUFFER BYTE POINTER
+	LP	J$DBCT,1,Z		;BUFFER BYTE COUNT
+
+;LOG FILE PARAMETERS
+
+	LP	J$GBUF,^D10		;ADDRESS OF LOG FILE BUFFERS
+	LP	J$GBFR,PAGSIZ		;FIRST LOG FILE BUFFER
+	LP	J$GNLN,1,Z		;NUMBER OF LINES WRITTEN IN LOG
+	LP	J$GIBC,1,Z		;INTERNAL LOG BYTE COUNT
+	LP	J$GIBP,1,Z		;INTERNAL LOG BYTE POINTER
+	LP	J$GINP,1,Z		;NUMBER OF INTERNAL LOG PAGES
+	LP	J$GSPL,2		;SPOOLED FILENAME THAT'S PUT IN LOG
+
+;PICTURE BLOCKS
+
+	LP	J$PUSR,10		;USER NAME
+	LP	J$PNOT,4		;/NOTE
+	LP	J$PDST,10		;/DISTRIBUTION:"text"
+	LP	J$PFL1,10		;FIRST LINE OF FILE NAME
+	LP	J$PFL2,12		;SECOND LINE OF FILE NAME
+	LP	J$PFLS,1		;BLOCKSIZE FOR FILENAME
+	LP	J$FTYP,1		;Address of special file typer
+
+	LP	J$FASC,1		;No graphics interpretation
+	LP	J$DBRK,1		;Address of device character break mask
+
+	LP	J$DWDS,DRVWDS		;Words reserved for device drivers
+	LP	J$VRAM,1		;Address of simulated RAM
+	LP	J$VVFU,1		;Address of simulated VFU
+	LP	J$VFLG,1		;Flags for LP20 simulation
+	  VF.DLH==1B0			;;Delim hold is set
+	  VF.UDC==1B1			;;Undefined char interrupt pending
+	  VF.PCZ==1B2			;;Page counter interrupt pending
+	LP	J$VLIN,1		;RH - Current line for VFU simulation
+					;LH - Bit 0 page counter enabled
+					;  Bits 1-17 page counter
+	LP	J$$DEV,0		;Device dispatch table
+	LP	J$LINK,1		;Device driver chain link
+	LP	J$DRIV,1		;Driver name
+	LP	J$INIT,1		;Device initialization
+	LP	J$IPCF,1		;Special IPCF message processing
+	LP	J$SCHD,1		;Scheduler call
+	LP	J$WAKE,1		;Wakeup timer check
+	LP	J$OPEN,1		;OPEN device
+	LP	J$CLOS,1		;CLOSE device
+	LP	J$FLSH,1		;Flush
+	LP	J$VFU,1			;Load VFU
+	LP	J$RAM,1			;Load RAM
+	LP	J$FLER,1		;File LOOKUP error processing
+	LP	J$FIER,1		;File input error processing
+	LP	J$CHRO,1		;Output a character to virtual device
+	LP	J$OUTP,1		;Output a buffer
+	LP	J$OUTE,1		;OUTPUT error processing
+	LP	J$EOF,1			;EOF processing
+	LP	J$ALNF,1		;Printer does not need alignment
+	LP	J$POSF,1		;Device position flag
+	LP	J$FFDF,1		;Form feed flag
+	LP	J$DC3F,1		;Device supports DC3 spacing
+	LP	J$MNTF,1		;Mountable forms flag
+	LP	J$BJOB,1		;Begining of job
+	LP	J$EJOB,1		;End of job
+	LP	J$BFIL,1		;Begining of file
+	LP	J$EFIL,1		;End of file
+	LP	J$BNRI,1		;Banner initialization
+	LP	J$HDRI,1		;Header initialization
+	LP	J$BKPR,1		;Character processor
+	LP	J$RULR,1		;RULER DISPLAYER
+	LP	J$HDRW,1		;SET UP WIDTHS FOR HEADERS
+	LP	J$SHUT,1		;SHUTDOWN HANDLER
+	LP	J$STST,1		;STATUS MESSAGE
+	LP	J$$DND,1		;End device initialization vectors
+
+;	LP	J$$END,1		;END OF PARAMETER AREA
+
+;AREA FOR FONT FILE HANDLERS
+	LP	J$FONT,1		;Address of font header from /FONT
+	LP	J$FNTL,1		;Name of font name linked list
+					;** Next two words must be consecutive
+	LP	J$FCNT,1		;**Number of characters in font buffer
+	LP	J$FBTP,1		;**Font byte pointer
+	CHTLTH==^D200			;Lenght of the intercepted sequence
+	CHTWDS==CHTLTH/4		;Number of words it takes up
+	LP	J$CTMP,CHTWDS		;Address of intercepted escape seq.
+	LP	J$NMTP,FNMLTH		;Temporary name variable
+	LP	J$NMT2,FNMLTH		;And another for comparisons against
+					;Variables for SIXELed name extraction
+	LP	J$FNSZ,1		;Size of physical RAM
+	LP	J$LDNF,1		;Flag for always load font
+	LP	J$NMIF,1		;Name of get byte routine for FNTNAM
+	LP	J$OLDL,1		;Name of current list
+	LP	J$SVCH,1		;Last character read
+
+	LP	J$BCT8,1		;Count of translated bytes
+	LP	J$BYT8,1		;And where they are kept (3 at a time)
+
+	LP	J$$FND,1		;End of font parameter area
+
+	LP	J$$END,1		;END OF PARAMETER AREA
+	J$$LEN==J$$END-J$$BEG		;Length of parameter area
+	J$$FNL==J$$FND-J$$BEG		;Lenght for font printers
+	SUBTTL	End of LPTMAC
+
+	END
+ 

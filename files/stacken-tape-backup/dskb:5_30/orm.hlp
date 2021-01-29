@@ -1,0 +1,119 @@
+                     ORM - et realtime spill
+
+   M}let ved spillet er } bygge en ORM som er s} lang som  mulig,
+dette gj|res ved } dirigere ORMen omkring p} skjermen slik at den
+treffer det tallet som er der.  Om man ikke klarer } treffe dette
+tallet i l|pet av et par sekunder, s} vil tallet fjerne seg og et
+annet tall vil dukke opp et annet sted.   For  hvert  siffer  man
+klarer  }  treffe,  vil  man f} det sifferet antall nye segmenter
+lagt til p} enden av ORMen.  Jo fler segmenter,  jo  fler  poeng,
+men legg merke til at for hver gang man ikke klarer } f} tak i et
+tall f|r det forsvinner, s} vil man miste poeng.
+
+   Spillet slutter n}r man treffer en annen del av ORMen eller en
+av sidene i det feltet man befinner seg.
+
+   Om man spiller den versjonen som har med  hindringer,  s}  vil
+treff p} en av sidene eller hindringene resultere i at man mister
+alle segmentene man har samlet opp.  Dette s|rger dog ikke for at
+man mister alle poengene sine, man mister bare en viss prosent av
+de poengene man hadde, men  resten  av  ORMen  blir  liggende  og
+kommer  da som } fungere som en farlig hindring.  Treffer man den
+s} er resultatet det samme som om man skulle ha truffet seg  selv
+- spillet slutter.
+
+   Poengberegningen er logaritmisk, dvs at jo fler  segmenter  du
+har, jo fler poeng f}r du neste gang du treffer et siffer.
+
+   Om man ikke har spillt  ORM  f|r,  s}  anbefales  det  at  man
+spiller  som  begynner,  man  f}r  du  mer  tid p} seg til treffe
+tallene, men man kommer logisk nok ikke  p}  listen  selv  om  da
+oppn}r nok poeng til det.
+
+
+Man kan spille ORM p} to m}ter:
+
+1. Ormen beveger seg hele tiden, og du gir kun beskjed om n}r den
+   skal skifte retning.
+
+2. Ormen beveger deg kun det spesifiserte antall steg, s} st}r den
+   stille og venter p} ny kommando. det er her det l|nner seg } v{re
+   kjapp til } taste inn.
+
+En beskrivelse av kommandoene til de to spillem}tene f|lger:
+
+1. Kontinuerlig bevegelse:
+
+For } f} ormen til } skifte retning brukes f|lgende taster:
+
+Opp: 'O' eller                8
+Venstre 'V' eller          4
+H|yre 'H'  eller                 6
+Ned 'N' eller                 2
+
+
+2. Orm som g}r p} kommando:
+
+   Hodet p} ORMen er alltid markert  med  en  'O'  og  resten  av
+kroppen  med 'X'er, merk at n}r spillet starter, s} har man ingen
+kropp og dermed er bare en 'O' synlig p} skjermen.
+
+   Kommando sekvensen er :  knn<CR> (default er nn=1)
+
+   hvor k er retningen og nn distansen som ormen skal flyttes,
+   om nn er st|rre enn 60, s} ignoreres dette.
+            0<=nn<=60
+
+   Om man har en sifferpad p} tastaturet, s} b|r man bruke  denne
+til  }  angi  hvilken  retning ORMen skal beveges, dette fordi de
+fleste reagerer raskere n}r man bruker systemet anvist under  enn
+om man m}tte lete seg fram til en riktig bokstav p} tastaturet.
+
+   Opp:     8 eller 'O'                8
+   Ned:     2 eller 'N'             4     6
+   H|yre:   6 eller 'H'                2
+   Venstre: 4 eller 'V'
+
+   Om man feks.  skulle bevege ORMen 25 steg til h|yre, s}  kunne
+man enten skrive :
+                   625<CR>
+   Hvor 6 st}r for opp og 25 for  antall  steg,  <CR>  er trykk
+p} RETURN knappen.
+
+   eller man kunne skrive :
+                            o25<CR>
+   Hvor man istedetfor tallet 6 brukte bokstaven 'o'.
+
+   Hvis man trykker  p}  noe  annet  s}  vil  det  bli  ignorert,
+bortsett fra de f|lgende:
+
+   ' ' alts} trykk p} space fjerner kommandolinjen
+       Denne brukes om man har skrevet gal kommando.
+
+   'P' er pause slik at spillet fryses til nok en 'p' p}trykkes
+       Om man f}r en ?Time limit exceeded, som programmet ikke
+       klarer } fange opp, s} skrives .cont<CR> raskt etterfulgt
+       av et trykk p} p.  Spillet er da frosset, og man kan da i 
+       ro og mak trykke to ganger p} <ESC> slik at man f}r et
+       nytt bilde.  N}r man har f}tt det, er det bare } trykke
+       en gang til p} p og man kan fortsette } spille.
+
+
+*********************************
+
+Felles for begge spillem}tene er:
+
+'?' som gir denne informasjonen, og
+
+   'Q' som stopper spillet.
+
+   Jeg h}per dette var nok av en  introduksjon  til  at  man  kan
+klare } spille ORM og samtidig forst} litt av det som skjer.
+
+   For de som ikke skulle vite det s} startes ORM ved kommandoen
+
+         .R GAM:ORM<CR>
+
+   siste oppdatering :  Tirsdag 9 Mars '82
+
+   Forfatter till ORM {r Johan V{rn|, Oslo.

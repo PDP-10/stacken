@@ -1,0 +1,837 @@
+TITLE	MNTPAR	MOUNT and ALLOCATE parser
+SUBTTL	P. Taylor/DPM/PJT/LWS  29-Feb-84
+
+;
+;
+;
+;        COPYRIGHT (c) 1975,1976,1977,1978,1979,1980,1981,1982,
+;			 1983,1984,1985,1986
+;                    DIGITAL EQUIPMENT CORPORATION
+;			ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;     
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;     
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+
+
+
+	SEARCH	GLXMAC			;Get Galaxy symbols
+	PROLOG	(MOUNT)
+
+	SEARCH	ORNMAC,QSRMAC,MNTMAC
+
+	EXTERN	ERROR,HELPER
+	PARSET				;Declare external Parser routines
+
+	TWOSEG				;Make us sharable
+	RELOC	400000			;Code goes here
+SUBTTL	ALLOCATE and MOUNT commands
+
+
+;ALLOCATE and MOUNT syntax tables
+
+MOU010::	;Mount and allocate share common syntax
+ALL010::$SWITCH(,MOU011,$ALTER(MOU015))
+MOU015:	$CRLF	($ALTER (MOU020))
+
+MOU020:	$FIELD(MOU022,<volume set name>,$BREAK(VSNBRK))
+MOU022:	$TOKEN(MOU023,<(>,$ALTER(MOU026))
+MOU023:	$FIELD(MOU024,<volume identifier>)
+MOU024:	$COMMA(MOU023,$ALTER(MOU025))
+MOU025:	$TOKEN(MOU026,<)>)
+MOU026:	$TOKEN(MOU030,<:>,$ALTER(MOU030))
+
+MOU030:	$FIELD(MOU032,<logical name>)
+MOU032:	$TOKEN(MOU040,<:>,$ALTER(MOU040))
+
+MOU040:	$SWITCH(,MOU041,$ALTER(MOU050))
+
+MOU050:	$COMMA(MOU020,$ALTER(MOU060))
+
+MOU060:	$CRLF
+
+;Character set allowed for VOLUME-SET-NAME
+
+VSNBRK::
+	777777,,777760			;Break on all control
+	777754,,001760			;Allow - and 0-9
+	400000,,000760			;Allow A-Z
+	400000,,000760			;Allow LC A-Z
+;MOUNT and ALLOCATE option tables
+
+
+MOU011:	$STAB
+	DSPTAB(MOU010,MO$CHE,<CHECK>)
+	DSPTAB(MOU010,MO$DIS,<DISK>)
+	DSPTAB(,HELPER,<HELP>)
+	DSPTAB(MOU010,MO$NNT,<NONOTIFY>)
+	DSPTAB(MOU010,MO$NOT,<NOTIFY>)
+	DSPTAB(MOU010,MO$NOW,<NOWAIT>)
+	DSPTAB(MOU010,MO$TAP,<TAPE>)
+	DSPTAB(MOU010,MO$WAI,<WAIT>)
+	$ETAB
+
+MOU041:	$STAB
+	DSPTAB(MOU040,MO$ACT,<ACTIVE>)
+	DSPTAB(MOU040,MO$CRE,<CREATE>)
+	DSPTAB(M$DEN1,MO$DEN,<DENSITY>)
+	DSPTAB(M$FLD1,MO$DEV,<DEVICE>)
+	DSPTAB(MOU040,MO$DIS,<DISK>)
+	DSPTAB(MOU040,MO$EXC,<EXCLUSIVE>)
+	DSPTAB(M$LAB1,MO$LAB,<LABEL-TYPE>)
+	DSPTAB(MOU040,MO$SHA,<MULTI>)		;Ala SHARABLE
+	DSPTAB(MOU040,MO$NEW,<NEW-VOLUME-SET>)
+	DSPTAB(MOU040,MO$NOC,<NOCREATE>)
+	DSPTAB(MOU040,MO$NNT,<NONOTIFY>)
+	DSPTAB(MOU040,MO$NOT,<NOTIFY>)
+	DSPTAB(MOU040,MO$NOW,<NOWAIT>)
+	DSPTAB(MOU040,MO$PAS,<PASSIVE>)
+	DSPTAB(M$PRO1,MO$PRO,<PROTECTION>)
+	DSPTAB(MOU040,MO$QTA,<QUOTA>)
+	DSPTAB(MOU040,MO$REA,<READ-ONLY>)
+	DSPTAB(M$VOL1,MO$VOL,<REELID>)		;Ala VOLID
+	DSPTAB(M$REM1,MO$REM,<REMARK>)
+	DSPTAB(MOU040,MO$REA,<RONLY>)		;Ala READ-ONLY
+	DSPTAB(MOU040,MO$SCR,<SCRATCH>)
+	DSPTAB(MOU040,MO$SHA,<SHARABLE>)
+	DSPTAB(MOU040,MO$EXC,<SINGLE>)		;Ala EXCLUSIVE
+	DSPTAB(MOU040,MO$TAP,<TAPE>)
+	DSPTAB(M$TRA1,MO$TRA,<TRACKS>)
+	DSPTAB(M$REM1,MO$REM,<VID>)		;Ala REMARK
+	DSPTAB(M$VOL1,MO$VOL,<VOLID>)
+	DSPTAB(MOU040,MO$WAI,<WAIT>)
+	DSPTAB(MOU040,MO$WRI,<WENABLE>)		;Ala WRITE-ENABLE
+	DSPTAB(MOU040,MO$REA,<WLOCK>)		;Ala READ-ONLY	
+	DSPTAB(M$WRI1,MO$WRI,<WRITE-ENABLE>)	;Also WRITE:YES and WRITE:NO
+	$ETAB
+;ALLOCATE and MOUNT options syntax tables
+
+M$DAT1:	$DATE(MOU040)
+
+M$DEN1:	$KEY(MOU040,M$DEN2)
+M$DEN2:	$STAB
+	KEYTAB(.TFD16,<1600-BPI>)
+	KEYTAB(.TFD20,<200-BPI>)
+	KEYTAB(.TFD55,<556-BPI>)
+	KEYTAB(.TFD62,<6250-BPI>)
+	KEYTAB(.TFD80,<800-BPI>)
+	$ETAB
+
+M$FLD1:	$FIELD(MOU040)
+
+
+M$LAB1:	$KEY(MOU040,M$LAB2)
+M$LAB2:	$STAB
+	KEYTAB(%TFANS,<ANSI>)
+	KEYTAB(%TFLBP,<BLP>)
+	KEYTAB(%TFLBP,<BYPASS-LABEL-PROCESSING>)
+	KEYTAB(%TFEBC,<EBCDIC>)
+	KEYTAB(%TFEBC,<IBM>)
+	KEYTAB(%TFUNL,<NOLABELS>)
+	KEYTAB(%TFUNL,<NONE>)
+	KEYTAB(%TFUNL,<UNLABELED>)
+	KEYTAB(%TFUNV,<USER-EOT>)
+	$ETAB
+
+M$NUM1:	$NUMBER(MOU040,^D10)
+
+M$PRO1:	$NUMBER(MOU040,^D8)
+
+M$REM1:	$QUOTE(MOU040,,$ALTER(M$REM2))
+M$REM2:	$FIELD(MOU040,,$BREAK(REMBRK))
+
+REMBRK:	777777,,777760			;Break on all control
+	777754,,001760			;Allow - and 0-9
+	400000,,000760			;Allow A-Z
+	400000,,000760			;Allow LC A-Z
+
+M$TRA1:	$KEY(MOU040,M$TRA2)
+M$TRA2:	$STAB
+	KEYTAB(.TMDR7,<7-TRACK>)
+	KEYTAB(.TMDR9,<9-TRACK>)
+	$ETAB
+
+M$VOL1:	$TOKEN(M$VOL2,<(>,$ALTER(M$VOL5))
+M$VOL2:	$FIELD(M$VOL3)
+M$VOL3:	$COMMA(M$VOL2,$ALTER(M$VOL4))
+M$VOL4:	$TOKEN(MOU040,<)>,$ALTER(MOU040))
+M$VOL5:	$FIELD(MOU040)
+
+M$WRI1:	$KEY(MOU040,M$WRI2,<$DEFAULT(YES),$ALTER(MOU040)>)
+M$WRI2:	$STAB
+	KEYTAB(FALSE,<NO>)
+	KEYTAB(TRUE,<YES>)
+	$ETAB
+
+;MOUNT and ALLOCATE commands
+
+;These routines will parse a MOUNT or an ALLOCATE command.
+; The parse blocks are built in a page of data supplied by the caller
+;Call -
+;	S1/	Adrs of a page into which the mount message
+;		will be built
+;Return -
+;	TRUE	always.
+;	If there are ANY errors, these routines pull a $ERR macro
+;	which JSPs to a caller-defined ERROR label (external from here)
+;	which should handle the error condition.
+
+.ALLOC::
+	TDZA	F,F			;CLEAR FLAG WORD
+.MOUNT::
+	MOVX	F,FL.MOU+FL.WAT		;Set Mount and Wait flags
+	$SAVE	<P1,P2,P3,P4>		;Preserve some AC's
+	$SAVE	<T1,T2,T3,T4>		;SAVE THE TEMP ACS
+	MOVE	P1,S1			;Save the incoming page adrs
+	MOVE	S1,['MOUNT ']		;Assume mount
+	TXNN	F,FL.MOU
+	MOVE	S1,['ALLOCA']
+	MOVEM	S1,CMDNAM		;Save incase /HELP was typed
+
+MOUN05:	PUSHJ	P,P$CFM			;Try to get EOL
+	  SKIPF				;User didn't type CRLF yet
+;**;[56] Change 1 line at MOUN05+2L. /LWS
+	TXO	F,FL.LST		;[56] Default to /LIST if EOL already
+	$CALL	DOSWS			;Parse leading switches
+	MOVEM	F,DEFSWS		;Save sticky options
+	MOVEI	P2,.MMHSZ(P1)		;P2 contains first free address
+	MOVEI	S2,.QOMNT		;Get mount message type
+	STORE	S2,.MSTYP(P1),MS.TYP	;Save in the message
+	MOVX	S2,MF.ACK		;Get ACK request flag
+	MOVEM	S2,.MSFLG(P1)
+	$CALL	P$CFM			;Get confirmation
+	 JUMPT	MOUN80			;Yes..just return
+	JUMPE	S1,MOUN80		;Return at end of command (MOUNT/CHECK)
+
+	HRROI	T1,.GTNM1		;Get user name
+	GETTAB	T1,			;May I?
+	 SETZ	T1,			;No..
+	HRROI	T2,.GTNM2		;Get second half
+	GETTAB	T2,			;May I?
+	 SETZ	T2,			;No..
+	DMOVEM	T1,.MMUSR(P1)		;Store in message
+	MOVEI	T1,2			;Get arg count for account
+	SETO	T2,			;My Job
+	HRROI	T3,.MMUAS(P1)		;Store in message
+	MOVE	S2,[.ACTRD,,T1]		;Get the account
+	ACCT.	S2,
+	 JFCL
+
+MOUN10:	INCR	.MMARC(P1)		;Increment total message arg count
+	MOVE	P3,P2			;P3 points to current entry
+	ADDI	P2,.MEHSZ		;P2 points to first free word
+	MOVE	F,DEFSWS		;Get default options
+	SETZ	S1,			;Initially, no flags
+	TXNN	F,FL.MOU		;Is this a mount request?
+	MOVX	S1,ME%ALC		;Get the allocate-only bit
+	MOVEM	S1,.MEFLG(P3)		;Stash the flags
+	SETZM	VOLCNT			;Clear the count of VOLIDS
+
+MOUN20:	$CALL	P$FLD			;Was VSN specified?
+	SKIPN	ARG.DA(S1)		;Make sure its not null
+	 $ERR	(<Volume set name must be specified>)
+	MOVEM	S1,VSNADR		;Save address of Volume set name
+	HRROI	S1,ARG.DA(S1)		;Point to volume set name string
+	$CALL	DEVCHK			;See if actual device name given
+	MOVEM	S2,VSNAME		;Save SIXBIT volume set name
+	MOVE	T1,S2			;[10271]Save Device name
+	CAIN	S1,.TYDSK		;[10271]Is it a disk?
+	DEVNAM	T1,			;[10271]Yes, translate logical name.
+	 JRST	MOUN21			;[10271]Failed, or not a disk.
+	MOVE	T3,VSNADR		;[10271]Get device name address.
+	MOVEI	T2,2			;[10271]Arg block is only 2 long now.
+	STORE	T2,ARG.HD(T3),AR.LEN	;[10271]So stuff it.
+	SETZM	ARG.DA(T3)		;[10271]Zap the current name
+	ADD	T3,[POINT 7,ARG.DA]	;[10271]Make into byte pointer
+	TRZ	T1,7777			;[10271]Ensure only 4 characters
+MOLO:	SETZ	T2,			;[10271]Loop to change SIXBIT to ASCIZ
+	ROTC	T1,6			;[10271]Shift a character into T2
+	ADDI	T2,"A"-'A'		;[10271]Make into ASCII
+	IDPB	T2,T3			;[10271]Stuff into name
+	JUMPN	T1,MOLO			;[10271]Continue until done
+MOUN21:	TXNE	F,FL.TAP!FL.DSK		;[10271]Request type known?
+	JRST	MOUN25			;Yes..then allow it
+	JUMPF	[CAIN	S1,ER$EZD	;  ersatz device?
+		  $ERR(<Ersatz device ^W/S2/ may not be mounted>)
+		 CAIN	S1,ER$PLD	;  pathological name?
+		  $ERR(<Pathological device ^W/S2/ may not be mounted>)
+		 CAIN	S1,ER$ASN	;  ambigious?
+		  $ERR(<Ambigious structure name ^W/S2/>)
+		 CAIN	S1,ER$ISN	;  illegal?
+		  $ERR(<Illegal structure name ^W/S2/>)
+		 CAIN	S1,ER$GDN	;  generic?
+	 	  $ERR(<Generic device ^W/S2/ may not be mounted>)
+		 JRST	MOUN25]		;No..process as VSN
+
+	CAIN	S1,.TYMTA		;Yes..was it tape?
+	TXO	F,FL.TAP		;Yes..specify tape
+	CAIN	S1,.TYDSK		;Was it disk?
+	TXO	F,FL.DSK
+
+MOUN25:	$CALL	P$TOK			;Was it terminated by a token?
+	 JUMPF	MOUN30			;No..on to parse logical name
+	MOVE	S1,ARG.DA(S1)		;Get the token
+	CAMN	S1,[ASCIZ/:/]		;Was VSN: specified?
+	JRST	MOUN30			;Yes..on to get logical name
+	$CALL	P$PREV			;Backup to token again
+	$CALL	MO$VOL			;Process VOLID list
+	JRST	MOUN25			;See if VSN(list): was specified!
+
+MOUN30:	$CALL	P$SIXF			;Get locical name
+	  JUMPF	MOUN40			;Don't store junk
+	MOVEM	S1,LOGNAM		;Save logical name
+	$CALL	P$TOK			;Get optional ":"
+
+MOUN40:	$CALL	DOSWS
+	TXNN	F,FL.DSK		;Is this a disk request ?
+	TXNE	F,FL.TRK		;Was /TRACK specified ?
+	JRST	MOUN41			;Yes, skip this
+	SETZM	S1			;clear S1
+	MOVE	S2,VSNAME		;Get the volume set name in sixbit
+	CAMN	S2,[SIXBIT/M9/]		;Did he specify M9 ?
+	MOVX	S1,.TMDR9		;Yes, get 9 track code
+	CAMN	S2,[SIXBIT/M7/]		;Did he specify M7 ?
+	MOVX	S1,.TMDR7		;Yes, get 7 track code
+	JUMPE	S1,MOUN41		;Neither,,skip this
+	MOVEI	S2,.TMDRV		;Get /TRACK: block type
+	PUSHJ	P,ADDSUB		;Add /TRACK:x to message
+
+MOUN41:	PUSHJ	P,BLDVSN		;Build the VSN
+	PUSHJ	P,LOGCHK		;No - check out the logical name
+	SETZ	S1,			;Clear entry flags
+	TXNE	F,FL.SCR		;Scratch volume wanted?
+	TXO	S1,TM%SCR!TM%WEN	;Yes
+	TXNE	F,FL.NEW		;New volume set wanted?
+	TXO	S1,TM%NEW!TM%WEN	;Yes
+	TXNE	F,FL.WRT		;Write enabled?
+	TXO	S1,TM%WEN		;Yes
+	TXNE	F,FL.WLK		;Write locked?
+	TXO	S1,TM%WLK		;Yes
+	TXNE	F,FL.BYP		;Bypass labels?
+	TXO	S1,TM%BYP		;Yes
+	TXNE	F,FL.PAS		;Was /PASSIVE specified?
+	TXO	S1,SM%PAS		;Yes
+	TXNE	F,FL.NOC		;Was /NOCREATE specified?
+	TXO	S1,SM%NOC		;Yes
+	TXNE	F,FL.EXC		;Was /EXCLUSIVE specified?
+	TXO	S1,SM%EXC		;Yes
+	TXNE	F,FL.QTA		;Was /QUOTA specified?
+	TXO	S1,SM%ARD		;Yes
+	IORM	S1,.MEFLG(P3)		;Save the entry flags
+	MOVEI	S1,.MNUNK		;Get unknown entry type
+	TXNE	F,FL.TAP		;Was it a tape request?
+	MOVEI	S1,.MNTTP		;Yes..then use tape entry type
+	TXNE	F,FL.DSK		;Was it a disk request?
+	MOVEI	S1,.MNTST		;Yes..then use disk entry type
+MOUN52:	STORE	S1,ARG.HD(P3),AR.TYP	;Save request type
+	MOVE	S1,P2			;Close current entry
+	SUB	S1,P3			;Compute entry length
+	STORE	S1,ARG.HD(P3),AR.LEN	;Save in entry header
+	$CALL	P$COMMA			;No..then must be a comma
+	JUMPT	MOUN10			;Yes..Back to try again
+	$CALL	P$CFM			;Confirmed?
+	JUMPT	MOUN80			;Yes..send what we have
+	 $ERR	(<Unrecognized command syntax>)
+
+
+MOUN80:	SETZB	S1,.MMFLG(P1)		;Clear message flag word
+	TXNE	F,FL.WAT		;Want to wait for the mount?
+	TXO	S1,MM.WAT		;Yes..light the flag
+	TXNE	F,FL.NOT		;Want terminal notification?
+	TXO	S1,MM.NOT		;Yes..light the flag
+	MOVEM	S1,.MMFLG(P1)		;Set the message flags
+	SUB	P2,P1			;Compute message length
+	STORE	P2,.MSTYP(P1),MS.CNT	;Save it
+	MOVEI	S1,PAGSIZ		;Send of the page
+	MOVE	S2,P1
+	$RETT
+
+;MOUNT option processors
+
+DOSWS::	$CALL	P$SWIT			;Get a switch if any
+	 $RETIF				;No, return
+	$CALL	0(S1)			; Else call the processor
+	JRST	DOSWS			;Process next switch
+
+
+;ACTIVE option places disk in jobs active search list
+
+MO$ACT:	MOVX	S1,TXT(/ACTIVE)		;Get error prefix
+	$CALL	DSKCHK			;Must be disk
+	TXZ	F,FL.PAS		;Clear Passive flag
+	$RETT
+
+
+;CHECK option lists the mount queues
+
+MO$CHE:	TXO	F,FL.CHK		;Set the flag
+	$RETT
+
+
+;CREATE option
+
+MO$CRE:	MOVX	S1,TXT(/CREATE)		;Get error prefix
+	$CALL	DSKCHK			;Must be disk
+	TXZ	F,FL.PAS!FL.NOC		;Clear Passive and Nocreate
+	$RETT
+
+
+;DENSITY option requests specific tape density
+
+MO$DEN:	MOVX	S1,TXT(/DENSITY)	;Get error prefix
+	$CALL	TAPCHK			;Must be tape
+	$CALL	P$KEYW			;Get proper density
+	MOVEI	S2,.TMDEN
+	PJRST	ADDSUB
+
+
+;DEVICE option requests specific device type
+
+MO$DEV:	$CALL	P$SIXF			;Get requested device
+	$RETT
+
+
+;DISK option declares disk devices
+
+MO$DIS:	MOVX	S1,TXT(/DISK)
+	$CALL	DSKCHK			;Must be disk request
+	$RETT
+
+
+;EXCLUSIVE option declares that exclusive ownership is requested
+
+MO$EXC:	MOVX	S1,TXT(/EXCLUSIVE)
+	$CALL	DSKCHK			;Must be disk
+	TXO	F,FL.EXC		;Set the flag
+	$RETT
+
+
+
+;LABEL-TYPE option
+
+MO$LAB:	MOVX	S1,TXT(/LABEL-TYPE)	;Get error prefix
+	$CALL	TAPCHK			;Must be a tape request
+	$CALL	P$KEYW			;Get the LABEL type
+MO$LA1:	CAXN	S1,%TFLBP		;Was it BYPASS?
+	TXO	F,FL.BYP		;Yes..set the flag
+	TXO	F,FL.LAB		;Note that something was said
+	MOVEI	S2,.TMLT		;Create  label type entry
+	PJRST	ADDSUB
+
+
+;NEW-VOLUME-SET option
+
+MO$NEW:	MOVX	S1,TXT(/NEW-VOLUME-SET)
+	$CALL	TAPCHK			;Tape requests only
+	TXO	F,FL.NEW		;Set the flag
+	$RETT
+
+
+;NOCREATE option
+
+MO$NOC:	MOVX	S1,TXT(/NOCREATE)
+	$CALL	DSKCHK			;Disk requests only
+	TXO	F,FL.NOC
+	$RETT
+
+
+;NOWAIT option
+;
+;NOTIFY option
+
+MO$NOW:	TXZ	F,FL.WAT		;Clear the wait flag,,imply notify
+MO$NOT:	TXOA	F,FL.NOT		;Notify on completion
+MO$NNT:	TXZ	F,FL.NOT		;No notify
+	$RETT
+
+;PASSIVE option
+
+MO$PAS:	MOVX	S1,TXT(/PASSIVE)	;Get error prefix
+	$CALL	DSKCHK			;Must be dsk
+	TXO	F,FL.PAS		;Set the PASSIVE flag
+	$RETT
+
+
+;PROTECTION option
+
+MO$PRO:	MOVX	S1,TXT(/PROTECTION)	;Get error prefix
+	$CALL	TAPCHK			;Must be tape
+	$CALL	P$NUM			;Get the value
+	CAIL	S1,0			;Check the range
+	CAILE	S1,MAXPRO
+	 $ERR	(<Protection out of range>)
+	MOVEI	S2,.TMVPR		;Create protection entry
+	PJRST	ADDSUB			;  and return
+
+
+;QUOTA option
+
+MO$QTA:	MOVX	S1,TXT(/QUOTA)		;Get error prefix
+	PUSHJ	P,DSKCHK		;Must be dsk
+	TXO	F,FL.QTA		;Set the quota flag
+	$RETT
+
+;READ-ONLY option
+
+MO$REA:	TXO	F,FL.WLK		;Set write lock flag
+	$RETT
+
+
+;REMARK option
+
+MO$REM:	TXO	F,FL.REM		;Remember we saw it
+	$CALL	P$QSTR			;Get quoted string
+	SKIPT
+	$CALL	P$FLD			;Or simple field
+	$CALL	CPYSUB			;Create .TMRMK subentry
+	MOVEI	S1,.TMRMK		;Make entry type remark
+	STORE	S1,ARG.HD(S2),AR.TYP
+	$RETT
+
+
+;SCRATCH option
+
+MO$SCR:	MOVX	S1,TXT(/SCRATCH)	;Get error prefix
+	$CALL	TAPCHK			;Must be tape
+	TXO	F,FL.SCR		;Set the flag
+	$RETT
+
+;SHARABLE option
+
+MO$SHA:	MOVX	S1,TXT(/SHARABLE)
+	$CALL	DSKCHK			;Must be disk
+	TXZ	F,FL.EXC		;Clear Exclusive
+	$RETT
+;TAPE option
+
+MO$TAP:	MOVX	S1,TXT(/TAPE)
+	$CALL	TAPCHK
+	$RETT
+
+
+;TRACKS option
+
+MO$TRA:	MOVX	S1,TXT(/TRACKS)		;Get error prefix
+	$CALL	TAPCHK			;Must be tape
+	$CALL	P$KEYW			;Get the track type
+	TXO	F,FL.TRK		;Set /TRACK: flag
+	MOVEI	S2,.TMDRV
+	PJRST	ADDSUB
+
+
+;WAIT option
+
+MO$WAI:	TXO	F,FL.WAT		;Set the flag
+	$RETT
+
+
+;WRITE-ENABLE option
+
+MO$WRI:	$CALL	P$KEYW			;Get YES or NO
+	JUMPF	[TXO	F,FL.WRT	;Default is WRITE:YES
+		 $RETT]
+	JUMPE	S1,[TXO	F,FL.WLK	;Set write lock if WRITE:NO
+		    $RETT]
+	TXO	F,FL.WRT		;Set write enable if WRITE:YES
+	$RETT
+
+;VOLID option
+
+MO$VOL:	MOVX	S1,TXT(Volume identifier)	;Get the error prefix
+	SKIPE	VOLCNT			;Have we been here before?
+	 $ERR	(<Only one volume identifier list is allowed>)
+	INCR	.MECNT(P3)		;Bump subentry count
+	MOVE	P4,P2			;Save free address
+	ADDI	P2,1			;Reserve a word for header
+	$CALL	P$TOK			;Get optional list token
+	JUMPF	[$CALL	MO$VO3		;Allow only one volume
+		 JRST	MO$VO2]		;If no token is found
+MO$VO1:	$CALL	MO$VO3			;Get volume identifier
+	$CALL	P$COMMA			;More to come?
+	JUMPT	MO$VO1			;Yes..get the whole list
+	$CALL	P$TOK			;Check optional list token
+	JUMPF	[$ERR(<Missing volume identifier list terminator>)]
+MO$VO2:	MOVE	S1,P2			;Get final free address
+	SUB	S1,P4			;Compute argument length
+	MOVS	S1,S1			;Put length in Left half
+	HRRI	S1,.TMVOL		;Get Volume subtype entry
+	MOVEM	S1,ARG.HD(P4)		;Store in subentry header
+	MOVE	S1,P4			;Point to argument
+	$CALL	UNICHK			;Check VOLID uniqueness
+	SKIPT				;All OK?
+	 $ERR	(<Volume identifiers must be unique>)
+	$RETT
+
+;Routine to store and individual volume identifier
+
+MO$VO3:	$CALL	P$SIXF			;Get the first volume
+	JUMPF	[$ERR(<Invalid volume identifier>)]
+	JUMPE	S1,[$ERR(<Volume identifier must not be null>)]
+	MOVEM	S1,0(P2)		;Store the volume name
+	AOS	VOLCNT			;Increment volume count
+	ADDI	P2,1			;Increment free address
+	$RETT
+SUBTTL	General routines
+
+;ADDARG - Routine to add a 2 word argument to general message
+;ADDSUB - Routine to add a 2 word subentry argument to MOUNT message
+
+;ACCEPTS	S1/ Data word to be stored in message
+;		S2/ argument type code
+;		P1/ Address of message header
+;		P2/ Address of first free word in message
+;		P3/ Address of current mount entry
+
+ADDARG::
+	AOSA	.OARGC(P1)		;Increment message arg count
+ADDSUB::
+	INCR	.MECNT(P3)		;Increment subargument count
+	MOVEM	S1,ARG.DA(P2)		;Store data word
+	HRLI	S2,ARG.SZ		;Get size of 2
+	MOVEM	S2,ARG.HD(P2)		;Store in header
+	ADDI	P2,ARG.SZ		;Point to next free word
+	$RETT
+
+;CPYARG - Routine to copy argument to general message
+;CPYSUB - Routine to copy subargument to MOUNT message
+
+;ACCEPTS	S1/ Address of argument header word
+;		S2/ Number of words in argument
+
+;RETURNS	S2/ Address of argument header in message
+
+CPYARG::
+	AOSA	.OARGC(P1)		;Increment message arg count
+CPYSUB::
+	INCR	.MECNT(P3)		;Increment subargument count
+	MOVS	S1,S1			;Create BLT pointer
+	HRR	S1,P2
+	ADD	S2,P2			;Get Next Free address
+	BLT	S1,-1(S2)		;Copy the whole argument
+	EXCH	P2,S2			;P2 points to next free address
+	$RETT				;S2 points to stored argument
+
+;CPYSTR - routine to store asciz string
+
+;ACCEPTS	S1/ Pointer to source string
+;		S2/ Pointer to destination string
+
+CPYSTR::
+	ILDB	TF,S1
+	IDPB	TF,S2
+	JUMPN	TF,CPYSTR
+	$RETT
+;TAPCHK	- routine to ensure that we are processing a tape request
+;DSKCHK - routine to ensure that we are processing a disk request
+
+;ACCEPTS	S1/ Pointer to error prefix
+
+TAPCHK:	TXNE	F,FL.DSK		;Disk request?
+	 $ERR	(<^Q/S1/ is only valid for tape>)
+	TXO	F,FL.TAP		;Remember we have a tape request
+	$RETT
+
+DSKCHK:	TXNE	F,FL.TAP		;Tape request?
+	 $ERR	(<^Q/S1/ is only valid for disk>)
+	TXO	F,FL.DSK		;Remember we have a disk request
+	$RETT
+
+;LOGCHK - check and add LOGICAL name to mount request
+
+LOGCHK:	SKIPN	S1,LOGNAM		;See if logical name
+	 $RETT				;No--Just return
+	TXNE	F,FL.DSK		;Disk request?
+	 JRST	LOGC.1			;Yes--No logical name
+	DEVCHR	S1,			;See if logical name in use
+	JUMPE	S1,LOGC.2		;No--Thats OK
+	TXNN	S1,DV.ASC!DV.ASP	;Assigned by console or program?
+	JRST	LOGC.2			;No
+	SKIPE	BATJOB			;Batch job?
+	$TEXT	(,<% Specified logical name "^W/LOGNAM/" already in use>)	;Yes--Tell him
+	MOVX	S1,<INSVL.(.FORED,FO.FNC)!FO.ASC>;Get a new channel
+	MOVEM	S1,FBLK+.FOFNC		;Store
+	SETZM	FBLK+.FOIOS		;No mode
+	MOVE	S1,LOGNAM		;Get device
+	MOVEM	S1,FBLK+.FODEV		;Store device
+	SETZM	FBLK+.FOBRH		;And no buffers
+	MOVE	S1,[.FOBRH+1,,FBLK]	;Point to FILOP.
+	FILOP.	S1,			;Open the device
+	 JRST	LOGC.2			;Cant
+	LOAD	S1,FBLK+.FOFNC,FO.CHN	;Get channel
+	MOVEI	S2,0			;Clear logical name
+	DEVLNM	S1,			;Zap it
+	 JFCL				;We tried
+	MOVX	S1,.FOREL		;Release function
+	STORE	S1,FBLK+.FOFNC,FO.FNC	;Store it
+	MOVE	S1,[1,,FBLK]		;Point to FILOP.
+	FILOP.	S1,			;Release channel
+	 JFCL				;Cant
+
+LOGC.2:	MOVE	S1,LOGNAM		;Get logical name
+	MOVX	S2,.TMLNM		;And block type
+	$CALL	ADDSUB			;Add it
+	$RETT				;And return
+
+LOGC.1:	SKIPE	BATJOB			;Batch job?
+	$TEXT	(,<% Logical name "^W/LOGNAM/" ignored on disk structure ^W/VSNAME/:>)	;
+	$RETT				;Error and return
+; Routine to build a volume set name into a MOUNT message block
+; Call:	PUSHJ	P,BLDVSN
+;	<return>
+;
+; If the VSN is a generic device, then a VSN of DEV-xxxxxx (where xxxxxx
+; is a random alpha-numeric value guaranteed to be unique) will be created.
+; Otherwise, the existing VSN will be used.
+;
+BLDVSN:	MOVEI	TF,0			;Clear character count
+	MOVEI	S1,.TMSET		;Get subentry type
+	STORE	S1,ARG.HD(P2),AR.TYP	;Store it
+	INCR	.MECNT(P3)		;Increment subargument count
+	MOVEI	S2,@VSNADR		;Get atring address - ARG.DA
+	ADD	S2,[POINT 7,ARG.DA]	;Get byte pointer to read characters
+	MOVEI	T1,ARG.DA(P2)		;Get storage address
+	HRLI	T1,(POINT 7)		;Make a byte pointer
+
+BLDV.1:	ILDB	S1,S2			;Get a character
+	JUMPE	S1,BLDV.2		;Done ?
+	PUSHJ	P,BLDV.C		;Store it
+	JRST	BLDV.1			;Loop back for another
+
+BLDV.2:	TXNE	F,FL.GDV		;Generic device ?
+	PUSHJ	P,BLDV.3		;Yes - generate a special VSN
+	MOVX	S1,.CHNUL		;Get a <NUL>
+	PUSHJ	P,BLDV.C		;Store it
+	IDIVI	TF,5			;Count words in the VSN
+	ADDI	TF,ARG.DA+1		;Round up to the next full word
+	HRLM	TF,(P2)			;Update word count
+	ADD	P2,TF			;Get new first free word pointer
+	POPJ	P,			;Return
+
+BLDV.3:	TXNE	F,FL.MOU		;If ALLOCATE,,thats an error
+	SKIPN	BATJOB			;If a batch pre-scan,,thats an error
+	 $ERR	(<Illegal volume set name specified for MOUNT/ALLOCATE command>)
+	MOVEI	S1,"-"			;Get a funny character
+	PUSHJ	P,BLDV.C		;Store it
+	$CALL	I%NOW			;Get the current time
+	MOVEI	T2,6			;Only 6 characters
+
+BLDV.4:	IDIVI	S1,^D36			;Radix 36
+	PUSH	P,S2			;Save the remainder
+	SOSE	T2			;Count characters
+	PUSHJ	P,BLDV.4		;Recurse if not done
+	POP	P,S1			;Get a digit
+	ADDI	S1,"0"			;Make it ASCII
+	CAILE	S1,"9"			;A number ?
+	ADDI	S1,"A"-"9"-1		;No - make it a letter
+
+BLDV.C:	IDPB	S1,T1			;Store it
+	ADDI	TF,1			;Count characters
+	POPJ	P,			;Return
+
+;UNICHK	- routine to ensure uniqueness among argument entries
+
+;ACCEPTS	S1/ Address of argument header
+
+UNICHK:	LOAD	T2,ARG.HD(S1),AR.LEN	;Get argument length
+	MOVE	T1,S1			;Save beginning address
+	ADDI	T2,-1(S1)		;Compute end test address
+UNICH1:	ADDI	T1,1			;Compute next address
+	CAML	T1,T2			;Done?
+	 $RETT				;Yes..all are unique
+	MOVEI	S2,1(T1)		;S2 points to comparision entry
+	MOVE	S1,0(T1)		;Get entry to check
+UNICH2:	CAMLE	S2,T2			;Finished checking this entry?
+	 JRST	UNICH1			;Yes..back for next
+	CAME	S1,0(S2)		;No..is it unique?
+	AOJA	S2,UNICH2		;Yes..back to check next entry
+	 $RETF				;No..return the failure
+;DEVCHK - routine to ensure device string is valid
+
+;ACCEPTS	S1/ Pointer to device name string
+
+;RETURNS	S1/ Device type (.TYDSK or .TYMTA)
+;		S2/ Sixbit device name (abbrv of name string)
+
+;ERRORS		ER$IDN	Invalid device name
+;		ER$NSD	No such device
+;		ER$USD	Unsupported device
+;		ER$EZD	Ersatz device
+;		ER$PLD	Pathological device
+;		ER$ASN	Ambigious structure name
+;		ER$ISN	Illegal structure name
+;		ER$GDN	Generic device name
+
+
+DEVCHK:	$CALL	S%SIXB			;Convert to sixbit
+	ILDB	S1,S1			;Get terminator
+	JUMPN	S1,[$RETER(ER$IDN)]	;Invalid device name
+	$SAVE	<S2,P1,P2,P3>		;Save sixbit for return
+	MOVE	P1,S2			;Save the device name
+	MOVE	TF,[1,,P1]		;Yes, get DSKCHR parms
+	DSKCHR	TF,			;Get structure status bits
+	 JRST	DEVC.1			;Not a disk
+	LOAD	TF,TF,DC.TYP		;Get the device type
+	CAXN	TF,.DCTAB		;Ambigious?
+	 $RETER(ER$ASN)			;Yes, say so
+	CAXE	TF,.DCTUF		;Unit within strcuture?
+	CAXN	TF,.DCTCN		;Controller class?
+	 $RETER(ER$ISN)			;Yes, illegal structure
+	CAXE	TF,.DCTCC		;Controller class?
+	CAXN	TF,.DCTPU		;Physical unit?
+	 $RETER(ER$ISN)			;Yes, illegal structure
+	CAXN	TF,.DCTDS		;Generic or ersatz?
+	 JRST	DEVC.2			;Yes, check it out some more
+	MOVX	S1,.TYDSK		;Its a disk
+	$RETT				;And return
+
+DEVC.2:	MOVE	TF,[3,,P1]		;Get PATH. args
+	PATH.	TF,			;Find out some more
+	 $RETT				;Ignore any error
+	TXNE	P2,PT.DLN!PT.EDA	;Pathological name?
+	 $RETER(ER$PLD)			;Yes, say so
+	TXNE	P2,PT.IPP		;Implied PPN? (ersatz)
+	 $RETER(ER$EZD)			;Yes, say so
+	$RETER(ER$GDN)			;Else call it generic
+
+DEVC.1:	DEVTYP	S2,			;Get device type
+	 $RETER(ER$NSD)			;Unknown device
+	JUMPE	S2,[$RETER(ER$NSD)]	;Unknown device
+	TXNE	S2,TY.GEN		;A generic device ?
+	TXO	F,FL.GDV		;Yes - remember it
+	LOAD	S1,S2,TY.DEV		;Load the device type
+	CAIE	S1,.TYMTA		;Is it a tape??
+	 $RETER(ER$USD)			;No,,Unsupported device
+					;(DSKCHR would win if a disk)
+	$RETT				;Yes,,return
+	SUBTTL	DATA STORAGE
+
+
+	XLIST			;Turn listing off
+	LIT			;Dump literals
+	LIST			;Turn listing on
+
+	RELOC	0
+
+$DATA	DEFSWS,1		;Sticky mount switches
+$DATA	VOLCNT,1		;Number of volume identifiers specifed
+$DATA	LOGNAM,1		;Logical name
+$DATA	FBLK,.FOMAX		;FILOP. UUO block
+
+;Global data
+$GDATA	VSNAME,1		;6bit Volume set name
+$GDATA	VSNDEV,1		;6 bit device name
+$GDATA	VSNADR,1		;Address of ASCIZ Volume set name argnt
+$GDATA	CMDNAM,1		;Address of parsed command name
+$GDATA	BATJOB,1		;Batch job flag (0 = batch job)
+	END

@@ -1,0 +1,7 @@
+.r fur
+*copy sys:=dsk:iptest.exe
+=^Z
+.r filddt
+*sys:iptest/s
+=^Z
+.save sys:iptddt.exe

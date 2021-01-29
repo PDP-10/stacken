@@ -1,0 +1,180 @@
+!!TALK.BEG
+Introductory Dialog - This body of text corresponds to the message and
+prompt dialog presented in the Instruct Introductory dialog. It explains
+the basic Instruct commands and responses.
+
+@@call_course_admin
+Well, we can't help you much more than that. There must be something
+wrong with the way the material is being presented.  Please contact:
+
+	Digital Equipment Corporation
+	Course Administrator MR 1-2 / A86
+	200 Forest Street
+	Marlboro Massachusetts
+	                        01752
+
+
+
+If you want to continue with this course anyway press the BACKSPACE
+key or type /REVERSE<CR>. Otherwise type /BREAK and you will exit to
+the SPEAR prompt.
+@@instruct_intro
+Introduction
+
+SPEAR is a library of programs which provide support to both
+Field Service and customers.
+
+Four of the functions (Analyze, Summarize, Retrieve, and Compute) are
+designed to help you evaluate system performance and analyze the
+contents of system event files. 
+
+A fifth function, Instruct, is designed to help you learn to use the
+Spear Library to calculate system availability and isolate
+intermittent system failures. 
+
+Another function, Theory, is used in conjunction with Analyze to give
+more detailed explanation about the theories Analyze produces.   In
+addition there is a seventh function for 36 bit machines called KLERR.
+
+Instruct also describes the Guaranteed Uptime Program and NOTIFY,
+which relate to system uptime and reliability.
+
+Type /BREAK to leave or press the RETURN key for further information.
+@@return_key
+The RETURN key - Instruct is frame oriented. That is, it displays one
+idea, or frame of information at a time. Thus, you may study each frame
+for as long as you like. Then, when you are ready, you can proceed to
+the next frame of information by pressing the RETURN key. Try it.  
+@@
+@@return_key_a
+The RETURN key (an additional use) - The RETURN key also serves as a
+universal response terminator. All responses to Instruct or any other
+Spear Library function must be terminated by pressing the RETURN key.
+Throughout this text the symbol <cr>, represents the RETURN key.
+
+Remember, from now on press the RETURN key to proceed to the next frame.
+@@
+@@backspace
+The BACKSPACE key - Occasionally, you may want to backup and review a
+previous frame of information. If you want, you may do so by pressing 
+the BACKSPACE key. If your terminal does not have a BACKSPACE key you
+can perform the same function by typing /Reverse<CR>.
+
+If you'd like, you may try the BACKSPACE feature now. Otherwise, press
+the RETURN key to continue.
+@@
+@@help_response
+HELP  - All Spear Library Dialogs (including Instruct) support the HELP
+feature. Thus, any time you are unsure of how to proceed or respond to a
+particular prompt, you can type HELP. Spear will respond by displaying a
+one page (22 lines max) message that explains all acceptable responses.
+
+Question mark (?) - All Spear Library Dialogs (again including Instruct)
+also support the question mark feature. Thus, if you only want a list of
+the acceptable responses, you can type: ?. Spear will respond by listing
+the acceptable responses.
+@@
+@@delete_key
+The DELETE key - Alphanumeric typing errors may be corrected by pressing
+the Delete key. Each time you press the Delete key the last character
+left in your response will be deleted. After deleting the typing error
+re-enter the correct response.
+@@ 
+@@quest_ans
+Questions and Answers - Occasionally, Instruct will ask you a question.
+Sometimes the question will require that you input text; your name or
+mailing address, for example. Most of the time, however, the question
+will have an implied Yes/No or True/False answer. Yes/No answers may be
+abbreviated to Y or N. Likewise, True/False answers may be abbreviated
+to T or F. All answers must, however, be terminated by pressing the
+RETURN key.
+
+Do you understand everything so far ?
+
+@@
+@@review
+Ok. Let's review the Instruct interface protocol:
+
+Use the RETURN key to terminate all responses and to advance to the next
+frame of information.
+
+Use the BACKSPACE key or type /REVERSE to review a previous frame.
+
+Type: HELP any time that you are unsure of your options.
+
+Use the DELETE key to correct alphanumeric typing errors.
+
+Answer questions by typing either Yes or No, or True or False; which
+ever is appropriate.
+
+OK?
+@@
+@@course_des
+Course Description
+
+The Instruct course is designed to help you use the Spear Library to
+isolate intermittent system failures. The course consists of three main
+modules:
+
+ 1. Fault Isolation Techniques - This module describes the nature of
+    intermittent faults and discusses some of the most common methods
+    used to isolate intermittent system and subsystem failures.
+
+ 2. System Event File Organization and Content - this module describes
+    the overall organization and content of TOPS-10, TOPS-20, and
+    VAX/VMS system event files.
+
+ 3. Spear Library Functions - This module explains the how to use each
+    of the Spear maintenance functions: Analyze, Retrieve, Summarize,
+    and Compute.
+
+Each module consists of an introduction and a menu of subordinate 
+subjects. When appropriate, the subordinate subjects are further broken
+down into introductions and menus. Thus, Instruct can be used as both a
+tutorial and a reference tool.
+@@
+@@course_des_a
+If you want to use Instruct as a tutorial (i.e., sequence through the
+course much like you would read a book) you can do so using the RETURN
+key. You will proceed to the module introduction, then the menu, then
+the first subject on the menu, followed by the next subject, etc.
+
+If you want to use Instruct as a reference tool, then, instead of
+pressing the RETURN key at the menu, select the subject number that
+intrests you. You will proceed directly to that subject. If, after
+investigating the subject, you want to return to the menu, type MENU.
+@@
+@@break
+The /BREAK switch - You may leave Instruct any time you wish by typing
+/Break<CR>. If you have established a student ID, Instruct will keep
+track of where you left off. Then, when you return, you can specify your
+student ID and pickup at the point where you left off. If you do not
+have a student ID, however, then you are left with two choices; you can
+either start all over again, or you can use the REFERENCE ID. To use the
+the Reference ID Type: INSTRUCT ID REFERENCE<cr> at the SPEAR prompt.
+
+Example:    SPEAR> Instruct ID REF<cr>
+
+
+The difference between a student ID and the Reference ID is: the student
+ID is used (like a personal book mark) to keep track of where you are in
+the course, the Reference ID is not. The Reference ID simply allows you
+to skip over this introduction and go directly to the course menu.
+@@
+@@new_student
+Your student ID is your personal book marker in Instruct. After you have
+established your student ID you may leave Instruct any time you wish.
+Then, when you want to return, type: INSTRUCT ID xxxxxx<cr> in response
+to the SPEAR prompt (where xxxxxx is your student ID).
+
+  Example:  SPEAR>Instruct ID xxxxxx<cr>
+
+
+If you wish to establish a student ID enter any alphanumeric string that
+you are not likely to forget; your name or employee badge number, for
+example. Then, press the RETURN key. From that point on, Instruct will
+keep track of where you are in the course. If, however, you do not wish
+to establish a student ID at this time type: REFERENCE<cr> in response
+to this prompt.
+@@
+!!TALK.END

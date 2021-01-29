@@ -1,0 +1,1520 @@
+	TITLE	WHOFMT - Format switch handler for WHO
+
+	SEARCH	WHOMAC
+
+	$SETUP	(WHOFMT)
+
+Comment |
+
+This module handles the format switch processor and contains
+some of the typeout routines.
+
+|
+;               TABLE OF CONTENTS FOR WHOFMT
+;
+;
+;                        SECTION                                   PAGE
+;    1. FORMAT switch handler
+;         1.1   General...........................................   4
+;    2. Keyword tables
+;         2.1   JOB MODE..........................................   5
+;         2.2   LINE mode.........................................   6
+;         2.3   NODE mode.........................................   7
+;         2.4   USER mode.........................................   8
+;         2.5   Dispatch tables...................................   9
+;         2.6   INITIAL/FINAL/HEADING/FOOTING.....................  10
+;    3. Default format descriptors
+;         3.1   Macro definitions.................................  11
+;         3.2   Job mode -- VERY FAST.............................  12
+;         3.3   Job mode -- FAST..................................  12
+;         3.4   Job mode -- NORMAL................................  12
+;         3.5   Job mode -- SLOW..................................  12
+;         3.6   Line mode -- VERY FAST............................  13
+;         3.7   Line mode -- FAST.................................  13
+;         3.8   Line mode -- NORMAL...............................  13
+;         3.9   Line mode -- SLOW.................................  13
+;         3.10  Node mode -- VERY FAST............................  14
+;         3.11  User mode -- VERY FAST............................  15
+;         3.12  DDBS -- VERY FAST.................................  16
+;         3.13  DDBS -- FAST......................................  16
+;         3.14  DDBS -- NORMAL....................................  16
+;         3.15  DDBS -- SLOW......................................  16
+;         3.16  IPCF - NORMAL.....................................  17
+;         3.17  DEFAULTS - NORMAL.................................  18
+;         3.18  ACCOUNT - NORMAL..................................  19
+;         3.19  BATCH - NORMAL....................................  20
+;         3.20  STAMP - NORMAL....................................  21
+;         3.21  TIME - NORMAL.....................................  22
+;         3.22  CORE - NORMAL.....................................  23
+;    4. Routines
+;         4.1   LKNAM - Lookup keyword in a table.................  24
+;    5. Format print routines
+;         5.1   TNAME - Type a user name..........................  25
+;         5.2   TNODE - Type node and line........................  25
+;         5.3   TCTL - Type controlling program and job...........  25
+;         5.4   TCORE - Type core size............................  25
+;         5.5   TUNAME - Type a user name.........................  25
+;         5.6   TPGRR - Type paging rate..........................  26
+;         5.7   THPQP - Type HPQ value............................  26
+;         5.8   TDSKP - Type DSK value............................  26
+;         5.9   TLIMIB - Type batch time limit....................  26
+;         5.10  TPC - type octal PC word..........................  26
+;         5.11  TTIME - Print time................................  26
+;         5.12  TDECB - Type a decimal number if non-zero.........  26
+;         5.13  T1000 - Type a decimal number (scaled down 1000)..  26
+;         5.14  TWTO - Type WTO privs.............................  26
+;         5.15  TOPR - Type OPR privs.............................  26
+;         5.16  TBSN - Type batch stream number...................  26
+;    6. Storage...................................................  29
+	SUBTTL	Format switch handler -- /INITIAL/FINAL/HEADING/FOOTING/FORMAT
+
+INISWT::
+FINSWT::
+HEASWT::
+FOOSWT::SKIPA	T1,[IOWD SYSLEN,SYSFMT]
+FORSWT:: MOVE	T1,IFMTX(M)
+	JRST	FMTSWT
+	SUBTTL	FORMAT switch handler -- General
+
+FMTSWT:	PUSHJ	P,.SAVE2##		;SAVE P1-P2
+	MOVE	P1,@1(P2)		;GET ADDRESS OF SWITCH STORAGE
+	MOVE	P2,T1			;SAVE POINTER TO KEYWORD TABLE
+	SKIPLE	T1,(P1)			;SEE IF FIRST TIME
+	 JRST	FMTS.1			;ALREADY SETUP
+	MOVEI	T1,MX$FMT*.FMLEN	;GET CORE FOR FORMAT SPEC
+	PUSHJ	P,C$ALLOC##		;ALLOCATE CORE
+	MOVEM	T1,(P1)			;STORE ADDRESS OF TABLE
+FMTS.1:	HLRZ	T1,(P1)			;GET COUNT OF ARGS SO FAR
+	ADDI	T1,1			;INCREMENT
+	CAILE	T1,MX$FMT		;SEE IF TOO MANY
+	 $FATAL	(TMF,<Too many FORMAT switch keywords>);YES--DIE
+	HRLM	T1,(P1)			;STICK COUNT BACK IN STORAGE
+	IMULI	T1,.FMLEN		;TIMES LENGTH OF EACH
+	HRRZ	P1,(P1)			;GET BASE
+	ADDI	P1,-.FMLEN(T1)		;PLUS OFFSET
+	PUSHJ	P,.TIAUC##		;GET NEXT CHAR
+	CAIE	C,""""			;START OF TEXT?
+	  JRST	FORS.1			;NO
+;
+;HERE TO READ QUOTED ASCII TEXT
+;
+	MOVE	T2,[POINT 7,.NMUL##]	;POINT TO STORAGE
+	MOVEI	T1,0			;CLEAR CHARACTER COUNT
+FORA.L:	PUSHJ	P,.TICHE##		;GET A CHAR
+	JUMPLE	C,FORA.2		;JUMP IF EOL
+	CAIN	C,""""			;SEE IF EOQ
+	  JRST	FORA.1			;YES--END
+	IDPB	C,T2			;NO--STORE CHAR
+	AOJA	T1,FORA.L		;AND LOOP
+FORA.1:	PUSHJ	P,.TIALT##		;GET NEXT CHAR
+FORA.2:	MOVEI	T3,0			;CLEAR T3
+	IDPB	T3,T2			;STORE NULL
+	ADDI	T1,5			;ROUND UP
+	IDIVI	T1,^D5			;TO WORDS
+	PUSH	P,T1			;SAVE WORDS
+	PUSHJ	P,C$ALLOC##		;ALLOCATE CORE
+	HRLI	T1,(<MOVEI T1,>)	;POINT TO IT
+	MOVEM	T1,.FMLOD(P1)		;STORE
+	HRLI	T1,.NMUL##		;POINT TO START
+	POP	P,T2			;RESTORE LENGTH
+	ADDI	T2,(T1)			;FORM END+1
+	BLT	T1,-1(T2)		;MOVE TEXT INTO PLACE
+	MOVE	T1,[INSVL.(.FMFLT,FM.FMT)+FM.STR+.TSTRG##];DEFAULT FLOAT
+	MOVEM	T1,.FMFMT(P1)		;STORE
+	JRST	FORS.3			;AND SCAN FOR ARGS
+;
+;HERE TO READ SIXBIT KEYWORD
+;
+FORS.1:	PUSHJ	P,.SIXSC##		;READ SIXBIT WORD
+	MOVE	T1,P2			;POINT TO KEYWORDS
+	PUSHJ	P,LKNAM			;LOOKUP IN TABLE
+	HLRE	T2,P2			;GET -N+1
+	IMULI	T1,2			;DOUBLE
+	SUB	T1,T2			;FORM OFFSET INTO NEXT TABLE
+	ADDI	T1,1(P2)		;ADD START OF TABLE
+	MOVE	T2,0(T1)		;GET INSTR TO LOAD
+	MOVEM	T2,.FMLOD(P1)		;STORE
+	MOVE	T2,1(T1)		;GET WIDTH AND BITS
+	MOVEM	T2,.FMFMT(P1)		;STORE
+;
+;HERE TO SCAN FOR POSSIBLE FIELDWIDTH AND JUSTIFY SPECIFICATIONS
+;
+FORS.3:	CAIE	C,":"			;ARG COMING?
+	  JRST	FORS.E			;AND RETURN
+	PUSHJ	P,.DECPW##		;YES--READ FIELDWIDTH
+	STORE	N,.FMFMT(P1),FM.WID	;STORE WIDTH
+	MOVX	T1,FM.USR		;FLAG USER GAVE
+	IORM	T1,.FMFMT(P1)		;STORE
+	CAIE	C,":"			;ARG COMING?
+	  JRST	FORS.E			;AND RETURN
+	PUSHJ	P,.SIXSW##		;READ SIXBIT
+	MOVE	T1,[IOWD JUSLEN,JUSTAB]	;POINT TO TABLE
+	PUSHJ	P,LKNAM			;LOOKUP IN TABLE
+	STORE	T1,.FMFMT(P1),FM.JUS	;STORE
+	CAIE	C,":"			;NEXT ARG?
+	 JRST	FORS.E			;NO
+	PUSHJ	P,.DECPW##		;YES--SCAN SPACE COUNT
+	STORE	N,.FMFMT(P1),FM.SPC	;STORE THAT
+FORS.E:	JRST	.SWDON##		;RETURN W/O STORE
+
+JUSTAB:	SIXBIT	/LEFT/
+	SIXBIT	/CENTER/
+	SIXBIT	/RIGHT/
+JUSLEN==.-JUSTAB
+	SUBTTL	Keyword tables -- JOB MODE
+
+DEFINE	FORMS,<
+	XLIST
+   XX	ACCOUNT		,FIX ,40,1 ,L,.TSTRG##,<PUSHJ P,JB$ACC##>
+IFN FTIPC,<
+   XX	BADGE		,FIX ,7 ,1 ,R,.TDECW##,<PUSHJ P,JB$BDG##>
+>;END IFN FTIPC
+   XX	BATCORE		,FIX ,4 ,1 ,L,.TDECW##,<PUSHJ P,JB$BCL##>
+   XX	BATSTREAM	,FIX ,2 ,1 ,R,TBSN,<PUSHJ P,JB$BSN##>
+IFN FTIPC,<
+   XX	CATEGORY	,FIX ,4 ,1 ,R,.TOCTW##,<PUSHJ P,JB$CAT##>
+>;END IFN FTIPC
+   XX	CHARGE		,FIX ,6 ,1 ,L,CHGTYO##,<PUSHJ P,JB$CNO##>
+IFN FTIPC,<
+   XX	CID		,FIX ,6 ,1 ,L,.TSIXN##,<PUSHJ P,JB$CID##>
+>;END IFN FTIPC
+   XX	CLASS		,FIX ,3 ,1 ,R,.TDECW##,<PUSHJ P,JB$CLS##>
+   XX	CORE		,FIX ,14,1 ,L ,TCORE,<JFCL>
+   XX	CPL		,FIX ,4 ,1 ,R,.TDECW##,<PUSHJ P,JB$CPL##>
+   XX	CRLF		,FIX ,1 ,0 ,L,.TCRLF##,<JFCL>
+   XX	CTLJOB		,FIX ,3 ,1 ,R,.TDECW##,<PUSHJ P,JB$CJN##>
+   XX	CTLPRG		,FIX ,7 ,1 ,L,.TSIXN##,<PUSHJ P,JB$CPN##>
+   XX	CVL		,FIX ,4 ,1 ,R,.TDECW##,<PUSHJ P,JB$CVL##>
+   XX	DEFATTACH	,FIX , 7,1 ,L,ATTYES##,<PUSHJ P,JB$DAD##>
+   XX	DEFBIGBUF	,FIX , 3,1 ,L,.TDECW##,<PUSHJ P,JB$DBB##>
+   XX	DEFBUFFER	,FIX , 3,1 ,L,.TDECW##,<PUSHJ P,JB$DNB##>
+   XX	DEFPROTECTION	,FIX , 6,1 ,L,.TPROT##,<PUSHJ P,JB$DPV##>
+   XX	DSKPRIORITY	,FIX ,3 ,1 ,R,.TDECW##,<PUSHJ P,JB$DPR##>
+   XX	FUNNY		,FIX ,3 ,1 ,R,.TDECW##,<PUSHJ P,JB$PFS##>
+   XX	GLXOPR		,FIX ,7 ,1 ,L,TGOP,<PUSHJ P,JB$GOP##>
+   XX	HPQ		,FIX ,3 ,1 ,R,.TDECW##,<PUSHJ P,JB$HPQ##>
+   XX	IPCFORECEIVE	,FIX ,5 ,1 ,R,.TDECW##,<PUSHJ P,JB$IOR##>
+   XX	IPCFOSEND	,FIX ,5 ,1 ,R,.TDECW##,<PUSHJ P,JB$IOS##>
+   XX	IPCFQRECEIVE	,FIX ,5 ,1 ,R,.TDECW##,<PUSHJ P,JB$IQR##>
+   XX	IPCFQSEND	,FIX ,5 ,1 ,R,.TDECW##,<PUSHJ P,JB$IQS##>
+   XX	IPCFRECEIVE	,FIX ,5 ,1 ,R,.TDECW##,<PUSHJ P,JB$IMR##>
+   XX	IPCFSEND	,FIX ,5 ,1 ,R,.TDECW##,<PUSHJ P,JB$IMS##>
+   XX	JLT		,FIX ,10,1 ,L ,.TUFTM##,<PUSHJ P,JB$IJL##>
+   XX	JOB		,FIX ,3 ,1 ,R ,.TDECW##,<MOVEI T1,(O)>
+   XX	KCS		,FIX ,7 ,1 ,R ,T1000,<PUSHJ P,JB$KCM##>
+   XX	LIMIT		,BLK ,8 ,1 ,R,TLIMIB,<PUSHJ P,JB$BTL##>
+   XX	LINE		,FIX ,4 ,1 ,R ,.TOCTW##,<PUSHJ P,JB$NLN##>
+   XX	LOCATION	,FIX ,4 ,1 ,R,.TOCTW##,<PUSHJ P,JB$LOC##>
+   XX	LPPN		,FIX ,15,1 ,C ,.TPPNW##,<PUSHJ P,JB$LPN##>
+   XX	LPRGNUM		,FIX ,6 ,1 ,L ,.TOCTW##,<PUSHJ P,JB$LPG##>
+   XX	LPRJNUM		,FIX ,7 ,0 ,R ,.TOCTW##,<PUSHJ P,JB$LPJ##>
+   XX	MPL		,FIX ,4 ,1 ,R,.TDECW##,<PUSHJ P,JB$MPL##>
+   XX	MVL		,FIX ,4 ,1 ,R,.TDECW##,<PUSHJ P,JB$MVL##>
+   XX	NAME		,FIX ,14,1 ,L ,TNAME,<JFCL>
+   XX	NODE		,FIX ,11,1 ,L ,TNODE,<JFCL>
+   XX	NODENAME	,FIX ,7 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$NNM##>
+   XX	NODENUMBER	,FIX ,4 ,1 ,R ,.TOCTW##,<PUSHJ P,JB$NNU##>
+   XX	OVERHEAD	,FIX ,2 ,1 ,R,.TDECW##,<PUSHJ P,JB$OVP##>
+   XX	PAGERATE	,FIX ,6 ,1 ,R,TPGR,<PUSHJ P,JB$PGR##>
+   XX	PC		,FIX ,6 ,1 ,L,TPC,<PUSHJ P,JB$PC##>
+   XX	PHYHIG		,FIX ,3 ,1 ,R,.TDECW##,<PUSHJ P,JB$PPH##>
+   XX	PHYLOW		,FIX ,3 ,1 ,R,.TDECW##,<PUSHJ P,JB$PPL##>
+   XX	PPN		,FIX ,15,1 ,C ,.TPPNW##,<PUSHJ P,JB$PPN##>
+   XX	PRGNUM		,FIX ,6 ,1 ,L ,.TOCTW##,<PUSHJ P,JB$PPG##>
+   XX	PRGRUN		,FIX , 7,1 ,L,.TSIXN##,<PUSHJ P,JB$PTR##>
+   XX	PRJNUM		,FIX ,7 ,0 ,R ,.TOCTW##,<PUSHJ P,JB$PPJ##>
+   XX	PROGRAM		,FIX ,7 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$PRG##>
+   XX	PROSET		,FIX , 4,1 ,L,ONOFF##,<PUSHJ P,JB$DPS##>
+   XX	READS		,FIX ,7 ,1 ,R ,.TDECW##,<PUSHJ P,JB$DBR##>
+   XX	RESET		,FIX ,10,1 ,L,.TUFTM##,<PUSHJ P,JB$ITR##>
+   XX	RUNTIME		,FIX ,8 ,1 ,R,TTIME,<PUSHJ P,JB$TIM##>
+   XX	SEGMENT		,FIX ,7 ,1 ,L,.TSIXN##,<PUSHJ P,JB$HSN##>
+IFN FTIPC,<
+   XX	SLOT		,FIX ,4 ,1 ,R,.TDECW##,<PUSHJ P,JB$SLT##>
+>;END IFN FTIPC
+   XX	SPACE		,FIX ,1 ,0 ,L,.TSPAC##,<JFCL>
+   XX	TTY		,FIX ,8 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$TTY##>
+   XX	UUOS		,FIX ,7 ,1 ,R ,.TDECW##,<PUSHJ P,JB$UUC##>
+   XX	VIRHIG		,FIX ,3 ,1 ,R,.TDECW##,<PUSHJ P,JB$PVH##>
+   XX	VIRLOW		,FIX ,3 ,1 ,R,.TDECW##,<PUSHJ P,JB$PVL##>
+   XX	VKCS		,FIX ,7 ,1 ,R ,T1000,<PUSHJ P,JB$VKM##>
+   XX	WRITES		,FIX ,7 ,1 ,R ,.TDECW##,<PUSHJ P,JB$DBW##>
+   XX	WSCODE		,FIX ,6 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$WSC##>
+   XX	WTO		,FIX ,5 ,1 ,L,TWTO,<PUSHJ P,JB$WTO##>
+	LIST
+>
+
+DEFINE	XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<EXP SIXBIT/NAME/>
+
+JOBFMT:	FORMS
+JOBLEN==.-JOBFMT
+
+DEFINE	XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<
+	LOD
+	IFIDN <JUS><R>,<..TMP==.FMRIG>
+	IFIDN <JUS><C>,<..TMP==.FMCEN>
+	IFIDN <JUS><L>,<..TMP==.FMLEF>
+	IFIDN <FMT><FIX>,<..TMR==.FMFIX>
+	IFIDN <FMT><FLT>,<..TMR==.FMFLT>
+	IFIDN <FMT><BLK>,<..TMR==.FMBLK>
+
+	EXP	<INSVL.(..TMR,FM.FMT)!INSVL.(^D'WID,FM.WID)!INSVL.(..TMP,FM.JUS)!INSVL.(SPC,FM.SPC)!INSVL.(PRT,FM.PRT)>
+>
+
+
+DEFINE	LL(TXT),<
+	EXP	<INSVL.(.FMFLT,FM.FMT)!FM.STR!.TSTRG##>
+	MOVEI	T1,[ASCIZ\TXT\]
+>
+
+DEFINE CRLF,<
+	EXP	<INSVL.(.FMFLT,FM.FMT)!FM.STR!.TCRLF##>
+	JFCL
+>
+DEFINE SPACE(N),<
+	EXP	<INSVL.(.FMFIX,FM.FMT)!INSVL.(^D'N,FM.WID)!INSVL.(.FMLEF,FM.JUS)!.POPJ##>
+	JFCL
+>
+
+	FORMS
+	SUBTTL	Keyword tables -- LINE mode
+
+DEFINE FORMS,<
+	XLIST
+   XX	ASSIGN		,FIX,1 ,1 ,L ,TTAC,<PUSHJ P,LB$TAC##>
+   XX	BREAKS		,FIX,6 ,1 ,L ,.TDECW##,<PUSHJ P,LB$BCC##>
+   XX	CARRIER		,FIX,1 ,1 ,L ,TDSC,<PUSHJ P,LB$DSC##>
+   XX	COMMANDS	,FIX,5 ,1 ,L ,.TDECW##,<PUSHJ P,LB$CMD##>
+   XX	CRLF		,FIX,1 ,0 ,L,.TCRLF##,<JFCL>
+   XX	APC		,FIX,1 ,1 ,L ,TAPC,<PUSHJ P,LB$APC##>
+   XX	INITED		,FIX,1 ,1 ,L ,TTAP,<PUSHJ P,LB$TAP##>
+   XX	INPUT		,FIX,7 ,1 ,L ,.TDECW##,<PUSHJ P,LB$ICT##>
+   XX	JOB		,FIX,3 ,1 ,R ,.TDECW##,<PUSHJ P,LB$JOB##>
+   XX	LINE		,FIX,4 ,1 ,R ,.TOCTW##,<PUSHJ P,LB$NLN##>
+   XX	LOCATION	,FIX,19,1 ,L ,.TSTRG##,<PUSHJ P,LB$LOC##>
+IFN FTLGNQ,<
+   XX	LOGINQ		,FIX,1 ,1 ,L ,TLQP,<PUSHJ P,LB$LQP##>
+> ;END IFN FTLGNQ
+   XX	MIC		,FIX,1 ,1 ,L ,TMCL,<PUSHJ P,LB$MCL##>
+   XX	NODENAME	,FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$NNM##>
+   XX	NODENUMBER	,FIX,3 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$NNU##>
+   XX	OUTPUT		,FIX,8 ,1 ,L ,.TDECW##,<PUSHJ P,LB$OCT##>
+   XX	RCVSPEED	,FIX,5 ,1 ,R ,.TDECW##,<PUSHJ P,LB$RBD##>
+   XX	REMOTE		,FIX,1 ,1 ,L ,TRMT,<PUSHJ P,LB$RMT##>
+   XX	SLAVE		,FIX,1 ,1 ,L ,TSLV,<PUSHJ P,LB$SLV##>
+   XX	SPACE		,FIX,1 ,0 ,L,.TSPAC##,<JFCL>
+   XX	TTY		,FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$TTY##>
+   XX	TYPE		,FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$TYP##>
+   XX	USER		,FIX,1 ,1 ,L ,TTCJ,<PUSHJ P,LB$TCJ##>
+   XX	XMTSPEED	,FIX,5 ,1 ,R ,.TDECW##,<PUSHJ P,LB$TBD##>
+	LIST
+>
+DEFINE	XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<EXP SIXBIT/NAME/>
+
+LINFMT:	FORMS
+LINLEN==.-LINFMT
+
+DEFINE	XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<
+	LOD
+	IFIDN <JUS><R>,<..TMP==.FMRIG>
+	IFIDN <JUS><C>,<..TMP==.FMCEN>
+	IFIDN <JUS><L>,<..TMP==.FMLEF>
+	IFIDN <FMT><FIX>,<..TMR==.FMFIX>
+	IFIDN <FMT><FLT>,<..TMR==.FMFLT>
+	IFIDN <FMT><BLK>,<..TMR==.FMBLK>
+
+	EXP	<INSVL.(..TMR,FM.FMT)!INSVL.(^D'WID,FM.WID)!INSVL.(..TMP,FM.JUS)!INSVL.(SPC,FM.SPC)!INSVL.(PRT,FM.PRT)>
+>
+
+	FORMS
+	SUBTTL	Keyword tables -- NODE mode
+
+DEFINE FORMS,<
+	XLIST
+   XX	CONFIGURATION	,FIX,32,1 ,L ,.TSTRG##,<PUSHJ P,NB$CNF##>
+   XX	CRLF		,FIX,1 ,0 ,L ,.TCRLF##,<JFCL>
+   XX	CTL		,FIX,3, 1 ,L ,.TDECW##,<PUSHJ P,NB$CTL##>
+   XX	DATE		,FIX,10,1 ,L ,.TSTRG##,<PUSHJ P,NB$DAT##>
+   XX	LAP		,FIX,3 ,1 ,L ,.TDECW##,<PUSHJ P,NB$LAP##>
+   XX	LAR		,FIX,3 ,1 ,L ,.TDECW##,<PUSHJ P,NB$LAR##>
+   XX	LAS		,FIX,3 ,1 ,L ,.TDECW##,<PUSHJ P,NB$LAS##>
+   XX	LMA		,FIX,3 ,1 ,L ,.TDECW##,<PUSHJ P,NB$LMA##>
+   XX	LMP		,FIX,3 ,1 ,L ,.TDECW##,<PUSHJ P,NB$LMP##>
+   XX	LMR		,FIX,3 ,1 ,L ,.TDECW##,<PUSHJ P,NB$LMR##>
+   XX	LMS		,FIX,3 ,1 ,L ,.TDECW##,<PUSHJ P,NB$LMS##>
+   XX	MOM		,FIX,3 ,1 ,L ,.TDECW##,<PUSHJ P,NB$MOM##>
+   XX	NEIGHBORS	,BLK,0 ,0 ,L ,TONEI,<PUSHJ P,NB$TOP##>
+   XX	NODE		,FIX,8 ,1 ,L ,.TSIXN##,<PUSHJ P,NB$NNM##>
+   XX	NODENAME	,FIX,8 ,1 ,L ,.TSIXN##,<PUSHJ P,NB$NNM##>
+   XX	NODENUMBER	,FIX,8 ,1 ,L ,.TOCTP##,<PUSHJ P,NB$NNU##>
+   XX	SPACE		,FIX,1 ,0 ,L ,.TSPAC##,<JFCL>
+   XX	OBJECTS		,FLT,0 ,0 ,L ,TOBJS,<PUSHJ P,NB$OBJ##>
+   XX	OPR		,FIX,3, 1 ,L ,TOOPR,<PUSHJ P,NB$OPR##>
+   XX	TOPOLOGY	,BLK,0 ,0 ,L ,TOTOP,<PUSHJ P,NB$TOP##>
+	LIST
+>
+
+DEFINE	XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<EXP SIXBIT/NAME/>
+
+NODFMT:	FORMS
+NODLEN==.-NODFMT
+
+DEFINE	XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<
+	LOD
+	IFIDN <JUS><R>,<..TMP==.FMRIG>
+	IFIDN <JUS><C>,<..TMP==.FMCEN>
+	IFIDN <JUS><L>,<..TMP==.FMLEF>
+	IFIDN <FMT><FIX>,<..TMR==.FMFIX>
+	IFIDN <FMT><FLT>,<..TMR==.FMFLT>
+	IFIDN <FMT><BLK>,<..TMR==.FMBLK>
+
+	EXP	<INSVL.(..TMR,FM.FMT)!INSVL.(^D'WID,FM.WID)!INSVL.(..TMP,FM.JUS)!INSVL.(SPC,FM.SPC)!INSVL.(PRT,FM.PRT)>
+>
+
+	FORMS
+	SUBTTL	Keyword tables -- STRUCTURE mode
+
+DEFINE FORMS,<
+	XLIST
+   XX	CRLF		,FIX,1 ,0 ,L ,.TCRLF##,<JFCL>
+   XX	FREE		,FIX,8 ,0 ,R ,.TDECW##,<PUSHJ P,SB$FRE##>
+   XX	FSNUMBER	,FIX,2 ,1 ,R ,.TDECW##,<PUSHJ P,SB$FSN##>
+   XX	MOUNTCOUNT	,FIX,3 ,1 ,R ,.TDECW##,<PUSHJ P,SB$MTC##>
+   XX	NAME		,FIX,4 ,1 ,L ,.TSIXN##,<PUSHJ P,SB$STN##>
+   XX	OWNER		,FLT,13,0 ,L ,TOWNER,<PUSHJ P,SB$OWN##>
+   XX	SINGLEACCESS	,FIX,3 ,1 ,L ,.TDECW##,<PUSHJ P,SB$SAJ##>
+   XX	STATUS		,FLT,0 ,0 ,L ,TSTATU,<PUSHJ P,SB$DCH##>
+	LIST
+>
+
+DEFINE	XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<EXP SIXBIT/NAME/>
+
+STRFMT:	FORMS
+STRLEN==.-STRFMT
+
+DEFINE	XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<
+	LOD
+	IFIDN <JUS><R>,<..TMP==.FMRIG>
+	IFIDN <JUS><C>,<..TMP==.FMCEN>
+	IFIDN <JUS><L>,<..TMP==.FMLEF>
+	IFIDN <FMT><FIX>,<..TMR==.FMFIX>
+	IFIDN <FMT><FLT>,<..TMR==.FMFLT>
+	IFIDN <FMT><BLK>,<..TMR==.FMBLK>
+
+	EXP	<INSVL.(..TMR,FM.FMT)!INSVL.(^D'WID,FM.WID)!INSVL.(..TMP,FM.JUS)!INSVL.(SPC,FM.SPC)!INSVL.(PRT,FM.PRT)>
+>
+
+	FORMS
+	SUBTTL	Keyword tables -- UNIT mode
+
+DEFINE FORMS,<
+	XLIST
+   XX	1CONI		,FIX,12,1 ,R ,.TOCTW##,<PUSHJ P,UB$SOF##>
+   XX	2CONI		,FIX,12,1 ,R ,.TOCTW##,<PUSHJ P,UB$ERR##>
+   XX	1DATAI		,FIX,12,1 ,R ,.TOCTW##,<PUSHJ P,UB$SDI##>
+   XX	2DATAI		,FIX,12,1 ,R ,.TOCTW##,<PUSHJ P,UB$HDI##>
+   XX	ALTERNATE	,FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,UB$ALT##>
+   XX	BREADS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$BRC##>
+   XX	BWRITES		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$BWC##>
+   XX	CBLOCKS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$CBK##>
+   XX	CHKERRORS	,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$CER##>
+   XX	CRCALLS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$CRC##>
+   XX	CRHITS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$CRH##>
+   XX	CRLF		,FIX,1 ,0 ,L ,.TCRLF##,<JFCL>
+   XX	CWCALLS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$CWC##>
+   XX	CWHITS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$CWH##>
+   XX	DETACHED	,FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,UB$DET##>
+   XX	DREADS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$DRC##>
+   XX	DWRITES		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$DWC##>
+   XX	FREEBLOCKS	,FIX,8 ,0 ,R ,.TDECW##,<PUSHJ P,UB$FRB##>
+   XX	FREESWAPPING	,FIX,8 ,0 ,R ,.TDECW##,<PUSHJ P,UB$FRS##>
+   XX	HARDDATA	,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$HDT##>
+   XX	HARDDEVICE	,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$HDV##>
+   XX	LBN		,FIX,10,1 ,R ,.TOCTW##,<PUSHJ P,UB$HBN##>
+   XX	LOGICAL		,FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,UB$LOG##>
+   XX	MREADS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$MRC##>
+   XX	MSEEKS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$MSC##>
+   XX	MWRITES		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$MWC##>
+   XX	NAME		,FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,UB$UNN##>
+   XX	NEXTUNIT	,FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,UB$NUS##>
+   XX	PREADS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$PRC##>
+   XX	PWRITES		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$PWC##>
+   XX	RETRIES		,FIX,8 ,0 ,R ,.TDECW##,<PUSHJ P,UB$ECT##>
+   XX	RIBERRORS	,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$RER##>
+   XX	SATERRORS	,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$SER##>
+   XX	SEEKS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$TSC##>
+   XX	SOFTDATA	,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$SDT##>
+   XX	SOFTDEVICE	,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$SDV##>
+   XX	STRUCTURE	,FIX,4 ,1 ,L ,.TSIXN##,<PUSHJ P,UB$STR##>
+   XX	SREADS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$SRC##>
+   XX	SWRITES		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$SWC##>
+   XX	UNITID		,FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,UB$UID##>
+   XX	USEEKS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$USC##>
+   XX	XREADS		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$XRC##>
+   XX	XWRITES		,FIX,10,1 ,R ,.TDECW##,<PUSHJ P,UB$XWC##>
+	LIST
+>
+
+DEFINE	XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<EXP SIXBIT/NAME/>
+
+UNIFMT:	FORMS
+UNILEN==.-UNIFMT
+
+DEFINE	XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<
+	LOD
+	IFIDN <JUS><R>,<..TMP==.FMRIG>
+	IFIDN <JUS><C>,<..TMP==.FMCEN>
+	IFIDN <JUS><L>,<..TMP==.FMLEF>
+	IFIDN <FMT><FIX>,<..TMR==.FMFIX>
+	IFIDN <FMT><FLT>,<..TMR==.FMFLT>
+	IFIDN <FMT><BLK>,<..TMR==.FMBLK>
+
+	EXP	<INSVL.(..TMR,FM.FMT)!INSVL.(^D'WID,FM.WID)!INSVL.(..TMP,FM.JUS)!INSVL.(SPC,FM.SPC)!INSVL.(PRT,FM.PRT)>
+>
+
+	FORMS
+	SUBTTL	Keyword tables -- Dispatch tables
+
+DEFINE XX(MOD,ABR,MAP,TXT,ERR),<IOWD ABR'LEN,ABR'FMT>
+
+IFMTX:	MODES
+	SUBTTL	Keyword tables -- INITIAL/FINAL/HEADING/FOOTING
+
+DEFINE FORMS,<
+	XLIST
+   XX	BATMAX		,FLT, 4,1,L,.TDECW##,<PUSHJ P,XB$BMX##>
+   XX	BATMIN		,FLT, 4,1,L,.TDECW##,<PUSHJ P,XB$BMN##>
+   XX	BATNUM		,FLT, 4,1,L,.TDECW##,<PUSHJ P,XB$BNM##>
+   XX	CORMAX		,FLT, 4,1,L,.TCORW##,<PUSHJ P,XB$CMX##>
+   XX	CRASH		,FLT,25,0,L,.TSTRG##,<MOVEI T1,CRSFIL##>
+   XX	CRLF		,FIX, 1,0,L,.TCRLF##,<JFCL>
+   XX	CVERSION	,FLT,12,1,L,.TVERW##,<PUSHJ P,XB$CVN##>
+   XX	DATE		,FLT,10,0,L,.TDATE##,<PUSHJ P,XB$DAT##>
+   XX	DAY		,FLT,10,0,L,.TDOW##, <PUSHJ P,XB$UDT##>
+   XX	JOBMAX		,FLT, 4,1,L,.TDECW##,<PUSHJ P,XB$JMX##>
+   XX	LOGMAX		,FLT, 4,1,L,.TDECW##,<PUSHJ P,XB$LMX##>
+   XX	LOGNUM		,FLT, 4,1,L,.TDECW##,<PUSHJ P,XB$LNM##>
+   XX	MEMSIZE		,FLT, 5,1,L,.TCORW##,<PUSHJ P,XB$SMS##>
+   XX	NAME		,FLT,25,1,L,.TSTRG##,<PUSHJ P,XB$NAM##>
+   XX	NODENAME	,FLT, 6,0,L,.TSIXN##,<PUSHJ P,XB$NNM##>
+   XX	NODENUMBER	,FLT, 2,0,1,.TOCTW##,<PUSHJ P,XB$NNU##>
+   XX	POKEADDRESS	,FLT, 6,0,R,TPC,<PUSHJ P,XB$PKA##>
+   XX	POKEJOB		,FIX, 3,0,R,.TDECW##,<PUSHJ P,XB$PKJ##>
+   XX	POKENUMBER	,FLT, 1,0,L,.TDECW##,<PUSHJ P,XB$PKN##>
+   XX	SCHEDULE	,FLT, 6,1,L,.TOCTW##,<PUSHJ P,XB$SCH##>
+   XX	SERIAL		,FLT, 5,1,L,.TDECW##,<PUSHJ P,XB$CSN##>
+   XX	SPACE		,FIX, 1,0,L,.TSPAC##,<JFCL>
+   XX	SYSDAT		,FLT, 9,1,L,.TSTRG##,<PUSHJ P,XB$SCD##>
+   XX	TIME		,FLT, 9,0,L,.TTIME##,<PUSHJ P,XB$TIM##>
+   XX	UPTIME		,FLT,12,0,L,.TTIME##,<PUSHJ P,XB$UPT##>
+   XX	VERSION		,FLT,12,1,L,.TVERW##,<PUSHJ P,XB$DVN##>
+	LIST
+>
+
+	DEFINE   XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<EXP SIXBIT/NAME/>
+
+SYSFMT:	FORMS
+SYSLEN==.-SYSFMT
+
+DEFINE   XX(NAME,FMT,WID,SPC,JUS,PRT,LOD),<
+	LOD
+	IFIDN <JUS><R>,<..TMP==.FMRIG>
+	IFIDN <JUS><C>,<..TMP==.FMCEN>
+	IFIDN <JUS><L>,<..TMP==.FMLEF>
+	IFIDN <FMT><FIX>,<..TMR==.FMFIX>
+	IFIDN <FMT><FLT>,<..TMR==.FMFLT>
+	IFIDN <FMT><BLK>,<..TMR==.FMBLK>
+
+	EXP	<INSVL.(..TMR,FM.FMT)!INSVL.(^D'WID,FM.WID)!INSVL.(..TMP,FM.JUS)!INSVL.(SPC,FM.SPC)!INSVL.(PRT,FM.PRT)>
+>
+
+	FORMS
+	SUBTTL	Default format descriptors -- Macro definitions
+
+
+DEFINE	XX(FMT,WID,SPC,JUS,PRT,LOD),<
+	IFIDN <JUS><R>,<..TMP==.FMRIG>
+	IFIDN <JUS><C>,<..TMP==.FMCEN>
+	IFIDN <JUS><L>,<..TMP==.FMLEF>
+	IFIDN <FMT><FIX>,<..TMR==.FMFIX>
+	IFIDN <FMT><FLT>,<..TMR==.FMFLT>
+	IFIDN <FMT><BLK>,<..TMR==.FMBLK>
+
+	EXP	<INSVL.(..TMR,FM.FMT)!INSVL.(^D'WID,FM.WID)!INSVL.(..TMP,FM.JUS)!INSVL.(SPC,FM.SPC)!INSVL.(PRT,FM.PRT)>
+	LOD	;;.FMLOD
+>
+
+DEFINE	FFORMS(MODE,NAME,TITLE),<
+	F'MODE'NAME:: FORMS
+	L'MODE'NAME==:<.-F'MODE'NAME>/2
+	T'MODE'NAME::[ASCIZ |TITLE|]
+>;END DEFINE FFORMS
+	SUBTTL	Default format descriptors -- Job mode -- VERY FAST
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,13,1 ,L ,TNAME,<JFCL>
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$TTY##>
+	LIST
+>
+
+FFORMS	(JOB,VFAST,<  User Name   Line >)
+
+	SUBTTL	Default format descriptors -- Job mode -- FAST
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,3 ,1 ,R ,.TDECW##,<MOVEI T1,(O)>
+   SPACE 1
+   XX	FIX,13,1 ,L ,TNAME,<JFCL>
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$TTY##>
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$PRG##>
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$WSC##>
+	LIST
+>
+
+FFORMS	(JOB,FAST,<Job  User Name    Line   Prog  State>)
+
+	SUBTTL	Default format descriptors -- Job mode -- NORMAL
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,3 ,1 ,R ,.TDECW##,<MOVEI T1,(O)>
+   SPACE 1
+   XX	FIX,13,1 ,L ,TNAME,<JFCL>
+   XX	FIX,6 ,0 ,R ,.TOCTW##,<PUSHJ P,JB$PPJ##>
+   XX	FIX,0 ,0 ,L ,TCOMMA,<JFCL>
+   XX	FIX,6 ,1 ,L ,.TOCTW##,<PUSHJ P,JB$PPG##>
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$TTY##>
+   XX	FIX,12,1 ,L ,TNODE,<JFCL>
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$PRG##>
+   XX	FIX,5 ,1 ,R ,TLCORE,<JFCL>
+   LL <+>
+   XX	FIX,5 ,1 ,L ,THCORE,<JFCL>
+   SPACE 1
+   XX	FIX,2 ,1 ,R ,.TDECW##,<PUSHJ P,JB$OVP##>
+   SPACE 1
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$WSC##>
+>
+
+FFORMS	(JOB,NORMAL,<Job  User  name       PPN      Line    Connect    Prog   Low + Hgh  OH State >)
+
+	SUBTTL	Default format descriptors -- Job mode -- SLOW
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,3 ,1 ,R ,.TDECW##,<MOVEI T1,(O)>
+   SPACE 1
+   XX	FIX,13,1 ,L ,TNAME,<JFCL>
+   XX	FIX,6 ,0 ,R ,.TOCTW##,<PUSHJ P,JB$PPJ##>
+   XX	FIX,0 ,0 ,L ,TCOMMA,<JFCL>
+   XX	FIX,6 ,1 ,L ,.TOCTW##,<PUSHJ P,JB$PPG##>
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$TTY##>
+   XX	FIX,12,1 ,L ,TNODE,<JFCL>
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$PRG##>
+   XX	FIX,5 ,1 ,R ,TLCORE,<JFCL>
+   LL <+>
+   XX	FIX,5 ,1 ,L ,THCORE,<JFCL>
+   SPACE 1
+   XX	FIX,2 ,1 ,R ,.TDECW##,<PUSHJ P,JB$OVP##>
+   SPACE 1
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,JB$WSC##>
+   CRLF
+   SPACE 5
+   LL	<RD:>
+   XX	FIX,7 ,0 ,L ,.TDECW##,<PUSHJ P,JB$DBR##>
+   LL	<WR:>
+   XX	FIX,7 ,1 ,L ,.TDECW##,<PUSHJ P,JB$DBW##>
+   LL	<UUOS:>
+   XX	FIX,8 ,1 ,L ,.TDECW##,<PUSHJ P,JB$UUC##>
+   LL	<JLT:>
+   XX	FIX,10 ,1 ,L ,.TUFTM##,<PUSHJ P,JB$IJL##>
+;;LL	<RESET:>
+;;XX	FIX,10,1 ,L ,.TUFTM##,<PUSHJ P,JB$ITR##>
+   LL	<PC:>
+   XX	FIX,8 ,1 ,L ,TPC,<PUSHJ P,JB$PC##>
+   XX	BLK,13,1 ,L ,TLIMI,<PUSHJ P,JB$BTL##>
+   XX	BLK,9 ,1 ,L ,TPGRR,<PUSHJ P,JB$PGR##>
+   XX	BLK,7 ,1 ,L ,TDSKP,<PUSHJ P,JB$DPR##>
+   XX	BLK,5 ,1 ,L ,THPQP,<PUSHJ P,JB$HPQ##>
+	LIST
+>
+
+FFORMS	(JOB,SLOW,<Job  User  name       PPN      Line    Connect    Prog   Low + Hgh  OH State >)
+	SUBTTL	Default format descriptors -- Line mode -- VERY FAST
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$TTY##>
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$NNM##>
+   XX	FIX,4 ,1 ,R ,.TOCTW##,<PUSHJ P,LB$NLN##>
+	LIST
+>
+
+FFORMS	(LIN,VFAST,< Term   Node  Lin >)
+
+	SUBTTL	Default format descriptors -- Line mode -- FAST
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$TTY##>
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$NNM##>
+   XX	FIX,4 ,1 ,R ,.TOCTW##,<PUSHJ P,LB$NLN##>
+   SPACE 1
+   XX	FIX,1 , ,L ,TRMT,<PUSHJ P,LB$RMT##>
+   XX	FIX,1 , ,L ,TAPC,<PUSHJ P,LB$APC##>
+   XX	FIX,1 , ,L ,TDSC,<PUSHJ P,LB$DSC##>
+   XX	FIX,1 , ,L ,TSLV,<PUSHJ P,LB$SLV##>
+   XX	FIX,1 , ,L ,TMCL,<PUSHJ P,LB$MCL##>
+   SPACE 1
+   XX	FIX,1 ,1 ,L ,TTAC,<PUSHJ P,LB$TAC##>
+   XX	FIX,1 ,1 ,L ,TTAP,<PUSHJ P,LB$TAP##>
+   XX	FIX,1 ,1 ,L ,TTCJ,<PUSHJ P,LB$TCJ##>
+IFN FTLGNQ,<
+   XX	FIX,5 ,1 ,L ,TLQP,<PUSHJ P,LB$LQP##>
+> ;END IFN FTLGNQ
+   SPACE 1
+   XX	FIX,3 ,1 ,R ,.TDECW##,<PUSHJ P,LB$JOB##>
+	LIST
+>
+
+FFORMS	(LIN,FAST,< Term   Node  Lin Chars Sts Job>)
+
+	SUBTTL	Default format descriptors -- Line mode -- NORMAL
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$TTY##>
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$NNM##>
+   XX	FIX,4 ,1 ,R ,.TOCTW##,<PUSHJ P,LB$NLN##>
+   SPACE 1
+   XX	FIX,19,1 ,L ,.TSTRG##,<PUSHJ P,LB$LOC##>
+   XX	FIX,1 , ,L ,TRMT,<PUSHJ P,LB$RMT##>
+   XX	FIX,1 , ,L ,TAPC,<PUSHJ P,LB$APC##>
+   XX	FIX,1 , ,L ,TDSC,<PUSHJ P,LB$DSC##>
+   XX	FIX,1 , ,L ,TSLV,<PUSHJ P,LB$SLV##>
+   XX	FIX,1 , ,L ,TMCL,<PUSHJ P,LB$MCL##>
+   SPACE 1
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$TYP##>
+   XX	FIX,5 ,1 ,R ,.TDECW##,<PUSHJ P,LB$TBD##>
+   XX	FIX,5 ,1 ,R ,.TDECW##,<PUSHJ P,LB$RBD##>
+   SPACE 1
+   XX	FIX,1 ,1 ,L ,TTAC,<PUSHJ P,LB$TAC##>
+   XX	FIX,1 ,1 ,L ,TTAP,<PUSHJ P,LB$TAP##>
+   XX	FIX,1 ,1 ,L ,TTCJ,<PUSHJ P,LB$TCJ##>
+IFN FTLGNQ,<
+   XX	FIX,1 ,1 ,L ,TLQP,<PUSHJ P,LB$LQP##>
+> ;END IFN FTLGNQ
+   SPACE 1
+   XX	FIX,3 ,1 ,R ,.TDECW##,<PUSHJ P,LB$JOB##>
+	LIST
+>
+
+FFORMS	(LIN,NORMAL,< Term   Node  Lin      Location      Chars  Type   Xmt  Rcv  Sts Job>)
+
+	SUBTTL	Default format descriptors -- Line mode -- SLOW
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$TTY##>
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$NNM##>
+   XX	FIX,4 ,1 ,R ,.TOCTW##,<PUSHJ P,LB$NLN##>
+   SPACE 1
+   XX	FIX,19,1 ,L ,.TSTRG##,<PUSHJ P,LB$LOC##>
+   XX	FIX,1 , ,L ,TRMT,<PUSHJ P,LB$RMT##>
+   XX	FIX,1 , ,L ,TAPC,<PUSHJ P,LB$APC##>
+   XX	FIX,1 , ,L ,TDSC,<PUSHJ P,LB$DSC##>
+   XX	FIX,1 , ,L ,TSLV,<PUSHJ P,LB$SLV##>
+   XX	FIX,1 , ,L ,TMCL,<PUSHJ P,LB$MCL##>
+   SPACE 1
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,LB$TYP##>
+   XX	FIX,5 ,1 ,R ,.TDECW##,<PUSHJ P,LB$TBD##>
+   XX	FIX,5 ,1 ,R ,.TDECW##,<PUSHJ P,LB$RBD##>
+   SPACE 2
+   XX	FIX,1 ,1 ,L ,TTAC,<PUSHJ P,LB$TAC##>
+   XX	FIX,1 ,1 ,L ,TTAP,<PUSHJ P,LB$TAP##>
+   XX	FIX,1 ,1 ,L ,TTCJ,<PUSHJ P,LB$TCJ##>
+IFN FTLGNQ,<
+   XX	FIX,1 ,1 ,L ,TLQP,<PUSHJ P,LB$LQP##>
+> ;END IFN FTLGNQ
+   SPACE 1
+   XX	FIX,3 ,1 ,R ,.TDECW##,<PUSHJ P,LB$JOB##>
+   CRLF
+   SPACE 5
+   LL	<ICC:>
+   XX	FIX,7 ,1 ,L ,.TDECW##,<PUSHJ P,LB$ICT##>
+   LL	<OCC:>
+   XX	FIX,8 ,1 ,L ,.TDECW##,<PUSHJ P,LB$OCT##>
+   LL	<BRK:>
+   XX	FIX,6 ,1 ,L ,.TDECW##,<PUSHJ P,LB$BCC##>
+   LL	<CMD:>
+   XX	FIX,5 ,1 ,L ,.TDECW##,<PUSHJ P,LB$CMD##>
+	LIST
+>
+
+FFORMS	(LIN,SLOW,< Term   Node  Lin      Location      Chars  Type   Xmt  Rcv  Sts Job>)
+	SUBTTL	Default format descriptors -- Node mode -- VERY FAST
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,NB$NNM##>
+	LIST
+>
+
+FFORMS	(NOD,VFAST,< Node >)
+
+	SUBTTL	Default format descriptors -- Node mode -- FAST
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,8 ,1 ,L ,.TSIXN##,<PUSHJ P,NB$NNM##>
+   XX	FIX,8 ,1 ,L ,.TOCTP##,<PUSHJ P,NB$NNU##>
+	LIST
+>
+
+FFORMS	(NOD,FAST,< Node    Number >)
+
+	SUBTTL	Default format descriptors -- Node mode -- NORMAL
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,8 ,1 ,L ,.TSIXN##,<PUSHJ P,NB$NNM##>
+   XX	FIX,8 ,1 ,L ,.TOCTP##,<PUSHJ P,NB$NNU##>
+   XX	FIX,32,1 ,L ,.TSTRG##,<PUSHJ P,NB$CNF##>
+   XX	FIX,10,1 ,L ,.TSTRG##,<PUSHJ P,NB$DAT##>
+	LIST
+>
+
+FFORMS	(NOD,NORMAL,< Node    Number Configuration>)
+
+	SUBTTL	Default format descriptors -- Node mode -- SLOW
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,8 ,1 ,L ,.TSIXN##,<PUSHJ P,NB$NNM##>
+   XX	FIX,8 ,1 ,L ,.TOCTP##,<PUSHJ P,NB$NNU##>
+   XX	FIX,32,1 ,L ,.TSTRG##,<PUSHJ P,NB$CNF##>
+   XX	FIX,10,1 ,L ,.TSTRG##,<PUSHJ P,NB$DAT##>
+   CRLF
+   SPACE 8
+   XX	FLT,0 ,0 ,L ,TOBJS,<PUSHJ P,NB$OBJ##>
+	LIST
+>
+
+FFORMS	(NOD,SLOW,< Node    Number Configuration>)
+
+	SUBTTL	Default format descriptors -- STRUCTURE mode -- VERY FAST
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,SB$STN##>
+	LIST
+>
+
+FFORMS	(STR,VFAST,< Name >)
+
+	SUBTTL	Default format descriptors -- STRUCTURE mode -- FAST
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,SB$STN##>
+	LIST
+>
+
+FFORMS	(STR,FAST,< Name >)
+
+	SUBTTL	Default format descriptors -- STRUCTURE mode -- NORMAL
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,SB$STN##>
+   XX	FIX,8 ,1 ,R ,.TDECW##,<PUSHJ P,SB$FRE##>
+   XX	FIX,6 ,1 ,R ,.TDECW##,<PUSHJ P,SB$MTC##>
+   SPACE 2
+   XX	FIX,6 ,6 ,R ,TOWNPJ,<PUSHJ P,SB$OWN##>
+   XX	FIX,1 ,1 ,L ,TOWNCM,<PUSHJ P,SB$OWN##>
+   XX	FIX,6 ,6 ,L ,TOWNPG,<PUSHJ P,SB$OWN##>
+   SPACE 2
+   XX	FLT,0 ,0 ,L ,TSTATU,<PUSHJ P,SB$DCH##>
+	LIST
+>
+
+FFORMS	(STR,NORMAL,<Name     Free   Mount     Owner>)
+
+	SUBTTL	Default format descriptors -- STRUCTURE mode -- SLOW
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,SB$STN##>
+   XX	FIX,8 ,1 ,R ,.TDECW##,<PUSHJ P,SB$FRE##>
+   XX	FIX,6 ,1 ,R ,.TDECW##,<PUSHJ P,SB$MTC##>
+   SPACE 2
+   XX	FIX,6 ,6 ,R ,TOWNPJ,<PUSHJ P,SB$OWN##>
+   XX	FIX,1 ,1 ,L ,TOWNCM,<PUSHJ P,SB$OWN##>
+   XX	FIX,6 ,6 ,L ,TOWNPG,<PUSHJ P,SB$OWN##>
+   XX	FIX,4 ,4 ,R ,.TOCTW##,<PUSHJ P,SB$FSN##>
+   SPACE 2
+   XX	FLT,0 ,0 ,L ,TSTATU,<PUSHJ P,SB$DCH##>
+	LIST
+>
+
+FFORMS	(STR,SLOW,<Name     Free   Mount     Owner      FS>)
+	SUBTTL	Default format descriptors -- UNIT mode -- VERY FAST
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,UB$UNN##>
+	LIST
+>
+
+FFORMS	(UNI,VFAST,< Name >)
+
+	SUBTTL	Default format descriptors -- UNIT mode -- FAST
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,6 ,1 ,L ,.TSIXN##,<PUSHJ P,UB$UNN##>
+	LIST
+>
+
+FFORMS	(UNI,FAST,< Name >)
+
+	SUBTTL	Default format descriptors -- UNIT mode -- NORMAL
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,UB$UNN##>
+   XX	FIX,7 ,0 ,L ,.TSIXN##,<PUSHJ P,UB$UID##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$FRB##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$BRC##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$BWC##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$DRC##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$DWC##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$MRC##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$MWC##>
+	LIST
+>
+
+FFORMS	(UNI,NORMAL,< Name  UnitId    Free    Buf Rd   Buf Wt   Dmp Rd   Dmp Wt   Mon Rd   Mon Wt   >)
+
+	SUBTTL	Default format descriptors -- UNIT mode -- SLOW
+
+DEFINE	FORMS,<
+	XLIST
+   XX	FIX,7 ,1 ,L ,.TSIXN##,<PUSHJ P,UB$UNN##>
+   XX	FIX,7 ,0 ,L ,.TSIXN##,<PUSHJ P,UB$UID##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$FRB##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$BRC##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$BWC##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$DRC##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$DWC##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$MRC##>
+   XX	FIX,9 ,0 ,R ,.TDECW##,<PUSHJ P,UB$MWC##>
+   CRLF
+   SPACE 5
+   LL	<Alt:>
+   XX	FIX,7 ,0 ,L ,.TSIXN##,<PUSHJ P,UB$ALT##>
+   LL	<Det:>
+   XX	FIX,7 ,0 ,L ,.TSIXN##,<PUSHJ P,UB$DET##>
+   LL	<Mon seeks:>
+   XX	FLT,0 ,1 ,L ,.TDECW##,<PUSHJ P,UB$MSC##>
+   LL	<Usr seeks:>
+   XX	FLT,0 ,1 ,L ,.TDECW##,<PUSHJ P,UB$USC##>
+	LIST
+>
+
+FFORMS	(UNI,SLOW,< Name  UnitId    Free    Buf Rd   Buf Wt   Dmp Rd   Dmp Wt   Mon Rd   Mon Wt   >)
+	SUBTTL	Default format descriptors -- DDBS -- VERY FAST
+
+DEFINE FORMS,<
+	XLIST
+   XX	FIX,45,1,L,TSDDB##,<JFCL>
+	LIST
+>
+
+	FFORMS	(DDB,VFAST)
+
+	SUBTTL	Default format descriptors -- DDBS -- FAST
+
+DEFINE FORMS,<
+	XLIST
+   XX	FIX,45,1,L,TSDDB##,<JFCL>
+   XX	FIX, 6,1,R,TDECB,<PUSHJ P,DG$BLK##>
+   XX	FIX, 4,0,R,DP$ACC##,<JFCL>
+   XX	FIX, 1,0,R,.TCHAR##,<PUSHJ P,DG$AC1##>
+   XX	FIX, 1,0,L,.TCHAR##,<PUSHJ P,DG$IO##>
+   XX	FIX, 1,0,L,.TCHAR##,<PUSHJ P,DG$SIO##>
+	LIST
+>
+
+	FFORMS	(DDB,FAST)
+
+	SUBTTL	Default format descriptors -- DDBS -- NORMAL
+
+DEFINE FORMS,<
+	XLIST
+   XX	FIX, 1,0,L,.TCHAR##,<PUSHJ P,DG$ACT##>
+   XX	FIX, 1,0,L,.TCHAR##,<PUSHJ P,DG$SPL##>
+   XX	FIX, 8,1,L,.TSIXN##,<PUSHJ P,DG$DEV##>
+   XX	FIX, 4,1,L,.TSTRG##,<PUSHJ P,DG$AIF##>
+   XX	FIX, 8,1,L,.TSIXN##,<PUSHJ P,DG$LOG##>
+   XX	FIX,45,1,L,TSDDB##,<JFCL>
+   XX	FIX, 6,1,R,TDECB,<PUSHJ P,DG$BLK##>
+   XX	FIX, 4,0,R,DP$ACC##,<JFCL>
+   XX	FIX, 1,0,R,.TCHAR##,<PUSHJ P,DG$AC1##>
+   XX	FIX, 1,0,L,.TCHAR##,<PUSHJ P,DG$IO##>
+   XX	FIX, 1,0,L,.TCHAR##,<PUSHJ P,DG$SIO##>
+	LIST
+>
+
+	FFORMS	(DDB,NORMAL)
+
+	SUBTTL	Default format descriptors -- DDBS -- SLOW
+
+DEFINE FORMS,<
+	XLIST
+   XX	FIX, 1,0,L,.TCHAR##,<PUSHJ P,DG$ACT##>
+   XX	FIX, 1,0,L,.TCHAR##,<PUSHJ P,DG$SPL##>
+   XX	FIX, 8,1,L,.TSIXN##,<PUSHJ P,DG$DEV##>
+   XX	FIX, 4,1,L,.TSTRG##,<PUSHJ P,DG$AIF##>
+   XX	FIX, 8,1,L,.TSIXN##,<PUSHJ P,DG$LOG##>
+   XX	FIX,45,1,L,TSDDB##,<JFCL>
+   XX	FIX, 6,1,R,TDECB,<PUSHJ P,DG$BLK##>
+   XX	FIX, 4,0,R,DP$ACC##,<JFCL>
+   XX	FIX, 1,0,R,.TCHAR##,<PUSHJ P,DG$AC1##>
+   XX	FIX, 1,0,L,.TCHAR##,<PUSHJ P,DG$IO##>
+   XX	FIX, 1,0,L,.TCHAR##,<PUSHJ P,DG$SIO##>
+   CRLF
+   SPACE 5
+   LL	<Mode:>
+   XX	FIX, 6,1,L,.TOCTW##,<PUSHJ P,DG$MOD##>
+   LL	<Addr:>
+   XX	FIX, 9,1,L,.TOCTW##,<PUSHJ P,DG$ADR##>
+   XX	FIX,10,1,L,DP$SLA##,<JFCL>
+   XX	FIX,10,1,L,DP$DLA##,<JFCL>
+	LIST
+>
+
+	FFORMS	(DDB,SLOW)
+	SUBTTL	Default format descriptors -- IPCF - NORMAL
+
+DEFINE FORMS,<
+	XLIST
+   SPACE 5
+   LL	<IPCF messages: S:>
+   XX	FIX,6 ,1 ,L,.TDECW##,<PUSHJ P,JB$IMS##>
+   LL	<R:>
+   XX	FIX,6 ,1 ,L,.TDECW##,<PUSHJ P,JB$IMR>
+   LL	<outstanding: S:>
+   XX	FIX,3 ,1 ,L,.TDECW##,<PUSHJ P,JB$IOS##>
+   LL	<R:>
+   XX	FIX,3 ,1 ,L,.TDECW##,<PUSHJ P,JB$IOR##>
+   LL	<quotas: S:>
+   XX	FIX,4 ,1 ,L,.TDECW##,<PUSHJ P,JB$IQS##>
+   LL	<R:>
+   XX	FIX,4 ,1 ,L,.TDECW##,<PUSHJ P,JB$IQR##>
+	LIST
+>
+
+	FFORMS(IPCF,NORMAL)
+	SUBTTL	Default format descriptors -- DEFAULTS - NORMAL
+
+DEFINE FORMS,<
+	XLIST
+   SPACE 5
+   LL	<Defaults: >
+   LL	<Buffers:>
+   XX	FIX,4 ,1 ,L,.TDECW##,<PUSHJ P,JB$DNB##>
+   LL	<Bigbuf:>
+   XX	FIX,4 ,1 ,L,.TDECW##,<PUSHJ P,JB$DBB##>
+   LL	<Protection:>
+   XX	FIX,5 ,0 ,L,.TPROT##,<PUSHJ P,JB$DPV##>
+   XX	FIX,5 ,1 ,L,ONOFF##,<PUSHJ P,JB$DPS##>
+   LL	<Attach:>
+   XX	FIX,7 ,0 ,L,ATTYES##,<PUSHJ P,JB$DAD##>
+	LIST
+>
+
+	FFORMS(DEF,NORMAL)
+	SUBTTL	Default format descriptors -- ACCOUNT - NORMAL
+
+DEFINE FORMS,<
+	XLIST
+   SPACE 5
+   LL	<Account: >
+   XX	FIX,39,0 ,L,.TSTRG##,<PUSHJ P,JB$ACC##>
+	LIST
+>
+
+	FFORMS(ACT,NORMAL)
+	SUBTTL	Default format descriptors -- BATCH - NORMAL
+
+DEFINE FORMS,<
+	XLIST
+   SPACE 5
+   LL	<WTO privs:>
+   XX	FIX,6 ,0 ,L,TWTO,<PUSHJ P,JB$WTO##>
+   LL	<OPR privs:>
+   XX	FIX,8 ,0 ,L,TGOP,<PUSHJ P,JB$GOP##>
+   LL	<Batch stream:>
+   XX	FIX,4 ,0 ,L,TBSN,<PUSHJ P,JB$BSN##>
+   LL	<Limit:>
+   XX	FIX,9 ,0 ,L,TLIMIB,<PUSHJ P,JB$BTL##>
+   LL	<Core:>
+   XX	FIX,3 ,0 ,L,.TDECW##,<PUSHJ P,JB$BCL##>
+	LIST
+>
+
+	FFORMS(BAT,NORMAL)
+	SUBTTL	Default format descriptors -- STAMP - NORMAL
+
+DEFINE FORMS,<
+	XLIST
+   XX	FIX,9 ,0 ,R,.TDATE##,<PUSHJ P,XB$DAT##>
+   SPACE 1
+   XX	FIX,8 ,0 ,R,.TTIME##,<PUSHJ P,XB$TIM##>
+	LIST
+>
+
+	FFORMS	(STAM,NORMAL)
+	SUBTTL	Default format descriptors -- TIME - NORMAL
+
+DEFINE FORMS,<
+	XLIST
+   SPACE 5
+   LL	<Run time is >
+   XX	FLT,8 ,1 ,R ,TTIME,<PUSHJ P,JB$TIM##>
+   CRLF
+   SPACE 5
+   LL	<Login for >
+   XX	FLT,9 ,1 ,R,.TUFTM##,<PUSHJ P,JB$IJL##>
+   LL	<at >
+   XX	FLT,19, 0,R,.TWDTM##,<PUSHJ P,JB$JLT##>
+   CRLF
+   SPACE 5
+   LL	<Reset for >
+   XX	FLT,9 ,1 ,R,.TUFTM##,<PUSHJ P,JB$ITR##>
+   LL	<at >
+   XX	FLT,19, 0,R,.TWDTM##,<PUSHJ P,JB$STM##>
+	LIST
+>
+
+	FFORMS	(TIM,NORMAL)
+	SUBTTL	Default format descriptors -- CORE - NORMAL
+
+DEFINE FORMS,<
+	XLIST
+   SPACE 5
+   LL	<Core limits:  Current: Virt:>
+   XX	FIX,4 ,0 ,L,.TDECW##,<PUSHJ P,JB$CVL##>
+   LL	<Phys:>
+   XX	FIX,5 ,0 ,L,.TDECW##,<PUSHJ P,JB$CPL##>
+   LL	<Maximum: Virt:>
+   XX	FIX,4 ,0 ,L,.TDECW##,<PUSHJ P,JB$MVL##>
+   LL	<Phys:>
+   XX	FIX,4 ,0 ,L,.TDECW##,<PUSHJ P,JB$MPL##>
+	LIST
+>
+
+	FFORMS	(COR,NORMAL)
+	SUBTTL	Title table generation
+
+
+DEFINE	XX	(MOD,ABR,MAP,TXT,ERR),<EXP	ABR'TTL>
+TTLTAB:: MODES
+
+
+DEFINE	XX	(MOD,ABR,MAP,TXT,ERR),<
+	XLIST
+ABR'TTL:	TITLES (ABR,<VFAST,FAST,NORMAL,SLOW>)
+	LIST
+>
+
+DEFINE	TITLES	(ABR,LIST),<IRP LIST,<	EXP	T'ABR'LIST>>
+
+	MODES
+	SUBTTL	Routines -- LKNAM - Lookup keyword in a table
+
+LKNAM::	JUMPE	N,E$$NKS		;JUMP IF NULL
+	PUSHJ	P,.SAVE1##		;SAVE P1
+	MOVEI	P1,(T1)			;SAVE ADDR TABLE
+	PUSHJ	P,.NAME##		;LOOKUP NAME
+	  JRST	LKNA.1			;ERROR
+	SUBI	T1,1(P1)		;RETURN OFFSET
+	ANDI	T1,-1			;JUST INDEX
+	POPJ	P,			;AND RETURN
+
+LKNA.1:	JUMPG	T1,E$$ABK		;AMBIGIOUS
+	$FATAL	(UNK,<Unknown keyword >,E.UNK)
+	$FATAL	(ABK,<Ambiguous keyword >,E.UNK)
+	$FATAL	(NKS,<No keyword specified>)
+E.UNK:	MOVE	T1,N			;GET KEYWORD
+	PJRST	.TSIXN##		;TYPE AND RETURN
+	SUBTTL	Format print routines -- TNAME - Type a user name
+
+TNAME:	PUSHJ	P,JB$NAM##		;GET NAME POINTER
+	PUSH	P,1(T1)			;SAVE SECOND HALF
+	MOVE	T1,(T1)			;GET FIRST HALF
+	SKIPN	(P)			;SECOND HALF BLANK?
+	 JRST	[POP	P,(P)		;YES--CLEAN STACK
+		 PJRST	.TSIXN##]	;AND TYPE WHAT WE GOT
+	PUSHJ	P,.TSIXS##		;TYPE
+	POP	P,T1			;GET SECOND HALF BACK
+	PJRST	.TSIXN##		;TYPE AND RETURN
+
+	SUBTTL	Format print routines -- TNODE - Type node and line
+
+TNODE:	PUSHJ	P,JB$TLN##
+	CAML	T1,SYSPTY##
+	 JRST	TCTL
+	PUSHJ	P,JB$NNM##	
+	JUMPE	T1,.POPJ##
+	PUSHJ	P,.TSIXN##
+	MOVEI	T1,"_"
+	PUSHJ	P,.TCHAR##
+	PUSHJ	P,JB$NLN##
+	PUSHJ	P,.TOCTW##
+	PUSHJ	P,JB$APC##
+	CAIG	T1,1
+	 POPJ	P,
+	PJRST	TAPC
+
+
+	SUBTTL	Format print routines -- TCTL - Type controlling program/job
+
+TCTL:	PUSHJ	P,JB$CPN##
+	JUMPE	T1,.POPJ##
+	PUSHJ	P,.TSIXS##
+	MOVEI	T1,[ASCIZ/ J/]
+	PUSHJ	P,.TSTRG##
+	PUSHJ	P,JB$CJN##
+	PJRST	.TDECW##
+
+	SUBTTL	Format print routines -- TCORE - Type core size
+
+TLCORE:	PUSHJ	P,JB$PPL##		;GET PHYSICAL LOW SIZE
+	PJRST	.TDECW##		;TYPE IT AND RETURN
+
+THCORE:	PUSHJ	P,JB$SGN##		;GET HIGH SEG NUMBER, ETC.
+	JUMPL	T1,[MOVSI T1,'SPY'	;SPY SEGMENT?
+		    PJRST .TSIXN##]	;YES--INDICATE SO
+	PUSHJ	P,JB$PPH##		;GET PHYSICAL HIGH SIZE
+	PJRST	.TDECW##		;TYPE IT AND RETURN
+
+TCORE:	PUSHJ	P,.SAVE1##		;SAVE P1
+	PUSHJ	P,JB$PPL##		;PHYSICAL LOW SIZE
+	MOVEI	P1,(T1)			;SAVE A MOMENT
+	PUSHJ	P,.TDECW##
+;	PUSHJ	P,JB$PVL##		;VIRTUAL LOW SIZE
+;	CAIE	T1,-1(P1)		;SAME AS LOW SIZE (+.UPMP)
+;	  PUSHJ	P,.TDECP##
+	PUSHJ	P,JB$SGN##
+	 JUMPL	T1,[MOVEI T1,[ASCIZ/+SPY/]
+		 PUSHJ	P,.TSTRG##	;TYPE SPY
+		 JRST	TCORE1]		;AND OUTPUT FUNNY SPACE
+	MOVEI	T1,"+"
+	PUSHJ	P,.TCHAR##
+	PUSHJ	P,JB$PPH##		;PHYSICAL HIGH SIZE
+	MOVEI	P1,(T1)			;SAVE A MOMENT
+	PUSHJ	P,.TDECW##
+;	PUSHJ	P,JB$PVH##		;VIRTUAL HIGH SIZE
+;	CAIE	T1,(P1)			;SAME AS HIGH SIZE
+;	  PUSHJ	P,.TDECP##
+TCORE1:	MOVEI	T1,"+"
+	PUSHJ	P,.TCHAR##
+	PUSHJ	P,JB$OVP##		;GET NUMBER OF OVERHEAD PAGES
+	PJRST	.TDECW##		;TYPE AND RETURN
+;	MOVE	T1,S.INCLUDE##		;GET /INCLUDE
+;	TRNN	T1,INCFUNNY##		;/INCLUDE:FUNNY?
+;	 POPJ	P,			;NO--RETURN
+;	PUSHJ	P,.TLBRK##		;TYPE "["
+;	PUSHJ	P,JB$PFS##		;PAGES FUNNY SPACE
+;	PUSHJ	P,.TDECW##		;TYPE
+;	PJRST	.TRBRK##		;CLOSE "]" AND RETURN
+	SUBTTL	Format print routines -- TPGRR - Type paging rate
+
+TPGRR:	JUMPE	T1,.POPJ##		;RETURN IF ZERO
+	PUSH	P,T1			;ELSE SAV IT
+	MOVEI	T1,[ASCIZ/PGR:/]
+	PUSHJ	P,.TSTRG##
+	POP	P,T1			;GET IT BACK
+					;AND FALL INTO TPGR
+TPGR::	IDIVI	T1,^D100		;SPLIT APART
+	PUSH	P,T2			;SAVE REMAINDER
+TPGRZ:	PUSHJ	P,.TDECW##		;TYPE
+	PUSHJ	P,.TDOT##		;DOT
+	POP	P,T1			;GET REMAINDER
+	MOVEI	T3,^D2			;2 DIGITS
+	PJRST	.TDECZ##		;TYPE WITH ZEROS
+
+	SUBTTL	Format print routines -- THPQP - Type HPQ value
+
+THPQP:	JUMPE	T1,.POPJ##
+	PUSH	P,T1
+	MOVEI	T1,[ASCIZ/HPQ:/]
+	PUSHJ	P,.TSTRG##
+	POP	P,T1
+	PJRST	.TDECW##
+
+	SUBTTL	Format print routines -- TDSKP - Type DSK value
+
+TDSKP:	JUMPE	T1,.POPJ##
+	PUSH	P,T1
+	MOVEI	T1,[ASCIZ/DPR:/]
+	PUSHJ	P,.TSTRG##
+	POP	P,T1
+	PJRST	.TDECW##
+
+	SUBTTL	Format print routines -- TLIMIB - Type batch time limit
+
+TLIMI:	JUMPE	T1,.POPJ##
+	PUSH	P,T1
+	MOVEI	T1,[ASCIZ/LIM:/]
+	PUSHJ	P,.TSTRG##
+	POP	P,T1
+TLIMIB:	JUMPE	T1,.POPJ##
+	PJUMPG	T1,TTIME
+	PUSH	P,T1
+	PUSHJ	P,.TDASH##
+	POP	P,T1
+	MOVNS	T1
+	PJRST	TTIME
+
+	SUBTTL	Format print routines -- TPC - type octal PC word
+
+TPC:	TLNN	T1,-1			;SECTION NUMBER
+	JRST	TPC1			;NO
+	PUSH	P,T1			;SAVE PC
+	HLRZS	T1			;ISOLATE SECTION NUMBER
+	PUSHJ	P,.TOCTW##		;TYPE IT
+	PUSHJ	P,.TCOMA##		;SEPARATE
+	PUSHJ	P,.TCOMA##		; SECTION NUMBER
+	POP	P,T1			;RESTORE PC
+	HRRZS	T1			;ISOLATE SECTION RELATIVE ADDRESS
+TPC1:	MOVEI	T3,^D6			;SIX DIGITS
+	PJRST	.TOCTZ##		;TYPE AND RETURN
+
+	SUBTTL	Format print routines -- TTIME - Print time
+
+TTIME:	SKPNO	S.INCREMENAL##
+	 CAML	T1,[^D60*^D60*^D1000]
+	  CAIA
+	   PJRST .TTIME##
+	ADDI	T1,^D500
+	PJRST	.TTIME##
+
+	SUBTTL	Format print routines -- TDECB - Type a decimal number if non-zero
+
+TDECB:	JUMPE	T1,.POPJ##
+	PJRST	.TDECW##
+
+	SUBTTL	Format print routines -- T1000 - Type a decimal number (scaled down 1000)
+
+T1000:	ADDI	T1,^D500
+	IDIVI	T1,^D1000
+	PJRST	.TDECW##
+
+	SUBTTL	Format print routines -- TWTO - Type WTO privs
+
+TWTO::	MOVE	T1,[ [ASCIZ/all/]
+		     [ASCIZ/WTO/]
+		     [ASCIZ/none/] ](T1)
+	PJRST	.TSTRG##
+
+	SUBTTL	Format print routines -- TOPR - Type OPR privs
+
+TGOP::	MOVE	T1,[ [ASCIZ/none/]
+		     [ASCIZ/system/]
+		     [ASCIZ/host/]
+		     [ASCIZ/remote/] ](T1)
+	PJRST	.TSTRG##
+
+	SUBTTL	Format print routines -- TBSN - Type batch stream number
+
+TBSN:	PJMPGE	T1,.TDECW##
+	MOVEI	T1,[ASCIZ/no/]
+	PJRST	.TSTRG##
+TRMT:	MOVE	T1,[EXP "L","R"](T1)
+	PJRST	.TCHAR##
+
+TAPC:	MOVE	T1,[EXP "?","H","D","T","G","A","M","N","L","C","?"](T1)
+	PJRST	.TCHAR##
+
+TDSC:	JUMPE	T1,.POPJ##
+	PUSHJ	P,LB$APC##
+	CAIN	T1,1				;HARDWIRED?
+	 SKIPA	T1,["P"]			;YES--POWERED ON
+	  MOVEI	T1,"C"				;NO--CARRIER
+	PJRST	.TCHAR##
+
+TSLV:	MOVE	T1,[EXP " ","S"](T1)
+	PJRST	.TCHAR##
+
+TMCL:	MOVE	T1,[EXP " ","M"](T1)
+	PJRST	.TCHAR##
+
+TTAC:	MOVE	T1,[EXP " ","A"](T1)
+	PJRST	.TCHAR##
+
+TTAP:	MOVE	T1,[EXP " ","I"](T1)
+	PJRST	.TCHAR##
+
+TTCJ:	MOVE	T1,[EXP " ","U"](T1)
+	PJRST	.TCHAR##
+
+TJOB:	JUMPE	T1,.POPJ##
+	PUSH	P,T1
+	MOVEI	T1,[ASCIZ/job/]
+	PUSHJ	P,.TSTRG##
+	POP	P,T1
+	MOVEI	T3,^D3
+	PJRST	.TDECJ##
+
+TOWNER::PUSH	P,T1			;SAVE OWNER PPN
+	PUSHJ	P,TOWNPJ		;TYPE IT
+	MOVE	T1,(P)			;GET PPN AGAIN
+	PUSHJ	P,TOWNCM		;COMMA TO SEPARATE
+	POP	P,T1			;GET PPN BACK
+TOWNPG:	TLZA	T1,777777		;KEEP ONLY PROGRAMMER NUMBER
+TOWNPJ:	HLRZS	T1			;KEEP ONLY PROJECT NUMBER
+	JUMPE	T1,.POPJ##		;RETURN IF NO PPN
+	CAIN	T1,777777		;WILD?
+	PJRST	.TASTR##		;YES--TYPE AN ASTERISK AND RETURN
+	PJRST	.TOCTW##		;TYPE OCTAL PROJECT OR PROGRAMMER #
+TOWNCM:	JUMPE	T1,.TSPAC##		;JUST TYPE A SPACE IF NO PPN
+	PJRST	.TCOMA##		;ELSE TYPE A COMMA
+
+TSTATU:	PUSHJ	P,.SAVE2##		;SAVE SOME ACS
+	MOVE	P1,T1			;GET DSKCHR UUO BLOCK ADDRESS
+	MOVE	P2,[-SSTLEN,,SSTTAB]	;AOBJN POINTER TO TABLE
+	TRZ	F,FR.COMMA		;INIT COMMA NEEDED FLAG
+TSTAT1:	HLLZ	T1,(P2)			;GET A BIT
+	TDNN	T1,-1(P1)		;TURNED ON?
+	JRST	TSTAT2			;NO
+	TROE	F,FR.COMMA		;BEEN HERE BEFORE?
+	PUSHJ	P,.TCOMA##		;YES--SEPARATE
+	HRRZ	T1,(P2)			;GET STRING ADDRESS
+	PUSHJ	P,.TSTRG##		;TYPE TEXT
+TSTAT2:	AOBJN	P2,TSTAT1		;LOOP
+	SKIPG	.DCSAJ(P1)		;SINGLE ACCESS?
+	POPJ	P,			;NO
+	TROE	F,FR.COMMA		;NEED TO SEPARATE?
+	PUSHJ	P,.TCOMA##		;YES
+	MOVEI	T1,[ASCIZ |Single access by job |]
+	PUSHJ	P,.TSTRG##		;TYPE TEXT
+	HRRZ	T1,.DCSAJ(P1)		;GET JOB NUMBER
+	PJRST	.TDECW##		;TYPE IT AND RETURN
+
+SSTTAB:	DC.PRV+[ASCIZ	|Private|]
+	DC.NNA+[ASCIZ	|No new access|]
+	DC.AWL+[ASCIZ	|Software write-locked|]
+SSTLEN==.-SSTTAB
+
+IFN FTLGNQ,<
+TLQP:	JUMPE	T1,.POPJ##
+	JUMPL	T1,[MOVEI T1,"P"
+		    PJRST .TCHAR##]
+	PUSH	P,T1
+	MOVEI	T1,[ASCIZ/Q#/]
+	PUSHJ	P,.TSTRG##
+	POP	P,T1
+	PJRST	.TDECW##
+> ;END IFN FTLGNQ
+
+TCOMMA:	PUSHJ	P,JB$PPN##		;GET PPN
+	PUSH	P,T1			;SAVE
+	PUSHJ	P,JB$LPN##		;GET LOGGED IN PPN
+	POP	P,T2			;RESTORE PPN
+	CAME	T1,T2			;MATCH?
+	 PJRST	.TDASH##		;NO--DELIMIT "-"
+	PJRST	.TCOMA##		;YES--DELIMIT ","
+TOBJS:	PUSHJ	P,.SAVE1##		;SAVE P1
+	MOVN	P1,OBJ.MX##		;GET -OBJECT COUNT
+	HRLZS	P1			;PUT IN LH
+	HRR	P1,T1			;POINT TO THE RETURNED BLOCK
+
+OBJS.1:	SKIPN	T1,(P1)			;GET A WORD
+	JRST	OBJS.2			;NULL ENTRY
+	HLRZS	T1			;GET THE NCL OBJECT TYPE
+	ADD	T1,OBJTAB##		;INDEX INTO THE ANF-10 OBJECT TABLE
+	HRLZ	T1,(T1)			;GET THE SIXBIT OBJECT NAME
+	PUSHJ	P,.TSIXN##		;OUTPUT IT
+	PUSHJ	P,.TLBRK##		;OUTPUT A BRACKET
+	HRRZ	T1,(P1)			;GET THE NUMBER OF DEVICES
+	PUSHJ	P,.TDECW##		;OUTPUT IT
+	PUSHJ	P,.TRBRK##		;OUTPUT A BRACKET
+	PUSHJ	P,.TSPAC##		;AND A SPACE
+
+OBJS.2:	AOBJN	P1,OBJS.1		;LOOP
+	POPJ	P,			;DONE
+
+
+; Operator TTY number
+TOOPR:	JUMPGE	T1,.TOCTW##		;OUTPUT TTY NUMBER IN OCTAL UNLESS
+	PJRST	.TSPAC##		; NO OPR LINE CONNECTED AT THIS STATION
+
+
+; Topology/cost output
+TOTOP:	PUSHJ	P,.SAVE2##		;SAVE P1 AND P2
+	MOVE	P1,T1			;POINT TO BLOCK (WORKING COPY)
+	MOVE	P2,P1			;REMEMBER THE ORIGINAL
+
+TOTO.1:	SKIPN	T1,(P1)			;END OF LIST?
+	JRST	TOTO.2			;YES
+	PUSHJ	P,TONODE		;OUTPUT (NNN)
+	MOVEI	T1,"/"			;GET A SLASH
+	PUSHJ	P,.TCHAR##		;OUTPUT IT
+	HLRZ	T1,(P1)			;GET COST
+	PUSHJ	P,.TDECW##		;OUTPUT IT
+	HLRZ	T2,(P1)			;GET COST AGAIN
+	MOVEI	T1,2			;NUMBER OF SPACES TO NEXT FIELD
+	CAIGE	T1,^D9			;PAD COST OUT
+	ADDI	T1,1			;  TO 2 COLUMNS
+	PUSHJ	P,.TSPAN##		;OUTPUT N SPACES
+	AOJA	P1,TOTO.1		;LOOP
+
+TOTO.2:	CAME	P1,P2			;DECNET COMPAT PORT MAYBE?
+	POPJ	P,			;NO
+	MOVEI	T1,[ASCIZ |None|]	;MAKE IT LOOK LIKE THE NETWORK PROGRAM
+	PJRST	.TSTRG##		;OUTPUT TEXT AND RETURN
+
+
+; Type node neighbors
+TONEI:	PUSHJ	P,.SAVE1##		;SAVE P1
+	MOVE	P1,T1			;POINT TO LIST
+
+TONE.1:	SKIPN	T1,(P1)			;GET A NODE
+	POPJ	P,			;DONE IF END OF LIST
+	PUSHJ	P,TONODE		;TYPE IT
+	MOVEI	T1,2			;COLUMNS TO THE NEXT FIELD
+	PUSHJ	P,.TSPAN##		;OUTPUT SPACE
+	AOJA	P1,TONE.1		;AND LOOP
+
+
+; Type a node number as (nnn) with leading spaces so columns line up
+; Call:	MOVE	T1, node number
+;	PUSHJ	P,TONODE
+;
+TONODE:	HRRZS	T3,T1			;SAVE NODE NUMBER
+	LSH	T1,33			;LEFT JUSTIFY
+	JFFO	T1,.+1			;COUNT LEADING ZEROS
+	MOVE	T1,T2			;GET COUNT
+	IDIVI	T1,3			;3 BITS PER DIGIT
+	SKIPE	T1,[EXP 0,1,2](T1)	;GET NUMBER OF LEADING SPACES
+	PUSHJ	P,.TSPAN##		;OUTPUT THEM
+	PUSHJ	P,.TLPRN##		;OUTPUT "("
+	MOVE	T1,T3			;GET NODE NUMBER
+	PUSHJ	P,.TOCTW##		;OUTPUT IT
+	PJRST	.TRPRN##		;OUTPUT ")" AND RETURN
+; Type a YES or NO
+; Call:	MOVE	T1, 0 or 1
+;	PUSHJ	P,TYESNO
+;
+TYESNO::MOVEI	T1,[[ASCIZ |No|]
+		    [ASCIZ |Yes|]](T1)
+	PJRST	.TSTRG##		;TYPE YES OR NO AND RETURN
+	SUBTTL	Storage
+
+	$LOW
+
+	END

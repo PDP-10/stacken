@@ -1,0 +1,1425 @@
+	TITLE	SOSSET - The Set and Give Information Commands
+;		-------------------------------------------
+; 
+;  This file contains code for:
+;	1. the set (_) command
+;	2. the give (=) command
+;	3. the unique initial segment decoder
+;	4. the name table
+; 
+
+	SEARCH	SOSTCS
+	$INIT
+
+	SUBTTL	The _ Command
+
+SET::	PUSHJ	P,SCAN##	; Get the thing to set to
+	TRNN	FL,IDF		; Must be an ident
+	NERROR	ILC
+	PUSHJ	P,DOSET		; Call subroutine to do set command
+	  JRST	XERR
+	JRST	COMND##		; Ok return
+
+DOSET::	PUSHJ	P,XCODE		; Fetch dispatch arg
+	TLZ	T1,477777	; Clear give addrs
+	PUSH	P,T1		; Save dispatch
+	TLNN	FL2,INPARS	; Skip term check if parse
+	PUSHJ	P,SCAN		; And check for terminator
+	CAIE	C,":"		; Colon ok also
+	CAIN	C,"="		; Is it an =?
+	JRST	SETVAR		; Yes: set something
+	POP	P,T1		; Get dispatch addr
+	TLNN	T1,(1B1)	; Better not require arg
+	PUSHJ	P,CKTERM	; Check legal term
+	POPJ	P,
+	HRRZ	T1,T1
+	JUMPE	T1,CPOPJ##
+	PUSHJ	P,0(T1)		; Do routine
+	JRST	CPOPJ1##	; Give ok return
+
+SETM37:	MOVEI	T1,1		; A 1
+	MOVEM	T1,QMDFLG	; Store
+	JRST	CLRDPY		; And clear DPY
+
+SETM33:	SETOM	QMDFLG		; Case folding for lower and specials
+CLRDPY:	SETZM	DPYFLG		; TTY's are not displays
+	PUSHJ	P,SETTTY##	; Get TTY status set correctly
+	PJRST	CLRLF		;NO SPECIAL DISPLAY HANDLING
+
+SETSTD::SETZM	QMDFLG		; Clear case folding
+	PJRST	CLRDPY		; Make sure display bits are off
+
+SETTXT:	TDZA	T2,T2		; Clear T2 for lower case
+SETPRG:	MOVEI	T2,1		; Set for upper case
+	MOVEI	T1,2003		; Trmop function code for lc
+	JRST	SETERM		; Merge with common code
+
+
+SETCON:	SKIPA	T1,[-2]		;GET EXIT CONTINIOUS
+CLRSEQ:	MOVEI	T1,1
+	JRST	STOSEQ
+
+SETXSQ:	TDZA	T1,T1
+SETSEQ:	MOVNI	T1,1
+STOSEQ:	MOVEM	T1,.UNSQF##
+	POPJ	P,
+
+SETBAS:	SKIPN	INIFLG##	; Illegal if not initial
+	NERROR	ILC
+	SETOM	BASICF
+	POPJ	P,
+
+SETEXM:	SKIPN	TOTCHG		; Check for changes
+	SKIPE	CHGCNT		; on this or previous passes
+	NERROR	ACF		; And reject this if so
+	SETOM	XFLAG		; Note that he said /X
+	TLZ	FL2,LNUMF	; assume no sequence
+	  ;			; and fall into read only
+SETRED:	SKIPN	TOTCHG		; If changes sometime before
+	SKIPE	CHGCNT		; or on this pass
+	NERROR	ACF		; %Already changed the file
+	TRO	FL,READOF
+	POPJ	P,
+
+	SUBTTL	CHKCOM -- HERE TO CHECK FOR EXPERIMENTAL EDITOR AND APPLY
+;DEFAULTS TO LOOK LIKE V21 SOS
+;
+CHKCOM::HRROI	T1,.GTDFL	;GET DEFAULTS WORD
+	GETTAB	T1,		;ASK MONITOR
+	 MOVEI	T1,0		;FAILED
+	TLNE	T1,(<PD.XED==1B13>);EXPERIMENTAL EDITOR?
+	 PJRST	EXPSET		;YES--CLEAR NEWCOMMAND
+	PUSHJ	P,SETQZB	;NO--SET /QZBAK
+	PUSHJ	P,CLRSEQ	;CLEAR /XSEQUENCE SET /SEQUENCE
+	PJRST	SETNCMD		;SET /COMPATIBILY AND RETURN
+
+EXPSET:
+CLRNCMD:	SOSA	NEWCMD		;CLEAR /NEWCOMMAND
+SETNCMD:	  SETZM	NEWCMD		;SET /NEWCOMMAND
+	POPJ	P,		;AND RETURN
+
+SETDPY::SETOM	DPYFLG		; Set for display
+	SETZM	QMDFLG		; Set for no case flagging
+	PJRST	SETTTY##	; Set TTY attributes
+
+SETBAU:	MOVEI	T3,BAUD			;GET BAUD STORAGE
+	PJRST	SETGTB			;AND SET
+
+GIVBAU:	OUTSTR	[ASCIZ/Baud /]		;TYPE
+	MOVE	T1,BAUD			;GET BAUD SETTING
+	PUSHJ	P,GIV2			;PRINT THAT
+	OUTSTR	[ASCIZ/Speed /]		;GET SPEED
+	MOVE	T1,TSPEED		;GET SPEED
+	PJRST	GIV2			;PRINT AND RETURN
+
+SETNALT:SOSA	NEWALT##		; SET NEW ALTER FLAG
+CLRNALT:  SETZM	NEWALT			; CLEAR NEW ALTER FLAG
+	POPJ	P,			; AND RETURN
+GIVNALT:SKIPN	NEWALT			;SEE IF NEW ALTER
+	 OUTSTR	[ASCIZ/No /]		;
+	OUTSTR	[ASCIZ/New alter mode/]	;
+	PJRST	FOCRLF			;
+
+SETUND:	SETOM	SWUNDER			;SET UNDERLINE SPECIAL
+	POPJ	P,			;AND RETURN
+
+CLRUND:	SETZM	SWUNDER			;CLEAR UNDERLINE SPECIAL
+	POPJ	P,			;AND RETURN
+
+GIVUND:	SKIPN	SWUNDER			;SEE IF SET
+ 	 OUTSTR	[ASCIZ/No /]		;..
+	OUTSTR	[ASCIZ/Underline/]	;FINISH OFF
+	PJRST	FOCRLF			;AND RETURN
+
+SETXIN: SOSA	XINSRT##		; SET X-INSERT MODE
+CLRXIN:	 SETZM	XINSRT##		; CLEAR X-INSERT MODE
+	POPJ	P,			; AND RETURN
+GIVXIN:	SKIPN	XINSRT##
+	 OUTSTR	[ASCIZ/No /]
+	OUTSTR	[ASCIZ/X insert new line mode/]
+	PJRST	FOCRLF
+
+SETLF:	PUSHJ	P,SETTTY##		;SETUP TERMINAL
+	PUSHJ	P,FNDTRM		;GET TERMINAL TYPE INDEX
+	 POPJ	P,			;CANT
+	MOVE	T2,TRMCR(T1)		;GET CR STRING
+	MOVEM	T2,TMFCR		;SAVE
+	MOVE	T2,TRMCUP(T1)		;GET CURSOR UP FUNCTION
+	MOVEM	T2,TMFCUP		;SAVE
+	POPJ	P,
+
+CLRLF:	SETZM	TMFCR			;ZAP THE FUNCTIONS
+	SETZM	TMFCUP			;..
+	PJRST	CLRDIS			;AND CLEAR DISPLAY FUNCTIONS
+
+GIVLF:	PUSHJ	P,FNDTRM		;GET TERMINAL TYPE
+	 JRST	GIVNLF			;NOT THERE
+	SKIPN	TMFCUP			;CAN IT DO IT?
+	 JRST	GIVNLF			;NO
+	OUTSTR	[ASCIZ/LF /]		;TYPE
+	PJRST	GIVTRM			;AND LIST TERMINAL TYPE
+GIVNLF:	OUTSTR	[ASCIZ/No LF
+/]					;
+	POPJ	P,			;AND RETURN
+
+SETDIS::PUSHJ	P,SETTTY##		;SETUP TERMINAL STUFF
+	PUSHJ	P,FNDTRM		;GET TERMINAL TYPE INDEX
+	 POPJ	P,			;CANT
+	MOVE	T2,TRMCR(T1)		;GET CR STRING
+	MOVEM	T2,TMFCR		;SAVE
+	MOVEI	T3,0			;CLEAR FLAG
+	SKIPE	T2,TRMCLN(T1)		;GET CLEAT-TO-END-OF-LINE
+	 ADDI	T3,1			;COUNT 1
+	MOVEM	T2,TMFCLN		;SAVE
+	SKIPE	T2,TRMCTE(T1)		;GET CLEAR-TO-END-OF-SCREEN
+	 ADDI	T3,1			;COUNT 2
+	MOVEM	T2,TMFCTE		;SAVE
+	SKIPE	T2,TRMCUP(T1)		;GET CURSOR-UP
+	 ADDI	T3,1			;COUNT 3
+	MOVEM	T2,TMFCUP		;SAVE
+	MOVE	T2,TRMCLR(T1)		;GET CLEAR-ENTIRE-SCREEN
+	MOVEM	T2,TMFCLR		;SAVE
+	MOVE	T2,TRMCUR(T1)		;GET CURSOR ADDRESSING PARA
+	MOVEM	T2,TMFCUR		;SAVE
+	CAIN	T3,3			;ALL THREE FUNCTIONS?
+	 SOS	VT52FL			;YES--FLAG SPECIAL FEATURES
+	POPJ	P,			;AND RETURN
+
+CLRDIS:	SETZM	VT52FL			;CLEAR SPECIAL FEATURES
+	SETZM	TMFCUR			;AND NO CURSOR ADDRESSING
+	POPJ	P,			;RETURN
+
+GIVDIS:	PUSHJ	P,FNDTRM		;FIND TERMINAL TYPE
+	 JRST	GIVNDI			;NOT THERE
+	SKIPL	VT52FL			;SPECIAL STUFF?
+	 JRST	GIVNDI			;NO
+	OUTSTR	[ASCIZ/Display /]	;GIVE TEXT
+GIVTRM:	MOVE	T1,TRMNAM(T1)		;GET NAME
+	MOVEI	T3,OCHR##		;CHAR PUTTER
+	PUSHJ	P,PRTSX##		;TYPE TERMINAL
+	PJRST	FOCRLF			;AND FINISH OFF
+GIVNDI:	OUTSTR	[ASCIZ/No Display
+/]					;
+	POPJ	P,			;RETURN
+
+
+FNDTRM:	MOVE	T1,TERMNM		;GET TERMINAL NAME
+	MOVSI	T2,-LENTRM		;GET LENGTH OF KNOWN TERMINALS
+FNDT.L:	MOVEI	T3,(T2)			;GET INDEX
+	IMULI	T3,LENFNC		;TYPES FUNCTION LENGTH
+	CAME	T1,TRMTAB+TRMNAM(T3)	;SEE IF MATCHES
+	 AOBJN	T2,FNDT.L		;NO--LOOP
+	JUMPG	T2,CPOPJ##		;ERROR IF NOT THERE
+	MOVEI	T1,TRMTAB(T3)		;RETURN OFFSET
+	JRST	CPOPJ1##		;AND TAKE GOOD RETURN
+TRMNAM==0
+TRMCR==1
+TRMCLN==2
+TRMCTE==3
+TRMCUP==4
+TRMCLR==5
+TRMCUR==6
+LENFNC==7
+DEFINE TYPE(NAME,FUNCTIONS),<
+LENTRM==LENTRM+1
+	DEFINE .CR<15>
+	DEFINE ..CLN<0>
+	DEFINE ..CTE<0>
+	DEFINE ..CUP<0>
+	DEFINE ..CLR<0>
+	DEFINE ..CUR<0>
+	EXP	SIXBIT	/NAME/
+	FUNCTIONS
+	DEFINE ..CR,<OUTSTR [BYTE (7) .CR,0]>
+	..CR
+	..CLN
+	..CTE
+	..CUP
+	..CLR
+	..CUR
+>
+
+DEFINE CR(STR),<DEFINE .CR,<STR>>
+DEFINE CLR(STR),<DEFINE ..CLR,<OUTSTR [BYTE(7) STR,.CR,0]>>
+DEFINE CUP(STR),<DEFINE ..CUP,<OUTSTR [BYTE(7) .CR,STR,.CR,0]>>
+DEFINE CLN(STR),<DEFINE ..CLN,<OUTSTR [BYTE(7) STR,.CR,0]>>
+DEFINE CTE(STR),<DEFINE ..CTE,<OUTSTR [BYTE(7) .CR,STR,.CR,0]>>
+DEFINE CUR(ADDR,NCHR,CMAX),<DEFINE ..CUR,<CMAX*1000+NCHR,,ADDR##>>
+
+LENTRM==0
+TRMTAB:
+TYPE 4023,<
+	CUP	<34,40,66,15>
+>
+TYPE VT52,<
+	CLR	<33,"H",33,"J">
+	CTE	<33,"J">
+	CLN	<33,"K">
+	CUP	<33,"A">
+	CUR	V52CUR,4,120
+>
+TYPE VT61,<
+	CLR	<33,"H",33,"J">
+	CTE	<33,"J">
+	CLN	<33,"K">
+	CUP	<33,"A">
+	CUR	V52CUR,4,120
+>
+TYPE VT05,<
+	CR	<15,177,177,177>
+	CLR	<35,177,177,177,177,177,37,177,177,177,177,177>
+	CTE	<37,177,177,177,177,177>
+	CLN	<36,177,177,177,177,177>
+	CUP	<32,177,177,177,177,177>
+>
+TYPE ADDS,<
+	CUP	<32>
+	CUR	ADDCUR,2,177
+>
+TYPE INFOTON,<
+	CTE	<13>
+	CLN	<13>
+	CUP	<34>
+>
+TYPE REGENT,<
+	CTE	<33,"k">
+	CLN	<33,"K">
+	CUP	<32>
+	CUR	REGCUR,2,177
+>
+TYPE VT100,<
+	CLR	<33,"[","H",33,"[","J">
+	CTE	<33,"[","J">
+	CLN	<33,"[","K">
+	CUP	<33,"[","A">
+>
+TYPE I100,<
+	CTE	<33,"J">
+	CLN	<33,"K">
+	CUP	<33,"A">
+>
+TYPE 4027,<
+	CLR	<"!","U","P","3","4","!","D","L","I","3","4">
+	CTE	<"!","D","L","I","3","4">
+	CLN	<"!","D","C","H","8","0">
+	CUP	<"!","U","P","1">
+>
+TYPE DIABLO,<
+	CUR	DIACUR,3,175
+>
+
+SETDPA:	MOVEI	T1,1
+	JRST	STOAAL
+
+CLRALT:	TDZA	T1,T1
+SETAAL:	SETO	T1,
+STOAAL:	MOVEM	T1,AUTALT##
+	POPJ	P,
+
+SAEXAC:	TDZA	T1,T1
+CAEXAC:	MOVEI	T1,40		; Used with a TDZ instruction in SOSALT
+	MOVEM	T1,AEXACF
+	POPJ	P,
+
+SEXACT:	SETOM	EXACTF
+	POPJ	P,
+
+CEXACT:	SETZM	EXACTF
+	POPJ	P,
+
+
+SETTEL:	SOSA	TELFLG##	; Do a tell on exit
+SETNTL:	CLEARM	TELFLG##	; Don't do tell on exit
+	POPJ	P,		; Return
+
+SETBKS:	TLOA	FL2,BKSPF	; Treat backspaces as rubouts
+SETNBS:	TLZ	FL2,BKSPF	; Do not treat backspaces as rubouts
+	POPJ	P,
+
+SETDCD:	TLOA	FL2,PDECID
+CLRDCD:	TLZ	FL2,PDECID
+	POPJ	P,
+
+SETOLD:	MOVEI	T1,1		; Set to +1
+	JRST	STOBAK
+CLRBAK:	TDZA	T1,T1		; Clear and skip
+SETBAK:	SETO	T1,
+STOBAK:	MOVEM	T1,.BAKF##
+	POPJ	P,
+
+IFN %UACCL,<
+SETCCL:	SOSA	CCLFLG##	; Treat CCL entry special
+CLRCCL:	SETZM	CCLFLG##	; Clear special CCL flag
+>
+IFE %UACCL,<
+SETCCL:
+CLRCCL:	OUTSTR	[ASCIZ"%Not assembled for /CCL feature
+"]
+	POPJ	P,		; THATS EVEN EASIER!
+>;END IFE %UACCL
+	POPJ	P,		; That was easy, wasn't it
+
+SETCCX:	SOSA	CCEXIT		; ^C exits direct to monitor
+CLRCCX:	SETZM	CCEXIT		; ^C asks for user confirmations
+	POPJ	P,		; Done
+
+QSON:	TROA	FL2,QSEPF
+QSOFF:	TRZ	FL2,QSEPF
+	POPJ	P,
+
+
+SETEXP:	SETOM	EXPFLG		;SET /EXPERT
+	SKIPE	NEWCMD		;SEE IF IN COMPAT MODE
+	  POPJ	P,		;NO--JUST RETURN
+	PJRST	CLRINF		;YES--CLEAR /INFORM TOO
+
+SETNOV:	SETZM	EXPFLG		;CLEAR /EXPERT
+	SKIPE	NEWCMD		;SEE IF IN COMPAT MODE
+	  POPJ	P,		;NO-JUST RETURN
+	PJRST	SETINF		;YES-SET /INFORM TOO
+
+
+SETINF::SOSA	INFFLG
+CLRINF:	SETZM	INFFLG
+	POPJ	P,
+
+CLRAIN:	SOSA	NOAINF		; Flag /NOINSERT
+SETAIN:	SETZM	NOAINF		; Flag /INSERT
+	POPJ	P,		; and return
+SETQZB:	SOSA	QZBAKF
+CLRQZB:	SETZM	QZBAKF
+	POPJ	P,
+
+SETUPP:	TDZA	T1,T1
+SETLOW:	MOVEI	T1,40
+	MOVEM	T1,CASEBT
+	POPJ	P,
+
+SETNUM::TLOA	FL2,LNUMF	; Set for printing line numbers
+SETNNM:	TLZ	FL2,LNUMF	; No more numbers!
+	POPJ	P,
+
+; Here to set the protection
+
+SETPRT:	LSHC	T1,-^D36	; T2 gets T1, T1 is cleared
+	TRZ	T2,1		; Clear line number bit
+	SETZ	T3,		; Clear accumulator
+SETPR1:	SETZ	T1,
+	LSHC	T1,7		; Get a character
+	LSH	T3,3		; Make room for next
+	SUBI	T1,"0"		; Convert to octal
+	CAIL	T1,0
+	CAILE	T1,7		; Make sure really an octal digit
+	JRST	SETV2		; No
+	IORI	T3,(T1)		; Move to accumulator
+	JUMPN	T2,SETPR1	; Loop over whole number
+	JUMPE	T3,SETV2	; 000 is illegal
+	CAILE	T3,777		; As is something larger than 777
+	JRST	SETV2		; So don't allow it
+	LSH	T3,^D27		; Shift to protection field
+	MOVEM	T3,PRTCOD	; Save
+	POPJ	P,		;  and return
+
+SETINI:	SETOM	INTFLG		;SET FLAG
+	POPJ	P,		;AND RETURN
+	SUBTTL	SET -- Code to set a variable, plus various set routines
+
+; Here to set a variable
+
+SETVAR::TLNE	FL2,INPARS
+	PUSHJ	P,SCAN		; Need extra scan if in parse
+	PUSHJ	P,SCAN		; Get an arg
+	MOVE	T3,0(P)		; Get what to do
+	TLNN	T3,(1B1)	; Need arg
+	JRST	SETV2		; No: error
+	TLNN	T3,(1B2)	; Need numeric arg?
+	JRST	SETV1		; No: just dispatch
+	TRNN	FL,NUMF		; Yes: is it?
+	JRST	SETV2		; Nope - lose
+	TLNE	FL2,INPARS
+	JRST	SETV1		; Skip term check in parse
+	PUSH	P,T2		; Save it
+	PUSH	P,T1		; In binary and ASCII
+	PUSHJ	P,SCAN		; Check for terminator
+	POP	P,T1		; Get back ascid
+	POP	P,T2		; Binary
+	PUSHJ	P,CKTERM	; Which had better be there
+	JRST	SETV2
+SETV1:	POP	P,T3		; Get dispatch
+	HRRZ	T3,T3
+	JUMPE	T3,CPOPJ
+	PUSHJ	P,0(T3)		; Dispatch
+	JRST	CPOPJ1		; And return to cmd loop
+
+SETV2:	POP	P,0(P)		; Prune pdl
+	POPJ	P,		; And give error return
+
+SETPLN:	MOVEI	T3,PLINES	; Plines for p
+	JRST	SETGTB
+
+
+SETRMR:	MOVEI	T3,RMAR		; Right margin for justify
+	JRST	SETGTB
+
+SETLMR:	MOVEI	T3,LMAR		; Left margin
+	JRST	SETGTB
+
+SETPMR:	MOVEI	T3,PMAR		; Paragraph margin
+	JRST	SETGTB
+
+SETINC:	MOVEI	T3,INCR		; Perm increment
+	JRST	SETGTA
+
+SETMLN:	MOVEI	T3,MAXLN	; Maximum line number
+	JRST	SETGTA
+
+SETSTP:	SKIPA	T3,[TECINC]	; Step
+SETFST:	MOVEI	T3,TECFST	; Start
+	JRST	SETGTA
+
+SETSAV:	MOVEM	T2,SSAVEN	; Store in reset place too
+	MOVEM	T2,SAVEN
+	POPJ	P,
+
+SETISV:	MOVEM	T2,SISAVN
+	MOVEM	T2,ISAVEN
+	POPJ	P,
+
+SETLEN:	MOVEI	T3,PAGESZ
+	JRST	SETGTB
+
+CLRCRF:	MOVEI	T2,0		; /NOCRLF sets it to zero
+SETCRF:	CAIG	T2,^D200	; Make sure not completely absurd
+	CAIGE	T2,0		; 
+	NERROR	ILC
+	MOVEM	T2,CRLFSW
+	PJRST	SETTTY##
+
+SETDLF:	SOSA	DELETF		; Set it
+CLRDLF:	SETZM	DELETF		; Clear it
+	POPJ	P,		; And return
+GIVDLF:	OUTSTR	[ASCIZ/ED /]
+	SKIPN	DELETF
+	OUTSTR	[ASCIZ/not /]
+	OUTSTR	[ASCIZ/allowed/]
+	PJRST	FOCRLF
+
+CLRFCL:	TDZA	T2,T2		; /NOFILL sets fill to zero
+SETWTH:	SKIPA	T1,[2012]	; Code for set tty width n
+SETFCL:	MOVEI	T1,2017		; Code for set tty fill n
+SETERM:	MOVE	T3,T2		; Argument to T3 for TRMOP.
+	HRRZ	T2,MYUDX	; Get my terminal UDX
+	MOVE	T4,[3,,T1]	; Command pointer
+	TRMOP.	T4,		; Set the desired terminal bits
+	  JRST	SETV2		; Treat this as an error
+	PJRST	SETTTY##	; Update internal database
+
+SETWMX:	MOVEI	T3,WINMAX	; Where to store it
+	JRST	SETWD0
+
+SETWMN:	MOVEI	T3,WINMIN	; Where to store it
+	JRST	SETWD0
+
+SETWRA:	MOVEI	T3,WINRAT	; Where to store the ratio
+	JRST	SETGTB
+
+SETWDW:	MOVEI	T3,WINDOW##	; Where to store it
+	  ; 
+SETWD0:	CAIG	T2,^D256	; Set the window size
+	IMULI	T2,2000		; He must mean K
+	CAILE	T2,^D250000	; BUT NOT BIGGER THAN 
+	JRST	SETV2		; the entire machine!
+	CAIGE	T2,4*BLKSIZ	; Minimum permissible size
+	MOVEI	T2,4*BLKSIZ	; Ensure it
+	JRST	SETGTB		; Check validity and stash
+
+CLRBFN:	MOVEI	T1,2		; Force only one buffer
+	JRST	SCBFN		; Join common code
+
+SETBFN:	MOVEI	T1,6		; Use six monitor buffer for IO
+SCBFN:	SKIPN	INIFLG##	; Illegal if not initial
+	 NERROR	ILC		; Tell him
+	MOVEM	T1,BUFNUM##	; Clear BUFNUM (Use monitor default)
+	POPJ	P,
+
+SETDSW:	TRO	FL2,R2.DSW	; Set /DECRYPT flag
+SETPSW:	SKIPN	INIFLG##	; Illegal if not initial
+	NERROR	ILC
+	TRO	FL2,R2.PSW	; Flag it
+	POPJ	P,		; And return
+
+CLRDLY:	SETZ	T2,		; /NOREFD means set to zero
+SETDLY:	SETZM	REFDLY		; Assume zero
+	JUMPE	T2,CPOPJ	; If zero
+	HRLI	T2,(HB.RTC)	; HIBER on input character bit
+	MOVEM	T2,REFDLY	; Set the value
+	POPJ	P,		; And return
+
+; Here to set a binary value and insure it is greater than zero
+
+SETGTB:	JUMPLE	T2,SETV2	; Error return if not correct
+	MOVEM	T2,0(T3)	; Stash in proper place
+	POPJ	P,		; Return
+
+; Here to set an ASCII number if greater than zero
+
+SETGTA:	JUMPLE	T2,SETV2	; Is binary a good value?
+	MOVEM	T1,0(T3)	; Its OK, store ASCII in its home
+	POPJ	P,		; Return
+
+; Here to set a filename (T3 must have lookup block address)
+
+SETNM1::PUSHJ	P,READNM##	; Get a file spec
+	  NERROR BFS		; Bad file specification
+	SKIPN	RSW		; Error if switches seen
+	SKIPE	SSW
+	POPJ	P,
+	SKIPE	TMPCOD		; No encryption key allowed
+	POPJ	P,
+	PJRST	CKTERM		; Grntee eol
+
+SETNAM::MOVEI	T3,NEWBLK##	; Will deposit new name here
+	MOVEI	T1,NPATH	; Place to read the path
+	MOVEM	T1,NEWPTH	; Setup the pointer
+	PUSHJ	P,SETNM1	; Get file spec , check errors
+	JRST	SETNM2		; Error return
+	SKIPN	T1,TMPDEV	; Get the device
+	MOVSI	T1,'DSK'	; Else default is DSK:
+	MOVEM	T1,NEWDEV	; Save it
+	SKIPE	TMPDEV		; Did he type a device
+	AOS	STRCNT##	; Then he'd probably like to see it
+	POPJ	P,		; And return
+
+SETNM2:	SETZM	NEWNAM		; Here on errors, clear new name
+	NERROR	ILC		; Smack user
+
+SETRUN:	MOVEI	T3,RPGR-1	; Will deposit run name here
+	MOVEI	T2,RNPATH	; Run path block
+	MOVEM	T2,RPGR		; Stash the path pointer
+	PUSHJ	P,SETNM1	; Get file spec - check errors
+	  NERROR ILC
+	SKIPE	DFXSW		; Default extension?
+	SETZM	RPGR+2		; Zero is the default
+	SETZM	DFXSW		; Might confuse SOSINI
+	MOVE	T1,RPGR		; Pick up the PPN
+	MOVEM	T1,RPGR+4	; Move to where it belongs for RUN UUO
+	SKIPE	T1,TMPDEV	; See if device specified
+	JRST	SETRN1		; Given, go set it
+	MOVSI	T1,'SYS'	; No: use sys
+	SKIPE	RNPATH+.PTPPN	; Any PPN given?
+	MOVSI	T1,'DSK'	; Yes, then default of DSK is better
+SETRN1:	MOVEM	T1,RPGR		; Save it
+	POPJ	P,		; Return
+
+; Routine to check proper termination
+
+CKTERM:	TLNE	FL2,INOPTF	; Check if option file
+	JRST	CKTRM1
+	TLNE	FL2,INPARS	; See if cmd string
+	JRST	CPOPJ1		; Always say proper term - parse will check
+CKTRM0:	TRNE	FL,TERMF	; Proper line term?
+	AOS	(P)		; Yes
+	POPJ	P,		; Non-skip if no
+
+CKTRM1:	CAIE	C,"/"		; Allow special chars
+	CAIN	C,","		; If in option file
+	JRST	CPOPJ1
+	CAIN	C,"-"		; If no spec chrs found
+	JRST	CPOPJ1
+	JRST	CKTRM0		; Also check EOL
+
+; Handle option files
+
+SETOPT:	TRNE	FL,IDF!NUMF	; Check for ident
+	SKIPN	T1,ACCUM	; And non-zero atom
+	NERROR	ILC
+	MOVEM	T1,OPTION	; Set up option
+	TLNE	FL2,INPARS	; Initial
+	JRST	OPTSWT##	; Yes: use speciial routine
+	PUSHJ	P,SCAN		; Check term
+	PUSHJ	P,CKTERM
+	NERROR	ILC		; Lose
+	PUSHJ	P,DOOPT##
+	JRST	SETOP1		; Not found
+	JRST	PSEOMS		; Bad options
+	POPJ	P,		; Ok return
+
+PSEOMS::MOVEI	T1,SEOMSG	; Here for "Syntax error in default 
+				; options message
+NFEMSG::OUTSTR	PCTPFX		; %
+	JRST	ANYMSG
+
+SETOP1:	MOVEI	T1,ONFMSG
+FAEMSG::OUTSTR	PCTPFX
+ANYMSG::PUSHJ	P,TYPSTR##
+POFCRL:	JRST	FOCRLF##
+
+ONFMSG::ASCIZ /Option not found/
+SEOMSG::ASCIZ /Syntax error in SWITCH.INI/
+QMKPFX::ASCIZ	/?/
+PCTPFX::ASCIZ	/%/
+	SUBTTL	The = Command
+
+GIVE::	PUSHJ	P,SCAN		; Find out what he wants to know
+	CAIE	C,"%"		; % Line number symbol?
+	CAIN	C,"."		; Current line/page?
+	JRST	GVSPSM		; Yes
+	CAIN	C,"#"		; # Line number symbol?
+	JRST	GVSPSM		; Yes
+	TRNN	FL,IDF		; If not, must be an ident
+	NERROR	ILC
+	PUSHJ	P,XCODE		; Fetch actual sixbit arg
+	HLRZ	T1,T1		; Get give addrs
+	TRZ	T1,3B20		; Clear funny bits
+	JUMPE	T1,XERR
+	PUSH	P,T1		; Save dispatch
+	PUSHJ	P,SCAN		; Check for term
+	PUSHJ	P,CKTRMF
+	POP	P,T1		; Now find out what he wants
+	PUSHJ	P,0(T1)		; Giv info
+	JRST	COMND		; And return
+
+GIVBIG:	TRNE	FL,BGSN		; Have we seen that page
+	JRST	GVBG1		; Yes, all is ok
+	MOVSI	T1,1		; Will have to search for it
+	MOVEM	T1,DPG
+	MOVEI	SINDEX,0
+	PUSHJ	P,FIND##
+	TRNN	FL,BGSN		; Should have seen it now
+	ERROR	ICN		; We are in trouble
+GVBG1:	MOVE	T1,BGPG		; Get it
+
+; Here to print a decimal number
+
+GIV2:	MOVEI	T3,OCHR##	; Routine for decimal printer to output to
+	PUSHJ	P,DECPR		; Print decimal
+	PJRST	FOCRLF##
+
+; Here to print an ASCII number (sequence number)
+
+GIV4:	MOVEM	T1,PRNTO1	; Put it in proper place
+	OUTSTR	PRNTO1		; Poof, there it goes
+	POPJ	P,
+
+GVCASE:	SKIPN	DPYFLG		; Display?
+	JRST	GVSTDT		; Give Standard and type
+	OUTSTR	[ASCIZ /Display /]
+	JRST	CHKSEP		; Check for /Separators
+
+GVSTDT:	OUTSTR	[ASCIZ /Standard /]
+	SKIPN	QMDFLG		; Are we quoting at all?
+	OUTSTR	[ASCIZ/ASCII /]
+	SKIPGE	QMDFLG
+	OUTSTR	[ASCIZ/C64 /]	; No, letters too
+	SKIPLE	QMDFLG
+	OUTSTR	[ASCIZ/C128 /]	; No, just funny ones
+CHKSEP:	TRNE	FL2,QSEPF
+	OUTSTR	[ASCIZ /Separators /]
+	TLNE	FL2,BKSPF
+	OUTSTR	[ASCIZ /Backspace /]
+	SKIPLE	AUTALT##	; In special DPY alter mode
+	OUTSTR	[ASCIZ/DPY-/]	; Yes, say so
+	SKIPE	AUTALT##	; In auto-alter mode mode
+	OUTSTR	[ASCIZ /Alter /]; Remind him
+CHKCSE:	MOVEI	T1,[ASCIZ /Lower
+/]
+	SKIPN	CASEBT
+	MOVEI	T1,[ASCIZ /Upper
+/]				; Print current case
+	OUTSTR	@T1
+	POPJ	P,
+
+
+GIVWTH:	SKIPA	T2,[1012]	; Give the current tty width
+GIVFCL:	MOVEI	T2,1017		; Give the current tty fill class
+	PUSHJ	P,TRMOPI	; Do the TRMOP.
+	  POPJ	P,		; Ignore error return
+	JRST	GIV2		; Go merge with common print code
+
+GIVLC:	MOVEI	T2,1003		; Argument
+	PUSHJ	P,TRMOPI
+	  POPJ	P,
+	SKIPE	T1		; Check
+	OUTSTR	[ASCIZ/No /]
+	OUTSTR	[ASCIZ/LC/]
+	PJRST	FOCRLF##
+
+TRMOPI:	PJOB	T3,
+	TRMNO.	T3,
+	  POPJ	P,
+	MOVE	T1,[2,,T2]
+	TRMOP.	T1,
+	  POPJ	P,
+	JRST	CPOPJ1##
+
+GIVER:	SKIPN	T1,SVERN
+	POPJ	P,
+	HRRZ	T1,ETBL##-1(T1)	;GET NOVICE ERROR ADDR
+	OUTSTR	(T1)		;TYPE MESSGA
+	PJRST	FOCRLF		;AND CRLF RETURN
+
+GVMLN:	MOVE	T1,MAXLN	; Maximum line number
+	JRST	GIV4
+GVRM:	MOVE	T1,RMAR		; Right margin
+	JRST	GIV2
+GVLM:	MOVE	T1,LMAR		; Left margin
+	JRST	GIV2
+GVPM:	MOVE	T1,PMAR		; Paragraph left margin
+	JRST	GIV2
+GVPG:	MOVE	T1,PAGESZ
+	JRST	GIV2
+
+GVPLN:	MOVE	T1,PLINES
+	JRST	GIV2
+
+; Here to print the output file protection
+
+GVPRT:	PUSHJ	P,GETOFP	; Get the protection code
+	ROT	T1,^D9		; Right justify
+	PUSHJ	P,OCTPR3	; Type in octal
+	PJRST	FOCRLF##	; Then CRLF
+
+GETOFP::SKIPE	T1,PRTCOD	; If set
+	POPJ	P,		; Just return it
+	PUSH	P,T2		; Save T2
+	MOVE	T1,SVPBTS	; Else as seen on input
+	MOVEI	T2,@PNTNMO	; Output file enter block
+	LDB	T2,[POINT 9,.RBPRV(T2),8] ; Temp file protection
+REPEAT 0,<			;**TEMP** ??
+	CAIN	T2,077		;Owner?
+	JRST	T2POPJ##	;Yes, just return SVPBTS
+	TLZE	T1,(70B8)	;Convert project field to 1 or 0
+	TLO	T1,(10B8)	;so we can rename the file
+	CAIN	T2,107		;Same project?
+	JRST	T2POPJ##	;Yes, done
+	TLZE	T1,(7B8)	;No, convert universe field to
+	TLO	T1,(1B8)	;1 or zero
+>;END REPEAT 0
+	JRST	T2POPJ##	; And return it
+
+GVSAV:	SKIPGE	T1,SAVEN	; Save left
+	MOVEI	T1,0
+	JRST	GIV2
+GVISAV:	SKIPGE	T1,ISAVEN	; Isave left
+	MOVEI	T1,0
+	JRST	GIV2
+
+GIVDSK:	JRST	TELSPC##
+
+
+GIVDCD:	TLNN	FL2,PDECID
+	OUTSTR	[ASCIZ "No "]
+	OUTSTR	[ASCIZ "Auto decide
+"]
+	POPJ	P,
+
+GIVDLY:	HRRZ	T1,REFDLY
+	PJRST	GIV2		; Type the value
+GIVBAK:	SKIPN	T1,.BAKF
+	OUTSTR	[ASCIZ "No "]
+	JUMPE	T1,GVBAK1
+	SKIPLE	T1
+	OUTSTR	[ASCIZ "Old "]
+GVBAK2:	SKIPGE	QZBAKF		; Special .Q?? or .Z?? type backup file?
+	OUTSTR	[ASCIZ "QZ "]	; Yes, so indicate
+GVBAK1:	OUTSTR	[ASCIZ "Backup 
+"]
+	POPJ	P,
+
+; Here to give the value of /BASIC
+
+GIVBAS:	SKIPN	BASICF		; Basic
+	OUTSTR	[ASCIZ/No /]
+	OUTSTR	[ASCIZ/BASIC/]
+	JRST	FOCRLF##	; CRLF and return
+; Here for the value of /CCL
+
+GIVCCL:	
+IFN %UACCL,<
+	SKIPN	CCLFLG
+>;END IFN %UACCL
+	OUTSTR	[ASCIZ/No /]
+	OUTSTR	[ASCIZ/CCL/]
+	PJRST	FOCRLF
+
+; Here to give the value of /CCEXIT
+
+GIVCCE:	SKIPN	CCEXIT
+	OUTSTR	[ASCIZ/No /]
+	OUTSTR	[ASCIZ/CCEXIT/]
+	PJRST	FOCRLF
+
+; Here to give the value of /EXPER or /NOVICE
+
+GIVEXP:	SKIPN	EXPFLG
+	OUTSTR	[ASCIZ/No /]
+	OUTSTR	[ASCIZ/Expert/]
+	PJRST	FOCRLF
+
+; Here to give the value of /INFORM
+
+GIVINF:	SKIPN	INFFLG
+	OUTSTR	[ASCIZ/No /]
+	OUTSTR	[ASCIZ/Inform/]
+	PJRST	FOCRLF
+
+GIVAIN:	SKIPE	NOAINF		; See if he said /NOINSERT
+	OUTSTR	[ASCIZ/No /]
+	OUTSTR	[ASCIZ/Auto insert/]
+	PJRST	FOCRLF
+
+; Here to give the value of /EXACT
+
+GIVEXA:	SETCM	T1,EXACTF
+	PUSHJ	P,GVEXS0
+	PJRST	GVEXS1
+
+; Here to give the value of /SEPERATORS
+
+GIVSEP:	TRNN	FL2,QSEPF
+	OUTSTR	[ASCIZ/No /]
+	OUTSTR	[ASCIZ/Separators/]
+	PJRST	FOCRLF
+
+; Here to give the value of /AEXACT
+
+GIVAEX:	MOVE	T1,AEXACF
+	PUSHJ	P,GVEXS0
+	OUTSTR	[ASCIZ/Alter /]
+GVEXS1:	OUTSTR	[ASCIZ/searches/]
+	PJRST	FOCRLF
+
+; Subroutine to type 'case folded' or 'case exact'
+GVEXS0:	OUTSTR	[ASCIZ/Case /]
+	SKIPE	T1
+	OUTSTR	[ASCIZ/folded /]
+	SKIPN	T1
+	OUTSTR	[ASCIZ/exact /]
+	POPJ	P,
+; Here to give the value of /R
+
+GIVRDO:	TRNN	FL,READOF
+	OUTSTR	[ASCIZ/No /]
+	OUTSTR	[ASCIZ/Readonly/]
+	PJRST	FOCRLF
+
+; Here to give the value of /BUFFER
+
+GIVBUF:	MOVE	T1,BUFNUM	; Get number
+	CAIE	T1,6		; Is it six
+	OUTSTR	[ASCIZ/No /]
+	OUTSTR	[ASCIZ/Extra buffers/]
+	PJRST	FOCRLF
+
+GIVSEQ:	SKIPN	T1,.UNSQF
+	MOVE	T1,UNSQIF
+	SKIPGE	T1
+	OUTSTR	[ASCIZ "No "]
+	OUTSTR	[ASCIZ "Sequence"]
+	CAMN	T1,[-2]		;
+	 OUTSTR	[ASCIZ " nor pages"]
+	OUTSTR	[ASCIZ "
+"]
+	POPJ	P,
+
+GVINC:	MOVE	T1,INCR		; Get current increment
+	JRST	GIV4		; Go print it
+
+GVSPSM:	PUSH	P,T2		; Save the page number
+	PUSH	P,T1		; and the line number
+	PUSHJ	P,SCAN		; See if a terminator is there
+	PUSHJ	P,CKTRMF##	; Check for end of line
+	POP	P,LINOUT	; Restore line number
+	OUTSTR	LINOUT
+	POP	P,T1		; Page number
+	PUSHJ	P,GIV2		; Put it out
+	JRST	COMND		; And return
+
+OCTPR::	SKIPA	CS,[^O10]
+DECPR::	MOVEI	CS,^D10
+RDXPR:	IDIVI	T1,0(CS)
+	HRLM	T2,(P)
+	SKIPE	T1
+	PUSHJ	P,RDXPR
+	HLRZ	C,(P)
+	ADDI	C,"0"
+	JRST	(T3)		; Except has arbitrary output routine
+
+; Here to print 3 digits of an octal number
+
+OCTPR3:	MOVEI	T3,3		; Number to print
+OCTPR0:	IDIVI	T1,10		; Divide by eight
+	HRLM	T2,(P)		; Save
+	SOSE	T3		; Count digits
+	PUSHJ	P,OCTPR0	; Output next
+	HLRZ	C,(P)
+	ADDI	C,"0"		; Convert back to ASCII
+	PJRST	OCHR##		; And type it
+
+GVSTR:	MOVEI	T1,SRPNT	; Get the pointer to pointer block
+	HRLI	T1,-SRNUM	; Set count
+	OUTSTR	[ASCIZ /Find:
+/]
+	PUSHJ	P,GVSTR3
+	MOVEI	T1,R2PNT
+	HRLI	T1,-SRNUM
+	OUTSTR	[ASCIZ /Substitute:
+/]
+	PUSHJ	P,GVSTR3
+	MOVEI	T1,R1PNT
+	HRLI	T1,-SRNUM
+	OUTSTR	[ASCIZ /For:
+/]
+	PUSHJ	P,GVSTR3
+IFN	EXTEND,<
+	OUTSTR	[ASCIZ /Line-contents:
+/]
+	MOVEI	T4,0
+	MOVEI	T5,LSNUM
+	MOVEI	T3,OCHR
+GVST1:	MOVEI	T1,1(T4)
+	PUSHJ	P,DECPR
+	MOVEI	C,":"
+	PUSHJ	P,OCHR
+	PUSHJ	P,FOCRLF##
+	MOVEI	T1,-1(T5)
+	IMULI	T1,SRNUM
+	ADDI	T1,LSPNT
+	HRLI	T1,-SRNUM
+	PUSHJ	P,GVSTR3
+	ADDI	T4,1
+	SOJG	T5,GVST1
+>
+	POPJ	P,
+
+GIVFST:	SKIPA	T1,TECFST	; Get current start
+GIVSTP:	MOVE	T1,TECINC	; Get input incr
+	JRST	GIV4		; Go print it
+
+GVSTR3:	SKIPN	T2,(T1)		; Is there one there?
+	POPJ	P,		; No, done
+GVSTR2:	ILDB	C,T2		; Next chr
+	JUMPE	C,GVSTR1	; Done
+	TRZE	C,<PT.PAT==400>	;PATTERN CHAR?
+	 PUSHJ	P,GVECHR	;YES--HANDLE
+
+	PUSHJ	P,OCHR		; Print it
+	JRST	GVSTR2		; And continue
+GVSTR1:	PUSHJ	P,FOCRLF##	; Clear output device
+	AOBJN	T1,GVSTR3	; If there is one
+	POPJ	P,
+
+GIVCRF:	MOVE	T1,CRLFSW	; Get switch value
+	PJRST	GIV2		; Print in decimal and return
+
+GVECHR:	PUSH	P,C		;SAVE THE PATTERN CHAR
+	MOVEI	C,<.PTPAT==5>	;GET A ^E
+	PUSHJ	P,OCHR		;PRINT IT
+	MOVE	T1,(P)		;GET CHAR
+	TRZE	T1,<PT.NUM==200>;NUMBER FOLLOWING?
+	 JRST	[PUSH P,T1
+		 ILDB T1,T2	;GET THE NUMBER
+		 PUSH P,T2	;SAVE POINTER
+		 MOVEI T3,OCHR##;LOAD CHAR PRINTER
+		 PUSHJ P,DECPR;PRINT IT
+		 POP P,T2	;RESTORE THEM
+		 POP P,T1	;..
+		 JRST .+1]	;AND CONTINUE
+	POP	P,C		;GET THE CHAR BACK
+	ANDI	C,177		;AND JUST THE CHAR
+	MOVSI	T3,-ELEN##	;GET LENGTH ^E TABLE
+GVECH1:	LDB	T4,[POINT 9,ETAB##(T3),8];GET A CHAR
+	CAIE	T4,(C)		;MATCH?
+	AOBJN	T3,GVECH1	;NO--LOOP
+	JUMPGE	T3,CPOPJ	;NO MATCH
+	HRRZ	C,ETAB##(T3)	;GET SPECIAL CHAR
+	POPJ	P,		;AND RETURN
+
+GIVNAM:	SETZM	STRNAM		; Make sure we don't type junk
+	PUSHJ	P,GVNAM		; Type the name
+CRLFCM::OCRLF			; Then CRLF
+	JRST	COMND		; and next command
+
+GVNAM::	PUSHJ	P,SETONM##	; Setup output name area (in SOSEND)
+	SKIPLE	STRCNT##	; Skip str if not needed
+	PUSHJ	P,GVDSTR	; Yes -- so tell him what it is
+GVNAMA:	MOVE	T4,ONMPTR##
+	MOVE	T5,OEXPTR##
+GVNAMB:	PUSHJ	P,GVNAM0	; Print file name
+	  ; 
+	SKIPE	T1,NEWPTH##	; Did he ask for a new PPN
+	  JRST	GVNAMC		; Yes--type that
+	TRNN	FL,READOF	; Skip if read-only
+	  SKIPA	T1,NAMEO+.RBPPN	; Get current output directory
+	MOVE	T1,NAMEI+.RBPPN	; Get PPN of file being read
+GVNAMC:	PUSHJ	P,GVDPTH	; Type path
+	PJRST	FORCE##		; and type it
+
+; Here to print a file name on terminal.  Call with T4=address of name,
+; and T5=address of extension.
+
+GVNAM0::MOVEI	T3,OCHR##	; output routine is for terminal
+GVNAM1::MOVE	T1,(T4)		; get name
+	PUSHJ	P,PRTSX##	; print it
+	HLLZ	T1,(T5)		; get extension
+	JUMPE	T1,CPOPJ##	; but return if null
+	  ; 
+	MOVEI	C,"."		; yes--get a period
+	PUSHJ	P,(T3)		; print it
+	JRST	PRTSX		; print extension 
+
+; Here to print PPN, if different from one's own
+
+GVDPTH::JUMPE	T1,CPOPJ	; Don't print [0,0], it looks dumb!
+	TLNN	T1,-1		; See if path pointer
+	  JRST	GVAPTH		; Yes, go handle
+	CAMN	T1,MYPPN##	; Same as mine?
+	  POPJ	P,		; I know what mine is!
+	  ;			; here to print it always
+GVAPPN::MOVEI	T3,OCHR		; Routine to print a char
+GVBPPN::PUSHJ	P,PRTLBK	; Type a left bracket
+	PUSHJ	P,POCTPR	; Print octal pair
+	PJRST	PRTRBK		; Print right bracket
+
+GVAPTH::SKIPN	T2,.PTPPN(T1)	; Fetch PPN
+	POPJ	P,		; [0,0,...] still looks dumb
+	CAMN	T2,MYPPN	; Different from host PPN
+	SKIPE	.PTPPN+1(T1)	; Any SFD names given?
+	  CAIA			; Need to print path
+	POPJ	P,		; Don't print uninteresting path
+	  ; 
+	MOVEI	T3,OCHR		; Routine to print a char
+GVBPTH::SKIPN	.PTPPN(T1)	; Is there really something here?
+	POPJ	P,		; No, then don't type anything
+	HRLI	T1,(POINT 36,)	; Set up word pointer
+	ADDI	T1,.PTPPN	; Point to PPN word
+	PUSH	P,T1		; Save pointer
+	PUSHJ	P,PRTLBK	; Print left bracket
+	ILDB	T1,(P)		; Fetch the PPN
+	PUSHJ	P,POCTPR	; Print octal pair
+	  ; 
+GVBPT0:	ILDB	T1,(P)		; Get SFD name
+	JUMPE	T1,[POP P,(P)
+		    JRST PRTRBK]; If end, type right bracket and return
+	MOVEI	C,","		; Set to type comma
+	PUSHJ	P,(T3)		; on the TTY
+	PUSHJ	P,PRTSX		; Type SFD name in SIXBIT
+	JRST	GVBPT0		; Loop over all SFD names
+
+; Suboutine to type out a right bracket.  Call with T3 setup as
+; the address of a typeout routine.
+
+PRTRBK::MOVEI	C,"]"		; Closing bracket
+	PJRST	(T3)		; Type it and return
+
+; Subroutine to print T1 as an octal pair, separated by commas
+; Call with T3 set up as typeout routine
+
+POCTPR:	PUSH	P,T1		; Save T1
+	HLRZ	T1,(P)		; Get the project
+	PUSHJ	P,OCTPR		; Print it
+	MOVEI	C,","		; Now a comma
+	PUSHJ	P,(T3)		; Print that
+	HRRZ	T1,(P)		; Get the programmer numer
+	PUSHJ	P,OCTPR		; Print
+	JRST	T1POPJ##
+
+; Suboutine to type out a left bracket.  Call with T3 setup as
+; the address of a typeout routine.
+
+PRTLBK::MOVEI	C,"["		; Closing bracket
+	PJRST	(T3)		; Type it and return
+
+; Here to type out the current output structure name
+
+GVDSTR::MOVEI	T3,OCHR
+	SKIPE	T1,STRNAM	; Try this first
+	JRST	GVDST0		; Then type it
+GVOSTR::SKIPN	T1,NEWDEV	; This first
+	MOVE	T1,ORGDEV	; Otherwise this one
+	  ; 
+	  ; Here with structure name in T1
+GVDST0:	SETZM	STRNAM		; Clear before next call
+GVDST1::PUSHJ	P,PRTSX		; output it
+	MOVEI	C,":"		; separate with colon
+	JRST	(T3)		; Finish off with his routine
+
+GVRUN:	MOVEI	T3,OCHR##	; set up for terminal output
+	MOVE	T1,RPGR		; get structure name
+	JUMPE	T1,[OUTSTR [ASCIZ/SYS:COMPIL/]
+		    JRST FOCRLF]
+	PUSHJ	P,GVDST1	; Print structure name
+	MOVEI	T4,RPGR+1	; point to file name
+	MOVEI	T5,RPGR+2	; point to extension
+	PUSHJ	P,GVNAM0	; print file name and extension
+	SKIPE	T1,RPGR+4	; is there a PPN?
+	  PUSHJ	P,GVDPTH	; Yes, then give it
+	JRST	FOCRLF##	; flush out and return
+	SUBTTL	The =LOCATION and =WINDOW commands
+
+GIVLOC:	PUSHJ	P,BKPLIN##	; Backup one line
+	  JRST	GLOC2		; Found start of buffer
+	CAMN	T1,PGMK		; Is this a page mark?
+	SOS	CPG		; On previous page
+	JRST	GIVLOC		; Keep looking for start
+
+GLOC2:	MOVE	T1,0(PNTR)	; Get the current word
+	TRNN	T1,1		; Is this a line start?
+	PUSHJ	P,FORLIN##	; No, find one
+	JUMPE	T1,GLOC7	; None there, the buffer is empty
+	CAMN	T1,PGMK		; Page mark?
+	JRST	GLOC6		; Yes, and that is special
+	MOVEM	T1,LINOUT	; Save the line number
+	OUTSTR	LINOUT		; Type it
+	MOVE	T2,CPG		; Current page number
+	PUSHJ	P,DPRNT##	; Type page number in decimal
+	PJRST	FOCRLF##	; end with CRLF
+
+; Here when first line is a page mark
+
+GLOC6:	MOVE	T2,CPG		; Current page
+	ADDI	T1,1		; This is really the next page
+	PJRST	PGPRN##		; Type as "Page nnn"
+
+; Here if the low buffer is empty
+
+GLOC7:	OUTSTR	[ASCIZ/Buffer is empty
+/]
+	POPJ	P,
+
+; Here to return the current WINDOW size
+
+GIVWDW:	SKIPA	T1,BUFLIM	; Limit of the buffer
+GIVWMX:	SKIPA	T1,WINMAX	; Get maximum
+	SUB	T1,BUFFIR	; from first word address
+	JRST	GIV2
+
+GIVWMN:	SKIPA	T1,WINMIN	; Get minimum
+GIVWRA:	MOVE	T1,WINRAT	; Get ratio
+	PJRST	GIV2		; And type
+
+
+GIVNCMD:	SKIPE	NEWCMD		;/NEWCOMMAND?
+	 OUTSTR	[ASCIZ/New commands not/]
+	SKIPN	NEWCMD
+	 OUTSTR	[ASCIZ/Old commands/]
+	OUTSTR	[ASCIZ/ compatibile with version 21 features/]
+	PJRST	FOCRLF##	;CRLF AND RETURN
+
+GIVRUL:	MOVEI	T1,0		;NO PROMPT SIZE
+	PUSHJ	P,LFPCLR##	;GO UP IF DPY
+	TLNE	FL2,LNUMF	;LINE NUMBERS?
+	 OUTSTR	[ASCIZ/        /];YES--8 SPACES
+	MOVE	T1,LINEW	;GET WIDTH
+	TLNE	FL2,LNUMF	;LINE NUMBERS?
+	 SUBI	T1,^D8		;YES--CORRECT FOR TAB
+	MOVNS	T1		;MAKE AOBJN
+	HRLZI	T1,(T1)		;GET -N,,0
+GIVR.1:	MOVEI	T2,1(T1)	;COPY WIDTH
+	IDIVI	T2,^D10		;GET REMANDER
+	ADDI	T3,"0"		;MAKE ASCII
+	CAIN	T3,"0"		;SEE IF XERO
+	 MOVEI	T3," "		;YES--TURN INTO SPACE
+	OUTCHR	T3		;OUTPUT
+	AOBJN	T1,GIVR.1	;LOOP
+	PJRST	FOCRLF		;CRLF AND RETURN
+	SUBTTL	Unique Initial Segment Decoder
+
+COMMENT	!
+THIS  HERE IS THE UNIQUE INITIAL SEGMENT DECODER STOLEN FROM THE
+PDP10 T-S MONITOR (SEE COMCON).    IT TAKES THE ARGUMENT IN  LOC
+'ACCUM' AND RETURNS THE FULL SIXBIT VALUE IN SAME.
+!
+
+DECODE:	MOVE	T1,ACCUM	; Fetch arg
+	MOVNI	T2,1		; Set mask all ones
+	LSH	T2,-6		; Clear out one more char
+	LSH	T1,6		; Shift 1 command char off
+	JUMPN	T1,.-2		; Lup until all gone
+	EXCH	T2,ACCUM	; Fetch arg in t2 & save mask
+	MOVNI	T3,1		; Clear found count
+LUP:	MOVE	T4,@S1		; Fetch table entry
+	TDZ	T4,ACCUM	; Mask out chars not typed
+	CAMN	T2,@S1		; Exact match?
+	JRST	FOUND		; Yes: this is it
+	CAME	T2,T4		; Close match?
+	JRST	LNEXT		; No: keep trying
+	AOJG	T3,LNEXT	; First time?
+	HRRZ	T5,S2		; Yes: rember index
+LNEXT:	AOBJN	S2,LUP		; No: keep looking
+	SETZM	ACCUM		; In case of ambiguity
+	SKIPE	T3		; Find only one?
+	POPJ	P,		; Yes, ambiguous
+	MOVE	S2,T5		; Yes: ok to use saved value
+FOUND:	MOVE	T5,@S1		; Get whole name
+	MOVEM	T5,ACCUM	; Save it
+	POPJ	P,		; Return
+
+XCODE::	PUSH	P,S1		; Save special acs
+	PUSH	P,S2
+	MOVE	S1,[S2,,NAMTAB]
+	MOVSI	S2,-NAMLEN
+	PUSHJ	P,DECODE
+	MOVE	T1,NAMDSP(S2)	; Get dispatch entry
+	POP	P,S2		; Restore special acs
+	POP	P,S1
+	POPJ	P,
+	SUBTTL	The Name Table
+
+; This is the full name table
+
+	DEFINE	NAMES <
+X	(AEXACT,	SAEXAC, GIVAEX,	0)
+X	(ALTER,		SETAAL,	GVCASE,	0)
+X	(BACKSPACE,	SETBKS,	GVCASE,	0)
+X	(BAK,		SETBAK,	GIVBAK,	0)
+X	(BASIC,		SETBAS,	GIVBAS,	0)
+X	(BAUD,		SETBAU, GIVBAU, XNUMF)
+X	(BIGPG,		0,	GIVBIG,	0)
+X	(BUFFER,	SETBFN,	GIVBUF,	0)
+X	(NOBUFF,	CLRBFN,	GIVBUF,	0)
+X	(C128,		SETM37,	GVCASE,	0)
+X	(C64,		SETM33,	GVCASE,	0)
+X	(CASE,		0,	GVCASE,	0)
+X	(CCL,		SETCCL,	GIVCCL,	0)
+X	(CCEXIT,	SETCCX,	GIVCCE,	0)
+X	(RULER,	0,	GIVRUL, 0)	;
+X	(OLDCOMMAND,	SETNCMD,	GIVNCMD, 0)	;
+X	(CONTIGIOUS,	SETCON, GIVSEQ, 0)
+X	(CRLF,		SETCRF,	GIVCRF,	XNUMF)
+X	(NOCCL,		CLRCCL,	GIVCCL,	0)
+X	(NOCRLF,	CLRCRF,	GIVCRF,	0)
+X	(DECIDE,	SETDCD,	GIVDCD,	0)
+X	(DEFINE,	SETDEF##, GIVDEF##, XVARF)
+X	(LDEFINE,	SETLDF##, GIVDEF##, XVARF)
+X	(MACRO,		SETMAC##, GIVMAC##, 0)
+X	(NOMACRO,	CLRMAC##, GIVMAC##, 0)
+X	(PURGE,		PURDEF##, 0,	XVARF)
+X	(INITIALIZE,	SETINI,	0,	0)
+X	(DECRYPT,	SETDSW, 0,0)
+X	(DELETE,	SETDLF, GIVDLF, 0)
+X	(DSK,		0,	GIVDSK,	0)
+X	(DISPLAY,	SETDIS, GIVDIS, 0)
+X	(DISK,		0,	GIVDSK,	0)
+X	(DPY,		SETDPY,	GVCASE,	0)
+X	(DPYALT,	SETDPA,	GVCASE,	0)
+X	(ERROR,		0,	GIVER,	0)
+X	(ENCRYPT,	SETPSW, 0,0	)
+X	(EXACT,		SEXACT, GIVEXA,	0)
+X	(EXPERT,	SETEXP,	GIVEXP,	0)
+X	(FILLCLASS,	SETFCL,	GIVFCL,	XNUMF)
+X	(NOFILL,	CLRFCL,	GIVFCL,	0)
+X	(FILE,		SETNAM,	GIVNAM,	XVARF)
+X	(INCREMENT,	SETINC,	GVINC,	XNUMF)
+X	(ISAVE,		SETISV,	GVISAV,	XNUMF)
+X	(INFORM,	SETINF,	GIVINF,	0)
+X	(INSERT,	SETAIN,	GIVAIN,	0)
+X	(LC,		SETTXT,	GIVLC,	0)
+X	(LENGTH,	SETLEN,	GVPG,	XNUMF)
+X	(LF,		SETLF,	GIVLF, 0)
+X	(NOLF,		CLRLF,	GIVLF,	0)
+X	(NOCCEX,	CLRCCX,	GIVCCE,	0)
+X	(LMAR,		SETLMR,	GVLM,	XNUMF)
+X	(LOCATION,	0,	GIVLOC,	0)
+X	(LOWER,		SETLOW,	GVCASE,	0)
+X	(M33,		SETM33,	GVCASE,	0)
+X	(M37,		SETM37,	GVCASE,	0)
+X	(MAXLN,		SETMLN,	GVMLN,	XNUMF)
+X	(NAME,		SETNAM,	GIVNAM,	XVARF)
+X	(NEWALTER,	SETNALT, GIVNALT, 0)
+X	(NOALTER,	CLRALT,	GVCASE,	0)
+X	(NOAEXACT,	CAEXACT, GIVAEX,0)
+X	(NOBACKSPACE,	SETNBS,	GVCASE,	0)
+X	(NEWCOMMAND, CLRNCMD,GIVNCMD, 0)	;
+X	(NOBAK,		CLRBAK,	GIVBAK,	0)
+X	(NODECIDE,	CLRDCD,	GIVDCD,	0)
+X	(NODISPLAY,	CLRDIS, GIVDIS, 0)
+X	(NODELETE,	CLRDLF,	GIVDLF,	0)
+X	(NOEXAC,	CEXACT,	GIVEXA,	0)
+X	(NOINFO,	CLRINF,	GIVINF,	0)
+X	(NOINSE,	CLRAIN,	GIVAIN,	0)
+X	(NOLC,		SETPRG,	GIVLC,	0)
+X	(OLDALTER,	CLRNALT, GIVNALT, 0)
+X	(NOSEPARATORS,	QSOFF,	GIVSEP,	0)
+X	(NOSEQUENCE,	SETSEQ,	GIVSEQ,	0)
+X	(NONUMBER,	SETNNM,	0,	0)
+X	(NOQZBAK,	CLRQZB,	GIVBAK,	0)
+X	(NOTELL,	SETNTL,	0,	0)
+X	(NOUC,		SETTXT, GIVLC,  0)
+X	(NOVICE,	SETNOV,	GIVEXP,	0)
+X	(NOXINSERT,	CLRXIN, GIVXIN, 0)
+X	(NOEXPERT,	SETNOV,	GIVEXP,	0)
+X	(NUMBER,	SETNUM,	0,	0)
+X	(OLD,		SETOLD,	GIVBAK,	0)
+X	(OPTION,	SETOPT,	0,	XVARF)
+X	(PLINES,	SETPLN,	GVPLN,	XNUMF)
+X	(PMAR,		SETPMR,	GVPM,	XNUMF)
+X	(PROGRAM,	SETPRG, GIVLC,  0)
+X	(PROTECTION,	SETPRT,	GVPRT,	XNUMF)
+X	(QZBAK,		SETQZB,	GIVBAK,	0)
+X	(R,		SETRED,	GIVRDO,	0)
+X	(READO,		SETRED, GIVRDO, 0)
+X	(RONLY,		SETRED,	GIVRDO,	0)
+X	(REFDLY,	SETDLY,	GIVDLY,	XNUMF)
+X	(NOREFD,	CLRDLY,	GIVDLY,	0)
+X	(RMAR,		SETRMR,	GVRM,	XNUMF)
+X	(RUN,		SETRUN,	GVRUN,	XVARF)
+X	(SAVE,		SETSAV,	GVSAV,	XNUMF)
+X	(SEPARATORS,	QSON,	GIVSEP,	0)
+X	(SEQUENCE,	CLRSEQ,	GIVSEQ,	0)
+X	(STANDARD,	SETSTD,	GVCASE,	0)
+X	(START,		SETFST,	GIVFST,	XNUMF)
+X	(STEP,		SETSTP,	GIVSTP,	XNUMF)
+X	(STRING,	0,	GVSTR,	0)
+X	(TELL,		SETTEL,	0,	0)
+X	(TEXT,		SETTXT, GIVLC,  0)
+X	(UC,		SETPRG, GIVLC,  0)
+X	(UNDERLINE,	SETUND, GIVUND, 0)
+X	(NOUNDERLINE,	CLRUND, GIVUND, 0)
+X	(UNSEQUENCE,	SETSEQ,	GIVSEQ,	0)
+X	(UPPER,		SETUPP,	GVCASE,	0)
+X	(X,		SETEXM,	GIVRDO,	0)
+X	(XINSERT,	SETXIN, GIVXIN, 0)
+X	(XSEQUENCE,	SETXSQ,	GIVSEQ,	0)
+X	(WIDTH,		SETWTH,	GIVWTH,	XNUMF)
+X	(WINDOW,	SETWDW,	GIVWDW,	XNUMF)
+X	(WMAXIM,	SETWMX, GIVWMX, XNUMF)
+X	(WMINIM,	SETWMN, GIVWMN,	XNUMF)
+X	(WRATIO,	SETWRA,	GIVWRA,	XNUMF)
+>
+
+	DEFINE	X(A,B,C,D) <
+	EXP	<SIXBIT /A/>>
+
+NAMTAB:
+	NAMES
+
+NAMLEN==.-NAMTAB
+
+	DEFINE	X(A,B,C,D) <
+	D+C,,B
+>
+
+XNUMF==3B20		; Set needs numeric arg
+XVARF==1B19		; Set needs arg
+
+NAMDSP:
+	NAMES
+
+	XERR,,XERR
+
+XERR::	SKIPE	ACCUM		; Accum zero?
+	NERROR	ILC		; Syntax problems
+	SKIPG	T3		; Ambiguous?
+	NERROR	NPN		; No, just wasn't one like that
+	NERROR	APN		; Yes
+
+	XLIST
+	LIT
+	LIST
+	RELOC	0
+
+INTFLG::BLOCK	1
+SWUNDER::BLOCK	1
+
+	END

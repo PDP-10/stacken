@@ -1,0 +1,6 @@
+; -*- Text -*- mode, please.
+
+set fal 0:3 net anf
+set fal 4:7 net dec
+start fal 0:7
+start batch 0:3

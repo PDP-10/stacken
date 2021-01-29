@@ -1,0 +1,9 @@
+! Compiles, loads, and saves FUR
+!
+.r macro
+*fur_tty:,dsk:fur
+=ftnih==-1
+.load @fur
+.ssave fur
+.r link
+*@fursym

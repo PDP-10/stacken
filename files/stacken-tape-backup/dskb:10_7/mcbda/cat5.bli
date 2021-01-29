@@ -1,0 +1,138 @@
+
+MODULE CAT5 (					!Convert ASCII to RAD50
+		IDENT = '001000',
+		LANGUAGE (BLISS16, BLISS36) %BLISS36 (, ENTRY ($CAT5))
+		) =
+BEGIN
+!
+!			  COPYRIGHT (c) 1977, 1978 BY
+!	      DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND  COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH  LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR  ANY  OTHER
+! COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE  WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS  A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: SYSTEM LIBRARY
+!
+! ABSTRACT:
+!
+!
+!	This module contains the routine to convert 3 or less characters
+!	to a RAD50 word.
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 26-sep-78
+!
+! MODIFIED BY:
+!
+!	, : VERSION
+! 01	-
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    $CAT5;					!Convert ASCII to RAD50
+
+!
+! INCLUDE FILES:
+!
+!
+! MACROS:
+!
+!
+! EQUATED SYMBOLS:
+!
+!
+! OWN STORAGE:
+!
+!
+! EXTERNAL REFERENCES:
+!
+
+GLOBAL ROUTINE $CAT5 (BUF_PTR_ADR, FLAG) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to extract
+!						!number from.
+!	.FLAG					!If non-zero, the period is
+!						!accepted as a character.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the characters used in the conversion.
+!
+! ROUTINE VALUE:
+!
+!	The RAD50 equivalent of the next 3 (or less) characters.
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	INDEX,
+	CHAR,
+	VALUE;
+
+    VALUE = 0;
+
+    INCR INDEX FROM 0 TO 2 DO
+	BEGIN
+	CHAR = CH$RCHAR_A (.BUF_PTR_ADR);
+	VALUE = .VALUE*%O'50' + (SELECTONE .CHAR OF
+	    SET
+	    [%C' '] : %O'0';
+	    [%C'A' TO %C'Z'] : .CHAR - %C'A' + %O'1';
+	    [%C'$'] : %O'33';
+	    [%C'.'] : IF .FLAG NEQ 0 THEN %O'34' ELSE
+		    BEGIN
+		    .BUF_PTR_ADR = CH$PLUS (..BUF_PTR_ADR, -1);
+		    0
+		    END;
+	    [%C'0' TO %C'9'] : .CHAR - %C'0' + %O'36';
+	    [OTHERWISE] :
+		BEGIN
+		.BUF_PTR_ADR = CH$PLUS (..BUF_PTR_ADR, -1);
+		0
+		END;
+	    TES);
+	END;
+
+    .VALUE
+    END;					!End of $CAT5
+
+END						!End of module
+
+ELUDOM

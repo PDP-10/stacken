@@ -1,0 +1,522 @@
+title	iprout -- IP routing and fragmentation.
+search	f, s
+search	ip4sym
+
+	$reloc
+	$low
+
+repeat 0,<
+
+We should implement one entry point here, IPROUTE::, and this should be
+used every time someone has an IP packet to move.  It does not matter if
+it is the local IP stack or one of the network interfaces, all packets
+should go the same way.
+
+Routing table:
+
+        ip address      pfx     if      next-hop        flags
+	----------      ---     --      --------        -----
+
+	130.237.234.7	/32	self			A
+	130.237.234.10	/32	slip			A
+	130.237.234.255	/32	una0			  B S
+	255.255.255.255 /32	una0			  B S
+	130.237.234.0	/24	una0
+	224.0.0.0	/4	null
+	240.0.0.0	/4	null
+	0.0.0.0		/0	una0	130.237.234.1
+
+	This means that what we keep is the IP address/mask, the interface
+	index (and type from that) and the gateway field.  Nothing more
+	should be needed.
+
+	Note that the routing code does not in any way know about the
+	interface addresses unless they are in the routing table itself.
+	(They should be there, installed by some init code, but...)
+
+>;repeat 0
+
+; Layout of the routing block:
+
+$phase 0
+
+rt.nxt:!block	1	;Next entry.
+rt.prv:!block	1	;Prev entry.
+rt.ipa:!block	1	;IPv4 addr, left justified.
+rt.msk:!block	1	;Prefix mask, left justified.
+rt.flg:!block	1	;Flags:
+  rtf.ar==1B35		;  ARP flag, we answer arp for this.
+  rtf.bc==1B34		;  Broadcast, this is a broadcast addr.
+  rtf.sl==1B33		;  Self, this can only be used from me.
+  rtf.dl==1B32		;  Deleted, ignore this route.
+rt.ifx:!block	1	;Next-hop interface.
+rt.via:!block	1	;Next-hop gateway.
+rtsize:!block	0	;Size of block.
+
+$dephase
+
+iniflg:	exp	0		;[temp] init flag.
+
+rthead:	exp	0		;Initial routing table, head.
+rttail:	exp	0		;Initial routing table, tail.
+rtcnt:	exp	0		;Count of entries.
+
+	$high
+
+;* routine to find an rt block given a prefix.
+;*
+;*   call with p1/ ip address, and p2/ mask.
+;*   skip returns if exact match, block ptr in r.
+;*   non-skip with r non-zero means r points to first block in
+;*   list with this prefix length.  r = zero means either list
+;*   is empty or all masks in list are longer.
+
+fndpfx:	skipn	r,rthead	;Get head of rt list.
+	 popj	p,		; None, all done.
+fndpf2:	camn	p1,rt.ipa(r)	;This our address?
+	 came	p2,rt.msk(r)	; This our mask?
+	  skipa	r,rt.nxt(r)	;  No, get next block.
+	   jrst	cpopj1##	;   Yes, give good return.
+	jumpn	r,fndpf2	;Loop over all blocks.
+	move	r,rthead	;Reload head of list.
+fndpf3:	camn	p2,rt.msk(r)	;This is our mask?
+	 popj	p,		; Yes, must be first of this length.
+	setcm	t1,p2		;Get complement of mask.
+	and	t1,rt.msk(r)	;Get overlap.
+	jumpe	t1,cpopj	;Got any?
+	skipe	r,rt.nxt(r)	;Get next.
+	 jrst	fndpf3		; Got one, loop.
+	popj	p,		;None, return.
+
+;* routine to find an rt block for routing a given address.
+;* Call with t1/ address.
+
+fndrt:	skipn	r,rthead	;Get head of list.
+	 popj	p,		; None, fail.
+fndrt1:	move	t2,t1		;Copy address.
+	and	t2,rt.msk(r)	;Mask address.
+	camn	t2,rt.ipa(r)	;Is it us?
+	 jrst	cpopj1##	; Yes, done.
+	skipe	r,rt.nxt(r)	;Get next.
+	 jrst	fndrt1		; Got one, loop.
+	popj	p,		;End of list, return.
+
+;* convert a bit count in t1 to a left-justified mask in t2.
+
+ln2msk:	movei	t2,1
+	lsh	t2,(t1)
+	subi	t2,1
+	jffo	t2,.+1
+	lsh	t2,(t3)
+	popj	p,
+
+;*
+;* routine to find an interface block given its name or number.
+;*
+
+fndif:	tlnn	t1,-1		;Bits set in left half?
+	 jrst	fndifx		; No, must be index.
+fndifn:	movsi	t2,-ifnum##	;Name, build AOBJN pointer to iftab.
+fndif2:	move	w,iftab(t2)	;Get if block pointer.
+	came	t1,if.nam(w)	;Is this it?
+	 aobjn	t2,fndif2	; No, loop over all if's.
+	jumpge	t2,cpopj##	;Fail if not found.
+	jrst	cpopj1##	;Found, good return.
+
+fndifx:	cail	t1,0		;Negative index?
+	 cail	t1,ifnum##	; In range?
+	  jrst	cpopj##		;  Fail.
+	move	w,iftab##(t1)	;Get if block pointer.
+	jrst	cpopj1##	;Skip return.
+
+;**********************************************************************
+;*
+;* IPROU. uuo:
+;*
+;*	movei	ac,[
+;*		exp	func
+;*		exp	buffer
+;*		exp	buflen]
+;*	call	ac,[sixbit 'iprou.']
+;*	 <error>
+;*	<success>
+
+.iradd==0			;Add one entry.
+.irdel==1			;Delete one entry.
+.irchk==2			;Check one prefix.
+.irdmp==3			;Dump whole table.
+.irluk==4			;Lookup one address.
+
+irilf%==ecod1##			;Illegal function code.
+iradc%==ecod2##			;Address check.
+irnsi%==ecod3##			;No such interface.
+irnsp%==ecod4##			;No such prefix.
+irnpv%==ecod5##			;No privs.
+irnec%==ecod6##			;Not enough core.
+
+irurk%==ecod17##		;URK.
+
+ipruuo::pushj	p,save4##	;Save P1-P4.
+	move	u,t1		;Let U point to user block.
+	move	t2,t1
+	addi	t2,2		;Last user data word.
+	pushj	p,trnge##	;Check access.
+	umove	t1,0(u)		;Get function code.
+	cail	t1,0		;Range check:
+	 cail	t1,maxfnc	; In range?
+	  jrst	irilf%		;  Not really.
+	jrst	@disp(t1)	;Dispatch.
+
+disp:	exp	ipradd		; 0 - add entry.
+	exp	iprdel		; 1 - delete entry.
+	exp	iprchk		; 2 - check one prefix. 
+	exp	iprdmp		; 3 - dump whole routing table.
+	exp	iprluk		; 4 - lookup one address.
+maxfnc==.-disp
+
+;* Get one entry from user. p1 = ip address, p2 = mask, p3 = flags,
+;* p4 = via, w = if ptr.
+
+getone:	umove	m,1(u)		;Get user buffer ptr.
+	pushj	p,getewd##	;Get first word, ip addr.
+	 jrst	iradc%		; Address check.
+	move	p1,t1		;Save.
+	pushj	p,getew1##	;Get next word.
+	 jrst	iradc%		; Address check.
+	move	p3,t1		;Keep flags in p3.
+	lsh	t1,-^d27	;Isolate prefix length.
+	pushj	p,ln2msk	;Convert to mask.
+	move	p2,t2		;Keep mask in p2.
+	hlrz	t1,p3		;Get if index.
+	andi	t1,777		;Keep just index.
+	cail	t1,ifnum##	;In range?
+	 jrst	irnsi%		; No Such Interface.
+	move	w,iftab##(t1)	;Get if block pointer.
+	andi	p3,777777	;Strip all but flags.
+	pushj	p,getew1##	;Get final user word.
+	 jrst	iradc%		; Address check.
+	move	p4,t1		;Keep next-hop in p4.
+	jrst	cpopj1##	;Good return.
+
+;* Here to add (or modify) one entry.
+
+ipradd:	pushj	p,ippriv##	;Need privs for this.
+	 jrst	irnpv%		; Got none.
+	pushj	p,getone	;Get entry from user.
+	 popj	p,		; Failed, error code stored.
+	pushj	p,fndpfx	;Find prefix.
+	 jrst	add.2		; Not exact match, check further.
+	movem	w,rt.ifx(r)	;Store (new) if ptr.
+	movem	p3,rt.flg(r)	;Store (new) flags.
+	movem	p4,rt.via(r)	;Store (new) next-hop.
+	jrst	cpopj1##	;Done!
+
+add.2:	movei	t2,rtsize	;Get a new rt block.
+	pushj	p,getwds##	;Allocate.
+	 jrst	irnec%		; No core?
+	movem	p1,rt.ipa(t1)	;Save ip address.
+	movem	p2,rt.msk(t1)	;Save mask.
+	movem	p3,rt.flg(t1)	;Save flags.
+	movem	p4,rt.via(t1)	;Save next-hop.
+	movem	w,rt.ifx(t1)	;Save interface ptr.
+	ip4off			;Protect this:
+	jumpn	r,add.3		;$ In the middle?
+	setzm	rt.nxt(t1)	;$ No, at end.
+	skipn	t2,rttail	;$ Got a tail?
+	 jrst	add.2a		;$  No, go set up first block.
+	movem	t1,rttail	;$ New tail.
+	movem	t1,rt.nxt(t2)	;$ Link us in.
+	movem	t2,rt.prv(t1)	;$ Link back.
+	jrst	add.4		;$ Done.
+
+add.2a:	setzm	rt.prv(t1)	;$ No one before us.
+	movem	t1,rthead	;$ Set up single block.
+	movem	t1,rttail	;$ ...
+	jrst	add.4		;$ Done.
+
+add.3:	skipn	t2,rt.prv(r)	;$ Got a prev?
+	 jrst	add.3a		;$  No, put us first.
+	movem	r,rt.nxt(t1)	;$ Set up our next.
+	movem	t1,rt.prv(r)	;$ Set up link back.
+	movem	t2,rt.prv(t1)	;$ Set up our prev.
+	movem	t1,rt.nxt(t2)	;$ Set up link back.
+	jrst	add.4		;$ Done.
+
+add.3a:	movem	r,rt.nxt(t1)	;$ Set up our next.
+	setzm	rt.prv(t1)	;$ No prev, we are first.
+	movem	t1,rt.prv(r)	;$ Set up link back.
+	movem	t1,rthead	;$ Set up new head.
+add.4:	aos	rtcnt		;$ Count this entry.
+	ip4on			;Allow interrupts again.
+	jrst	cpopj1##	;Skip return.
+
+;* Here to delete one entry.
+
+iprdel:	pushj	p,ippriv##	;Check for IP privs.
+	 jrst	irnpv%		; No privs for this.
+	pushj	p,getone	;Get one entry from user.
+	 popj	p,		; Error, code stored.
+	pushj	p,fndpfx	;Find this prefix.
+	 jrst	irnsp%		; No such prefix.
+
+	ip4off			;Protect. (from what?)
+	move	t1,rt.prv(r)	;$ Get prev.
+	skipn	t2,rt.nxt(r)	;$ Get and check next.
+	 jumpe	t1,del.0	;$  t1 == 0, t2 == 0, jump.
+	jumpe	t1,del.1	;$ t1 == 0, t2 != 0, jump.
+	jumpe	t2,del.2	;$ t1 != 0, t2 == 0, jump.
+	movem	t1,rt.prv(t2)
+	movem	t2,rt.nxt(t1)
+	jrst	del.r
+
+del.2:	setzm	rt.nxt(t1)	;$ We are new tail.
+	movem	t1,rttail
+	jrst	del.r
+
+del.1:	setzm	rt.prv(t2)	;$ We are new head.
+	movem	t2,rthead
+	jrst	del.r
+
+del.0:	setzm	rthead		;$ Empty list, clear ptrs.
+	setzm	rttail		;$  . . .
+del.r:	sos	rtcnt		;$ Adjust count.
+	ip4on			;Unprotect.
+	movei	t1,rtsize	;Get size.
+	move	t2,r		;Get pointer.
+	pushj	p,givwds##	;Return memory.
+	jrst	cpopj1##	;Good return.
+
+;* Here to check (lookup) one prefix.
+
+iprchk:	umove	m,1(u)		;Get user buffer address.
+	move	t1,m
+	move	t2,t1
+	addi	t2,2
+	pushj	p,trnge##	;Check access.
+
+	pushj	p,getone	;Get the one entry.
+	 popj	p,		; Error, code stored.
+	pushj	p,fndpfx	;Find this prefix.
+	 jrst	irnsp%		; No such prefix.
+sto1:	umove	m,1(u)		;Get user buffer address.
+	move	t1,rt.ipa(r)	;Get IP address.
+	pushj	p,putewd##	;Give to user.
+	 jrst	iradc%		; Address check?
+	move	w,rt.ifx(r)	;Get interface.
+	hrlz	t1,if.num(w)	;Get <ifnum,,0>
+	setcm	t2,rt.msk(r)	;Get inverted mask.
+	tro	t2,17		;Make sure terminated.
+	jffo	t2,.+1		;Get number of bits.
+	dpb	t3,[point 9,t1,8]
+	hrr	t1,rt.flg(r)	;Get flags.
+	pushj	p,putew1##	;Store next word for user.
+	 jrst	iradc%		; Address check?
+	move	t1,rt.via(r)	;Get next-hop address.
+	pushj	p,putew1##	;Store next word for user.
+	 jrst	iradc%		; Address check?
+	jrst	cpopj1##	;Done, good return.
+
+;* Here to lookup routing for an address.
+
+iprluk:	umove	m,1(u)		;Get user buffer address.
+	move	t1,m
+	move	t2,t1
+	addi	t2,2
+	pushj	p,trnge##
+
+	pushj	p,getone	;Get args.
+	 popj	p,		; Error, code stored.
+	skipn	t1,p1		;Copy address.
+	 jrst	irurk%		; No address?
+	pushj	p,fndrt		;Find RT block.
+	 jrst	irurk%		; Not found.
+	jrst	sto1		;Store data.
+
+;* Here to dump the whole routing table.
+
+iprdmp:	umove	m,1(u)		;Get user buffer address.
+	umove	p1,2(u)		;Get user buffer length.
+	jumpe	p1,retcnt	;Return count of entries if no buffer.
+	move	t1,m
+	move	t2,p1
+	imul	t2,3
+	subi	t2,1
+	add	t2,t1		;Compute last buffer address.
+	pushj	p,trnge##	;Check access.
+	skipn	r,rthead	;Get head of list.
+	 jrst	retcnt		; None, done here.
+dump.2:	move	t1,rt.ipa(r)	;Get IP address.
+	pushj	p,putewd##	;Give to user.
+	 jrst	iradc%		; Address check?
+	move	w,rt.ifx(r)	;Get interface.
+	hrlz	t1,if.num(w)	;Get <ifnum,,0>
+	setcm	t2,rt.msk(r)	;Get inverted mask.
+	tro	t2,17		;Make sure terminated.
+	jffo	t2,.+1		;Get number of bits.
+	dpb	t3,[point 9,t1,8]
+	hrr	t1,rt.flg(r)	;Get flags.
+	pushj	p,putew1##	;Store next word for user.
+	 jrst	iradc%		; Address check?
+	move	t1,rt.via(r)	;Get next-hop address.
+	pushj	p,putew1##	;Store next word for user.
+	 jrst	iradc%		; Address check?
+	pushj	p,getwr1##	;Bump pointer.
+	 jumpg	p1,iradc%	; Address check? (but not if done)
+	skipe	r,rt.nxt(r)	;Get next entry.
+	 sojg	p1,dump.2	; Loop over whole user buffer.
+retcnt:	move	t1,rtcnt	;Get number of entries.
+	jrst	stotc1##	;Give count to user.
+
+;* translate interface name to index:
+
+ifndx::	pushj	p,fndifn	;Do the work.
+	 popj	p,		; No.
+	move	t1,if.num(w)	;Get index.
+	jrst	stotc1##	;Return index to user.
+
+;* translate interface index to name:
+
+ifnam::	pushj	p,fndifx	;Do the work.
+	 popj	p,		; No.
+	move	t1,if.nam(w)	;Get name.
+	jrst	stotc1##	;Return name to user.
+
+;*
+;* Come here with pointer to packet descriptor in p1.
+;*
+
+iprout::skipn	p2,pd.ptr(p1)	;Get data pointer.
+	 jrst	givpd##		; None, silently drop descriptor.
+	skipn	t1,pd.ifn(p1)	;Get source if index.
+	 jrst	givpd##		; From null, cant be.
+	soje	t1,bypass	;Bypass tests if from self.
+	load.	t1,ih.ihl,(p2)	;Get header length in 32-bit words.
+	lsh	t1,2		;Convert length to bytes.
+	cail	t1,^D20		;Check sizes: at least a minimum IP header, -
+	 camle	t1,pd.len(p1)	; and all bytes really there?
+	  jrst	givpd##		;  No, toss.
+
+	;* XXX Save length for option processing.
+
+;* Verify the IP header checksum:
+
+	movei	p4,0		;Initial checksum.
+	movei	t2,(p2)		;IP header address. (t1 already has length)
+	pushj	p,csmbts##	;Checksum the header.
+	pushj	p,csmdon##	;Done checksumming.
+	caie	p4,177777	;Correct checksum?
+	 jrst	givpd##		; No, silently toss packet.
+
+;* Decrement TTL, check for too old packet:
+	
+	load.	t1,ih.ttl,(p2)	;Get TTL.
+	sojle	t1,[		;If one or lower, toss packet, -
+		movei	t1,^D11	; with an ICMP message.
+		movei	t2,0
+		jrst	icmp.e##]
+	stor.	t1,ih.ttl,(p2)	;Store decremented value back.
+	load.	t1,ih.csm,(p2)	;Get checksum.
+	addi	t1,^D256	;Adjust for changed TTL.
+	caile	t1,177777	;Overflow?
+	 subi	t1,177777	; Please dont.
+	stor.	t1,ih.csm,(p2)	;Restore updated checksum.
+
+bypass:
+	;* Lookup routing table entry.
+
+	load.	t1,ih.da,(p2)	;Get IP destination.
+	pushj	p,fndrt		;Find RT block.
+	 jrst	givpd##		; Not found, toss packet.
+	move	w,rt.ifx(r)	;Get if block pointer.
+	move	t1,rt.via(r)	;Get next-hop.
+	movem	t1,pd.via(p1)	;Set up for xmitter.
+
+	;* XXX check MTU, we might have to fragment.
+
+	skipe	pd.llb(p1)	;Broadcast?
+	 camn	w,ift.me##	; Outgoing?
+	  jrst	@if.snd(w)	;  No, go deliver packet.
+	jrst	givpd##		;Broadcast, on outgoing if. toss.
+
+;*
+;* Come here from ARPSER to check if we should accept packets to (answer
+;* arp for) a given address.  Query IP address in T1.
+;*
+
+ansarp::pushj	p,fndrt		;Get RT block.
+	 popj	p,		; None, fail.
+	move	t1,rt.flg(r)	;Get flags.
+	trnn	t1,rtf.ar	;Arp flag set?
+	 popj	p,		; No, fail.
+	jrst	cpopj1##	;Yes, accept.
+
+;*
+;* Here to check that an IP address in T1 is really one of ours.
+;*
+
+ipisme::pushj	p,fndrt		;Get RT block.
+	 popj	p,		; None, fail.
+	move	t1,rt.ifx(r)	;Get interface ptr.
+	came	t1,ift.me##	;Is it "self"?
+	 popj	p,		; No, fail.
+	jrst	cpopj1##	;Yes, accept.
+
+;*
+;* Here to get a suitable local address for a given remote.
+;*
+
+ipgtla::pushj	p,fndrt		;Find RT block.
+	 jrst	rtzer##		; None? Return zero.
+	move	t1,rt.ifx(r)	;Get interface.
+ifgtla::skipn	t1,if.ipa(t1)	;Get ip address.
+	 skipe	t1,if.slf##+if.ipa ;None, get system default.
+	  popj	p,		;  Got one.
+
+	;* scan for first match pointing to us.
+
+	skipn	r,rthead	;Get head of list.
+	 jrst	rtzer##		; Have to fail here.
+ipgtl2:	move	t1,rt.ifx(r)	;Get interface.
+	move	t2,rt.flg(r)	;Get flags.
+	camn	t1,ift.me##	;Is this us?
+	 trnn	t2,rtf.ar	; Yes, external addr?
+	  tdza	t1,t1		;  No, clear t1.
+	   skipa t1,rt.ipa(r)	;   Yes, get address.
+	    skipn r,rt.nxt(r)	;    Get next block.
+	     popj p,		;     Return address or zero.
+	jrst	ipgtl2		;Loop.
+
+;*
+;* Once/second routine.  (Not IP security!)
+;*
+
+ipsec::
+	aosn	iniflg		;[temp] are we inited?
+	 pushj	p,iprini	;[temp]  no, go do it.
+;	pushj	p,arpsec##	;Call ARP once/second handler.
+	pushj	p,unasec##	;Call DEUNA once/second handler.
+	pushj	p,tcpsec##	;Call TCPSER.
+	pushj	p,udpsec##	;Call UDPSER.
+
+	popj	p,		;All done.
+;*
+;* This routine inits the IP routing and interface blocks.
+;*
+
+iprini:
+
+;*** we should make an initial routing table here, installing a
+;*** route for 224.0.0.0/4 (multicast) and 240.0.0.0/4 (class E)
+;*** to null0 to prevent us from trying to forward them.
+;***
+;***    <ouripa>/32   una0 arp
+;***    224.0.0.0/4   null
+;***    240.0.0.0/4   null
+;***    0.0.0.0/0     una0
+
+;	move	t1,ouripa
+;	movem	t1,if.slf##+if.ipa
+
+	popj	p,		;All done.
+
+end

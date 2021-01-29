@@ -1,0 +1,28 @@
+FUR is a very general file utility routine.  The systems staff
+regularly uses it instead of PIP for file copying, deletion, and
+renaming.  Its advantages in these roles stem from the fact that
+it is faster than the normal commands which invoke both COMPIL and
+PIP, and also from the standpoint that standard defaults from
+SWITCH.INI can be called in.
+
+Using /ERSUPERSEDE as a default in SWITCH.INI enables you to use
+COPY commands freely without having to worry about accidentally
+overwriting an existing file.  The DECIDE option is quite useful
+during file copying and deletion to make sure the right files are
+involved.  Of course, the encryption feature is used for private
+files quite a bit.
+
+At NIH we use FUR for file-structure to file-structure
+copies.  These copies clean up the file structure by eliminating
+fragmentation and recovering lost blocks.  FUR understands how to
+create directories properly and makes sure that SFDs are created
+before the files that need to go into them are placed there.
+
+The high performance of FUR is due to the dump mode I/O commands
+that actually implement the data movement.
+
+To create a new version of FUR, load it with its own SCN7BF, WILD 7A or 7B,
+HELPER, and ENDECR (find these last two from BACKUP generations).
+
+I hope that you are happy with FUR and report any problems you
+may find with it.

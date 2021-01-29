@@ -1,0 +1,47 @@
+BEWARE FILE FOR THE SED SCREEN EDITOR
+
+SED %2(661)
+
+SED, on  TOPS-10  only,  now uses  the  PSI system  to  intercept KSYS
+countdown interrupts. The symbol, KSYMIN, in SEDSYM is set to 10 (ten).
+This symbol is used to determine the when SED should start warning the
+user of the impending KSYS. E.g. KSYMIN=^D10 means starting at 10 minutes
+till KSYS, SED will start warning (message at bottom of screen) the user.
+
+PUSH command has been implemenented for TOPS-10 7.03.
+
+SED now supports VT200 series terminals. See SEDV20.KYS for keyboard
+layout.
+
+   To   report   bugs  and  deficiencies,  to  ask  questions  or  make
+suggestions, contact
+
+	Ned Santee
+	Digital Equipment Corp.
+	MRO1-2/S43
+	200 Forest Street
+	Marlborough, Mass. 01752
+
+SED %2(656)
+
+   SED  runs on any processor that runs TOPS-10 or TOPS-20. However, if
+you have a  KA-10  set  the  assembly  parameter  "FTKA10"  in  SED.MAC
+(FTKA10==1).
+
+   SED  currently  reads  the file to be edited into core and writes it
+out on exit.  This  limits  the  size  of  the  edit  file,  the  exact
+restriction  depending on the system's memory and virtual memory.
+
+   If you define both the current file and the alternate file to be the
+same  file,  when  you do SET-FILEs to toggle back and forth the cursor
+may not be where you left it. (no harm is done, though).
+
+   If  your  terminals run at 9600 baud you may have a problem with the
+terminal sending XON-XOFF pairs when it feels  overworked.  SED  has  a
+hard  time distinguishing those characters from the ^S and ^Q commands.
+The easiest solution is to avoid using ^S and ^Q as  commands  and  set
+the  NPG flag to tell SED to keep TTY PAGE in effect (read SED.MEM, the
+installation guide, if you don't understand  this).  See  the  keyboard
+layout  in  SED2.KYS for a suggested arrangement of keys which does not
+use ^S and ^Q.
+

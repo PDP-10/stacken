@@ -1,0 +1,624 @@
+	TITLE	SOSCPY - The Copy and Transfer commands
+;		-------------------------------------
+; 
+;  This file contains the following:
+;	1. The copy (C) command
+;	2. The Transfer (T) command
+; 
+ 
+	SEARCH	SOSTCS
+	$INIT
+ 
+	SUBTTL	COPY AND TRANSFER COMMANDS
+ 
+TRANS:: SETOM	TRANFL		; Set for transfer
+	CAIA
+COPY::	SETZM	TRANFL		; Just to make sure
+	CLEARM	<STARTD,ENDD>	; We have not copied any text yet
+	SETZM	COCOPY		; Not yet
+	PUSHJ	P,GNCH##	; Look at next character
+	CAIL	C,140		; Lower case?
+	TRZ	C,40		; Yes, convert to upper
+	CAIN	C,"X"		; CX command?
+	JRST	CXCMD##		; Yes go handle it
+	TRNE	FL,READOF	; Read only?
+	NERROR	IRO		; If yes, then this is illegal
+	CAIN	C,"C"		; Co-Copy?
+	SETOM	COCOPY		; Yes, note that
+	CAIE	C,"T"		; Co-transfer?
+	JRST	NOTCOT		; No
+	SETOM	COCOPY		; Yes, co-copy flag
+	SETOM	TRANFL		; and transfer
+NOTCOT:	SKIPL	COCOPY		; Co-copy of some kind?
+	JRST	NOCOFL		; Not co-copy
+	SKIPGE	CXFPDP		; Co-file present?
+	JRST	NOCFER		; Yes
+	NERROR	ILC
+
+NOCOFL:	MOVEM	C,SAVC		; No, backup the scanner
+NOCFER:	PUSHJ	P,GET1SD##	; Get place to put lines
+	MOVE	T1,HIPG 	; Store it away for later
+	MOVEM	T1,DESTPG
+	SKIPN	T1,HILN		; Get destination line
+	MOVE	T1,LNZERO##	; Convert line zero to ASCID
+	MOVEM	T1,DESTLN
+	PUSHJ	P,SVHILN##	; Setup for #
+	CAIE	C,"_"		; ...
+	CAIN	C,"="		; Copy from another file?
+	JRST	ALTFIL		; Yes
+	TLZ	FL,COPFIL	; No, make sure flag is off
+	SKIPGE	COCOPY		; From co-file?
+	JSP	ALTP,CXSXCH##	; Change files
+				CONT.
+; Here to parse source line range.  May be in alternate file
+; or in co-file.
+
+COPY1:	SETOM	ISCOP		; Cause special error recovery
+	CAIE	C,","		; Should be comma even if from ALTFIL
+	NERROR	ILC		; He must say where to put it
+COPY1A:	SETZM	FRCPAG		; May still be set from destination scan
+	PUSHJ	P,SCAN##	; Scan next token
+	PUSHJ	P,GET2##	; Go get place to find lines
+	MOVE	T1,INCR 	; Save increment as current
+	MOVEM	T1,FINCR
+	SETZM	SINCR		; Set no second increment
+	CAIE	C,","		; Check for more arguments
+	JRST	CKTMCT		; No, look for terminator
+	PUSHJ	P,SCAN##
+	CAME	T1,LNZERO##	; Avoid 0 increments
+	TRNN	FL,NUMF 	; Should be increment, must be number
+	NERROR	ILC
+	MOVEM	T1,FINCR
+	PUSHJ	P,SCAN
+	CAIE	C,","
+	JRST	CKTMCT
+	PUSHJ	P,SCAN
+	CAME	T1,LNZERO##
+	TRNN	FL,NUMF
+	NERROR	ILC
+	MOVEM	T1,SINCR
+	PUSHJ	P,SCAN
+CKTMCT:	PUSHJ	P,CKTRMF##	; Check for proper termination
+	TLZ	FL,SRCOP	; Further errors are in dest file
+	SETOM	NLIN1		; Lines on first page
+	SETZM	NLIN2		; Lines on last page
+	TLO	FL2,NORENT	; And ree-enter
+	TLZ	FL2,RENTF	; In case he has
+	MOVE	ALTP,.JBFF##	; Point to first free core
+	MOVEM	ALTP,SVJRL	; So we can reset it
+	MOVEI	T2,2000(ALTP)	; Ask for another K
+	CORE	T2,		; Yes
+	  NERROR NEC		; No, say no core
+	SETZM	LSTPG		; Have seen no pages yet
+	PUSHJ	P,FINDL1##	; Get first line of range
+	TRZ	FL,LINSN	; And no lines
+				CONT.
+	SKIPL	TRANFL		; Is this a transfer command?
+	JRST	GOCOP		; No, ignore all this special stuff
+	HRRZM	ALTP,STARTD	; Save the start of deleted code
+	HRRZM	ALTP,ENDD	; And the end
+	MOVE	T1,CPG		; Get the page on which deletion starts
+	MOVEM	T1,TRANST	; And save it
+	PUSHJ	P,FINDB##	; Get the previous line
+	JUMPE	T1,BEGFIL	; If at beginning of file
+	CAMN	T1,PGMK 	; A page is special
+	JRST	SPCPG
+	MOVEM	T1,BOTLIN	; Save it for later
+	PUSHJ	P,FINDN 	; Go forward again
+	JRST	GOCOP
+
+SPCPG:	SKIPE	LOLN		; Do we intend to absorb this one
+	JRST	BEGFIF		; Move forward and record
+	PUSHJ	P,FINDB 	; Back up
+	JUMPE	T1,BEGFIF	; If hit beginning of file
+	PUSH	P,T1		; Save that line
+	PUSHJ	P,FINDN
+	PUSHJ	P,FINDN 	; And go back where we belong
+	POP	P,T1		; Get line number back
+	CAMN	T1,PGMK 	; There's that page again
+	JRST	BEGFIL
+	MOVEM	T1,BOTLIN	; Save line number
+	JRST	GOCOP
+
+BEGFIS:	AOS	CPG
+BEGFIF:	PUSHJ	P,FINDN
+BEGFIL: SETOM	BOTLIN		; A very small number
+GOCOP:	SETZM	PGDELS		; Total number of pages deleted is 0
+	SKIPE	LOLN		; Did he ask for the whole page
+	JRST	NOISTP		; No
+	DMOVE	T1,PGMK 	; Yes, put in the page mark
+	DMOVEM	T1,(ALTP)
+	HRRZM	ALTP,LSTPG
+	ADD	ALTP,[XWD 2,2]
+	SETZM	NLIN1		; No lines on first page
+	SKIPL	TRANFL		; Is this a transfer
+	JRST	NOISTP		; No, start transfer of data
+	MOVE	T1,CPG		; Check to see if we should delete
+	CAIN	T1,1		; Not if page 1
+	JRST	RSTSTP
+	PUSHJ	P,FINDB 	; Get that page
+	PUSHJ	P,DLTPAG##	; Delete the page mark
+	PUSHJ	P,FINDN1	; Make sure we're at the start of a line
+	AOS	CPG		; And get this straight
+	AOSA	PGDELS
+RSTSTP: HRRZM	ALTP,STARTD	; Reset start if none deleted
+	HRRZM	ALTP,ENDD	; Reset end
+				CONT.
+; Here to loop moving the required lines
+ 
+NOISTP: MOVE	T1,(PNTR)	; Make sure we have that junk back
+ONCOPY: PUSHJ	P,ONMOV##	; Still in range?
+	  JRST	ENDCOP		; No, start inserting
+	TRO	FL,LINSN	; We saw one
+	CAME	T1,PGMK		; Is this a page mark?
+	JRST	MOVLN1		; No
+	MOVE	T2,NLIN2	; 
+	SKIPGE	NLIN1		; See if already there
+	MOVEM	T2,NLIN1	; No, put it on first page
+	SETZM	NLIN2
+	SKIPE	TRANFL		; Is this a copy
+	AOS	CPG		; We are on the next page (sort of)
+	AOS	PGDELS
+	HRRZM	ALTP,LSTPG	; Save record of where seen
+MOVLN1:	PUSHJ	P,GETLTH##	; Get line length, ensure it in core
+	MOVE	T2,(PNTR)	; Current line number
+	MOVEM	T2,LSTLN	; Save this as last one transfered
+	HRLI	T2,(PNTR)	; Point to current line
+	HRRI	T2,(ALTP)	; Point to xfer buffer
+	ADDI	ALTP,(T1)	; Advance xfer pointer
+	MOVEI	T3,(ALTP)	; Core needed (maybe)
+	CAMGE	T3,.JBREL##	; See if room
+	JRST	MOVLN2		; If there is
+	CORE	T3,		; Ask monitor for help
+	  NERROR NEC		; Too bad
+MOVLN2:	BLT	T2,-1(ALTP)	; Save this line
+	SKIPL	TRANFL		; Doing a transfer?
+	JRST	NXTLCP		; No, skip the delete part
+	HRRZM	ALTP,ENDD	; Save end of deleted text
+	PUSHJ	P,DLTLIN##	; Delete the line
+	PUSHJ	P,FINDN1##	; Make sure we're pointing to something
+	CAIA
+NXTLCP:	PUSHJ	P,FINDN##	; Find the next line
+	AOS	NLIN2		; One more line
+	JRST	ONCOPY		; Loop over whole range
+; Here at the end of copying or transfering
+ 
+ENDCOP: TRNN	FL,LINSN	; Were there any there?
+	NERROR	NLN		; No lose
+	SETZM	(ALTP) 		; Make sure therg is an end flag there
+	TLZE	FL,COPFIL	; Are we comming off a file
+	PUSHJ	P,RSCOP 	; Yes, reset pointers
+	SKIPL	COCOPY		; Co-copy
+	JRST	ENDNCP		; ...no
+	SKIPL	TRANFL		; A transfer?
+	JRST	ENDXCH		; No, copy.  Don't alter page counts
+	PUSHJ	P,FINDN1##	; Setup current line in T1
+	MOVN	T2,PGDELS	; Number of pages deleted
+	ADDM	T2,BGPG		; Fix big page
+	ADDB	T2,CPG		; Fix current page
+	DMOVEM	T1,CLN		; Setup current line position
+ENDXCH:	JSP	ALTP,CXSXCH##	; Get back 
+	MOVMS	COCOPY		; Change to plus 1
+ENDNCP:	MOVE	T1,DESTPG	; Look for destination
+	MOVEM	T1,DPG
+	SKIPN	COCOPY		; Co-copy?
+	SKIPL	TRANFL		; Is it a transfer?
+	JRST	DOINS1		; No, put the copied text in
+	SETZM	PGINSD		; No extra page mark inserted yet
+	MOVE	T2,(PNTR)	; Fetch current line
+	CAMN	PNTR,BUFLAS	; Skip if not end of buffer
+	JRST	NOPGIN		; Yes, do not insert a page mark
+	CAME	T2,PGMK 	; Also not if page mark
+	CAMLE	T2,BOTLIN	; Or greater than line left over
+	SKIPA
+	SETOM	PGINSD		; We will have to insert one
+NOPGIN:	MOVN	T2,PGDELS	; Count of pages deleted
+	CAMGE	T1,TRANST	; (T1 has dest. page) if lss than start
+	JRST	DOSUB		; Everything is ok
+	CAMN	T1,TRANST	; Is it same?
+	JRST	DSEQTR		; Special check required
+	CAMGE	T1,CPG		; Inside range deleted?
+	NERROR	ITD		; Lose big
+	CAMN	T1,CPG		; Same as top page?
+	JRST	DSEQCP
+	ADDM	T2,DPG		; Fix desired page
+	ADDM	T2,DESTPG	; In both places
+DOSUB:	ADDM	T2,CPG		; Fix this by number deleted
+	ADDM	T2,BGPG		; And these too
+	SKIPN	PGINSD		; See if we want to insert one
+	JRST	DOINS1
+	PUSHJ	P,INSPMK##	; Insert a page mark
+	OUTSTR	[ASCIZ /%Page mark inserted to prevent order error
+/]
+	JRST	DOINS1
+
+; Here if all lines on the same page
+
+ALLSAM: SKIPN	LOLN
+	SKIPE	PGINSD		; If did not delete page or inserted one
+	JRST	DOSUB		; All ok
+	MOVE	T1,(PNTR)	; Current line
+	CAME	PNTR,BUFLAS	; Skip if end of buffer
+	CAMN	T1,PGMK
+	NERROR	ITD		; There is no upper part
+	CAMLE	T1,DESTLN
+	NERROR	ITD
+	SOS	T1,DESTPG	; This will be on a lower page
+	MOVEM	T1,DPG
+	JRST	DOSUB
+DSEQTR: CAMN	T1,CPG		; Is it all on same page?
+	JRST	ALLSAM		; Yes, special checking
+	SKIPN	LOLN		; Did we start with a page
+	NERROR	ITD		; Yes, lose
+	SKIPE	PGINSD		; Was there a page inserted?
+	JRST	DOSUB		; Yes, all ok
+	MOVE	T1,(PNTR)	; Next line number
+	CAME	PNTR,BUFLAS	; Skip if end of buffer
+	CAMN	T1,PGMK
+	JRST	DOSUB		; This will be ok
+	CAMG	T1,DESTLN	; See if we are in trouble
+	NERROR	ITD
+	JRST	DOSUB		; Ok
+DSEQCP: SKIPE	PGINSD		; Was one inserted
+	JRST	AOSTRA		; Set page properly
+	MOVE	T1,DESTLN
+	CAMG	T1,BOTLIN
+	NERROR	ITD
+	SKIPA	T1,TRANST
+AOSTRA: AOS	T1,TRANST
+	MOVEM	T1,DESTPG
+	MOVEM	T1,DPG		; Also set this
+	JRST	DOSUB
+
+DOINS1: MOVE	SINDEX,DESTLN
+	SETZM	OLDLIN
+	PUSHJ	P,FIND##	; Find the destination line
+	MOVE	T1,CPG
+	CAMN	T1,DESTPG	; Pages must match
+	JRST	DOINS2
+	SKIPL	TRANFL		; Is this a transfer
+	NERROR	NSP		; No, no such page
+	PUSHJ	P,INSPMK##	; Insert a page mark
+	OUTSTR [ASCIZ /%Text inserted at end of file
+/]
+	MOVE 	T1,CPG
+				CONT.
+DOINS2:	MOVEM	T1,CPGL 	; Set this as current page
+	PUSHJ	P,FINDN1##	; Point back to line found
+	MOVE	T2,LNZERO##	; For start of new page
+	MOVEM	T2,CLN		; Set up as current line
+	MOVEM	T2,SVLNUM	; And as saved current
+	MOVE	ALTP,SVJRL	; Back to start of buffer
+	SETZM	TRANFL		; No longer needed
+	SKIPGE	NLIN1		; Were any page marks seen?
+	JRST	ONSET		; No, just need one increment
+	JUMPE	T1,[MOVE T2,INCR	; Default increment
+		    MOVEM T2,SINCR	; Setup for second increment
+		    MOVE T3,NLIN1	; Number of lines
+		    JRST ONST0]	; Join processing
+	MOVE	T3,NLIN2	; Number of lines on last page
+	MOVE	T2,LNZERO##	; No increment given
+	CAMN	T1,DESTLN	; Line found same as destination
+	MOVE	T1,T2		; Yes, force computation
+	PUSHJ	P,GETDIF##	; ...
+	  JRST	ORDSEC		; None exists
+	MOVEM	T1,START2	; Save place to start on last page
+	SKIPN	SINCR		; Did he give one?
+	JRST	[MOVE T1,LSTLN	; Last line seen
+		 CAML T1,0(PNTR); How does it look?
+		 JRST ONST3	; Not good enough
+		 JRST OKINC2]
+	CAML	T2,SINCR	; Ours is better?
+	JRST	OKINC2		; No, we'll use his
+ONST3:	MOVEM	T2,SINCR	; No, store calculated
+ONST2:	MOVEM	T2,PRNTO2	; And tell him
+	OUTSTR	ASCIZ2
+OKINC2: MOVE	SINDEX,DESTLN	; Set to find the line again
+	SETZM	OLDLIN		; Avoid extra order messages
+	PUSHJ	P,FIND##	; Reposition
+	MOVE	T4,T1		; Save this line number
+	CAMN	SINDEX,T1	; Before first line of page?
+	PUSHJ	P,FINDN		; No, skip over the destination line
+	SKIPG	T3,NLIN1	; Check for page-mark only
+	JRST	INSL2		;
+	MOVE	T2,DESTLN	; Where he wants everything
+	MOVE	T1,T4		; The current line
+	PUSHJ	P,GETDF1##	; Compute increment
+	  JRST	ORDCP2		; Order problem will follow
+	MOVEM	T1,CLN		; Setup the current line
+	MOVEM	T1,SVLNUM	; And saved current line
+	CAML	T2,FINCR	; Whose increment is better?
+	JRST	INSL2		; His
+	MOVEM	T2,FINCR	; Ours
+	JRST	ONST1		; Tell him about the change
+	CAML	T2,FINCR	; Is one given smaller?
+	JRST	INSL2		; Yes, all ok
+	MOVEM	T3,FINCR
+	JRST	ONST1		; Let him know
+ONSET:	SKIPG	T3,NLIN2	; Were there any?
+	JRST	INSL2		; All ok
+ONST0:	MOVE	T2,DESTLN	; His desired destination
+	MOVEM	T2,SVLNUM	; As good as any if order error
+	PUSHJ	P,GETDIF##	; Get an increment
+	  JRST	ORDCOP		; None exists
+	MOVEM	T1,SVLNUM	; Set the good number
+	MOVEM	T1,CLN		;  as current line number
+	CAML	T2,FINCR	; His okay?
+	JRST	INSL2		; Yes
+	MOVEM	T2,FINCR	; No, too small
+ONST1:	MOVEM	T2,PRNTO1	; Put in in print position
+	OUTSTR	ASCZ1
+	JRST	INSL2		; He has been told
+
+ORDCP2: SKIPA	T2,[ASCII /WAR	/]
+ORDCOP: MOVE	T2,[ASCII /Order/]
+	JRST	ONST1
+
+ORDSEC: MOVE	T2,[ASCII /Order/]
+	JRST	ONST2
+
+ASCON:: MOVSI	T3,400000	; Will become low order bit
+ASCO2:	IDIVI	T1,^D10
+	ADDI	T2,"0"
+	LSHC	T2,-7
+	TRNN	T3,1		; Has it gotten there?
+	JRST	ASCO2
+	POPJ	P,
+
+NUMCON::MOVEI	T1,0
+	TRZ	T3,1		; Get rid of low order bit
+NUMC1:	MOVEI	T2,0
+	LSHC	T2,7
+	IMULI	T1,^D10
+	ADDI	T1,-"0"(T2)
+	JUMPN	T3,NUMC1
+	POPJ	P,
+INSLN:	MOVE	T2,FINCR	; Generate new sequence number
+	SKIPN	T1,SVLNUM	; But only if we are supposed to
+	JRST	INSL2
+	PUSHJ	P,ASCIAD##
+	MOVEM	T1,SVLNUM	; Put either ngw or 0 back
+INSL2:	MOVEI	T1,LIBUF	; Set up output pointer
+	SKIPN	T2,(ALTP)	; At end?
+	JRST	INSDON		; Finished
+INS1:	MOVEM	T2,(T1) 	; Put it away
+	ADDI	ALTP,1		; Next
+	SKIPN	T2,(ALTP)	; Check for end of ling
+	JRST	DOINS
+	TRNN	T2,1		; By either method
+	AOJA	T1,INS1 	; Go on with transfer
+DOINS:	SUBI	T1,LIBUF-1	; Get count
+	MOVEM	T1,NCNT 	; And set as new
+	SETZM	OCNT		; Old is zero
+	MOVE	T1,LIBUF	; Get seq num
+	CAMN	T1,PGMK 	; Check for page
+	JRST	INSPG		; And do special
+	SKIPN	T1,SVLNUM	; If a non-zero number then replace
+	MOVE	T1,LIBUF
+	MOVEM	T1,LIBUF
+NOINCR: PUSHJ	P,INSLSB
+	MOVE	T3,CPG		; We are on the next page
+	MOVEM	T3,CPGL 	; Set as currenv
+	JRST	INSLN		; Go put in more
+
+INSPG:	MOVE	T1,LNZERO##	; Set to say line 0
+	AOS	BGPG		; One more page in file
+	SETZM	SVLNUM		; Don't do any more sequence replacement
+	MOVEI	T2,-2(ALTP)	; Since we have already gone past
+	CAMN	T2,LSTPG	; Unless starting last page
+	SKIPN	T3,SINCR	; And second sequence number given
+	JRST	NOINCR
+	MOVEM	T3,FINCR	; Set up increment
+	MOVE	T3,START2	; Last page start
+	MOVEM	T3,SVLNUM
+	PUSHJ	P,INSLSB	; Install the page mark
+	JRST	INSL2		; And get the rest of the lines
+
+INSLSB:	MOVEM	T1,CLN		; Setup current line
+	PUSHJ	P,INSED##	; Insert it
+	SETZM	OLDLIN		; Suppress extra order messages
+	PJRST	FINDN		; And pass over it
+INSDON::
+COPDON::RELEASE ALTDV,0 	; Just for good measure
+	TLZE	FL,COPFIL	; Are we copying from a file (if errors)
+	PUSHJ	P,RSCOP 	; Yes, clean up pointers
+	SETZM	ISCOP		; Reset copy flag
+	SKIPL	TRANFL		; If transfer, we must re-insert
+	JRST	COPRTN		; Not
+	SKIPG	COCOPY		; Text in co-file?
+	JRST	REINST
+	JSP	ALTP,CXSXCH##	; Switch back
+	SETOM	COCOPY
+REINST:	MOVE	ALTP,STARTD	; Point to start of deleted text
+	CLEARM	<LOLN,HILN>	; In case he tries again
+REINXT: MOVEI	T1,LIBUF
+	CAMN	ALTP,ENDD	; End yet?
+	JRST	COPRTN		; If done
+	MOVE	T2,(ALTP)
+	JRST	REINWD
+REINS:	MOVE	T2,(ALTP)
+	CAME	ALTP,ENDD
+	TRNE	T2,1
+	JRST	ENDLIN		; Done with this line
+REINWD: MOVEM	T2,(T1)
+	ADDI	T1,1
+	AOJA	ALTP,REINS
+ENDLIN:	SUBI	T1,LIBUF
+	PUSHJ	P,INSLIN##	; Insert line
+	SKIPE	COCOPY		; Co-copy?
+	SETZM	T1		; Yes, fix T1 so never matches PGMK
+	CAMN	T1,PGMK##	; Just inserted a page mark?
+	SOS	CPG		; Defend against FINDN
+	SETZM	OLDLIN		; Suppress order checking
+	PUSHJ	P,FINDN
+	JRST	REINXT
+
+COPRTN:	SKIPGE	COCOPY		; Co-copy?
+	JSP	ALTP,CXSXCH##	; Yes, get back to other file
+	SETZM	COCOPY
+	JRST	COMND##
+; Here to read another file to copy text from
+
+ALTFIL: SKIPN	COCOPY		; This is illegal for Co-copy
+	SKIPE	TRANFL		; Second file not legal in transfer
+	NERROR	ILC
+	PUSHJ	P,SCAN
+	MOVEI	T3,ALTFNM##	; Store alternate file name here
+	MOVEI	T1,APATH	; Pointer to alternate path area
+	MOVEM	T1,.RBPPN(T3)
+	MOVEI	T1,.RBBIG	; Length for lookup block
+	MOVEM	T1,ALTFNM##	; Set it up
+	PUSHJ	P,READNM##
+	  NERROR BFS		; Bad file specification
+	SKIPN	T1,TMPDEV	; Was a device specified?
+	MOVSI	T1,'DSK'	; No, use dsk
+	MOVEM	T1,ALDEVI+1	; Store device name
+	MOVE	T1,.JBREL##	; Set things up
+	HLRZ	T1,P		; Get -amount of stack left
+	CAIL	T1,-^D30	; We better have about 30 words
+	NERROR	NEC		; Else lets say oops
+	OPEN	ALTDV,ALDEVI	; Get it
+	  NERROR DNA		; Maybe its hereditary
+DOLOOK:	XLOOKP	ALTDV,ALTFNM	; Lookup file
+	  JRST	COMND		; Skip this; message issued
+	  JRST  [SKIPN DFXSW##	; Did we try a default extension?
+		 NERROR FNF	; No, say file was not found
+		 SETZM	DFXSW	; This one is not a default
+		 SETZM	ALTFNM+.RBEXT
+		 JRST	DOLOOK]
+	MOVE	T1,[XWD -LN$ASL,AFCVSL]
+	JSP	T5,PUSHL	; Save all good stuff
+IFN CRYPSW,<
+	MOVE	T1,TMPCOD	; Get the key
+	MOVEM	T1,ICODE	;  so we can decode the input
+>
+	MOVE	T1,CHNTAB+ALTDV	; Make altdev
+	MOVEM	T1,CHNTAB##+IN	; the input device
+	MOVEI	T1,ALTFNM	; Point to lookup block
+	MOVEM	T1,PNTNMI	; Setup input lookup block pointer
+	SETOM	ISCOP		; Tell the world we are copying
+	MOVE	T1,ALTFNM+.RBPPN; New PPN
+	MOVEM	T1,ORGPTH	; In case we have to back up
+	MOVE	T1,ALTFNM+.RBNAM; The new name
+	MOVEM	T1,ORGNAM
+	HLLZ	T1,ALTFNM+.RBEXT
+	MOVEM	T1,ORGEXT
+				CONT.
+	MOVEI	T1,1
+	MOVEM	T1,CPG
+	MOVEM	T1,CPGL		; Logical page also
+	SETZM	CLN		; Clear current line
+	SETZM	SVWD
+	SETZM	OLDLIN
+	MOVSI	T1,1
+	MOVEM	T1,BGPG
+	SKIPE	T1,RDTPDP	; Current Unsequenced read pointer
+	MOVEM	T1,RTIPDP	; will be initial for awhile
+	SETZM	IBUF+.BFCTR	; Make sure we start reading immediately
+	SETZM	BASICF
+	SKIPN	RSW
+	JRST	ALTFL2
+	SETZM	RSW
+	SETOM	SSW		; Set browse mode also
+	SETOM	BASICF
+ALTFL2:	MOVE	T1,FL		; Save selected flags
+	AND	T1,[XWD L1.NNL!TECOF,READOF!BOF!EOF!BGSN]
+	PUSH	P,T1
+	TRZ	FL,EOF!BGSN
+	TRO	FL,READOF!BOF
+	TLZ	FL,TECOF!L1.NNL
+	MOVEM	P,COPDL 	; Save pdl for later
+	TLO	FL,COPFIL	; We are using other file pointers
+	MOVEI	T1,12*BLKSIZ	; This is a good buffer size
+	TRNE	FL,TERMF	; Did we terminate
+	SETOM	SSW		; Give him a free /S if he forgot
+	SKIPN	SSW
+	JRST	[PUSHJ	P,BUFINI##
+		  ERROR NEC
+		 PUSHJ	P,IREAD##
+		 JRST	COPY1]
+	PUSHJ	P,CKTRMF##	; Must be terminated
+	PUSHJ	P,BUFINI##	; Initialize buffer pointers, get core
+	  ERROR NEC
+	PUSHJ	P,IREAD##
+	TLO	FL,SRCOP	; Set things up
+	MOVE	T1,[2,,[ASCIZ/C*/]]
+	MOVEM	T1,CMDPMT	; Set up copy prompt
+	JRST	COMND		; And go get commands
+
+DSCOP:: SETZM	LOLN		; This may have gotten reset
+	SETZM	SAVCHR		; Clear things out
+	SETZM	SAVC
+	SETZM	LIMBO
+	CLRBFI			; Clear rest of input
+	SETZM	SSW		; Forget this switch
+	SKIPE	QUITSW		; Did he want to quit?
+	JRST	[TLZ	FL,SRCOP
+		 JRST	COMND##] ; Don't ask
+	MOVE	T1,[^D13,,[ASCIZ/Source lines=/]]
+	PUSHJ	P,PROMPT##	; Prompt user
+	TLZ	FL2,NORENT	; In case he types control-C now
+	JRST	COPY1A		; Go get rest of command string
+RSCOP:: POP	P,T5
+	MOVE	P,COPDL 	; Get pdl back
+	POP	P,T1
+	TRZ	FL,READOF!BOF!EOF!BGSN; Restore selected flags
+	TLZ	FL,TECOF!L1.NNL!SRCOP
+	IOR	FL,T1
+	MOVE	T1,[XWD -LN$ASL,AFCVSL]
+	JRST	POPL		; Returns through T5
+
+ 
+
+; List of things that must be saved for alternate file copy
+
+AFCVSL:	XWD	CPGL,CLN
+	XWD	CPG,BUFFIR
+	XWD	BUFHSZ,BUFLIM
+	XWD	BUFLAS,PNTR
+	XWD	LPNTR,BUFBDY
+	XWD	BGPG,ORGNAM
+	XWD	ORGEXT,ORGPTH
+	XWD	BASICF,CHNTAB+IN
+	XWD	.JBFF,REMSIZ
+	XWD	OUTSIZ,OLDLIN
+	XWD	TECLIN,RDTPDP
+	XWD	IBUF+1,IBUF+2
+	XWD	IBUF+3,RDTBFP
+	XWD	RTIPDP,PNTNMI
+	XWD	PNTNMO,ALTFNM+.RBCNT
+	XWD	CXFCOR,SVJFF2
+	XWD	BUFLOW,CMDPMT
+	XWD	UNSQIF,BUFBLL
+	XWD	OBUF+3,ICODE
+LN$ASL==.-AFCVSL
+
+; Subroutine to save a list of variables on the stack
+; Call with
+;	MOVE	T1,AOBJN pointer to list
+;	JSP	T5,PUSHL
+
+PUSHL::	MOVS	T2,(T1)		; First word of variables
+	PUSH	P,(T2)		; Save first
+	MOVSS	T2
+	PUSH	P,(T2)		; Then second
+	AOBJN	T1,PUSHL
+	JRST	(T5)		; Return
+
+
+; Subroutine to restore a list--call as in PUSHL
+; Call with
+;	MOVE	T1,AOBJN pointer to list
+;	JSP	T5,POPL
+
+POPL::	HLRE	T2,T1		; Length of list negated
+	SUB	T1,T2		; Increment pointer past end of list
+POPL1:	MOVE	T3,-1(T1)	; Get last entry
+	POP	P,(T3)		; Restore a variable
+	MOVSS	T3		; Access next
+	POP	P,(T3)		; Restore next variable
+	SUBI	T1,1		; Back up pointer
+	AOJL	T2,POPL1	; Loop over whole list
+	JRST	(T5)		; Then return
+
+	END

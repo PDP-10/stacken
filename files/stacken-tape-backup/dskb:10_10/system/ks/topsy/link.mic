@@ -1,0 +1,6 @@
+.r link
+*system/save = /noinitial/hash:13k/locals -
+*common, comdev, commod, -
+*comcon, -
+*tops10/search, -
+*/patch:200/go

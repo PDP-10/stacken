@@ -1,0 +1,568 @@
+MODULE MDALST (					!Display data to the listing file.
+		IDENT = '003000',
+		LANGUAGE (BLISS16, BLISS36)
+		) =
+BEGIN
+!
+!
+!
+! COPYRIGHT (C) 1978 BY
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+! COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: MCBDA
+!
+! ABSTRACT:
+!
+!
+! THIS MODULE CONTAINS THE ROUTINES TO SEND LINES OF TEXT TO THE
+! LISTING FILE
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 25-AUG-78
+!
+! MODIFIED BY:
+!
+!	Alan D. Peckham, 2-Jul-80 : VERSION 3
+! 01	- General update for MCB V3.0
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    LSTOPN,					!Initialize listing device.
+    PRINT : NOVALUE,				!Print a line with optional paging
+    PUTLIN : NOVALUE,				!Edit and display a line of text to the listing device.
+    						!on the listing device.
+    SBTTL : NOVALUE,				!Set the heading sub-title
+    						!and force a page break.
+    SKIP : NOVALUE,				!Skip the specified number of lines.
+    TTYOPN,					!Initialize the user's terminal.
+    TYPE : NOVALUE,				!Type a line to the user's terminal.
+    TYPLIN : NOVALUE;				!Edit and display a line of text to the user's terminal.
+
+!
+! INCLUDE FILES
+!
+
+LIBRARY 'MDACOM';				!MDA COMMON DEFINITIONS
+
+!
+! MACROS:
+!
+!	NONE
+!
+! EQUATED SYMBOLS:
+!
+
+LITERAL
+    LINES_PER_PAGE = 55;			!Maximum number of lines per page.
+
+BIND
+    CRLF = CH$ASCII (%CHAR (13, 10, 10, 10));
+
+!
+! OWN STORAGE:
+!
+
+OWN
+    CURRENT_LINE,				!Current line on page.
+
+    %IF NOT %NULL (LST_FILE)
+    %THEN
+	FILE_LINE : CH$SEQUENCE (133),		!Dump file identification line.
+	FILE_LINE_LEN,				!Length of FILE_LINE string.
+    %FI
+
+    LSTBLK,
+    MY_FLAGS : BITVECTOR [3],			!Internal flags.
+    PAGE_NUMBER,				!Current page number.
+    SBTTL_LEN,					!Length of current subtitle.
+    SBTTL_PTR,					!Pointer to current subtitle.
+    TITLE : CH$SEQUENCE (133),			!Title line.
+    TITLE_PAGE_POS,				!Count of characters before page number.
+    TTYBLK;
+
+MACRO
+    NEW_LISTING =
+	MY_FLAGS [0] %,
+    NEW_SBTTL =
+	MY_FLAGS [1] %,
+    WIDE_LISTING =
+	MY_FLAGS [2] %;
+
+!
+! EXTERNAL REFERENCES:
+!
+
+EXTERNAL ROUTINE
+
+    %IF NOT %NULL (LST_FILE)
+    %THEN
+	FILNM : NOVALUE,			!Convert file name to ASCII.
+	FILDT : NOVALUE,			!Convert file creation date to ASCII.
+    %FI
+
+    GETTIM : NOVALUE,				!Get the time and date.
+    OPEN,					!Open a file.
+    PUTFIL : NOVALUE,				!Send text to the listing file.
+    $CBDSG,					!Convert binary to signed decimal ASCII.
+    $EDMSG;					!Edit data into text message.
+
+EXTERNAL
+    $LNCNT;					!Line counter.
+
+GLOBAL ROUTINE LSTOPN (LST_FILBLK, WIDE %IF NOT %NULL (LST_FILE) %THEN , LIB_FILBLK %FI) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    EXTERNAL LITERAL
+	VERLNG,					!Length of version string.
+	VERPTR;					!Pointer to version string.
+
+    OWN
+	DATE_AND_TIME : VECTOR [8];
+
+    %IF NOT %NULL (LST_FILE)
+    %THEN
+	OWN
+	    PARAMS : VECTOR [4] INITIAL (FILNM, 0, FILDT, 0);
+    %FI
+
+    BIND
+	DATE = DATE_AND_TIME [0] : VECTOR [3],
+	TIME = DATE_AND_TIME [3] : VECTOR [5];
+
+    LSTBLK = .LST_FILBLK;
+    GETTIM (DATE_AND_TIME);
+    TITLE_PAGE_POS = $EDMSG (%REF (CH$PTR (TITLE)),
+	CH$ASCIZ ('%^', LST_TITLE, ' %#A%#S%Y %2Z  PAGE '),
+	UPLIT (VERLNG, VERPTR, 79 - %CHARCOUNT (LST_TITLE) - VERLNG, DATE, TIME));
+
+    %IF NOT %NULL (LST_FILE)
+    %THEN
+	PARAMS [1] = PARAMS [3] = .LIB_FILBLK;
+	FILE_LINE_LEN = $EDMSG (%REF (CH$PTR (FILE_LINE)), CH$ASCIZ (LST_FILE, ' "%@" Created %@'), PARAMS);
+    %FI
+
+    NEW_LISTING = TRUE;
+    NEW_SBTTL = FALSE;
+    WIDE_LISTING = .WIDE;
+    CURRENT_LINE = 0;
+    PAGE_NUMBER = 0;
+    SBTTL_PTR = SBTTL_LEN;
+    SBTTL_LEN = 0;
+    OPEN (.LSTBLK, F_WRITE, F_ASCII)
+    END;					!OF LSTOPN
+
+GLOBAL ROUTINE PRINT (TEXT_PTR, LENGTH) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.TEXT_PTR				!POINTER TO TEXT STRING TO PRINT
+!	.LENGTH					!LENGTH OF TEXT
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    IF .WIDE_LISTING
+    THEN
+	CURRENT_LINE = .CURRENT_LINE + ($LNCNT = .$LNCNT + 1);
+
+    IF .NEW_SBTTL OR .NEW_LISTING OR .CURRENT_LINE GEQ LINES_PER_PAGE
+    THEN
+	BEGIN
+
+	IF .WIDE_LISTING
+	THEN
+	    BEGIN
+
+	    LOCAL
+		TITLE_LEN;
+
+	    TITLE_LEN = $CBDSG (%REF (CH$PTR (TITLE, .TITLE_PAGE_POS)), (PAGE_NUMBER = .PAGE_NUMBER + 1), 0) +
+	    .TITLE_PAGE_POS;
+	    PUTFIL (.LSTBLK, CH$PTR (TITLE), .TITLE_LEN);
+	    END;
+
+	PUTFIL (.LSTBLK, CRLF, 2);
+
+	IF .WIDE_LISTING OR .NEW_LISTING
+	THEN
+	    BEGIN
+
+	    %IF NOT %NULL (LST_FILE)
+	    %THEN
+		PUTFIL (.LSTBLK, CH$PTR (FILE_LINE), .FILE_LINE_LEN);
+	    %FI
+
+	    PUTFIL (.LSTBLK, CRLF, 2);
+	    NEW_LISTING = FALSE;
+	    END;
+
+	PUTFIL (.LSTBLK, .SBTTL_PTR, .SBTTL_LEN);
+	PUTFIL (.LSTBLK, CRLF, 2);
+
+	IF .WIDE_LISTING AND NOT .NEW_SBTTL
+	THEN
+	    PUTFIL (.LSTBLK, CRLF, 3)
+	ELSE
+	    NEW_SBTTL = FALSE;
+
+	CURRENT_LINE = .$LNCNT;
+	END;
+
+    PUTFIL (.LSTBLK, .TEXT_PTR, .LENGTH);
+    PUTFIL (.LSTBLK, CRLF, 2);
+    $LNCNT = 0;
+    END;					!OF PRINT
+
+GLOBAL ROUTINE PUTLIN (TIMES, PATTERN_PTR, PRM_LIST_ADR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	TIMES					!NUMBER OF LINES TO SKIP
+!						!BEFORE DISPLAYING LINE
+!	PATTERN					!ASCIZ STRING USED TO CONTROL
+!						!CONSTRUCTION OF OUTPUT LINE
+!	PARAMETER_LIST				!PARAMETERS TO TRANSLATE INTO
+!						!THE OUTPUT LINE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	BUFFER : CH$SEQUENCE (133),		!General editing buffer.
+	BUF_LNG;				!Length of edited string.
+
+    BIND
+	BUF_PTR = CH$PTR (BUFFER);		!Pointer to print buffer.
+
+    SKIP (.TIMES);
+    BUF_LNG = $EDMSG (%REF (BUF_PTR), .PATTERN_PTR, .PRM_LIST_ADR);
+
+    IF .BUF_LNG GTR 132
+    THEN
+	BEGIN
+
+	BIND
+	    OVERFLOW = CH$ASCIZ (WARNING, 'I JUST OVERFLOWED MY OUTPUT BUFFER !!!!');
+
+	TYPE (OVERFLOW, CH$LEN (OVERFLOW));
+	END;
+
+    PRINT (BUF_PTR, .BUF_LNG)
+    END;					!OF PUTLIN
+
+GLOBAL ROUTINE SBTTL (ASCIZ_TEXT_PTR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	ASCII_TEXT				!TEXT STRING FOR NEW SUB-TITLE
+!	TEXT_LENGTH				!LENGTH OF SUB-TITLE STRING
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+    SBTTL_PTR = .ASCIZ_TEXT_PTR;		!Save the sub-title address
+    SBTTL_LEN = CH$LEN (.ASCIZ_TEXT_PTR);	!and its length.
+    NEW_SBTTL = TRUE;
+    END;					!OF SBTTL
+
+GLOBAL ROUTINE SKIP (TIMES) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	BLANK_LINES;
+
+    BLANK_LINES = (IF NOT .WIDE_LISTING THEN MIN (.TIMES, 1) ELSE .TIMES);
+
+    WHILE (BLANK_LINES = .BLANK_LINES - 1) GEQ 0 DO
+	PRINT (0, 0);
+
+    END;					!End of SKIP
+
+GLOBAL ROUTINE TYPE (TEXT_PTR, LENGTH) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.TEXT_PTR				!POINTER TO TEXT STRING TO PRINT
+!	.LENGTH					!LENGTH OF TEXT
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+    PUTFIL (.TTYBLK, .TEXT_PTR, .LENGTH);
+    PUTFIL (.TTYBLK, CRLF, 2);
+    END;					!OF TYPE
+
+GLOBAL ROUTINE TTYOPN (TTY_FILBLK) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+    TTYBLK = .TTY_FILBLK;
+    OPEN (.TTYBLK, F_WRITE, F_ASCII)
+    END;					!OF TTYOPN
+GLOBAL ROUTINE TYPLIN (TIMES, PATTERN_PTR, PRM_LIST_ADR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	TIMES					!NUMBER OF LINES TO SKIP
+!						!BEFORE DISPLAYING LINE
+!	PATTERN					!ASCIZ STRING USED TO CONTROL
+!						!CONSTRUCTION OF OUTPUT LINE
+!	PARAMETER_LIST				!PARAMETERS TO TRANSLATE INTO
+!						!THE OUTPUT LINE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	BUFFER : CH$SEQUENCE (133),		!General editing buffer.
+	BUF_LNG;				!Length of edited string.
+
+    BIND
+	BUF_PTR = CH$PTR (BUFFER);		!Pointer to print buffer.
+
+
+    LOCAL
+	BLANK_LINES;
+
+    BUF_LNG = .TIMES;
+
+    WHILE (BUF_LNG = .BUF_LNG - 1) GEQ 0 DO
+	TYPE (0, 0);
+
+    BUF_LNG = $EDMSG (%REF (BUF_PTR), .PATTERN_PTR, .PRM_LIST_ADR);
+
+    IF .BUF_LNG GTR 132
+    THEN
+	BEGIN
+
+	BIND
+	    OVERFLOW = CH$ASCIZ (WARNING, 'I JUST OVERFLOWED MY OUTPUT BUFFER !!!!');
+
+	TYPE (OVERFLOW, CH$LEN (OVERFLOW));
+	END;
+
+    TYPE (BUF_PTR, .BUF_LNG)
+    END;					!OF TYPLIN
+
+
+END
+
+ELUDOM

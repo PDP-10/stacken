@@ -1,0 +1,42 @@
+    C  H  O  M  P      Rules and Instructions
+
+
+	Written by:  Jeff Bunce     Jan  1978
+
+
+   This is the game of CHOMP.   The object of CHOMP
+is not to bite down on the poison square located in
+the upper left hand corner.
+
+   To play, you will be asked:
+	"HOW MANY PLAYERS"
+	to which you reply how many you want
+	(no limit).
+   Next you will be asked:
+	"HOW MANY ROWS"
+	to which you reply how many rows
+	(no negatives and it must be up to  or in-
+	 cluding 9).
+   Next you will be asked:
+	"HOW MANY COLUMNS"
+	you reply the same as "HOW MANY ROWS".
+
+
+   The board is a big cookie -- R rows high,  and
+C columns wide.  In the upper left hand corner  is
+the poison square.  The one who chomps this square
+is the loser.  To take a chomp, type the  row  and
+column of the square you want to chomp. All of the
+squares below and to the right of that square van-
+ish --- CHOMP!!!.  Oh, one other thing, you  can't
+chomp squares that have already been  chomped  and
+you can't chomp squares outside  the dimensions of
+the cookie.
+
+	Have Fun!!
+
+
+
+
+
+

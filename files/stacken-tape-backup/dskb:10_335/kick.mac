@@ -1,0 +1,25 @@
+title kick -- kick the deuna if it is stuck.
+
+search jobdat, uuosym, macten
+
+.text	"/symseg:low/locals"
+
+opdef rdio [712b8]
+opdef wrio [713b8]
+
+t1==1
+t2==2
+
+kick:	jfcl
+	reset
+	move	t2,[3,,774510]
+	movei	t1,0
+	trpset	t1,
+	 halt
+	rdio	t1,(t2)
+	tro	t1,10
+	wrio	t1,(t2)
+	monrt.
+	jrst	kick
+
+end	kick

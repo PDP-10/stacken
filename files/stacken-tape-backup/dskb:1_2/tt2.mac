@@ -1,0 +1,385 @@
+title	telnet -- first telnet attepmt.
+search	jobdat, uuosym,macten
+
+.text	"/symseg:low/locals"
+
+opdef tcp. [call [sixbit "tcp."]]
+
+define ipaddr(b1,b2,b3,b4),<byte (8) ^D'b1,^D'b2,^D'b3,^D'b4>
+
+define error(msg),<
+	jrst[	outstr[ asciz "msg"]
+		outstr[ byte (7) 15, 12, 0]
+		jrst	quit]
+>;error macro
+
+tty==1
+tcp==2
+
+t1==1
+t2==2
+t3==3
+t4==4
+
+pc==16				;State for coroutine.
+
+p==17
+
+dummy:	block	1
+
+rport:	exp	^D23		;Telnet, default port.
+raddr:	pc2			;Default remote address.
+
+pc2:	ipaddr (192,168,111,58)
+bygg2:	ipaddr (192,168,111,59)
+topsy:	ipaddr (192,168,111,60)
+paf.se:	ipaddr (66,125,125,88)
+	ipaddr (64,168,243,36)
+spare:	exp 0
+
+tib:	block	3		;TCP: input buffer header.
+tob:	block	3		;TCP: output buffer header.
+
+tcb:	phase 0
+.tcfnc:!block   1		;Function code.
+    .tcfoa==0			;    Open active.
+    .tcfop==1			;    Open passive.
+    .tcfcl==2			;    Close.
+    .tcfab==3			;    Abort.
+    .tcfgs==4			;    Get status.
+
+    .tcfrd==10			;    Read data.
+    .tcfwr==11			;    Write data.
+
+.tcdev:!block   1		;Device/channel.
+.tcflg:!block   1		;Flags etc.
+.tclad:!block   1		;local address.
+.tcrad:!block   1		;remote address.
+.tclpr:!block   1		;local port.
+.tcrpr:!block   1		;remote port.
+.tcbuf:!block   1		;status buffer ptr.
+.tccnt:!block   1		;status buffer size.
+dephase
+
+dirty:	exp	0		;TCP: buffer has data, needs dumping.
+ttyflg:	exp	0		;TTY: input done flag.
+tcpflg:	exp	0		;TCP: input done flag.
+slploc:	sleep	t1,		;Race condition workaround.
+
+pdl:	block	<pdllen==^D100>	;Stack.
+
+vector:
+vectcp:	exp tcpint, 0, 0, 0
+vectty:	exp ttyint, 0, 0, 0
+
+outbuf:	block	<<<obsiz==^D512>+3>/4>
+outcnt:	exp	0		;Bytes used in above.
+outlft:	exp	obsiz		;Bytes free in above.
+outptr:	point	8,outbuf	;Pointer to above.
+
+tt::	jfcl
+	reset
+	move	p,[iowd pdllen,pdl]
+	movei	t1,vector
+	piini.	t1,
+	 jfcl
+	movx	t1,ps.fon
+	pisys.	t1,
+	 jfcl
+	open	tcp,[
+		exp uu.aio+.iobyt
+		sixbit 'tcp'
+		xwd tob, tib]
+	 error(Can't open TCP:)
+	move	t1,[
+		ps.fac+[exp tcp
+			xwd <vectcp-vector>,ps.rid!ps.rod!ps.rdo!ps.rol!ps.rsw
+			xwd 0,0]]
+	pisys.	t1,
+	 jfcl
+	open	tty,[
+		exp uu.aio+io.sup+.ioasc
+		sixbit 'tty'
+		xwd 0, 0]	;Do TTCALLs.
+	 error(Can't open TTY:)
+	move	t1,[
+		ps.fac+[exp tty
+			xwd <vectty-vector>,ps.rid!ps.rod!ps.ria
+			xwd 0,0]]
+	pisys.	t1,
+	 jfcl
+	skpinc			;Prime the pump.
+	 jfcl			; . . .
+
+	movei	t1,.tcfoa
+	movem	t1,tcb+.tcfnc	;Function, open active.
+	movei	t1,tcp
+	movem	t1,tcb+.tcdev	;Device/channel.
+	setzm	tcb+.tcflg	;No flags.
+	setzm	tcb+.tclad	;Default the local address.
+	mstime	t1,		;Get some random value.
+	andi	t1,177776	;Mask down to 16 bits, -
+	addi	t1,1		; and a non-zero value.
+	movem	t1,tcb+.tclpr	;This is our local port.
+	move	t1,rport
+	movem	t1,tcb+.tcrpr	;Set up our remote port.
+	move	t1,@raddr
+	movem	t1,tcb+.tcrad	;Set up our remote address.
+	setzm	tcb+.tcbuf	;No buffer.
+
+	movei	t1,tcb		;Try to connect.
+	tcp.	t1,
+	 error(Can't open tcp connection)
+
+	jsp	pc,istm		;Init input state machine.
+
+loop:	move	t2,[sleep t1,]
+	movem	t2,slploc
+	skipe	ttyflg
+	 pushj	p,dotty
+	skipe	tcpflg
+	 pushj	p,dotcp
+	movei	t1,5
+	xct	slploc
+	jrst	loop
+
+dotty:	setzm	ttyflg
+	setzm	dirty
+tloop:	inchrs	t3
+	 jrst	tcpfls
+	pushj	p,tcpchr
+	jrst	tloop
+
+tcpchr:	sosge	outlft		;Space left?
+	 jrst[	pushj p,tcpfls	; No, try to output the buffer.
+		skiple outlft	; Got any space?
+		 jrst tcpchr	;  Yes, go try again.
+		movei t2,1	; No, wait some.
+		sleep t2,
+		jrst @.]	; Try again.
+	aos	outcnt		;Count one more.
+	idpb	t3,outptr	;Store byte.
+	popj	p,		;Return.
+
+tcpfls:	skipn	outcnt		;Any data?
+	 popj	p,		; No, don't worry.
+	movei	t1,.tcfwr
+	movem	t1,tcb+.tcfnc	;Function, write data.
+	movei	t1,tcp
+	movem	t1,tcb+.tcdev	;Channel...
+	movei	t1,outbuf
+	movem	t1,tcb+.tcbuf	;Buffer pointer.
+	move	t1,outcnt
+	movem	t1,tcb+.tccnt	;Buffer count.
+	movei	t1,tcb
+	tcp.	t1,		;Try to send data.
+	 jrst[	movei t1,1
+		sleep t1,
+		jrst tcpfls]
+	movei	t1,obsiz	;Set up buffer for next time.
+	movem	t1,outlft
+	setzm	outcnt
+	move	t1,[point 8,outbuf]
+	movem	t1,outptr
+	popj	p,
+
+quit:	monrt.
+	jrst	tt
+
+dotcp:	sosge	tib+.bfctr
+	 jrst[	in tcp,
+		 jrst	dotcp
+		jrst	tcpfls]
+	ildb	t3,tib+.bfptr
+	jsp	pc,(pc)
+	jrst	dotcp
+
+; state machine for input data:
+
+istm:	jsp	pc,(pc)		;Get next char.
+	cain	t3,^D255	;IAC?
+	 jrst	i.iac		; Yep.
+istm2:	outchr	t3
+	jrst	istm		;Loop.
+
+i.iac:	jsp	pc,(pc)		;Get next char.
+	cain	t3,^D255	;IAC again?
+	 jrst	istm2		; Yep, is itself.
+	cain	t3,^D254	;DONT?
+	 jrst	i.dont
+	cain	t3,^D253	;DO?
+	 jrst	i.do
+	cain	t3,^D252	;WONT?
+	 jrst	i.wont
+	cain	t3,^D251	;WILL?
+	 jrst	i.will
+	; ...
+	jrst	istm
+
+iaclog:	outstr[	asciz "[IAC "]
+	outstr	(t1)
+	outstr[	asciz " "]
+	move	t1,t3
+	pushj	p,prdec
+	outstr[	asciz "]
+"]
+	popj	p,
+
+; 251.
+
+i.will:	jsp	pc,(pc)		;Get option.
+	movei	t1,[asciz "WILL"]
+	pushj	p,iaclog
+	cain	t3,1		;ECHO?
+	 jrst	wl.e		; Handle.
+	cain	t3,3		;SUP GA?
+	 jrst	wl.sga		; Handle.
+	push	p,t3		;Save.
+	movei	t3,^D255
+	pushj	p,tcpchr
+	movei	t3,^D254	;DONT
+	pushj	p,tcpchr
+	pop	p,t3
+	pushj	p,tcpchr
+	jrst	istm
+
+wl.e:	movei	t3,^D255	;IAC
+	pushj	p,tcpchr
+	movei	t3,^D253	;DO
+	pushj	p,tcpchr
+	movei	t3,^D1		;ECHO
+	pushj	p,tcpchr
+	jrst	istm
+
+wl.sga:	movei	t3,^D255	;IAC
+	pushj	p,tcpchr
+	movei	t3,^D253	;DO
+	pushj	p,tcpchr
+	movei	t3,^D3		;SUP GA.
+	pushj	p,tcpchr
+	jrst	istm
+
+; 252.
+
+i.wont: jsp	pc,(pc)		;Get option.
+	movei	t1,[asciz "WONT"]
+	pushj	p,iaclog
+	push	p,t3		;Save.
+	movei	t3,^D255
+	pushj	p,tcpchr
+	movei	t3,^D254	;DONT
+	pushj	p,tcpchr
+	pop	p,t3
+	pushj	p,tcpchr
+	jrst	istm
+
+; 253.
+
+i.do:	jsp	pc,(pc)		;Get option.
+	movei	t1,[asciz "DO"]
+	pushj	p,iaclog
+	cain	t3,1		;ECHO?
+	 jrst	do.e		; Yes, handle.
+	cain	t3,3		;SUP-GA?
+	 jrst	do.sga		; Yes, accept.
+	push	p,t3		;Save.
+	movei	t3,^D255
+	pushj	p,tcpchr
+	movei	t3,^D252	;WONT
+	pushj	p,tcpchr
+	pop	p,t3
+	pushj	p,tcpchr
+	jrst	istm
+
+do.e:	
+do.sga:	push	p,t3		;Save opt.
+	movei	t3,^D255	;IAC
+	pushj	p,tcpchr
+	movei	t3,^D251	;WILL
+	pushj	p,tcpchr
+	pop	p,t3		;Option.
+	pushj	p,tcpchr
+	jrst	istm
+
+; 254.
+
+i.dont:	jsp	pc,(pc)		;Get option.
+	movei	t1,[asciz "DONT"]
+	pushj	p,iaclog
+	push	p,t3		;Save.
+	movei	t3,^D255
+	pushj	p,tcpchr
+	movei	t3,^D252	;WONT
+	pushj	p,tcpchr
+	pop	p,t3
+	pushj	p,tcpchr
+	jrst	istm
+
+ttyint:	setom	ttyflg
+dismis:	movem	t1,slploc
+	movsi	t1,(jfcl)
+	exch	t1,slploc
+	debrk.
+	 jfcl
+	error(DEBRK. returned!)
+
+tcpint:	setom	tcpflg
+	jrst	dismis
+
+prdec:	idivi	t1,^D10
+	push	p,t2
+	skipe	t1
+	 pushj	p,prdec
+	pop	p,t2
+	movei	t1,"0"(t2)
+	outchr	t1
+	popj	p,
+
+foo:	move	t1,vectcp+.psvfl
+	trnn	t1,ps.rsw
+	 jrst	hand.2
+	movei	t1,[
+		exp 4
+		exp tcp
+		repeat 10,<0>]
+	tcp. t1,
+	 halt
+	cail t1,0
+	 caile t1,^D10
+	  movei t1,^D11
+	outstr[ asciz "state: "]
+	outstr@[exp[ asciz "closed"]
+		exp[ asciz "listen"]
+		exp[ asciz "syn-sent"]
+		exp[ asciz "syn-received"]
+		exp[ asciz "established"]
+		exp[ asciz "fin-wait 1"]
+		exp[ asciz "fin-wait 2"]
+		exp[ asciz "closing"]
+		exp[ asciz "time-wait"]
+		exp[ asciz "close-wait"]
+		exp[ asciz "last-ack"]
+		exp[ asciz "???"]](1)
+	outstr[ byte (7) 15, 12, 0]
+
+hand.2:	jfcl
+copy:	sosge tib+.bfctr
+	 jrst nxtbuf
+	ildb t1,tib+.bfptr
+	jsp	pc,(pc)
+	jrst copy
+
+nxtbuf:	statz tcp,io.eof
+	 jrst hand.4
+	in tcp,
+	 jrst copy
+
+hand.3:	statz	tcp,io.eof
+hand.4:	 outstr[asciz "EOF
+"]
+	movei t1,^D60
+	debrk.
+	 jfcl
+	halt
+
+end	tt

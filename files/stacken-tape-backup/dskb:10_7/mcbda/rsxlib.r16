@@ -1,0 +1,394 @@
+! RSXLIB.R16 - RSX Structure definitions for MCBDA
+!
+! COPYRIGHT (C) 1978 BY
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+! COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: MCB COMMUNICATIONS/NETWORKS FRONT-END
+!
+! ABSTRACT:
+!
+!
+! THIS FILE CONTAINS DEFINITIONS FOR THE MCB DATA STRUCTURES
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 25-AUG-78
+!
+! MODIFIED BY:
+!
+!	, : VERSION
+! 01	-
+!--
+
+!
+! Clock queue entry definitions
+!
+
+field
+    CLK_FIELDS =
+	set
+	C_LNK = [0, 0, 16, 0],
+	C_RQT = [1, 0, 8, 0],
+	C_EFN = [1, 8, 8, 0],
+	C_TCB = [2, 0, 16, 0],
+	C_TIM = [3, 0, 32, 0],
+
+	C_AST = [5, 0, 16, 0],
+	C_SRC = [6, 0, 16, 0],
+	C_DST = [7, 0, 16, 0],
+
+	C_RSI = [5, 0, 32, 0],
+	C_UIC = [7, 0, 16, 0],
+
+	C_SUB = [5, 0, 16, 0],
+	C_AR5 = [6, 0, 16, 0]
+	tes;
+
+literal
+    C_LGTH = 8,
+
+    C_MRKT = 0*2,
+    C_SCHD = 1*2,
+    C_SSHT = 2*2,
+    C_SYST = 3*2,
+    C_SYTK = 4*2,
+    C_CSTP = 5*2;
+
+!
+! Device Control Block definitions
+!
+
+field
+    DCB_FIELDS =
+	set
+	D_LNK = [0, 0, 16, 0],
+	D_UCB = [1, 0, 16, 0],
+	D_NAM = [2, 0, 2*8, 0],
+	D_UNIT = [3, 0, 8, 0],
+	D_UCBL = [4, 0, 16, 0],
+	D_DSP = [5, 0, 16, 0],
+	D_MSK = [6, 0, 4*32, 0],
+	D_PCB = [14, 0, 16, 0]
+	tes;
+
+literal
+    D_VINI = 0*2,
+    D_VCAN = 1*2,
+    D_VOUT = 2*2,
+    D_VPWF = 3*2;
+
+!
+! HEADER DEFINITIONS
+!
+
+field
+    HDR_FIELDS =
+	set
+	H_CSP = [0, 0, 16, 0],
+	H_HDLN = [1, 0, 16, 0],
+	H_EFLM = [2, 0, 32, 0],
+	H_CUIC = [4, 0, 2*8, 0],
+	H_DUIC = [5, 0, 2*8, 0],
+	H_IPS = [6, 0, 16, 0],
+	H_IPC = [7, 0, 16, 0],
+	H_ISP = [8, 0, 16, 0],
+	H_ODVA = [9, 0, 16, 0],
+	H_ODVL = [10, 0, 16, 0],
+	H_TKVA = [11, 0, 16, 0],
+	H_TKVL = [12, 0, 16, 0],
+	H_PFVA = [13, 0, 16, 0],
+	H_FPVA = [14, 0, 16, 0],
+	H_RCVA = [15, 0, 16, 0],
+	H_EFSV = [16, 0, 16, 0],
+	H_FPSA = [17, 0, 16, 0],
+	H_WND = [18, 0, 16, 0],
+	H_DSW = [19, 0, 16, 0],
+	H_FCS = [20, 0, 16, 0],
+	H_FORT = [21, 0, 16, 0],
+	H_OVLY = [22, 0, 16, 0],
+	H_VEXT = [23, 0, 16, 0],
+	H_SPRI = [24, 0, 8, 0],
+	H_NML = [24, 8, 8, 0],
+	H_RRVA = [25, 0, 16, 0],
+	H_GARD = [29, 0, 16, 0],
+	H_NLUN = [30, 0, 16, 0],
+	H_LUN = [31, 0, 2*16, 0],
+
+	W_BPCB = [0, 0, 16, 0],
+	W_BLVR = [1, 0, 16, 0],
+	W_BHVR = [2, 0, 16, 0],
+	W_BATT = [3, 0, 16, 0],
+	W_BSIZ = [4, 0, 16, 0],
+	W_BOFF = [5, 0, 16, 0],
+	W_BFPD = [6, 0, 8, 0],
+	W_BNPD = [6, 8, 8, 0],
+	W_BLPD = [7, 0, 16, 0]
+	tes;
+
+literal
+    W_BLGH = 8;
+
+!
+! PARTITION CONTROL BLOCK AND
+! ATTACHMENT DESCRIPTOR DEFINITIONS
+!
+
+field
+    PCB_FIELDS =
+	set
+	P_LNK = [0, 0, 16, 0],
+	P_PRI = [1, 0, 8, 0],
+	P_IOC = [1, 8, 8, 0],
+	P_NAM = [2, 0, 2*16, 0],
+	P_SUB = [4, 0, 16, 0],
+	P_MAIN = [5, 0, 16, 0],
+	P_REL = [6, 0, 16, 0],
+	P_BLKS = [7, 0, 16, 0],
+	P_WAIT = [8, 0, 16, 0],
+	P_SWSZ = [9, 0, 16, 0],
+	P_BUSY = [10, 0, 2*8, 0],
+	P_OWN = [11, 0, 16, 0],
+	P_TCB = [11, 0, 16, 0],
+	P_STAT = [12, 0, 16, 0],
+	    PS_APR = [12, 0, 3, 0],
+	    PS_DEL = [12, 3, 1, 0],
+	    PS_DRV = [12, 4, 1, 0],
+	    PS_SYS = [12, 5, 1, 0],
+	    PS_PIC = [12, 6, 1, 0],
+	    PS_COM = [12, 7, 1, 0],
+	    PS_NSF = [12, 8, 1, 0],
+	    PS_LIO = [12, 9, 1, 0],
+	    PS_PER = [12, 10, 1, 0],
+	    PS_FXD = [12, 11, 1, 0],
+	    PS_CHK = [12, 12, 1, 0],
+	    PS_CKR = [12, 13, 1, 0],
+	    PS_CKP = [12, 14, 1, 0],
+	    PS_OUT = [12, 15, 1, 0],
+	P_HDR = [13, 0, 16, 0],
+	P_PRO = [14, 0, 16, 0],
+	P_ATT = [15, 0, 2*16, 0],
+
+	A_PCBL = [0, 0, 16, 0],
+	A_PRI = [1, 0, 8, 0],
+	A_IOC = [1, 8, 8, 0],
+	A_TCB = [2, 0, 16, 0],
+	A_TCBL = [3, 0, 16, 0],
+	A_STAT = [4, 0, 8, 0],
+	    AS_RED = [4, 0, 1, 0],
+	    AS_WRT = [4, 1, 1, 0],
+	    AS_EXT = [4, 2, 1, 0],
+	    AS_DEL = [4, 3, 1, 0],
+	A_MPCT = [4, 8, 8, 0],
+	A_PCB = [5, 0, 16, 0]
+	tes;
+literal
+    A_LGTH = 6;
+
+!
+! I/O PACKET DEFINITIONS
+!
+
+field
+    PKT_FIELDS =
+	set
+	A_KSR5 = [-2, 0, 16, 0],
+	A_DQSR = [-1, 0, 16, 0],
+	A_CBL = [1, 0, 16, 0],
+	A_BYT = [2, 0, 16, 0],
+	A_AST = [3, 0, 16, 0],
+	A_NPR = [4, 0, 16, 0],
+	A_PRM = [5, 0, 16, 0],
+
+	I_LNK = [0, 0, 16, 0],
+	I_PRI = [1, 0, 8, 0],
+	I_EFN = [1, 8, 8, 0],
+	I_TCB = [2, 0, 16, 0],
+	I_LN2 = [3, 0, 16, 0],
+	I_UCB = [4, 0, 16, 0],
+	I_FCN = [5, 0, 16, 0],
+	I_IOSB = [6, 0, 16, 0],
+	I_AST = [9, 0, 16, 0],
+	I_PRM = [10, 0, 16, 0],
+	I_ATTL = [18, 0, 16, 0]
+	tes;
+
+literal
+    I_LGTH = 19;
+
+!
+! RSX11 TASK CONTROL BLOCK DEFINITIONS
+!
+
+field
+    TCB_FIELDS =
+	set
+	T_LNK = [0, 0, 16, 0],
+	T_PRI = [1, 0, 8, 0],
+	T_IOC = [1, 8, 8, 0],
+	T_CPCB = [2, 0, 16, 0],
+	T_NAM = [3, 0, 2*16, 0],
+	T_RCVL = [5, 0, 2*16, 0],
+	T_ASTL = [7, 0, 2*16, 0],
+	T_EFLG = [9, 0, 32, 0],
+	T_UCB = [11, 0, 16, 0],
+	T_TCBL = [12, 0, 16, 0],
+	T_STAT = [13, 0, 16, 0],
+	    TS_CKR = [13, 6, 1, 0],
+	    TS_CKP = [13, 7, 1, 0],
+	    TS_OUT = [13, 8, 1, 0],
+	    TS_RUN = [13, 11, 1, 0],
+	    TS_NRP = [13, 12, 1, 0],
+	    TS_MSG = [13, 13, 1, 0],
+	    TS_RDN = [13, 14, 1, 0],
+	    TS_EXE = [13, 15, 1, 0],
+	T_ST2 = [14, 0, 16, 0],
+	    T2_WFR = [14, 0, 1, 0],
+	    T2_SPN = [14, 2, 1, 0],
+	    T2_STP = [14, 4, 1, 0],
+	    T2_ABO = [14, 6, 1, 0],
+	    T2_HLT = [14, 7, 1, 0],
+	    T2_CAF = [14, 8, 1, 0],
+	    T2_TIO = [14, 9, 1, 0],
+	    T2_FXD = [14, 10, 1, 0],
+	    T2_BFX = [14, 11, 1, 0],
+	    T2_CKD = [14, 12, 1, 0],
+	    T2_CHK = [14, 13, 1, 0],
+	    T2_DST = [14, 14, 1, 0],
+	    T2_AST = [14, 15, 1, 0],
+	T_ST3 = [15, 0, 16, 0],
+	    T3_NET = [15, 4, 1, 0],
+	    T3_ROV = [15, 5, 1, 0],
+	    T3_CAL = [15, 6, 1, 0],
+	    T3_NSD = [15, 7, 1, 0],
+	    T3_RST = [15, 8, 1, 0],
+	    T3_CLI = [15, 9, 1, 0],
+	    T3_SLV = [15, 10, 1, 0],
+	    T3_MCR = [15, 11, 1, 0],
+	    T3_PRV = [15, 12, 1, 0],
+	    T3_REM = [15, 13, 1, 0],
+	    T3_PMD = [15, 14, 1, 0],
+	    T3_ACP = [15, 15, 1, 0],
+	T_DPRI = [16, 0, 8, 0],
+	T_LBN = [16, 8, 3*8, 0],
+	T_LDV = [18, 0, 16, 0],
+	T_PCB = [19, 0, 16, 0],
+	T_MXSZ = [20, 0, 16, 0],
+	T_ACTL = [21, 0, 16, 0],
+	T_ATT = [22, 0, 2*16, 0],
+	T_OFF = [24, 0, 16, 0],
+	T_SRCT = [25, 8, 8, 0],
+	T_RRFL = [26, 0, 2*16, 0]
+	tes;
+
+!
+! UNIT CONTROL BLOCK DEFINITIONS
+!
+
+field
+    UCB_FIELD =
+	set
+	U_CLI = [-3, 0, 16, 0],
+	U_LUIC = [-2, 0, 16, 0],
+	U_OWN = [-1, 0, 16, 0],
+	U_DCB = [0, 0, 16, 0],
+	U_RED = [1, 0, 16, 0],
+	U_CTL = [2, 0, 8, 0],
+	    UC_LGH = [2, 0, 2, 0],
+	    UC_KIL = [2, 2, 1, 0],
+	    UC_ATT = [2, 3, 1, 0],
+	    UC_PWF = [2, 4, 1, 0],
+	    UC_QUE = [2, 5, 1, 0],
+	    UC_NPR = [2, 6, 1, 0],
+	    UC_ALG = [2, 7, 1, 0],
+	U_STS = [2, 8, 8, 0],
+	    US_ABO = [2, 8, 1, 0],
+	    US_MDE = [2, 9, 1, 0],
+	    US_WCK = [2, 11, 1, 0],
+	    US_DSB = [2, 11, 1, 0],
+	    US_CRW = [2, 10, 1, 0],
+	    US_ECH = [2, 9, 1, 0],
+	    US_OUT = [2, 8, 1, 0],
+	    US_FRK = [2, 9, 1, 0],
+	    US_SHR = [2, 8, 1, 0],
+	    US_LAB = [2, 10, 1, 0],
+
+	    US_MDM = [2, 12, 1, 0],
+	    US_FOR = [2, 13, 1, 0],
+	    US_MNT = [2, 14, 1, 0],
+	    US_BSY = [2, 15, 1, 0],
+	U_UNIT = [3, 0, 8, 0],
+	U_ST2 = [3, 8, 8, 0],
+	    US_OFL = [3, 8, 1, 0],
+	    US_RED = [3, 9, 1, 0],
+	    US_PUB = [3, 10, 1, 0],
+	    US_UMD = [3, 11, 1, 0],
+	U_CW1 = [4, 0, 16, 0],
+	    DV_REC = [4, 0, 1, 0],
+	    DV_CCL = [4, 1, 1, 0],
+	    DV_TTY = [4, 2, 1, 0],
+	    DV_DIR = [4, 3, 1, 0],
+	    DV_SDI = [4, 4, 1, 0],
+	    DV_SQD = [4, 5, 1, 0],
+	    DV_MXD = [4, 6, 1, 0],
+	    DV_UMD = [4, 7, 1, 0],
+	    DV_SWL = [4, 9, 1, 0],
+	    DV_ISP = [4, 10, 1, 0],
+	    DV_OSP = [4, 11, 1, 0],
+	    DV_PSE = [4, 12, 1, 0],
+	    DV_COM = [4, 13, 1, 0],
+	    DV_F11 = [4, 14, 1, 0],
+	    DV_MNT = [4, 15, 1, 0],
+	U_CW2 = [5, 0, 16, 0],
+	    U2_LWC = [5, 0, 1, 0],
+	    U2_VT5 = [5, 1, 1, 0],
+	    U2_L3S = [5, 2, 1, 0],
+	    U2_PRV = [5, 3, 1, 0],
+	    U2_AT_ = [5, 4, 1, 0],
+	    U2_HLD = [5, 5, 1, 0],
+	    U2_DZ1 = [5, 6, 1, 0],
+	    U2_SLV = [5, 7, 1, 0],
+	    U2_LOG = [5, 8, 1, 0],
+	    U2_ESC = [5, 9, 1, 0],
+	    U2_CRT = [5, 10, 1, 0],
+	    U2_NEC = [5, 11, 1, 0],
+	    U2_L8S = [5, 12, 1, 0],
+	    U2_RMT = [5, 13, 1, 0],
+	    U2_DJ1 = [5, 14, 1, 0],
+	    U2_DH1 = [5, 15, 1, 0],
+
+	    U2_R04 = [5, 15, 1, 0],
+
+	    U2_7CH = [5, 12, 1, 0],
+	U_CW3 = [6, 0, 16, 0],
+    	U_CW4 = [7, 0, 16, 0],
+    	U_SCB = [8, 0, 16, 0],
+    	U_ATT = [9, 0, 16, 0],
+    	U_BUF = [10, 0, 2*16, 0],
+    	U_CNT = [12, 0, 16, 0],
+
+	U_ACP = [13, 0, 16, 0],
+	U_VCB = [14, 0, 16, 0],
+	U_CBF = [13, 0, 16*8, 0],
+	U_UIC = [21, 0, 2*8, 0]
+	tes;
+
+! [End of RSXLIB.R16]

@@ -1,0 +1,5 @@
+; L1PLNK -- Load TOPS-10 multi-segment production version of LINK.
+
+/RUN:SYS:LINK/RUNOFFSET:1/TMPFIL:LNK:"@LNKINI"
+
+

@@ -1,0 +1,35 @@
+13:00:46   1   1   EXP	Expanding low segment to 23P
+13:00:46   1   1   MOV	Moving low segment to expand area DY
+13:00:46   6   1   LMN	Loading module FUR from file DSK:FUR.REL[10,10,FUR]
+13:00:46   1   1   MOV	Moving low segment to expand area HC
+13:00:46   1   1   MOV	Moving low segment to expand area HC
+13:00:46   1   1   EXP	Expanding low segment to 33P
+13:00:46   6   1   LMN	Loading module .HELPR from file REL:HELPER.REL[5,11]
+13:00:46   1   1   MOV	Moving low segment to expand area HC
+13:00:46  31  24   FLE	LOOKUP error (0) file was not found DSK:SCAN.REL
+13:00:52   1   1   LDS	LOAD segment
+13:00:52   6   1   LMN	Loading module .SCAN from file REL:SCAN.REL[5,11]
+13:00:52   1   1   MOV	Moving low segment to expand area HC
+13:00:53   1   1   MOV	Moving low segment to expand area HC
+13:00:53   1   1   EXP	Expanding low segment to 43P
+13:00:53   1   1   MOV	Moving low segment to expand area LS
+13:00:53   6   1   LMN	Loading module .VERBO from file REL:SCAN.REL[5,11]
+13:00:53   6   1   LMN	Loading module .TNEWL from file REL:SCAN.REL[5,11]
+13:00:53   6   1   LMN	Loading module .TOUTS from file REL:SCAN.REL[5,11]
+13:00:53   1   1   MOV	Moving low segment to expand area HC
+13:00:53   1   1   RGS	Rehashing global symbol table from 251 to 509
+13:00:53   6   1   LMN	Loading module .STOPB from file REL:SCAN.REL[5,11]
+13:00:53   6   1   LMN	Loading module .CNTDT from file REL:SCAN.REL[5,11]
+13:00:53   6   1   LMN	Loading module .GTPUT from file REL:SCAN.REL[5,11]
+13:00:53   6   1   LMN	Loading module .SAVE from file REL:SCAN.REL[5,11]
+13:00:53   6   1   LMN	Loading module .WILD from file REL:WILD.REL[5,11]
+13:00:53   1   1   MOV	Moving low segment to expand area HC
+13:00:53   6   1   LMN	Loading module ENDECR from file REL:ENDECR.REL[5,11]
+13:00:53   1   1   MOV	Moving low segment to expand area HC
+13:00:53   1   1   MPS	MAP segment
+13:00:54   1   1   EMS	End of MAP segment
+13:00:54   1   1   EXS	EXIT segment
+13:00:54   1   1   RED	Reducing low segment to 42P
+13:00:54   1   1   CSF	Creating saved file
+13:00:54   1   1   FIN	LINK finished
+13:00:54   1   1   ELF	End of log file

@@ -1,0 +1,178 @@
+
+
+
+
+                       KLBPA %1(1) users reference manual
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Copyright (C) 1979
+Digital Equipment Corporation, Maynard, Massachusetts, U.S.A.
+
+This software is furnished under a license and may be used and  copyed  only  in
+accordance  with  the  terms of such license and with the inclusion of the above
+copyright notice.  This software or any other copies thereof may not be provided
+or  otherwise  made available to any other person.  No title to and ownership of
+the software is hereby transferred.
+
+The information in this software is subject to change without notice and  should
+not be construed as a commitment by Digital Equipment Corporation.
+
+Digital assumes no responsibility for the use or reliability of its software  on
+equipment which is not supplied by Digital.
+KLBPA %1(1) Users Reference Manual                                        Page 1
+Introduction
+
+
+     KLBPA (KL-10 Background Performance Analysis) is a program to  control  the
+gathering  of  general  "background" system performance statistics of a 7-series
+TOPS-10 monitor via the performance meter available on all KL-10 cpus.  As such,
+KLBPA is meaningful only for KL-10 based TOPS-10 systems.
+
+     In order to use KLBPA you must be running under the OPR account.
+KLBPA %1(1) Users Reference Manual                                        Page 2
+Background Performance Analysis Overview.
+
+
+     KL-10 processors come equipped with  a  very  powerful  and  very  flexible
+analytical  tool  called  the  "Performance Meter" or "Performance Meter Board",
+hereinafter referred to as simply the "meter".  The meter allows measurement  of
+a  wide  variety  of  operating  conditions or events which take place under the
+control of the KL-10 cpu.
+
+     The meter operates in one of two modes - duration mode or event  mode.   In
+duration  mode  the  meter  measures  the  amount  of  time  (the duration of) a
+condition occurs.  In event mode the meter counts  how  many  times  (events)  a
+condition occurs.
+
+     The meter can measure user mode  versus  executive  mode,  interrupt  level
+processing, RH20 channel to memory usage, memory usage (from which the cache hit
+ratio can be calculated), and a number of other conditions.  The meter can  even
+measure  a  microcode-controlled  condition, enabling the KL-10 to, for example,
+count the number of times an ILDB instruction is executed (or the amount of time
+spent  executing  ILDB  instructions).  To use the microcode in conjunction with
+the meter requires modifying the microcode.
+
+     For details  on  exact  meter  operation  read  the  DECsystem-10  Hardware
+Reference Manual.
+
+     The meter is available to user programs via the PERF.  monitor  call.   For
+details  on  how  to  use  the PERF.  monitor call read the TOPS-10 7.00 Monitor
+Calls Manual.
+
+     Starting with the 7.00 release of the TOPS-10 monitor  the  monitor  itself
+can use the meter to gather system-wide operating statistics independent of user
+programs.  If a specific user program has a cpu's meter in use then the  monitor
+can  not  use that cpu's meter (when the job releases the meter the monitor will
+automatically resume its background usage, if enabled).
+
+     If the meter is available to the monitor then the monitor will  (on  orders
+from,  for  example,  KLBPA)  enable  the  meter  and  leave  it running "in the
+background" gathering statistics.
+
+     The monitor has a command table (in the COMMON module) which contain  meter
+commands.   The  monitor  will  round-robin  through  the  command table passing
+successive conditions to the meter.  A user-settable sampling interval  controls
+how often the meter command is changed.
+
+     At the end of a sample interval the monitor reads the meter value  and  the
+elapsed  time  and adds them into a CDB variables subtable (GETTAB item %CCBPA),
+then steps to the next command, reenables the meter, and continues.  The monitor
+sampling is driven by the monitor clock interrupt service, which, running at the
+APR PI level (the highest ever used by  the  monitor),  gives  a  very  accurate
+sampling interval.
+
+     It is important to note that the monitor has no  idea  what  the  meter  is
+doing,  the  monitor  merely  picks  up  the 36-bit meter command from the meter
+command table, passes the command to the meter, then later reads what the  meter
+has  "counted",  as  well  as the interval for which the meter was enabled.  Any
+interpretation of the statistics so gathered is left to user programs.
+KLBPA %1(1) Users Reference Manual                                        Page 3
+Background Performance Analysis Overview.
+
+
+     With the 7.00 release of the  monitor  the  meter  commands  table  has  16
+(decimal) entries, the first eight of which watch the RH20 to MBOX interactions,
+and the second eight of  which  watch  the  amount  of  time  spent  at  various
+interrupt levels.  All sixteen entries are duration mode.  
+
+     KLBPA  itself  does  not  do  anything  with  the  background   performance
+statistics,  the  ONLY  function  of  KLBPA  is  to  control whether or not said
+statistics are gathered.  SYSDPY %434(562) will display these statistics as part
+of  the "system" display for any cpu which is enabled to maintain them.  See the
+SYSDPY manual for details.
+KLBPA %1(1) Users Reference Manual                                        Page 4
+Commands
+
+
+     KLBPA will prompt the user with a "/" character.  At this  point  the  user
+may  type  in  a  single command to KLBPA.  Commands to KLBPA are of the form of
+action keywords, optionally followed by any arguments (similar to BACKUP).
+
+     The commands to KLBPA are:
+
+[NO]ALL         Enable [Disable] all cpus.  The "ALL" command instructs KLBPA to
+                turn  on  the performance meter for all cpus in the system.  The
+                NOALL command instructs KLBPA to turn off the performance  meter
+                for all cpus in the system.
+
+[NO]CLEAR       Do [not] zero the statistics tables when enabling  a  cpu.   The
+                CLEAR  command  instructs  KLBPA  to  have  the monitor zero the
+                per-cpu statistics table when the cpu is enabled for performance
+                measurements.   The NOCLEAR command instructs KLBPA to not cause
+                the per-cpu statistics  table  to  be  cleared  when  a  cpu  is
+                enabled.   The  [NO]CLEAR  command is a status switch which will
+                affect all subsequent enable/disable commands.
+
+[NO]CPU0        Enable [Disable] only CPU0.  The CPU0 command enables background
+                performance  statistics  gathering  only  for  CPU0.  The NOCPU0
+                command disables  background  performance  statistics  gathering
+                only for CPU0.
+
+[NO]CPU1        Enable [Disable] only CPU1.  The CPU1 command enables background
+                performance  statistics  gathering  only  for  CPU1.  The NOCPU1
+                command disables  background  performance  statistics  gathering
+                only for CPU1.
+
+[NO]CPU2        Enable [Disable] only CPU2.  The CPU2 command enables background
+                performance  statistics  gathering  only  for  CPU2.  The NOCPU2
+                command disables  background  performance  statistics  gathering
+                only for CPU2.
+
+[NO]CPU3        Enable [Disable] only CPU3.  The CPU3 command enables background
+                performance  statistics  gathering  only  for  CPU3.  The NOCPU3
+                command disables  background  performance  statistics  gathering
+                only for CPU3.
+
+[NO]CPU4        Enable [Disable] only CPU4.  The CPU4 command enables background
+                performance  statistics  gathering  only  for  CPU4.  The NOCPU4
+                command disables  background  performance  statistics  gathering
+                only for CPU4.
+
+[NO]CPU5        Enable [Disable] only CPU5.  The CPU5 command enables background
+                performance  statistics  gathering  only  for  CPU5.  The NOCPU5
+                command disables  background  performance  statistics  gathering
+                only for CPU5.
+
+TICKS:nnn       Set measurement cycling interval to nnn clock ticks.  The  TICKS
+                command  sets  the interval between successive samples read from
+                the performance meter.  The TICKS command  is  a  status-setting
+                command  which  affects  all  subsequent enabling commands.  The
+                default value for the sampling interval is one clock tick.

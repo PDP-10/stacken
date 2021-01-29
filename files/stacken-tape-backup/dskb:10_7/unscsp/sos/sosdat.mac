@@ -1,0 +1,790 @@
+	TITLE	SOSDAT - DATA AND CHARACTER TABLES
+	SEARCH	SOSTCS
+	$INIT(-)
+;		--------------------------------
+; 
+;  Data and character tables.
+; 
+	SUBTTL	CHARACTER TABLES
+
+; A character table for use on type in and type out
+
+; Flags used in character table
+
+OPF==10		; This is a special character
+SNUMF==4	; This is part of a number
+LETF==2		; This is a letter
+TERM==1		; This is a terminator
+M37==400000	; This chr is printed as itself on model 37
+NSEPF==200000	; This is not a seperator (used on $,%,and.)
+DEFINE CHRS (FLAGS,PALT,INALT,RH)
+<BYTE (4) FLAGS (7) PALT,INALT(18)RH>
+
+CTBL::	0
+	CHRS	OPF,"!","",""
+	CHRS	OPF,42,"",""
+	CHRS	OPF,"#",3,3
+	CHRS	OPF,"$",4,4
+	CHRS	OPF,"%",5,5
+	CHRS	OPF,"&",6,6
+	CHRS	OPF,"'",7,7
+	CHRS	OPF,"(",10,10
+	0
+	CHRS	OPF!TERM,0,12,12
+	CHRS	OPF,0,13,13
+	CHRS	OPF!TERM,0,14,14
+	0
+	CHRS	OPF,")",16,16
+	CHRS	OPF,"*",17,17
+	CHRS	OPF,"+",20,20
+	CHRS	OPF,54,21,21
+	CHRS	OPF,"-",22,22
+	CHRS	OPF,".",23,23
+	CHRS	OPF,"/",24,24
+	CHRS	OPF,"0",25,25
+	CHRS	OPF,"1",26,26
+	CHRS	OPF,"2",27,27
+	CHRS	OPF,"9",30,30
+	CHRS	OPF,"6",31,31
+	CHRS	OPF,"4",32,32
+	CHRS	OPF,"=",33,33
+	CHRS	OPF,74,34,34
+	CHRS	OPF,76,35,35
+	CHRS	OPF,"7",36,36
+	CHRS	OPF,"8",37,37
+	0
+	CHRS	OPF,0,1,"!"
+	CHRS	OPF,0,2,42
+	CHRS	OPF,0,3,"#"
+	CHRS	OPF,0,4,"$"+NSEPF
+	CHRS	OPF,0,5,"%"+NSEPF
+	CHRS	OPF,0,6,"&"
+	CHRS	OPF,"'","'","'"+M37
+	CHRS	OPF,0,10,"("
+	CHRS	OPF,0,16,")"
+	CHRS	OPF,0,17,"*"
+	CHRS	OPF,0,20,"+"
+	CHRS	OPF,0,21,54
+	CHRS	OPF,0,22,"-"
+	CHRS	OPF,0,23,"."+NSEPF
+	CHRS	OPF,0,24,"/"
+	CHRS	SNUMF,0,25,20
+	CHRS	SNUMF,0,26,21
+	CHRS	SNUMF,0,27,22
+	CHRS	SNUMF,0,176,23
+	CHRS	SNUMF,0,32,24
+	CHRS	SNUMF,0,"5",25
+	CHRS	SNUMF,0,31,26
+	CHRS	SNUMF,0,36,27
+	CHRS	SNUMF,0,37,30
+	CHRS	SNUMF,0,30,31
+	CHRS	OPF,0,174,":"
+	CHRS	OPF,0,73,73
+	CHRS	OPF,0,34,74
+	CHRS	OPF,0,33,"="
+	CHRS	OPF,0,35,76
+	CHRS	OPF,0,37,"?"
+	CHRS	OPF,0,140,"@"
+XXZ=101
+REPEAT ^D26,<CHRS	LETF,0,XXZ+40,XXZ-40
+XXZ=XXZ+1>
+	CHRS	OPF,0,173,"["
+	CHRS	OPF,0,"\","\"
+	CHRS	OPF,0,175,"]"
+	CHRS	OPF,0,"^","^"
+	CHRS	OPF,0,"_","_"
+	CHRS	OPF,100,140,140
+XXZ=141
+REPEAT ^D26,<CHRS	LETF,XXZ-40,XXZ,XXZ-100
+XXZ=XXZ+1>
+	CHRS	OPF,"[",173,173+M37
+	CHRS	OPF,":",174,174+M37
+	CHRS	OPF,"]",175,175+M37
+	CHRS	OPF,"3",176,176
+	CHRS	OPF,"\",177,177
+	CHRS	OPF,0,0,200
+
+; Define CCL IOWD here
+IFN %UACCL,<
+ESFIOW::IOWD	CCLSVL,CCLSVB
+	IOWD	CCLS2L,RPGR	; Save results of last /RUN
+	EXP	0		; Zero end world
+>
+
+; The UUO dispatch and OPCODE table follows
+
+
+IOTAB::	Z	XENTUU##
+	OPEN.	OPNSTR##
+	Z	IFN FTVDDT,<CORUUO##>
+	RLEAS.	IOEXCT##
+	INBUF.	IOEXCT
+	OUTBF.	IOEXCT##
+	USETI.	IOEXCT##
+	USETO.	IOEXCT
+	IN.	XINOUT##
+	INPUT.	IOEXCT
+	OUT.	XINOUT##
+	OUPUT.	IOEXCT
+	STATZ.	IOEXCT
+	STATO.	IOEXCT
+	OPEN.	IOEXCT
+	CLOSE.	IOEXCT
+	LOOKP.	XLKPFL##
+	ENTER.	XCTENT##
+	RENAM.	XCTRNM##
+	GTSTS.	IOEXCT
+	STSTS.	IOEXCT
+
+; Special constants
+
+CRLF::	BYTE	(7) 15,12
+LNOVER::EXP	<ASCIZ/9999:/>!1
+LNZERO::EXP	<ASCIZ/00000/>!1
+LN100::	EXP	<ASCIZ/00100/>!1
+LN10::	EXP	<ASCIZ/00010/>!1
+LN1::	EXP	<ASCIZ/00001/>!1
+PMTSZP::POINT	18,PMTSTR,17
+STDPMT::XWD	1,[ASCIZ/*/]
+
+
+ONMPTR::POINT	6,OUTNAM
+OEXPTR::POINT	6,OUTEXT
+	SUBTTL	IMPURE DATA REGION
+
+; Impure section is divided into two areas
+; 1) data which is semi constant
+; 2) data which is initially zeroed
+
+DATAB::	
+IFN RENTSW,< RELOC 0	; Switch to low seg
+DATABL::RELOC
+	PHASE DATABL>
+
+; Channel and IO UUO TABLE blocks follow
+
+CHNTAB::XWD	0,0		; For channel zero -- not used
+	Z	TTY,TTDEVI	; For channel 1 -- TTY
+CHNIN::	Z	IN,INDEVI	; For channel 2 -- INPUT
+CHNOUT::Z	OUT,OUDEVI	; For channel 3 -- OUTPUT
+	Z	LPT,LPDEVI	; For listing device
+	Z	ALTDV,ALDEVI	; For channel -- Alternate
+	Z	IND,INDDVI	; For indirect channel
+	Z	OPT,OPTDVI	; For option file
+
+
+INDEVI::EXP	17
+	SIXBIT /DSK/
+	XWD OBUF1,IBUF1
+
+OUDEVI::EXP	17
+	SIXBIT /DSK/
+	XWD OBUF2,IBUF2
+
+ALDEVI::EXP	17
+	SIXBIT /DSK/
+	XWD OBUF3,IBUF3
+
+TTDEVI::XWD	400000,101
+	SIXBIT	/TTY/
+	XWD	0,CTIBUF	; Input only
+
+
+OPTDVI::EXP	1
+	SIXBIT	/DSK/
+	XWD	0,OPTBHD
+
+OPTFIL::EXP	4
+	EXP	0
+	SIXBIT	/SWITCH/
+	SIXBIT	/INI/
+	EXP	0
+
+INIDVI::EXP	1
+	SIXBIT	/DSK/
+	XWD	0,INDBUF
+INIFIL::EXP	4
+	EXP	0
+	SIXBIT	/XSOS/
+	SIXBIT	/INI/
+	0
+
+; ---
+PGMK::	<ASCII /     />!1	;\Keep
+PGMKW2::BYTE (7)15,14,0,0,0	;/Together
+; ---
+
+SQBUF::	BLOCK 1
+	ASCII /	/
+IFN LSTSW,<				; [211]
+PGHS::	BYTE(7)11,11," "," "," "	; tab, tab, 3 spaces (1 word)
+REPEAT 6,<ASCII /     />		; 30 spaces (6 words) for filename
+REPEAT 3,<ASCII /     />		; 15 spaces (3 words) for date & time
+	BYTE (7)15,"P","a","g","e"," "	; (2 words) for page number
+
+LPDEVI::EXP	1
+	SIXBIT /LPT/
+	XWD LOBUF,HLPBUF
+>
+
+ERRHD::	EXP	0	; Uuohs come here
+	JRST ERRHD0##
+
+ASCZ1::	ASCII /Inc1=/
+PRNTO1::EXP	0
+	ASCIZ /
+/
+ASCIZ2::ASCII /Inc2=/
+PRNTO2::EXP	0
+	ASCIZ /
+/
+COMESS::ASCIZ /Command # /
+LINOUT::EXP	0
+	  ASCIZ ./.
+
+
+
+IFN CCLSW,<
+IFN TEMPC,<
+T.HEAD::SIXBIT /EDS   />
+T.IOWD::XWD 0,CMDBUF-1
+	EXP 0
+>
+
+; Control block for control-C trapping
+
+CNCBLK::4,,0
+	0,,1B34
+	0
+	0
+CNCLOK::-1		; Interlock for re-entrant handling
+INDDVI::BLOCK	3
+
+
+; Semi-constant data to save on /CCL starts here
+
+CCLSVB::		; Place to start dumping
+
+IFN %UACCL,<
+DVNCCL==:.VNCCL			; So always get right value in SOSINI
+CCLVER::EXP	.VNCCL
+>
+IFN EXTEND,<
+LSBUFN::LSNUM
+LSPTR::	
+	I==0
+REPEAT LSNUM,< POINT 7,LSBUF+<SRBLG/5+2>*I
+	I==I+1
+>
+LSPTT::	
+	I==0
+REPEAT LSNUM,< EXP LSPNT+SRNUM*I
+	I==I+1
+>
+>
+
+; Stuff for justification
+
+PMAR::	1	; Paragraph indentation
+LMAR::	1	; Normal indentation (left margin)
+RMAR::	; Right margin
+MAXL::	EXP	^D64	; Otherwise known as max line length
+MAXLN::	<ASCII /99999/>!1	; Maximum line number on a page
+WTBL::	.+1		; For now, all characters have width 1
+	 1
+JFLOP::	1	; Flipflop for inserting blanks on l or r
+PAGESZ::EXP	PGSZ
+PLINES::20	; Default value for p cmd
+CTLWTH::2	; Default control print width
+
+
+;  The following control the automatic window sizing function
+;  when the window size is to be computed base on file size.
+
+WINRAT::EXP	4	; File size to window ratio
+WINMIN::EXP	2000	; Minimum window size
+WINMAX::EXP	60000	; Maximum window size
+
+REFDLY::EXP	HB.RTC!^D500	;DEFAULT /REFDLY VALUE
+BAUD::	EXP	^D1200		;DEFAULT /BAUD VALUE
+IFN RENTSW,< DEPHASE >
+DATAE==:.-1
+; Rest is random variables and buffers
+
+IFN RENTSW,< RELOC DATABL+<DATAE-DATAB>+1 >
+
+
+; Stuff that must be saved for /CCL must come first
+
+ZEROB==:.
+
+BUFNUM::BLOCK	1	; Number of buffers to use for unsequenced input
+WINDOW::BLOCK	1	; Actual window size
+
+SVINDV::BLOCK	1	; Place to save input device
+SVOUDV::BLOCK	1	; Place to save output device
+
+SVFL::	BLOCK	1	; Place to save flag register
+SVFL2::	BLOCK	1	; Place to save second flag register
+; ---
+.UNSQF::BLOCK	1	;\Keep        Permanent unsequence flag
+.BAKF::	BLOCK	1	;/Together    Permanent BAK file flag
+; ---
+IFN EXTEND,<
+LSHIPG::BLOCK	1
+LSHILN::BLOCK	1
+LSCNT::	BLOCK	1
+LSPG::	BLOCK	1
+LSBUF::	BLOCK	<SRBLG/5+2>*LSNUM
+LSPNT::	BLOCK	SRNUM*LSNUM
+>
+; ---
+CLN::	BLOCK	1	;\Keep
+CPGL::	BLOCK	1	;/Together
+LSLOLN::BLOCK	1	;\Last value setup of LOLN, LOPG
+LSLOPG::BLOCK	1	;/
+CURINS::BLOCK	1	;\Last line insert with the I command
+CURINP::BLOCK	1	;/Last page inserted with the I command
+; ---
+INCR::	BLOCK	1
+CPG::	BLOCK	1
+
+AUTALT::BLOCK	1		; Allow special Insert/Alter Mode
+
+EXACTF::BLOCK	1		; IF non-zero then F and S searches
+				; exact
+AEXACF::BLOCK	1		; If non-zero then Alter searches exact
+
+TELFLG::BLOCK	1		; Tell [str:file.ext[path]] on exit
+QZBAKF::BLOCK	1		; -1 use Q?? and Z?? type backup files
+INFFLG::BLOCK	1		; -1 give lines deleted message on D
+NOAINF::BLOCK	1		; Non-zero, skip auto insert on create.
+DELETF::BLOCK	1		; -1 if /DELETE, 0 if /NODELETE
+
+CCEXIT::BLOCK	1		; -1 if user wants out on ^C
+
+CCLFLG::BLOCK	1		; User interested in CCL
+AFSBUF::BLOCK	4		; Buffer for F command string
+
+; ---
+	BLOCK	-XRBBIG		; SOS part of block
+NAMEO::	BLOCK	.RBBIG+1	; Start of extended ENTER block
+; ---
+
+STRCNT::BLOCK	1		; Count of structures seen
+				; Really a flag since only > 0 counts
+STRNAM::BLOCK	3
+OUTLEB::BLOCK	1		; Last Lookup Enter block used by SOSEND
+
+STRSBN::BLOCK	2
+ARBBUF::BLOCK	MXWPL*2+1
+ARBCNT::BLOCK	1
+; ---
+SRHILN::BLOCK	1	;\Keep
+SRHIPG::BLOCK	1	;/Together
+; ---
+SRCNT::	BLOCK	1
+SRBUF::	BLOCK	SRBLG/5+2
+SRPG::	BLOCK	1
+SRPNT::	BLOCK	SRNUM
+
+CODEBF::BLOCK	4*SRNUM+2
+
+R1BUF::	BLOCK	SRBLG/5+2
+R2BUF::	BLOCK	SRBLG/5+2
+; ---
+RPHILN::BLOCK	1	;\Keep
+RPHIPG::BLOCK	1	;/Together
+; ---
+R1PNT::	BLOCK	SRNUM
+R2PNT::	BLOCK	SRNUM
+CCNT::	BLOCK	1
+RSTRCT::BLOCK	1
+
+CCLENT::BLOCK	1		; Did we do CCL entry
+; ---
+ORGDEV::BLOCK	1	; \
+ORGPTH::BLOCK	1	; |
+ORGNAM::BLOCK	1	; | original file name (keep in order)
+ORGEXT::BLOCK	2	; /
+; ---
+OUTPTH::BLOCK	1	; \
+OUTNAM::BLOCK	1	; | Output file name (Keep in order)
+OUTEXT::BLOCK	2	; /
+; ---
+	BLOCK	-XRBBIG		; SOS part of the block
+NAMEI::	BLOCK	.RBBIG+1	; Start of extended LOOKUP block
+; ---
+
+TECFST::BLOCK	1		; First number to use when sequencing a
+				; TECO file
+TECINC::BLOCK	1		; Increment to use on such files
+
+SSAVEN::BLOCK	1
+SISAVN::BLOCK	1
+PZBEG==:.
+PNAMI::	BLOCK	3
+IPATH:: BLOCK	.PTMAX
+IFN CRYPSW,<
+ICODE::BLOCK	1	; Permanent encryption code
+>
+PNAMO::	BLOCK	3
+OPATH::	BLOCK	.PTMAX
+IFN CRYPSW,<
+OCODE::BLOCK	1
+CODBUF::BLOCK	5
+>
+PZEND==:.-1
+PRTCOD::BLOCK	1	; Protection to be used for final output file
+CRLFSW::BLOCK	1	; Value of /CRLF:n
+
+CCLSVE::		; Where to stop dumping
+CCLSVL=:CCLSVE-CCLSVB
+MCLSVL=:-CCLSVL		; Length for IOWD
+MYPPN::	BLOCK	1	; This is the users PPN
+CAUNIT::BLOCK	1	; Units of core allocation. (Pages or K)
+MYUDX:: BLOCK	1	; My terminal UDX
+TABINI:: BLOCK	1	; Initial setting of TTY TAB
+TABCUR:: BLOCK	1	; Current setting of TTY TAB
+SVCRLF::BLOCK	1	; Save value of CRLF during alter
+UNSEQF::BLOCK	1	;-1 unsequence the file, 0 use UNSQIF, 1 sequenc
+PMIFLG::BLOCK	1	; -1=PAGE MARK ADDED TO PREVENT WAR
+UNPAGF::BLOCK	1	; FLAG TO STRIP PAGE MARKS AND SEQUENCE NUMBERS
+XFLAG::	BLOCK	1	;-1 if /X given
+UNSQIF::BLOCK	1	; 0=don't know, -1 = unsequenced, 1 = sequenced
+BAKF::	BLOCK	1	; 0 = nobackup , -1 = bak, 1 for old
+BAKF1::	BLOCK	1	; 0 = no backup yet, -1 = we already did it once
+NORNM::	BLOCK	1	; Input file must not be deleted so can't use 
+			; rename
+ENDFLG::BLOCK	1	; -1 if we are trying to get a new file spec
+; ---
+PNTNMI::BLOCK	1	;\Keep     Pointer to IN channel lookup block
+PNTNMO::BLOCK	1	;/Together Pointer to OUT channel lookup block
+; ---
+SVWD::	BLOCK	1
+SVWD2::	BLOCK	1
+TMPT1::	BLOCK	1
+BASICF::BLOCK	1
+RPGSW::	BLOCK	1
+TMPNAM::BLOCK	1
+TMPDEV::BLOCK	1
+TMPCOD::BLOCK	1	; Temporary encryption key
+ERSW::	BLOCK	1	; Flag to say doing an edit restart
+			; 0 Means normal start
+			; +1 Means read ESF file
+			; -1 Means doing an ER
+			; -2 Means doing a CX second file initialization
+EDSW::	BLOCK	1	; -1 means delete input file on exit
+QUITSW::BLOCK	1	; We are giving up -- delete temps, go
+EWNFNF::BLOCK	1	; -1 if filename given on E or W command
+; ---
+ERDEV::	BLOCK	1	;\ Keep      Device to use next time
+ERPPN::	BLOCK	1	; |          PPN to use next time
+ERFNAM::BLOCK	1	; |          File name to use next time
+EREXT::	BLOCK	2	;/ Together  Extension to use next time
+; ---
+NEWBLK==:.-1
+NEWPTH::BLOCK	1
+NEWNAM::BLOCK	1
+NEWEXT::BLOCK	3
+NEWDEV::BLOCK	1
+
+NPATH::	BLOCK	.PTMAX		; Place to store the path
+SVJFF2::BLOCK	1	; Nominal value of .JBFF at command start
+BUFFIR::BLOCK	1	; Points to first word of low buffer
+BUFLAS::BLOCK	1	; Points to word following last word in high buf
+BUFLIM::BLOCK	1	; Points to highest permissible value of BUFLAS
+BUFHSZ::BLOCK	1	; Contains (.BUFLIM-.BUFFIR)/2
+BUFSAI::BLOCK	1	; Short advance increment
+BUFBDY::BLOCK	1	; Low order 7 bits or BUFFIR.  Used to detect
+BUFLOW::BLOCK	1	; Same as BUFFIR with -BLKSIZ in left half
+			; block boundaries
+BUFBLL::BLOCK	1	; Last word in buffer known to contain a line
+			; sequence bit.
+REMSIZ::BLOCK	1	; Count of words remaining in the input file
+			; (unread)
+OUTSIZ::BLOCK	1	; Count of words written to the output file
+			; (Output actually performed)
+RDTPDP::BLOCK	1	; ReaD Teco Push Down List pointer
+RTIPDP::BLOCK	1	; Read Teco Initial Push Down Pointer
+RDTPDL::BLOCK	RTPLSZ+2; Push down list used by Read Teco Coroutine
+RDTBFP::BLOCK	1	; XWD fwa,lwa+1 of read TECO buffer ring.
+			; Allows return of the core if lwa+1 is top
+			; or core when EOF is reached.
+
+TECLIN::BLOCK	1	; Contains the line number to be used next
+			; when sequencing a file
+
+SSW::	BLOCK	1
+RSW::	BLOCK	1
+DFXSW::	BLOCK	1	; -1 if READNM set a default extension
+SVDFX::	BLOCK	1	; Default extension for create after ER command
+EDNAM::	BLOCK	1	; nnnSOS, where nnn is the current job number
+OLDLIN::BLOCK	1	; Previous line seen by input sequence checker
+SAVEN::	BLOCK	1	; Current /SAVE count
+ISAVEN::BLOCK	1	; Current /ISAVE count
+CHGCNT::BLOCK	1	; This is really a 3-way switch
+			; -1 means just did a save
+			; 0 means no changes this pass
+			; GTR 0 means changes this pass.  All non-zero
+			; values force SOSBUF to wrap file around.
+TOTCHG::BLOCK	1	; RH is GTR 0 if changes on previous passes
+			; Bit 0 is set to 1 if no changes since last
+			; save.  This bit is cleared by SOSBUF.
+ALTSN::	BLOCK	1	; -1 =  altmode was typed on input, else 0
+FFFLAG::BLOCK	1	; 1 if empty line with FF seen, -1 if non-empty
+			; line with form feed seen.  Set by RDLIN.
+ALTINC::BLOCK	1	; Increment used when user break a line in Alter
+INIFLG::BLOCK	1	; Allow initial only set commands
+ALTFLG::BLOCK	1
+CASEBT::BLOCK	1
+BGPG::	BLOCK	1	; Largest page in file, (or huge value)
+			; value is correct if BGSN flag is set
+ACCUM::	BLOCK	1	; SCAN returns identifiers here
+SVT1E::	BLOCK	1	; UUO trapping save T1 here initially
+SVERN::	BLOCK	1	; and save error number here (xERROR UUO's)
+SAVCHR::BLOCK	1	; a lookahead character for TTY input
+TEMINC::BLOCK	1	; Temporary increment (Set with ";" by I and R)
+REINC::	BLOCK	1	; Increment used by N command
+INCST::	BLOCK	1	; Next line number for N command to use
+ALTCNT::BLOCK	1	; Count of characters on left of Alter cursor
+INOCNT::BLOCK	1	; Rep count for O in alter mode
+INOCHR::BLOCK	1	; Chacracter being inserted with O cmd
+IGNCH::	BLOCK	1	; Character routine for alter insert
+ALTWPR::BLOCK	1	; Processing routine for word commands
+XCMDF::	BLOCK	1	;-1 if X-command, 0 if Alter, +1 to exit
+			; to insert routine
+SUPSNF::BLOCK	1	;-1, don't type SN this time
+PRVSIZ::BLOCK	1	; Print size of line being altered
+CHGLNF::BLOCK	1	;-1 if this alter command can change print width
+V52SPF::BLOCK	1	;-1 to suppress output 
+DELBAK::BLOCK	1	;-1 if deleting backward or inserting
+LOGPG::	BLOCK	1
+LSTCNT::BLOCK	1
+SVCCNT::BLOCK	1
+SAVC::	BLOCK	1
+DELCNT::BLOCK	1	; Number of lines deleted
+FDELLN::BLOCK	1	; First line deleted (D and R)
+LDELLN::BLOCK	1	; Last line deleted (D and R)
+IFN LSTSW,<		; [211]
+LOBUF::	BLOCK	3	; Lineprinter buffer header for L command
+HLPBUF::BLOCK	3	; Input buffer head for device LPT, for HELP.
+PGHD::	BLOCK	^D12	; place to stash header
+PGHDE=:PGHD+^D11	; point to end of header
+>
+OBUF::	BLOCK	4	; Disk output
+IBUF::	BLOCK	4	; Dsk input
+; ---
+IBUF1:	BLOCK	4	; This set of buffer headers are allocated
+OBUF1:	BLOCK	4	; for each of the standard I/O channels.
+IBUF2:	BLOCK	4	; They are not global to discourage non-
+OBUF2:	BLOCK	4	; standard access.  The correct way to reach
+IBUF3:	BLOCK	4	; these blocks is indirectly through CHNTAB.
+OBUF3:	BLOCK	4
+; ---
+AUXFIL::BLOCK	1	; Set to -1 if second temp file is open, else 0
+OPNOUF::BLOCK	1	; Set to -1 if .TEM file was opened.
+PDL::	BLOCK	PDLSIZ+1	; Pushdown list
+P.TEXT::BLOCK	1
+CMDBUF::; COMMAND BUFFER ; Used to store the rescan line at startup
+LIBUF::	BLOCK	MXWPL+2	; Line input buffer
+CRSX::	BLOCK	1	; Place for CR's
+LIBUF2::BLOCK	MXWPL+2	; Second working line buffer, used by J commands
+LSTBLK::BLOCK	6	; LOOKUP/ENTER block for listing
+PARCNT::BLOCK	1
+RPPG::	BLOCK	1
+RPCNT::	BLOCK	1
+FNDFLG::BLOCK	1
+IFN JUSTSW,<
+OCNT1::	BLOCK	1
+OPTR::	BLOCK	1
+LINL::	BLOCK	1
+LWRD::	BLOCK	1
+WRDL::	BLOCK	1
+TPNT::	BLOCK	1
+ELIN::	BLOCK	1
+TCHR::	BLOCK	1
+WCNT::	BLOCK	1
+BPW::	BLOCK	1
+REM::	BLOCK	1
+BLIN::	BLOCK	1
+INDNT::	BLOCK	1
+>
+SVOCIN::BLOCK	1
+OPTION::BLOCK	1
+OPTBHD::BLOCK	3
+INDEXT::BLOCK	3
+GIFEXT::BLOCK	1		; Explicitly typed extension on ind file
+GIFDEV::BLOCK	2		; Explicitly typed device on ind file
+SVALTP::BLOCK	1
+DPG::	BLOCK	1
+SVINC::	BLOCK	1
+SVCNT::	BLOCK	1
+OCNT::	BLOCK	1
+NCNT::	BLOCK	1
+SRCALP::BLOCK	1
+SVPBTS::BLOCK	1	; Protection of current input file
+LINEW::	BLOCK	1	; TTY line width, from the TRMOP. monitor call
+WRPCNT::BLOCK	1	; Count of times that we wrapped around
+TTALTF::BLOCK	1	; Zero if user has TTY ALTMODE set
+NULFIL::BLOCK	4	; Null file for DELETE macro renames
+UUONOM::BLOCK	1	; Flag to UUO to silence error messages
+			; -1 = silent, all other values mean issue
+FTYPE::	BLOCK	1	; Holds address of possible error message
+STOPGF::BLOCK	1	; Flag meaning stop at page boundary if NEQ 0
+CMDPMT::BLOCK	1	; Current command prompt
+PMTSTR::BLOCK	1	; Current prompt pointer
+FNDPMT::BLOCK	1	; Prompt for next search string
+FRCPAG::BLOCK	1	; Page number if implied by special symbols %, #
+			; and ".".  Used only by scanner.
+ZEROE==:.-1
+SAVPDP::BLOCK	1	;***Obsolete
+ALTFNM::BLOCK	.RBBIG+1; Alternate filename during copy
+APATH::	BLOCK	.PTMAX
+SVPATH::BLOCK	.PTMAX
+LPPATH::BLOCK	.PTMAX
+; ---
+HILN::	BLOCK	1	;\Keep
+HIPG::	BLOCK	1	;/Together
+; ---
+LOLN::	BLOCK	1	;\Keep
+LOPG::	BLOCK	1	;/Together
+; ---
+CXFCOR::BLOCK	1	; Highest word in use by this editing segment
+CXFPDP::BLOCK	1	; Current pushdown list pointer for this segment
+			; Also used to determine if there is a co-edit
+			; in progress. If zero, no co-file; if negative,
+			; good co-file.  If GTR 0, bad co-file.
+CXFPTR::BLOCK	1	; BLT word used to save the segment
+; ---
+LSGEND==.
+;
+;---------Variable from here on are shared between co-files------------
+;
+CXFMNE::BLOCK	1	; Set to -1 if E command is illegal
+			; Set to +1 to allow E but disallow further
+			; co-edits after fatal error in first file.
+CXSUPF::BLOCK	1	; Set to -1 to suppress "Now editing..." msg
+;
+;---	; Following data is used by the C and T commands
+COCOPY::BLOCK	1	; Copy/Transfer from co-file
+ISCOP::	BLOCK	1	; Copy/Transfer in progress
+TRANFL::BLOCK	1	; We are doing a transfer
+SVPT::	BLOCK	1
+BUFSAV::BLOCK	1	; Code buffer for F & S commands
+BOTLIN::BLOCK	1	; First line copied, -1 if BOF, PGMK if pagemark
+FDELPG::BLOCK	1	; First page deleted (D and R commands)
+PGDELS::BLOCK	1	; number of pages to be deleted
+STARTD::BLOCK	1	; Start of copied text in high buffer
+ENDD::	BLOCK	1	; End of copied text in high buffer
+TRANST::BLOCK	1	; Page on which deletion begins
+PGINSD::BLOCK	1	; Flag: -1 if page was inserted to avoid war
+DESTLN::BLOCK	1	; Destination line for Copy or Transfer
+DESTPG::BLOCK	1	; Destination page for Copy or Transfer
+FINCR::	BLOCK	1	; First increment (before a page mark)
+SINCR::	BLOCK	1	; Second increment (after a page mark)
+SVLNUM::BLOCK	1	; 
+LSTPG::	BLOCK	1	; 
+LSTLN::	BLOCK	1
+SVJRL::	BLOCK	1	; .JBREL before copy command began
+COPDL::	BLOCK	1	; Special PDL pointer during C=filename
+NLIN1::	BLOCK	1
+NLIN2::	BLOCK	1
+DESTN::	BLOCK	1
+START2::BLOCK	1
+; ---	; Following data is used by the TTY input handler
+WFLG::	BLOCK	1	; ^W state:  -1 if at start of word erase
+ERSCTW::BLOCK	1	; -1 If we need to erase "^W" on a display
+			;	     0 if have seen first nonblank
+			;	     .GE. 1 if never started or complete
+LIMBO::	BLOCK	1	; Limbo char after bell
+CHIN::	BLOCK	1	; Input pntr
+SVCCIN::BLOCK	1	; Saved input routine for @ cmds
+SVPCIN::BLOCK	1	; Saved input routine for parse
+CTIBUF::BLOCK	3	; Terminal input buffer header
+TTYBA::	BLOCK	1	; Holds address of monitor-generated tty buffers
+TTYBE::	BLOCK	1	; Holds address of first free word after above
+TIBUF::	BLOCK	3	; Intermediate terminal input buffer header
+TBUF::	BLOCK	LINSIZ/5+1 ; Intermediate terminal input buffer
+TTOBUF::BLOCK	LINSIZ/5+1
+TTOCNT::BLOCK	1	; Output cntr
+TTOPNT::BLOCK	1	; Output pntr
+SVTSTS::BLOCK	1	; Place to save current TTY status
+COMFLF::BLOCK	1	; -1 if reading from a command file, else 0.
+INDFIL::BLOCK	6
+COMBUF::BLOCK	203
+CMPATH::BLOCK	.PTMAX		; For indirect file path
+
+; Start of the 2nd half of the CCL save area
+
+RPGR::	BLOCK	6
+RNPATH::BLOCK	.PTMAX
+VT52FL::BLOCK	1	; Fancy display flag
+DPYFLG::BLOCK	1	; -1 if display terminal
+BACCHR::BLOCK	1	; BACKSPACE CHAR (USUALLY ^H)
+NEWALT::BLOCK	1	; -1 IF NEW ALTER MODE
+NEWCMD::BLOCK	1	; -1 IF NEW COMMAND MODE
+TSPEED::BLOCK	1	; TERMINAL TRANSMIT SPEED
+TERMNM::BLOCK 1	; TERMINAL TYPE INDEX
+CMFFLG::BLOCK	1		
+COMFRP::BLOCK	1
+XINSRT::BLOCK	1	; -1 if X command should insert new lines 
+EXPFLG::BLOCK	1	; -1 if /EXPERT
+QMDFLG::BLOCK	1	; -1 if ' is special on input (all chars)
+			; +1 if ' is special on input for non-letters.
+
+; Function block for special display routines (/VT52 and /VT05)
+
+TMFFIR::		; First function
+TMFCR::	BLOCK	1	; FUNCTION TO <CR> WITH FILL
+TMFCLR::BLOCK	1	; Function to clear screen and home
+TMFCTE::BLOCK	1	; Function to clear to end of screen
+TMFCLN::BLOCK	1	; Function to clear to end of line
+TMFCUP::BLOCK	1	; Function to move cursor up one line
+TMFCUR::BLOCK	1	; FUNCTION TO DO DIRECT CURSOR ADDRESSING
+			; #CHARS,,ROUTINE (ZERO=TERMINAL CANT DO THIS)
+			;WHERE # CHARS=# CHARACTERS TO DIRECT CURSOR
+			;ADDRESS (TO SEE IF SPACES FASTER) AND ROUTINE
+			;IS CALLED WITH T1=NEW COLUMN TO GO TO
+TMFLAS==:.-1		; Last function
+CCLS2L==.-RPGR		; End second half of CCL save area
+COMCNT::BLOCK	2
+INDBUF::BLOCK	3
+IMPEND==:.-1
+LSGLEN==:LSGEND-DATABL	; Length of the low segment
+MLSGLN==:-LSGLEN
+IFN RENTSW,<RELOC>	; Into high segment for literals
+	LIT		; Generate literals
+IFN RENTSW,<RELOC>	; Back to low segment
+;  Comment--this is an  alternate  initial  start  address  to  get
+;  around  a  bug  in  LINK-10.   It  deletes  the  symbol table by
+;  changing the JOBDAT parameters so that the SAVE command will not
+;  save it.  This is done because LINK will not a generate a symbol
+;  file without leaving the  symbols  in  core.   To  perform  this
+;  chicanery,  use  the /START:SSTART/EXECUTE switches when linking
+;  SOS.  The normal start address, SOS, will be  installed  by  the
+;  code that follows.
+
+REPEAT 0,<			;**TEMP**
+IFN FTVDDT,<			; Useless on non-VM systems
+SSTART::
+	SETZM	.JBSYM##
+	HRLZI	T1,SSTART	; Point to end of data
+	HRRI	T1,SOS##	; Point to new start address
+	SETZB	T2,T3
+	HRLM	T2,.JBCOR##
+	SETUWP	T2,
+	  HALT	.+1
+	HRLM	T3,400000+.JBHCR##
+	MOVEM	T1,.JBSA##	; Denote end of data region
+	MOVEM	T1,400000	; in both copies of .JBSA
+	MOVSI	T1,'SOS'
+	SETNAM	T1,
+	OUTSTR	[ASCIZ/[Type (N)SSAVE to save the program]
+/]
+	EXIT			; This does a reset
+
+
+>
+>;END REPEAT			;**TEMP**
+	END

@@ -1,0 +1,566 @@
+	TITLE	RDREG -- Read and interpret Massbus registers
+	SUBTTL	G.M. Uhler/GMU
+
+
+;This program asks the user for an RH20 device code, an optional drive
+;select unit number, and a CPU number if on a multi-CPU (TOPS-10) system and
+;reads and interprets the massbus registers of the specified device.
+;The program is assembled with a separate universal file, DEFS, that
+;defines macros that give the massbus registers to interpret and the
+;definitions of bits and fields in each register.  In this manner,
+;only the UNIVERSAL file need be changed to change the type of device
+;being interpreted.  The program is assembled for either TOPS-10 or TOPS-20
+;by changing the definition of the parameter TOPS in the universal file
+;RDRMAC.  This need be done only once when the program is moved to a new
+;operating system.
+
+
+
+;Copyright (C) 1980,1981,1982,1983 by
+;Digital Equipment Corporation, Maynard, Mass.
+;
+;
+;This software is furnished under a license and may be used and copied
+;only  in  accordance  with  the  terms  of  such license and with the
+;inclusion of the above copyright notice.  This software or any  other
+;copies thereof may not be provided or otherwise made available to any
+;other person.  No title to and ownership of the  software  is  hereby
+;transferred.
+;
+;The information in this software is subject to change without  notice
+;and  should  not  be  construed  as a commitment by Digital Equipment
+;Corporation.
+;
+;Digital assumes no responsibility for the use or reliability  of  its
+;software on equipment which is not supplied by Digital.
+	SUBTTL	Assembly directives
+
+
+	SEARCH	RDRMAC		;Get the monitor specific definitions
+	SEARCH	DEFS		;Get the Massbus register definitions
+
+IF TOPS-10,<
+	SEARCH	JOBDAT,MACTEN,UUOSYM
+	.REQUIRE REL:SCAN
+>
+IF TOPS-20,<
+	SEARCH	MONSYM,MACSYM
+>
+	.DIRECTIVE .XTABM,FLBLST
+	SALL
+
+
+
+	RDRVER==1		;Major version
+	RDRMIN==0		;Minor version
+	RDREDT==6		;Edit number
+	RDRWHO==0		;Who edited
+
+
+;Define the version number information for TOPS-10 and setup the program
+;so that it's running as a sharable high segment.
+
+IF TOPS-10,<
+	LOC	.JBVER
+	VRSN.	(RDR)
+	RELOC
+	TWOSEG
+	RELOC	400000
+>
+
+;Define the entry vector for TOPS-20
+
+IF TOPS-20,<
+ENTVEC:	JRST	RDREG		;Start instruction
+	JRST	RDREG		;Restart instruction
+	FLD(RDRVER,VI%MAJ)!FLD(RDRMIN,VI%MIN)!FLD(RDREDT,VI%EDN)!FLD(RDRWHO,VI%WHO)
+				;Version number
+ENTLEN==.-ENTVEC		;Length of the entry vector
+> ;End IF TOPS-20
+	SUBTTL	Parameter definitions
+
+
+;Miscelaneous definitions
+
+PDLLEN==50			;Length of stack
+DRAES==1B9			;Disable register access error interrupt
+.DXDTR==06B5			;Drive type register
+.FTBIT==1			;Field type is bit
+.FTVAL==2			;Field type is value
+.FTNVL==3			;Field type is value (negative number)
+OPDEF XCONI[700240,,0]		;Because CONI is a macro also
+	SUBTTL	Program initialization
+
+
+RDREG:	JFCL			;No CCL entry
+	RESET			;Clear the world
+	MOVE	P,[IOWD PDLLEN,PDL] ;Setup a PDL
+IF TOPS-10,<
+	MOVEI	T1,0		;Force .TCHAR in SCAN to
+	CALL	.TYOCH##	;  do an OUTCHR
+> ;End IF TOPS-10
+	CALL	ASKDVC		;Get the device code
+	  JRST	BADDVC		;Bad device code
+	CAIL	N,540		;Range check the
+	CAILE	N,574		;  RH20 device code for legality
+	CAIA			;Illegal
+	TRNE	N,3		;And must be only 7 bits
+	JRST	BADDVC		;Bad device code
+	LSH	N,-2		;Convert to 7 bit form
+	DPB	N,[POINT 7,DODATO,9] ;Store device code in DATAO
+	DPB	N,[POINT 7,DODATI,9] ;Store device code in DATAI
+	DPB	N,[POINT 7,DOCONI,9] ;Store device code in CONI
+	MOVEI	N,0		;Assume no unit number required
+IFN FTDSEL,<
+	CALL	ASKUNI		;Ask for unit number
+	  JRST	BADUNI		;Bad unit number
+	JUMPL	N,BADUNI	;Range check the
+	CAILE	N,7		;  drive select value
+	JRST	BADUNI		;Go if error
+> ;End IFN FTDSEL
+	HRLZM	N,DRVSEL	;Save the drive select value
+IF TOPS-10,<
+	MOVX	T1,%CNST2	;GETTAB arg to get CNFST2
+	GETTAB	T1,		;Get it
+	  HALT	.		;Can't happen
+	TXNE	T1,ST%LSC	;Low seg cached (i.e. only 1 CPU)?
+	JRST	RDREG0		;Yes, don't ask about CPU number
+	MOVEI	T1,0		;No arg for .QSCAN
+	CALL	.QSCAN##	;Initialize input line
+	HRROI	T1,[ASCIZ/CPU number: /]
+	CALL	TSTRG		;Prompt the user
+	CALL	OCTNW		;Get the number
+	CAIL	N,0		;Range check the CPU number
+	CAILE	N,5		;...
+	JRST	BADCPU		;If illegal
+	MOVX	T1,SP.CR0	;Get bit for CPU0
+	LSH	T1,(N)		;Shift by value of CPU
+	HRLI	T1,.STCPU	;Function for SET CPU ONLY CPUn
+	SETUUO	T1,		;Restrict execution to that CPU
+	  JRST	NOSCPU		;Failed
+RDREG0:
+> ;End IF TOPS-10
+	USRIOT			;Get USRIOT privs from monitor
+	  JRST	NOTRPS		;Request failed
+	CALL	CHKDTR		;See if drive type is one we know about
+	  JRST	BADDTR		;No, tell him
+	HRROI	T1,[ASCIZ/
+
+Rg Name      Contents        Text
+-- ----   -------------- ----------------------------------------
+/]
+	CALL	TSTRG		;Type the header
+	SUBTTL	Register read and print logic
+
+
+	MOVSI	P1,-REGTBL	;Get AOBJN pointer to register table
+	XCT	DOCONI		;Get the CONI
+	JRST	RDREG2		;Skip the rest for the CONI
+RDREG1:	MOVE	T1,DRVSEL	;Get drive select
+	TXO	T1,DRAES	;Set DRAES
+	HLRZ	T2,REGTAB(P1)	;Get register to read from table
+	DPB	T2,[POINT 6,T1,5] ;Store in DATAO word
+	XCT	DODATO		;Setup the preparation register
+	IMULI	T1,1		;Stall
+	IMULI	T1,1		;...
+	XCT	DODATI		;Read the value
+	LDB	T3,[POINT 6,T1,5] ;Get register select back
+	CAIE	T3,(T2)		;Same as what we asked for?
+	JRST	RDREG1		;No, took an interrupt at the wrong time
+RDREG2:	MOVEM	T1,MBRTAB(P1)	;Store in the table
+	AOBJN	P1,RDREG1	;Loop for all elements in the table
+	MOVSI	P1,-REGTBL	;Build the AOBJN pointer again
+	HRROI	T1,[ASCIZ/  /]	;No register number to print for CONI
+	CALL	TSTRG		;  so don't try
+	JRST	RDREG4		;Join common processing
+RDREG3:	HLRZ	T1,REGTAB(P1)	;Get register back
+	CALL	.TOCT2		;Type as 2 digit octal number
+RDREG4:	CALL	TSPAC		;Add a space separator
+	HRRZ	P3,REGTAB(P1)	;Get address of block for this register
+	MOVE	T2,0(P3)	;Get SIXBIT name of register
+	CALL	.T6ALL		;Type as full SIXBIT name
+	CALL	TSPAC		;Add a space separator
+	MOVE	T2,MBRTAB(P1)	;Get the octal value
+	CALL	.T12DG		;Type as 12 octal digits
+	MOVEI	C," "		;Make the separator a space
+RDREG5:	SKIPN	T1,1(P3)	;Any more fields left to do?
+	JRST	RDREG9		;No
+	SKIPL	2(P3)		;This field valid for all types?
+	CAMN	DTR,2(P3)	;No, is it legal for this one?
+	CAIA			;Yes, continue
+	JRST	RDREG8		;No, skip it
+	LDB	T1,T1		;Get the field from P2
+	HLRZ	T2,3(P3)	;Get the type of field
+	CAIN	T2,.FTBIT	;Is it a bit?
+	JUMPE	T1,RDREG8	;Yes, don't print if it's off
+	PUSH	P,T1		;Save the value
+	MOVE	T1,C		;Move the separator to T1
+	CALL	TCHAR		;Type the separator
+	HRRO	T1,3(P3)	;Get the string for this field
+	CALL	TSTRG		;Type it
+	CAIE	T2,.FTVAL	;This a value field?
+	CAIN	T2,.FTNVL	;  or a negative value field?
+	SKIPA	T1,["="]	;Yes, get the separator
+	JRST	RDREG7		;No, continue
+	CALL	TCHAR		;Print it
+	SKIPE	T1,0(P)		;Get the value back but don't negate if 0
+	CAIE	T2,.FTNVL	;Is it a negative value field?
+	JRST	RDREG6		;No, just print as-is
+	SETOM	T2		;Get a full mask of ones
+	LDB	T3,[POINT 6,1(P3),11] ;Get the size of the field
+	LSH	T2,(T3)		;Shift the ones mask that much
+	IOR	T1,T2		;Make it a full 36 bit negative number
+	MOVNS	T1		;Negate it
+RDREG6:	CALL	TOCTW		;Type in octal
+RDREG7:	POP	P,(P)		;Flush the stack
+	MOVEI	C,","		;Change the separator
+RDREG8:	ADDI	P3,3		;Step block pointer by length of field
+	JRST	RDREG5		;  and loop for next field
+RDREG9:	HRROI	T1,[ASCIZ/
+/]				;Get a CRLF
+	CALL	TSTRG		;End the line
+	AOBJN	P1,RDREG3	;Loop for all registers
+	RESET			;Clear the world
+	MONRT.			;Exit quietly
+	JRST	RDREG		;Resart if CONTINUE
+	SUBTTL	Error processing
+
+
+
+BADDVC:	SKIPA	T1,[-1,,[ASCIZ/
+?Illegal RH20 device code
+/]]
+NOTRPS:	HRROI	T1,[ASCIZ/
+?Failed to get USRIOT privilegs
+/]
+	CALL	TSTRG
+	EXIT
+
+IF TOPS-10,<
+BADCPU:	SKIPA	T1,[-1,,[ASCIZ/
+?Illegal CPU number
+/]]
+NOSCPU:	HRROI	T1,[ASCIZ/
+?Unable to restrict execution to specified CPU
+/]
+	CALL	TSTRG
+	EXIT
+> ;End IF TOPS-10
+
+IFN FTDSEL,<
+BADUNI:	SKIPA	T1,[-1,,[ASCIZ/
+?Illegal unit number
+/]]
+> ;End IFN FTDSEL
+
+BADDTR:	HRROI	T1,[ASCIZ/
+?Drive type register does not match known values
+/]
+	CALL	TSTRG
+	EXIT
+	SUBTTL	Subroutines
+
+
+;Routine to print a number left-padded to a least size two with spaces.
+;Call:
+;	T1/Number
+;	CALL	.TOCT2
+;Return CPOPJ always
+
+.TOCT2:	CAILE	T1,7		;One digit?
+	PJRST	TOCTW		;No, print as-is
+	PUSH	P,T1		;Save the number
+	CALL	TSPAC		;Type a space
+	POP	P,T1		;Restore the number
+	PJRST	TOCTW		;Type it
+
+
+;Routine to print all 6 characters of a SIXBIT name.
+;Call:
+;	T2/SIXBIT word
+;	CALL	.T6ALL
+;Return CPOPJ always
+
+.T6ALL:	MOVEI	T3,6		;Setup loop count
+.T6AL1:	LSHC	T1,^D36		;Move to T1, clear T2
+	LSHC	T1,-^D30	;Keep just one character in T1
+	ADDI	T1,"A"-'A'	;Convert to ASCII
+	CALL	TCHAR		;Type it
+	SOJG	T3,.T6AL1	;Loop for all six
+.HELPR::RET			;Return
+
+
+;Routine to print a number as six octal digits separated by commas.
+;Call:
+;	T2/Number
+;	CALL	.T12DG
+;Return CPOPJ always
+
+.T12DG:	PUSH	P,T2		;Save the number
+	CALL	.T12D1		;Type the left half
+	HRROI	T1,[ASCIZ/,,/]	;Separate the two halves
+	CALL	TSTRG		;  by commas
+	POP	P,T2		;Restore the number
+	HRLZS	T2		;Keep only right half
+.T12D1:	MOVEI	T3,6		;Get a loop count
+.T12D2:	LSHC	T1,^D36		;Move number to T1, clear T2
+	LSHC	T1,-^D33	;Keep only 3 bits
+	ADDI	T1,"0"		;Convert to ASCII
+	CALL	TCHAR		;Type it
+	SOJG	T3,.T12D2	;Loop for all
+	RET			;Return
+;Routine to read the drive type register from the specified drive
+;and check it against the table of the ones we know about.
+;Call:
+;	CALL	CHKDTR
+;Return CPOPJ if no match
+;	CPOPJ1 if match with DTR set to the index
+
+CHKDTR:	MOVX	T1,.DXDTR!DRAES ;Get drive type register
+	IOR	T1,DRVSEL	;Include drive select field
+	XCT	DODATO		;Setup the preparation register
+	IMULI	T1,1		;Stall
+	IMULI	T1,1		;...
+	XCT	DODATI		;Read the value
+	LDB	DTR,[POINT 6,T1,5] ;Get the register select field
+	CAIE	DTR,<.DXDTR_-^D30> ;Was it the register we wanted?
+	JRST	CHKDTR		;No, try again
+	ANDI	T1,77		;Isolate just the drive type
+	MOVSI	DTR,-DTRTBL	;Build AOBJN pointer to table
+CHKDT1:	CAME	T1,DTRTAB(DTR)	;Find a match?
+	AOBJN	DTR,CHKDT1	;No, loop for all
+	JUMPGE	DTR,.POPJ	;Return error if no match
+	TLZ	DTR,-1		;Clear the LH
+.POPJ1:	AOS	0(P)		;Give skip return
+.POPJ:	RET			;Return
+
+;Define the table of drive types that we know about.
+
+DEFINE DTRTYP(A,B),<
+	EXP	A
+.DT'B==.-DTRTAB-1
+>
+
+DTRTAB:	DRVTYP
+DTRTBL==.-DTRTAB
+	SUBTTL	TOPS-10 specific support routines
+
+
+;The following equivalences define the local routines in terms of routines
+;in SCAN for TOPS-10.
+
+IF TOPS-10,<
+TCHAR==.TCHAR##			;Type a character
+TSTRG==.TSTRG##			;Type a string
+OCTNW==.OCTNW##			;Input an octal number
+TSPAC==.TSPAC##			;Type a space
+TOCTW==.TOCTW##			;Type an octal number
+
+
+;Routine to ask the user for the RH20 device code.
+;Call:
+;	CALL	ASKDVC
+;Return CPOPJ if error
+;	CPOPJ1 with number in N
+
+ASKDVC:	MOVEI	T1,0		;No arg for .QSCAN
+	CALL	.QSCAN##	;Initialize input line
+	HRROI	T1,[ASCIZ/
+RH20 device code: /]
+	CALL	TSTRG		;Prompt the user
+	CALL	OCTNW		;Get the number
+	RETSKP			;Give skip return
+
+
+IFN FTDSEL,<
+;Routine to ask the user for the massbus unit number.
+;Call:
+;	CALL	ASKUNI
+;Return CPOPJ if error
+	CPOPJ1 with number in N
+
+ASKUNI:	MOVEI	T1,0		;No arg for .QSCAN
+	CALL	.QSCAN##	;Initialize input line
+	HRROI	T1,[ASCIZ/Unit number (drive select): /]
+	CALL	TSTRG		;Prompt the user
+	CALL	OCTNW		;Get the number
+	RETSKP			;Give skip return
+> ;End IFN FTDSEL
+> ;End IF TOPS-10
+	SUBTTL	TOPS-20 specific support routines
+
+
+IF TOPS-20,<
+;Routine to print a space character.
+;Call:
+;	CALL	TSPAC
+;Return CPOPJ always
+
+TSPAC:	HRROI	T1,[ASCIZ/ /]	;Get the space
+;;	PJRST	TSTRG		;Fall into TSTRG
+
+
+;Routine to print a string.
+;Call:
+;	T1/Byte pointer to string
+;	CALL	TSTRG
+;Return CPOPJ always
+
+TSTRG:	PSOUT			;Output the string
+	RET			;Return
+
+
+;Routine to print a character.
+;Call:
+;	T1/Character to print
+;	CALL	TCHAR
+;Return CPOPJ always
+;Preserves all but T1
+
+TCHAR:	PUSH	P,T2		;Save T2
+	LSHC	T1,-^D36	;Move character to T2, clear rest of word
+	LSHC	T1,^D36-^D7	;Left justify character in T2
+	HRROI	T1,T2		;Get a byte pointer to the character
+	PSOUT			;Output it
+	POP	P,T2		;Restore T2
+	RET			;Return
+
+
+;Routine to print an octal number.
+;Call:
+;	T1/number to print
+;	CALL	TOCTW
+;Return CPOPJ always
+;Destroys T1, T2, T3
+
+TOCTW:	MOVE	T2,T1		;Copy number to T2
+	MOVX	T1,.PRIOU	;Destination is primary output device
+	MOVX	T3,FLD(^D8,NO%RDX) ;Radix is octal
+	NOUT			;Output the number
+	  HALT	.		;Shouldn't happen
+	RET			;Return
+;Routine to ask the user for the RH20 device code.
+;Call:
+;	CALL	ASKDVC
+;Return CPOPJ if error
+;	CPOPJ1 with number in N
+
+ASKDVC:	HRROI	T1,[ASCIZ/
+RH20 device code: /]
+	PJRST	ASKNUM
+
+
+IFN FTDSEL,<
+;Routine to ask the user for the massbus unit number.
+;Call:
+;	CALL	ASKUNI
+;Return CPOPJ if error
+	CPOPJ1 with number in N
+
+ASKUNI:	HRROI	T1,[ASCIZ/Unit number (drive select): /]
+	PJRST	ASKNUM
+> ;End IFN FTDSEL
+
+
+;Routine to ask the user for an octal number.
+;Call:
+;	T1/Byte pointer to prompt string
+;	CALL	ASKNUM
+;Return CPOPJ if error
+;	CPOPJ1 with number in N
+
+ASKNUM:	MOVE	T3,T1		;Copy byte pointer to T3 for RDTTY
+	PSOUT			;Prompt the user
+	SETZM	NUMBUF		;Clear first word of NUMBUF
+	MOVE	T1,[NUMBUF,,NUMBUF+1] ;Setup to clear it all
+	BLT	T1,NUMBUF+NUMBLN-1 ;Clear it all
+	HRROI	T1,NUMBUF	;Get byte pointer to NUMBUF
+	MOVEI	T2,NUMBLN*5	;Get length of buffer in bytes
+	RDTTY			;Read the string from the user
+	  RET			;Failed
+	HRROI	T1,NUMBUF	;Get byte pointer to NUMBUF again
+	MOVEI	T3,^D8		;Radix is octal
+	NIN			;Read the number
+	  RET			;Failed
+	MOVE	N,T2		;Return the number in N
+	ILDB	T2,T1		;Get next byte
+	JUMPE	T2,.POPJ1	;Give skip return if end of line
+	RET			;Else error
+> ;End IF TOPS-20
+	SUBTTL	Generate the tables from the macros
+
+
+;Define a macro to generate byte pointers from the mask in the
+;FIELDS macro definition.  Stupid MACRO chokes on the one in MACTEN
+;unless the argument to the POS macro is symbolic.
+
+DEFINE	POINTR(LOC,MASK),<
+	POSN==POS(<MASK>)
+	SIZ==WID(<MASK>)
+	POINT	SIZ,LOC,POSN
+>
+
+
+;Define the first-level table that gives the registers that we want to
+;read and the address of the block describing the fields in that register.
+
+DEFINE XX(A,B),<
+	XWD	A,.'B
+>
+
+REGTAB:	REGS
+REGTBL==.-REGTAB
+
+
+;Now, for each register defined in the REGTAB table, define another
+;table giving its SIXBIT mnemonic and the fields that we want to
+;interpret in the register.
+
+DEFINE XX(A,B),<
+.'B:	SIXBIT/B/
+	B
+	EXP	0
+>
+
+DEFINE FIELDS(A,B,C,D),<
+IFIDN <C>,<BIT>,<..XX==.FTBIT>
+IFIDN <C>,<VAL>,<..XX==.FTVAL>
+IFIDN <C>,<NVAL>,<..XX==.FTNVL>
+IFIDN <D>,<ALL>,<..YY==-1>
+IFDIF <D>,<ALL>,<..YY==.DT'D>
+	POINTR	MBRTAB(P1),A
+	EXP	..YY
+	XWD	..XX,[ASCIZ\B\]
+>
+	REGS
+	SUBTTL	Low segment data locations
+
+
+	XLIST			;Literals under XLIST
+	LIT
+	LIST
+
+IF TOPS-10,<
+	RELOC
+>
+
+
+DODATO:	DATAO	0,T1		;Device code patched in
+DODATI:	DATAI	0,T1		;Ditto
+DOCONI:	XCONI	0,T1		;Ditto
+DRVSEL:	BLOCK	1		;Drive select value in bits 15-17
+MBRTAB:	BLOCK	REGTBL		;Registers stored here
+PDL:	BLOCK	PDLLEN		;Push down list
+IF TOPS-20,<
+NUMBUF:	BLOCK	2		;Storage for numbers read in
+NUMBLN==.-NUMBUF		;Length of buffer
+> ;End IF TOPS-20
+
+
+IF TOPS-10,<
+	END	RDREG
+> ;End IF TOPS-10
+
+IF TOPS-20,<
+	END	<ENTLEN,,ENTVEC>
+> ;End IF TOPS-20

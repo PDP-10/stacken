@@ -1,0 +1,1524 @@
+	TITLE	GETNOD -- Get a network database from some other node
+	SUBTTL	T. LITT/TL	5-Oct-87
+
+
+	SEARCH	UUOSYM,MACTEN,SCNMAC
+
+	.TEXT |/LOCALS/SYMSEG:HIGH|
+	.REQUEST REL:SCAN
+	.REQUIRE REL:WILD
+
+
+;
+;
+;		COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION
+;				1987.
+;			ALL RIGHTS RESERVED.
+;
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+;
+	SUBTTL	Table of Contents
+
+;               TABLE OF CONTENTS FOR GETNOD
+;
+;
+;                        SECTION                                   PAGE
+;    1. Table of Contents.........................................   2
+;    2. Definitions...............................................   3
+;    3. Revision History..........................................   4
+;    4. HELP TEXT.................................................   5
+;    5. Switch table definition...................................   6
+;    6. MACROS....................................................   7
+;    7. Main program starts here..................................   8
+;    8. Loop reading node data....................................  11
+;    9. Handle end of response message............................  13
+;   10. File output routines......................................  14
+;   11. RSPERR  Report NICE response error........................  15
+;   12. GETCMD  Read a command line from the user.................  19
+;   13. PSCAN   Handle prompting and @ files for the command scanner  21
+;   14. REDNOD  Read node names for the command scanner...........  22
+;   15. SCNSWT - Scan off any switches............................  24
+;   16. SHONDS  Send a SHOW (or LIST) NODES command...............  25
+;   17. NICE byte string manipulation routines....................  26
+;   18. MAPIT   Map from node number to node name.................  27
+;   19. OPNLNK & CLSLNK Open and close NICE links to a foreign NML  28
+;   20. Close NICE link to foreign node...........................  29
+;   21. Network send and receive routines.........................  30
+;   22. Special typeout routines..................................  31
+;   23. String conversion routines................................  32
+;   24. Error handling routines...................................  33
+;   25. NSP. Error handling.......................................  34
+;   26. Pure data and Low segment.................................  37
+	SUBTTL	Definitions
+
+	SALL			;Clean listings
+	.DIRECTIVE FLBLST
+
+DEFINE	FLAG(SYL),<
+	...FLG==1B0
+	IRP SYL,<	F.'SYL==...FLG
+			...FLG==...FLG_-1
+		>
+	>
+
+	F=0
+		FLAG	<TTYO,FILO>	;[6] Flag bits--TTY output, File output
+	T1=1
+	T2=2
+	T3=3
+	T4=4
+	P1=5
+	P2=6
+	P3=7
+	P4=10
+	P=17
+	N==P3
+	C==P4
+
+	;FILES
+	FIL==1
+
+
+	.HELPR==:.POPJ
+
+	TWOSEG	640K		;Make us high and low
+
+; Program version information
+
+	GTNVER==1		;Major version
+	GTNMIN==0		;Minor version
+	GTNEDT==6		;Edit version
+	GTNWHO==0		;Who last edited
+
+	%%GTN==VRSN.(GTN)	;Full word version
+IFDEF .MCRV.,<	.VERSION <%%GTN>>
+
+	LOC	137
+.JBVER::! EXP	%%GTN
+	RELOC
+	SUBTTL	Revision History
+
+
+COMMENT	&
+
+Edit	Description
+
+1	22-Sep-87	TL
+	Creation.  Minor debt owed NETPTH for network IO and command
+	scanning, though a whole lot of fixing and upgrading of the latter
+	was done.
+
+2	24-Sep-87	TL
+	Learn how to do connects by the numbers.
+
+3	25-Sep-87	TL
+	NTMAN. used in MAPIT returns junk when called unpriv'd.  Try to
+	fake things out instead, so MJM can play.
+
+4	1-Oct-87	RCB/TL
+	Merge code from RCB which fools with flow control, segment size, and
+	quotas to improve performance, as well as cleans up the command 
+	scanner.  Accept switches on RH of "=", in reasonable places.  Default
+	area number when 0.nnn numeric addressing is used.
+
+5	1-OCT-87	TL
+	Support indirect files, CCL RUN UUOs, GETNOD monitor command.
+
+6	5-Oct-87	RCB
+	Fix PSCAN logic.  Call .OSCAN at EOL.
+	Fix node name parsing so '2B' works again.
+
+	;Loose ends:
+	None currently
+
+&; End Revsion History
+	SUBTTL	HELP TEXT
+
+HLPSTR:	ASCIZ	|
+
+			GETNOD %1(6)
+			  5-Oct-87
+
+GETNOD will establish a DECnet connection to the network management listener
+of any DECnet node, and obtain a list of all defined network nodes and their
+names.  GETNOD will interrogate either the volatile or the permanent database
+of the remote node.  GETNOD writes a command file (suitable for input to
+NCP or NODNAM) which, when executed by these utilities, will define the
+network as viewed by the remote node.
+
+Because the NICE network protocol is used, this method is relatively immune
+to changes in the format of the remote node's database.
+
+Command syntax:
+	GETNOD>outputfilespec{/switch(es)}=remotenodespec
+or
+	GETNOD>@indirectfilespc
+
+or, if DECLARed as a monitor command:
+
+	.GETNOD outputfilespec{/switch(es)}=remotenodespec
+or
+	.GETNOD @indirectfilespc
+
+Parameters:
+	Outputfilespec	A standard TOPS-10 filespecification which describes
+			where the command file is to be written.  Defaults
+			to DSK:NODNAM.INI[-].
+
+	Remotenodespec	A standard DECnet node identifier for the node whose
+			database is to be obtained.  May be specified as
+			{AREA.}nodenumber{"user pass acct"}{::} or as
+			nodename{"user pass acct"}{::}.
+
+	Indirectfilespc A standard TOPS-10 file specification which indicates
+			where GETNOD commands are to be found.  Defaults to
+			DSK:GETNOD.CCL/.CMD[-].  If started at the CCL entry, 
+			GETNOD will process TMP:GTN or jjjGTN.TMP, if present.
+
+Switches:
+	/PERMANENT	Read the remote node's permanent database.  
+	/VOLATILE	Read the remote node's volatile database (default).
+
+	The normal SCAN switches (eg, /ERSUPERSEDE, /VERSION, /ESTIMATE, 
+	/DENSITY ...) may also be specified.
+
+|
+	SUBTTL	Switch table definition
+
+;KEYS	SWAR,<0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,
+;21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
+;41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,
+;61,62,63>
+
+	DEFINE	SWTCHS,<
+;SL	AREA,U.AREA,SWAR,0,FS.OBV
+SN	PERMAN,U.PERM,
+SN	VOLATI,U.VOLAT,
+	>
+
+	DOSCAN(SWIT)
+	SUBTTL	MACROS
+
+; Handy macro for manipulating string blocks
+	DEFINE	STRBLK(MAX<XX>,STRING)<
+	XX==0
+	IRPC	STRING,<XX==XX+1>
+	XWD	XX,1+<MAX+3>/4
+	IFB <STRING>,<BLOCK	<MAX+3>/4>
+	CC==^D36-8
+	XX==0
+	IRPC	STRING,<
+	XX==XX+"STRING"_CC
+	CC==CC-8
+	IFL CC,<CC==^D36-8
+		XX
+		XX==0>
+			>
+	IFN CC-<^D36-8>,XX
+	>
+
+	DEFINE	ERROR(PFX,TEXT)<
+	JRST	[MOVX	T1,<SIXBIT |GTN'PFX|> ;; Get Prog name, error prefix
+		 MOVE	T2,["?",,[ASCIZ |TEXT|]] ;; Get lead char, error text
+		 JRST	ERRDIE]		;; And go croak
+	>
+
+	DEFINE	WARN(PFX,TEXT)<
+	PUSHJ	P,WRNRTN		;; Call the warning routine
+	JUMP	[SIXBIT |GTN'PFX|	;; Get Prog name, error prefix
+		 "%",,[ASCIZ |TEXT|]]	;; Get lead char, error text
+	>
+	SUBTTL	Main program starts here
+
+GETNOD:	PORTAL	.+2			;[6] Allow for protected entry
+	 PORTAL	.+2			;[6] Even if CCL
+	TDZA	T1,T1			;[5] Normal entry
+	 MOVEI	T1,1			;[5] CCL entry
+	MOVEM	T1,OFFSET		;[5] Save for SCAN
+	RESET				;Blow away the world
+	MOVX	F,F.TTYO		;[6] Initialize for TTY output
+	MOVE	P,STKPTR		;Set up stack
+
+	MOVEI	T1,^D9			;[4] Read our node number
+	MOVEM	T1,NTREX+.NTBYT		;[4] NTMAN. will return max of 9 chars
+	MOVEI	T1,NTREX		;[4] Now get my own node number
+	NTMAN.	T1,			;[4] Ask the monitor
+	 JRST	[SETO	T1,		;[4] Assume no privs
+		 JRST	.+2]		;[4] And skip this
+	LDB	T1,[POINT 6,X.NODE,7+8-2] ;[4] Fetch area number of our node
+	MOVEM	T1,X.AREA		;[4] Save for later
+	MOVE	T1,ISCARG		;Get arg for .ISCAN
+	PUSHJ	P,.ISCAN##		;Init SCAN
+
+	;Here, we scan the command line, and connect to the listener.
+
+CONTIN:	HLRZ	T1,.JBSA##		;Make sure we don't grow forever
+	MOVEM	T1,.JBFF##
+	SETOM	BLKWRT			;No blocks written yet
+	SETOM	U.PERM			;Make switches "not specified"
+	SETOM	U.VOLAT			;...
+	MOVX	F,F.TTYO		;[6] Make sure output is to TTY:
+	PUSHJ	P,GETCMD		;Read a command line
+	SKIPN	N.SPEC			;If null command
+	 JRST	CONTIN			;Don't execute anything
+
+	MOVEM	T1,REMNOD		;Save pointer to destination node
+	PUSHJ	P,OPNLNK		;Go open link to foreign NML
+	  JRST	NSPERR			;Can't open NICE link. Not NICE.
+; Print out banner - Some of which is part of the [Connected to...] message.
+; It's confusing, but we create both messages at once.
+
+	TXC	F,F.TTYO!F.FILO		;[6] Switch to file output
+	MOVEI	T1,[ASCIZ |;DECnet |]	;Output goes to file
+	PUSHJ	P,.TSTRG##
+	MOVEI	T1,[ASCIZ |volatile |]
+	SKIPE	U.VOLAT			;If /NOVOLATILE  [Default: /VOLATILE]
+	SKIPLE	U.PERM			;Or /PERMANENT  [Both: /PERMANENT]
+	 MOVEI	T1,[ASCIZ |permanent |]
+	PUSHJ	P,.TSTRG##
+	MOVEI	T1,[ASCIZ |database obtained by GETNOD %|]
+	PUSHJ	P,.TSTRG##
+	MOVE	T1,.JBVER		;Version
+	PUSHJ	P,.TVERW##
+	MOVEI	T1,[ASCIZ | from |]
+	PUSHJ	P,.TSTRG##
+	TXC	F,F.TTYO!F.FILO		;[6] Switch back to terminal
+	PUSHJ	P,.TCRLF##
+	MOVEI	T1,[ASCIZ |[GTNCNN Connected to |]
+	PUSHJ	P,.TSTRG##
+	TXO	F,F.FILO		;[6] Write to both
+	MOVEI	T1,[ASCIZ |node |]
+	PUSHJ	P,.TSTRG##
+	MOVE	T1,REMNOD		;Get end node name
+	SETZ	T2,			;No enforced field length
+	PUSHJ	P,.TNNAM		;Type it out too
+	PUSHJ	P,.TSPAC##		;Space over
+	MOVE	T1,REMNOD		;Get node address
+	PUSHJ	P,.TNNAD		;Type it out
+	TXZ	F,F.TTYO		;[6] Back to file
+	PUSHJ	P,.TCRLF##
+	MOVEI	T1,[ASCIZ |;on |]
+	PUSHJ	P,.TSTRG##
+	MOVX	T1,%CNDTM		;Time
+	GETTAB	T1,
+	 HALT	.
+	PUSHJ	P,.TDTTM##
+	MOVEI	T1,[ASCIZ | using |]
+	PUSHJ	P,.TSTRG##
+	TXC	F,F.TTYO!F.FILO		;[6] Terminal
+	MOVEI	T1,[ASCIZ |, |]
+	PUSHJ	P,.TSTRG##
+	TXO	F,F.FILO		;[6] Both
+	MOVEI	T1,[ASCIZ |NICE version |]
+	PUSHJ	P,.TSTRG##
+	LDB	T1,[POINT 8,VERFLG,7]	;Fetch major version
+	PUSHJ	P,.TDECW##
+	MOVEI	T1,"."
+	PUSHJ	P,.TCHAR##
+	LDB	T1,[POINT 8,VERFLG,7+8]	;Fetch DEC ECO version
+	PUSHJ	P,.TDECW##
+	MOVEI	T1,"."
+	PUSHJ	P,.TCHAR##
+	LDB	T1,[POINT 8,VERFLG,7+8+8] ;Fetch User ECO version
+	PUSHJ	P,.TDECW##
+	TXZ	F,F.FILO		;[6] Terminal only
+	PUSHJ	P,.TRBRK##
+	PUSHJ	P,.TCRLF##
+	TXC	F,F.TTYO!F.FILO		;[6] Conintue with file output
+	PUSHJ	P,.TCRLF##		;Type a crlf
+
+	;Headers written.  Issue a command to the listener, and make sure
+	;that it responds with a multi-part response introducer.
+
+	PUSHJ	P,SHONDS		;Send SHOW/LIST KNOWN NODES command
+	SETZM	NNODES			;[4] No responses processed yet
+	PUSHJ	P,REDMSG		;Read first reply
+	PUSHJ	P,NICSET		;Set up pointers
+	PUSHJ	P,NICBYT		;Get first byte of message
+	 HALT	 .			;!?!?
+	TRNE	T1,200			;Error?
+	 JRST	RSPERR			;Yes, report response error
+	CAIE	T1,2			;Ought to be multi-part response
+	 ERROR	(NMP,<NICE Listener didn't send expected response>)
+	MOVEI	T1,FILOUT		;[6] Skip test overhead
+	PUSHJ	P,.TYOCH##		;[6] During file construction
+	SUBTTL	Loop reading node data
+
+	;The listener is responding with a sequence of messages
+	;each of which describes one node.  We validate and decode each
+	;one, writing an output record for each valid node.  When we
+	;get an "end of response" message, we stop.
+
+LOOP:	PUSHJ	P,REDMSG		;Read next reply
+	PUSHJ	P,NICSET		;Set up pointers
+	PUSHJ	P,NICBYT		;Get first byte of message
+	 HALT	 .			;!?!?
+	CAIN	T1,200			;End of response?
+	 JRST	ENDDAT			;Yes
+	TRNE	T1,200			;Error?
+	 JRST	RSPERR			;Yes, report response error
+	CAIE	T1,1			;Better be single part response
+	 ERROR	(NSR,<Expected single part response message, but got something else>)
+	PUSHJ	P,NICBYT		;Read error detail
+	 HALT	.
+	PUSH	P,T1			;Save first
+	PUSHJ	P,NICBYT		;...
+	 HALT	.			;Both ought to be present
+	POP	P,T2			;Fetch first
+	CAIN	T1,377			;Better be -1
+	 CAME	T1,T2			;...
+	 ERROR	(BED,<Listener provided unexpected error detail>)
+	PUSHJ	P,NICBYT		;Fetch entity ID
+	 HALT	.
+	SKIPE	T1			;Check for "Node"
+	 ERROR	(ENN,<Listener returned non-node entity type>)
+	;Message looks OK, fetch the node number and name fields.
+	;A bunch of parameters follow, but we don't care what they say.
+
+	PUSHJ	P,NICBYT		;Fetch low node address
+	 HALT	.
+	PUSH	P,T1
+	PUSHJ	P,NICBYT		;Fetch high node address
+	 HALT	.
+	LSH	T1,^D8			;Shift into position
+	IORM	T1,(P)			;Save result
+	MOVE	T1,NICBPT		;Get pointer to name string
+	MOVE	T2,T1			;Make copy
+	ILDB	T3,T2			;Fetch length
+	ANDI	T3,177			;Pitch "Executor" bit
+	JUMPE	T3,LOOP.B		;[6] Skip this node if no name
+	DPB	T3,T2			;Put length back
+
+	MOVEI	T1,[ASCIZ |Set Node |]
+	PUSHJ	P,.TSTRG##
+
+	LDB	T1,[POINT 6,(P),25]	;Get area number
+	JUMPE	T1,LOOP.A		;Skip if no area number
+	PUSHJ	P,.TDECW##		;Type in decimal
+	MOVEI	T1,"."			;Add delimiter
+	PUSHJ	P,.TCHAR##		;...
+LOOP.A:	LDB	T1,[POINT 10,(P),35]	;Get node address
+	PUSHJ	P,.TDECW##		;Type in decimal
+
+	MOVEI	T1,[ASCIZ | Name |]
+	PUSHJ	P,.TSTRG##
+
+	MOVE	T1,NICBPT		;[6] Fetch name pointer again
+	SETZ	T2,			;No enforced field length
+	PUSHJ	P,.TCASC		;Type it out
+	PUSHJ	P,.TCRLF##		;Finish up with a <CRLF>
+	AOS	NNODES			;[4] Count one more node
+
+LOOP.B:	ADJSP	P,-1			;[6] Toss node number
+
+	JRST	LOOP			;Try next message
+	SUBTTL	Handle end of response message
+
+	;Here at end of response.  All that's left is to close off
+	;the output file, and log completion for the user.
+
+ENDDAT:	PUSHJ	P,CLSLNK		;Close the network link
+	MOVEI	T1,[ASCIZ |;[End of file on |]
+	PUSHJ	P,.TSTRG##
+	MOVX	T1,%CNDTM		;Include time so elapsed time 
+	GETTAB	T1,			;can be computed if desired
+	 HALT	.
+	PUSHJ	P,.TDTTM##
+	MOVEI	T1,[ASCIZ |, |]		;[4] Padding
+	PUSHJ	P,.TSTRG##
+	MOVE	T1,NNODES		;[4] How many nodes
+	PUSHJ	P,.TDECW##		;[4] Stuff into file
+	MOVEI	T1,[ASCIZ | nodes|]	;[4] Say what this is
+	PUSHJ	P,.TSTRG##		;[4] To the file
+	PUSHJ	P,.TRBRK##		;Right squarebracket
+	PUSHJ	P,.TCRLF##		;End of line
+
+	PUSHJ	P,FIXOUT		;[6] Restore top-level output routine
+	MOVEI	T1,[ASCIZ |
+[GTNWRT DECnet database received, |]
+	PUSHJ	P,.TSTRG##		;[4] Type it
+	MOVE	T1,NNODES		;[4] Get node count again
+	PUSHJ	P,.TDECW##		;[4] Tell the user
+	MOVEI	T1,[ASCIZ | nodes, |]	;[4] Some padding
+
+	;You'd think this would be simple, but we are using large buffers.
+	;Thus, we need to work to get the number of blocks written.
+
+	PUSHJ	P,.TSTRG##
+	MOVEI	T1,A.OPEN		;Point to OPEN block
+	DEVSIZ	T1,			;See about buffer size
+	 HALT	.			;Can't be that old
+	HRRZS	T1			;Ignore number of buffers
+	SUBI	T1,3			;Delete ring header size
+	MOVE	T3,T1			;Copy buffer size (in words)
+	ADDI	T1,177			;Round up (In case of (say) magtape)
+	IDIVI	T1,200			;To standard blocks
+	IMUL	T1,BLKWRT		;Compute blocks written
+	IMULI	T3,5			;Make buffer size into bytes
+	SUB	T3,A.BFR+.BFCTR		;Size-free - bytes written in last bufr
+	ADDI	T3,<200*5>-1		;Round to blocks that CLOSE will write
+	IDIVI	T3,200*5
+	ADD	T1,T3			;Add CLOSE blocks to explict OUT blocks
+	PUSHJ	P,.TDECW##		;Report
+	MOVEI	T1,[ASCIZ | blocks written]|]
+	PUSHJ	P,.TSTRG##
+	PUSHJ	P,.TCRLF##
+
+	CLOSE	FIL,			;Now, change ring header
+	STATZ	FIL,IO.ERR		;Check for last-moment errors
+	 JRST	OUTERR
+	RELEASE	FIL,			;Drop the channel
+
+	JRST	CONTIN			;No, go back to command mode
+	SUBTTL	File output routines
+
+FIXOUT:	MOVEI	T1,BTHOUT		;[6] Full-blown output routine
+	PUSHJ	P,.TYOCH##		;[6] Make sure we use it
+	TXZ	F,F.FILO		;[6] Suppress file output
+	TXO	F,F.TTYO		;[6] Ensure TTY: output
+	POPJ	P,			;[6] Done resetting output
+
+BTHOUT:	TXNE	F,F.TTYO		;[6] Supposed to do TTY output?
+	OUTCHR	T1			;[6] Yes--do it up ugly
+	TXNN	F,F.FILO		;[6] Supposed to do file output?
+	POPJ	P,			;[6] No--return now
+					;[6] Yes--fall into FILOUT
+FILOUT:	SOSL	A.BFR+.BFCTR		;Room?
+	 JRST	FILOT1
+	OUT	FIL,			;Get new buffer
+	 AOSA	BLKWRT			;Another "block" written
+	JRST	OUTERR			;Error doing output
+	 JRST	FILOUT			;Look for space
+
+	;Someday, report error bits
+OUTERR:	ERROR	(FOE,<File output error>)
+
+FILOT1:	IDPB	T1,A.BFR+.BFPTR		;Put this byte
+	POPJ	P,			;Done
+	SUBTTL	RSPERR	Report NICE response error
+
+	;Here when we get an error response code from the listener.
+	;Major error codes are negative in an 8 bit byte.  We report
+	;the major error code, and if supplied, the error detail and/or
+	;OS-generated text fields.  There's no point continuing, so we quit.
+
+RSPERR:	TDO	T1,[-1,,777400]		;Sign extend error code
+	MOVNS	T1			;Make more convenient
+	CAILE	T1,MAXRSE		;Bigger than max known?
+	 SETZ	T1,			;Hmmm
+	MOVE	T1,RSETAB(T1)		;Fetch error descriptor
+	PUSH	P,T1			;Save entry
+	PUSHJ	P,FIXOUT		;[6] Make sure of TTY: output
+	MOVEI	T1,[ASCIZ |
+?GTNRNE NICE error from remote node - |]
+	PUSHJ	P,.TSTRG##
+	PUSHJ	P,NICBYT		;Fetch low error detail
+	HALT	.			;HOPELESS
+	PUSH	P,T1			;Save that
+	PUSHJ	P,NICBYT		;Fetch high error detail
+	HALT	.			;HOPELESS
+	LSH	T1,^D8			;Shift over
+	IORM	T1,(P)			;Merge and save
+	HRRZ	T1,-1(P)		;Fetch string address
+	PUSHJ	P,.TSTRG##		;Print Major error string
+	POP	P,T2			;Fetch error detail
+	POP	P,T1			;Fetch table entry
+	HLRZS	T1			;Fetch aux routine
+	SKIPE	T1			;If specified
+	 PUSHJ	P,(T1)			;...Do it too
+	PUSH	P,NICBPT		;Save start of string
+	PUSHJ	P,NICBYT		;Fetch error string
+	HALT	.			;HOPELESS
+	JUMPE	T1,RSPER1		;No text available
+	PUSHJ	P,.TCRLF##
+	MOVE	T1,(P)			;Fetch pointer
+	SETZ	T2,			;No minimum length
+	PUSHJ	P,.TCASC		;Print counted string
+RSPER1:	ADJSP	P,-1
+	PUSHJ	P,.TCRLF##
+	JRST	GETNOD
+	;This is a table of ASCIZ error string by -<NICE return status code>
+	;Code 0 is undefined in NICE, so we use it for out of range status.
+	;The LH of each table entry points to an auxiliary routine which 
+	;adds to the error string based on the error detail.
+
+RSETAB:	XWD	0,[ASCIZ |Invalid or unrecognized NICE error returned|]
+	XWD	0,[ASCIZ |Unrecognized function or option|] ;(1)
+	XWD	0,[ASCIZ |Invalid message format|]	;(2)
+	XWD	0,[ASCIZ |Privilege violation|]		;(3)
+	XWD	0,[ASCIZ |Oversized Management command message|] ;(4)
+	XWD	0,[ASCIZ |Management program error|]	;(5)
+	XWD RSPPAR,[ASCIZ |Unrecognized parameter type|]	;(6)
+	XWD	0,[ASCIZ |Incompatible Management version|] (7)
+	XWD RSPENT,[ASCIZ |Uncrecognized component|]	;(8)
+	XWD RSPent,[ASCIZ |Invalid identification|]	;(9)
+	XWD	0,[ASCIZ |Line communication error|]	;(10)
+	XWD RSPENT,[ASCIZ |Component in wrong state|]	;(11)
+	XWD	0,[ASCIZ |Obsolete NICE error|]		;(12)
+	XWD RSPFIL,[ASCIZ |File open error|]		;(13)
+	XWD RSPFIL,[ASCIZ |Invalid file contents|]	;(14)
+	XWD	0,[ASCIZ |Resource error|]		;(15)
+	XWD RSPPAR,[ASCIZ |Invalid parameter value|]	;(16)
+	XWD	0,[ASCIZ |Line protocol error|]		;(17)
+	XWD RSPFIL,[ASCIZ |File I/O error|]		;(18)
+	XWD RSPMIR,[ASCIZ |Mirror link disconnected|]	;(19)
+	XWD	0,[ASCIZ |No room for new entry|]	;(20)
+	XWD RSPMIR,[ASCIZ |Mirror connect failed|]	;(21)
+	XWD RSPPAR,[ASCIZ |Parameter not applicable|]	;(22)
+	XWD RSPPAR,[ASCIZ |Parameter value too long|]	;(23)
+	XWD	0,[ASCIZ |Hardware failure|]		;(24)
+	XWD	0,[ASCIZ |Operation failure|]		;(25)
+	XWD	0,[ASCIZ |System-specific Management function not supported|]	;(26)
+	XWD	0,[ASCIZ |Invalid parameter grouping|]	;(27)
+	XWD	0,[ASCIZ |Bad loopback response|]	;(28)
+	XWD RSPPAR,[ASCIZ |Parameter missing|]		;(29)
+	MAXRSE==.-RSETAB-1		;[6]
+	;This page contains routines to interpret error detail.
+	;Implementations are free not to provide error detail, in which
+	;case the error detail is supplied as 2^16-1.  When no error
+	;detail is supplied, we add nothing.  Note that the text of these
+	;messages is specified by the NICE spec, and is not to be changed
+	;on a whim.
+
+	;Each routine is called with the error detail code in T2, and
+	;calls CHKDET to see if the error detail is present.
+
+	;Error detail is a parameter number
+
+RSPPAR:	PUSHJ	P,CHKDET			;See if detail is provided
+	MOVEI	T1,[ASCIZ |, parameter number |]
+	PUSHJ	P,.TSTRG##
+	POP	P,T1			;Fetch parameter number
+	PJRST	.TDECW##		;Print it
+
+	;Error detail is an Entity type
+
+RSPENT:	PUSHJ	P,CHKDET		;Check for detail
+	MOVEI	T1,[ASCIZ |, entity is |]
+	PUSHJ	P,.TSTRG##
+	POP	P,T1
+	CAILE	T1,5			;Be sure reasonable
+	 SETO	T1,
+	MOVE	T1,[[ASCIZ /UNKNOWN/]
+			[ASCIZ	/NODE/]
+			[ASCIZ	/LINE/]
+			[ASCIZ	/LOGGING/]
+			[ASCIZ	/CIRCUIT/]
+			[ASCIZ	/MODULE/]
+			[ASCIZ	/AREA/]]+1(T1)
+	PJRST	.TSTRG##
+
+	;Error detail is a file type
+
+RSPFIL:	PUSHJ	P,CHKDET		;Detail present?
+	POP	P,T1			;Fetch detail
+	CAILE	T1,7			;Known?
+	 POPJ	P,			;No, forget it
+	MOVE	T1,[	[ASCIZ	/, Permanent database/]
+			[ASCIZ /, Load file/]
+			[ASCIZ /, Dump file/]
+			[ASCIZ /, Secondary loader/]
+			[ASCIZ /, Tertiary loader/]
+			[ASCIZ /, Seconday dumper/]
+			[ASCIZ /, Volatile database/]
+			[ASCIZ /, Diagnostic file/]
+		    ](T1)
+	PJRST	.TSTRG##
+	;Error detail is a mirror error
+
+RSPMIR:	PUSHJ	P,CHKDET		;Detail present?
+	POP	P,T1
+	CAILE	T1,^D16			;Known?
+	 POPJ	P,
+	MOVE	T1,[	[ASCIZ /, No node name set/]
+			[ASCIZ /, Invalid node name format/]
+			[ASCIZ /, Unrecognized node name/]
+			[ASCIZ /, Node unreachable/]
+			[ASCIZ /, Network resources/]
+			[ASCIZ /, Rejected by object/]
+			[ASCIZ /, Invalid object name format/]
+			[ASCIZ /, Unrecognized object/]
+			[ASCIZ /, Access control rejected/]
+			[ASCIZ /, Object too busy/]
+			[ASCIZ /, No response from object/]
+			[ASCIZ /, Remote node shut down/]
+			[ASCIZ /, Node or object failed/]
+			[ASCIZ /, Disconnect by object/]
+			[ASCIZ /, Abort by object/]
+			[ASCIZ /, Abort by Management/]
+			[ASCIZ /, Local node shut down/]
+		   ](T1)
+	PJRST	.TSTRG##
+
+	;Here with error detail code in T2.
+	;If value is "none supplied", we return to the caller's caller,
+	;to suppress detail reporting.  Otherwise, we return having
+	;pushed the error detail code onto the stack.  This because
+	;virtually all reporting routines want to output a prefix before
+	;looking at the error detail.
+
+CHKDET:	CAIN	T2,177777		;DETAIL PROVIDED?
+	 JRST	CHKNDT			;NO
+	EXCH	T2,(P)			;Yes, stack it
+	JRST	(T2)			;Return
+
+	;No detail is supplied, don't report this code.
+CHKNDT:	ADJSP	P,-1			;Pitch return
+	POPJ	P,			;Routine is a no-op
+	SUBTTL	GETCMD	Read a command line from the user
+
+; This routine will read in command lines of the form:
+;
+;	Filespec=Sourcenode
+;
+; Call:	PUSHJ	P,GETCMD		;Takes no arguments
+;	<Only return>			;T1 contains a byte pointer to the
+;					;node name in standard NML format.
+;					;Ie: <Low#><High#><Length><Name>
+;
+
+GETCMD:	SETZM	N.SPEC			;Remember nothing yet
+	MOVE	T1,PSCARG		;[6] Get arg for .PSCAN
+	PUSHJ	P,PSCAN			;[6] Call our prompter
+	SETZM	CBLK+.NSCUS		;DEFAULT TO NO ACCESS CTL
+	SETZM	CBLK+.NSCPW
+	SETZM	CBLK+.NSCAC
+	PUSHJ	P,.FILIN##		;Read a filespec
+	SKIPN	T1			;[4] If got no filespec,
+	JUMPLE	C,GETCMD		;[6] Ignore this cruft
+	MOVEI	T1,A.ZER		;POINT TO OUR AREA
+	MOVEI	T2,A.EZER-A.ZER+1  	;..
+	PUSHJ	P,.GTSPC##		;GO COPY SPEC
+	SKIPN	T1,A.EXT		;SKIP IF EXT SPECIFIED
+	HRLOI	T1,'INI'		;DEFAULT IS INI
+	MOVEM	T1,A.EXT
+	SKIPN	A.NAM			;SEE IF NAME
+	SETOM	A.NAMM			;NO--DEFAULT TO NO WILD
+	SKIPN	T1,A.NAM		;SKIP IF NAME SPECIFIED
+	MOVE	T1,[SIXBIT/NODNAM/]	;Default
+	MOVEM	T1,A.NAM
+	SKIPN	T1,A.DEV
+	 MOVSI	T1,'DSK'
+	MOVEM	T1,A.DEV
+
+	CAIE	C,"="
+	 ERROR(NEQ,<No "=" in command line>)
+
+	PUSHJ	P,REDNOD		;Read the node we talk to
+	SKIPLE	C			;Did line terminate properly?
+	 PUSHJ	 P,REDJEL		;No, go eat it up
+REDEOL:	SKIPN	N.SPEC			;[6] If no node,
+	JUMPLE	C,GETCMD		;[6] Just loop for the blank line
+
+	MOVE	T1,OSCARG		;[6] Point to argument block
+	PUSHJ	P,.OSCAN##		;[6] Read SWITCH.INI
+	MOVEI	T1,A.ZER		;[6] Point to our filespec area
+	MOVEI	T2,A.EZER-A.ZER+1	;[6] With its length
+	PUSHJ	P,.OSDFS##		;[6] Apply any defaults
+
+	MOVSI	T3,.RBEST		;[6] Length of lookup
+	MOVSM	T3,A.LOOK
+	MOVEI	T1,A.DEV		;[6] SCAN BLOCK
+	MOVEI	T2,A.OPEN		;[6] OPEN BLOCK
+	HRRI	T3,A.LOOK		;[6] LOOKUP BLOCK
+	PUSHJ	P,.STOPN##		;[6] Convert SCAN to monitor
+	 ERROR	(FWI,<Wildcard illegal in output filespec>)
+	MOVSI	T1,A.BFR		;[6] Buffer hdr
+	MOVEM	T1,A.OPEN+.OPBUF	;[6] Save
+	MOVX	T1,UU.LBF
+	IORM	T1,A.OPEN
+	OPEN	FIL,A.OPEN
+	 JRST	[PUSHJ	P,E.DFO##
+		 MOVEI T1,A.DEV
+		 PUSHJ	P,.TFBLK##
+		 PUSHJ	P,.TCRLF##
+		 JRST	GETNOD]
+	ENTER	FIL,A.LOOK
+	 JRST	[MOVEI	T1,A.LOOK
+		 MOVE	T2,A.LOOK+.RBCNT
+		 ANDI	T2,777
+		 MOVEI	T3,A.DEV
+		 PUSHJ	P,E.LKEN##
+		 JRST	GETNOD]
+
+	MOVE	T1,[POINT 8,N.SPEC]	;Get BP to source node name
+	POPJ	P,			;And return happily
+
+REDJEL:	JUMPLE	C,.POPJ			;Did line end properly??
+	 WARN	 (JEL,Junk at end of line - ignored)
+	PUSHJ	P,.TICHR##		;Read a char
+	JUMPG	C,.-1			;Loop till we hit eol
+	POPJ	P,
+	SUBTTL	PSCAN	Handle prompting and @ files for the command scanner
+
+PSCAN:	MOVEM	T1,PSCANA		;[6] Save arg pointer
+	MOVEM	P,PSCANP		;[6] And calling pdl
+	JRST	PSCAN1			;[6] Skip restart logic
+PSCAN0:	MOVE	P,PSCANP		;[6] Restore PDL pointer
+	PUSHJ	P,FIXOUT		;[6] Make sure of TTY: output
+	MOVE	T1,PSCANA		;[6] Restore arg pointer
+PSCAN1:	SETOM	REPARS			;[6] Init reparsing flag
+	PUSH	P,.OPTN##		;[6] Save /OPTION
+	PUSH	P,.FLVRB##		;[6] Save /MESSAGE
+	PUSHJ	P,.PSCAN##		;[6] Set up partial line scanner
+	 TDZA	T1,T1			;[6] Wants to prompt
+	MOVEI	T1,1			;[6] Just parse
+	POP	P,.FLVRB##		;[6] Restore /MESSAGE
+	POP	P,.OPTN##		;[6] Restore /OPTION
+	AOSE	REPARS			;[6] Did scan restart .PSCAN (/HELP ?)
+	JRST	PSCAN0			;[6] Yes--take it from the top
+	JUMPN	T1,PSCAN2		;[6] Jump if no prompt needed
+	SKPINL				;[6] Clear ^O
+	  JFCL				;[6] Ignore return
+	MOVEI	T1,[ASCIZ |GETNOD>|]	;[6] Yes--get prompt string
+	PUSHJ	P,.TSTRG##		;[6] And type it
+
+PSCAN2:	PUSHJ	P,.TICHR##		;[6] Prime the pump - get a character
+	CAIN	C," "			;[6] A space?
+	 PUSHJ	P,.TICHR##		;[6] Get a real character
+	CAIE	C,"@"			;[6] See if indirect file
+	JRST	PSCAN3			;[6] It isn't
+	PUSHJ	P,.GTIND##		;[6] Yes--set up for it
+	JUMPG	C,E.ILSC##		;[6] Demand eol here
+PSCAN3:	CAMN	C,[.CHEOF]		;[6] If found an EOF,
+	PUSHJ	P,.ALDON##		;[6] Do the right thing with it
+	JUMPLE	C,PSCAN0		;[6] Try again if not yet time to exit
+	PJRST	.REEAT##		;[6] Return ready to eat this character
+	SUBTTL	REDNOD	Read node names for the command scanner
+
+; Read one node name or number, checking for validity, skipping spaces, etc.
+; Return name in N.SPEC as a standard DECnet node name string.
+;
+; Call:	PUSHJ	P,REDNOD		;Go read a name or number
+;	 Only return; node name in N.SPEC, terminating character in C.
+;
+
+REDNOD:	SETZM	N.SPEC			;Clear number and name length fields
+	SETZM	N.ADDR			;Clear address mode flag
+	PUSHJ	P,SWTSCN		;[4] See if any switches
+	JUMPLE	C,.POPJ			;[5] EOL means stop
+	PUSHJ	P,.SIXMW##		;[6] Read some characters
+	SKIPE	.NMUL##+1		;[6] Did we get too many?
+	 WARN	 (NLS,Node name longer than six characters)
+	MOVE	T4,.NMUL##		;[6] Fetch the name
+	TDNN	T4,['@@@@@@']		;[6] Any alphabetics seen?
+	JRST	REDNO7			;[6] No--go handle address format
+
+; Loop around gathering up node name.
+	MOVE	T1,[POINT 8,N.SPEC,7+8+8] ;[6] Get BP to 1st byte of name
+	SETZ	T2,			;[6] Set to count up length
+REDNO1:	JUMPE	T4,REDNO2		;[6] Stop if no more characters
+	SETZ	T3,			;[6] Clear character AC
+	LSHC	T3,6			;[6] Get next character
+	ADDI	T3," "			;[6] Convert to ASCII
+	IDPB	T3,T1			;[6] Stuff into node spec
+	AOJA	T2,REDNO1		;[6] Loop over all characters
+REDNO2:	JUMPE	T2,REDRET		;[6] Skip out now if null name
+	DPB	T2,[POINT 8,N.SPEC,7+8+8] ;[6] Set length in node spec
+	JRST	REDNOA			;[6] Go map name & win
+
+; Here if 1st char of node name is a digit.  User wants to use #
+REDNO7:	SETZ	T1,			;[6] Clear accumulation AC
+REDNO8:	JUMPE	T4,REDNO9		;[6] Finished if out of characters
+	SETZ	T3,			;[6] Clear character AC
+	LSHC	T3,6			;[6] Get next digit
+	IMULI	T1,^D10			;[6] Shift to next decade
+	ADDI	T1,-'0'(T3)		;[6] Include next digit
+	JRST	REDNO8			;[6] Loop over all digits
+REDNO9:	JUMPE	T1,REDNOB		;[6] Zero addresses are naughty
+	CAIE	C,"."			;Area?
+	 JRST	REDN7A			;No
+	LSH	T1,^D10			;[6] Yes, position
+	PUSH	P,T1			;[6] Save
+	PUSHJ	P,.DECNW##		;Read next
+	JUMPE	N,[ADJSP P,-1
+		   JRST	REDNOB]		;Silly user
+	POP	P,T1			;[6] Restore area
+	TDNN	N,[-1_^D10]		;Invalid node?
+	 TDNN	T1,[-1,,776000]		;Invalid area?
+	JRST	REDNOB			;Naughty
+	IOR	N,T1			;Add area
+
+REDN7A:	DPB	N,[POINT 8,N.SPEC,7]	;Install the low order byte
+	LSH	N,-8			;Get the high order byte
+	MOVE	T1,X.AREA		;[4] Fetch home area for defaulting
+	LSH	T1,2			;[4] Adjust area
+	TRNN	N,77_2			;[4] Area specified?
+	 IOR	N,T1			;[4] No, merge one
+	DPB	N,[POINT 8,N.SPEC,7+8]	;Install the high order byte
+	SKIPG	N			;[4] See if default used and invalid
+	 ERROR	NPA,<Area must be specified in node address>
+	SETOM	N.ADDR			;Remember address-mode connect used
+;[6]	JRST	REDNOA			;Go map name and give skip return
+
+; Here to map the name to a number, and determine reachability
+REDNOA:	MOVE	T1,[POINT 8,N.SPEC]	;Get pointer to node spec
+	PUSHJ	P,MAPIT			;Map number into name (or vice versa)
+	 CAIA				;Failed
+	JRST	REDRET			;OK, continue parse
+
+	SKIPE	N.ADDR			;[6] OK if not address mode connect
+	 JRST	 REDNOE			;Unknown component
+
+	;Here, we've read the node name or number.  
+	;We must now parse the optional access control string, and/or ::
+REDRET:	CAIN	C,""""			;Start of access control?
+	 PUSHJ	P,REDACC		;Yes
+	CAIE	C,":"			;Node terminator?
+	 JRST	REDRT0			;[4] No, possible switch
+	PUSHJ	P,.TICHR##		;[6] Yes, get next char
+	CAIE	C,":"			;Better be ::
+	 JRST	REDRT1			;Nope
+	PUSHJ	P,.TICHR##		;[6] Get next char
+
+REDRT0:	SKIPLE	C			;[6] If needed,
+	PUSHJ	P,.REEAT##		;[4] Re-stuff delimiter
+	PUSHJ	P,SWTSCN		;[4] Scan any switches
+	POPJ	P,
+
+REDRT1:	SKIPLE	C			;[6] If not EOL
+	PUSHJ	P,.REEAT##		;Not, re-stuff it
+NODSYN:	ERROR	(NSY,<Invalid nodname syntax>)
+	POPJ	P,			;And return
+
+; Here when name to number mapping operation fails
+REDNOE:	CAIN	P2,6			;Did user give a node number??
+REDNOB:	 ERROR	 (INN,Illegal node number) ;Yes, give correct message
+	ERROR	(UKN,Unknown node name)
+;Here to read access control string
+
+REDACC:	PUSHJ	P,.AS8QC##		;Read full string
+	PUSHJ	P,.SAVE1##		;SAVE AN AC
+	MOVE	P1,[POINT 8,.NMUL##]	;Point to data
+	MOVEI	T1,CUSER		;Read user name
+	PUSHJ	P,RDACS
+	 JRST	RDACT			;None, check termination
+	MOVEM	T1,CBLK+.NSCUS		;Tell NSP.
+	MOVEI	T1,CPASS		;Read password
+	PUSHJ	P,RDACS
+	 JRST	RDACT			;None, check termination
+	MOVEM	T1,CBLK+.NSCPW		;Tell NSP.
+	MOVEI	T1,CACC			;Read account string
+	PUSHJ	P,RDACS
+	 JRST	RDACT			;None, check termination
+	MOVEM	T1,CBLK+.NSCAC		;Tell NSP.
+RDACT:	POPJ	P,			;Done
+
+	;Helper routine to read an access control field into a DECnet
+	;string block.  We are careful not to scribble past end of SB.
+
+RDACS:	HRRZ	T2,.NSASL(T1)		;Fetch length of block
+	SUBI	T2,.NSAST		;Subtract length of header
+	IMULI	T2,4			;Compute longest string
+	MOVEI	T3,.NSAST(T1)		;Address of string
+	HRLI	T3,(POINT 8,,)		;Make into pointer
+	SETZ	T4,			;Bytes in string
+	PUSH	P,C			;Save SCAN's C
+
+RDACS1:	CAMN	P1,[POINT 8,.NMUE##,31]	;Off end?
+	 JRST	RDACSE			;Yes
+	ILDB	C,P1			;Fetch next char
+	SKIPE	C			;If off end, don't store
+	CAIN	C," "			;Space?
+	 JRST	RDACSE			;Yes, end of this field
+	SOJL	T2,RDACS1		;No, include if space left in SB
+	IDPB	C,T3			;Store it
+	AOJA	T4,RDACS1		;Read next character
+
+RDACSE:	POP	P,C			;Restore SCAN's C
+	HRLM	T4,.NSASL(T1)		;Store string length
+	SKIPE	T4			;Anything here?
+	 AOS	(P)			;Yes
+	POPJ	P,			;DONE
+	SUBTTL	SCNSWT - Scan off any switches
+
+SWTSCN:	SKIPLE	C			;[6] If not yet EOL,
+	PUSHJ	P,.TICHR##		;[6] Get a character
+SWTSC1:	CAIN	C," "			;[6] Is it a space?
+	 PUSHJ	P,.TICHR##		;[6] Yes, get next character
+	CAIE	C,"/"			;[4] Switch introducer?
+	 JRST	SWTSCE			;[4] End of switches
+	PUSHJ	P,.KEYWD##		;[4] Read the switch
+	 ERROR	NSS,<No switch specified>
+	JUMPG	C,SWTSC1		;[6] If not EOL, see if another switch
+	POPJ	P,			;[6] EOL (?)
+
+SWTSCE:	SKIPLE	C			;[6] Unless EOL
+	PUSHJ	 P,.REEAT##		;[4] No, put it back
+	POPJ	P,			;[4] Done
+	SUBTTL	SHONDS	Send a SHOW (or LIST) NODES command
+
+
+;	This routine will issue a NICE SHOW or LIST KNOWN NODES command to
+;	the listener process on the other end of the link.
+;
+; Call:	PUSHJ	P,SHONDS
+;	<Return +1 always>
+
+SHONDS:	DMOVE	T1,[EXP SHWNLN		;Length of NICE SHOW command
+		    POINT 8,SHWNIC]	;Pointer to command
+	SKIPE	U.VOLAT			;If /NOVOLATILE  [Default: /VOLATILE]
+	SKIPLE	U.PERM			;Or /PERMANENT  [Both: /PERMANENT]
+	 DMOVE	T1,[EXP LSTNLN		;Length of NICE LIST command
+		    POINT 8,LSTNIC]	;Pointer to command
+	PUSHJ	P,SNDMSG		;Go send the message
+	POPJ	P,			;Command issued
+	SUBTTL	NICE byte string manipulation routines
+
+; Call this to set up for calls to NICBYT
+
+NICSET:	DMOVEM	T1,NICCNT		;Put BP and count in safe place
+	POPJ	P,
+
+; Call this for each byte to be read from NICE message
+
+NICBYT:	SOSGE	NICCNT			;Any bytes left??
+	 POPJ	 P,			;No, give skip return
+	ILDB	T1,NICBPT		;Yes, get one
+.POPJ1:	AOS	(P)			;And give
+.POPJ:	POPJ	P,			;skip return
+
+; Get current ILDB pointer to NICE string
+
+NICPTR:	MOVE	T1,NICBPT		;Get current NICE pointer
+	POPJ	P,
+	SUBTTL	MAPIT	Map from node number to node name
+
+; Call:	MOVx	T1,BP to node spec
+;	PUSHJ	P,MAPIT
+;	 <+1 return if node is unknown>
+;	<+2 return if success>
+; In either case T1/ original BP
+
+MAPIT:	MOVEM	T1,NTMAP+.NTBPT		;Set up pointer to info to be mapped
+	MOVEI	T2,9			;Get length of MAPBUF
+	MOVEM	T2,NTMAP+.NTBYT		;Stuff it
+	MOVEI	T2,NTMAP		;Get arg for NTMAN.
+	NTMAN.	T2,			;Read mapping from monitor
+	 JFCL				;Something went wrong
+	;What NTMAN. returns on error is unpredictable.  NTMAN. is
+	;a privileged UUO in any case.  There is no alternative.
+	;In any case, if a null name string is returned, we want to
+	;default it.  So the error doesn't much matter.
+	MOVE	T2,T1			;Copy node spec
+	ILDB	T3,T2			;Fetch address
+	ILDB	T4,T2			;...
+	IOR	T3,T4			;See if known
+	SKIPN	N.ADDR			;Address mode connect?
+	 POPJ	P,			;No, node number 0 is harmless
+	JUMPE	T3,.POPJ		;Yes, return error if no number
+	ILDB	T3,T2			;Have number, see if name
+	JUMPN	T3,.POPJ1		;Wonder why we failed...pretend not
+
+	MOVEI T3, 6			;Default name
+	DPB T3,T2			;So
+	MOVE T4,[POINT 7,[ASCII /....../]]
+DEFNAM:	ILDB	T3,T4			;Fetch a char
+	SKIPE	T3			;End?
+	IDPB	T3,T2			;Copy to user
+	JUMPN	T3,DEFNAM		;For entire string
+	JRST	.POPJ1			;Pretend we Translated
+	SUBTTL	OPNLNK & CLSLNK	Open and close NICE links to a foreign NML
+
+	;Open a NICE link to the node whose description is passed in T1.
+	;Read the connect confirm data to establish the NICE protocol version
+	;being spoken by the listener.
+
+OPNLNK:	ILDB	T2,T1			;Skip first byte
+	ILDB	T3,T1			;Skip second byte of node number
+	SKIPE	N.ADDR			;Address mode connect?
+	 JRST	[PUSHJ	P,BLDNNA	;Yes, Build numeric node address
+		 JRST	OPNLN2]		;Continue
+	ILDB	T2,T1			;Get length of node name
+	SKIPN	T2			;Is it legal?
+	 HALT	 .			;!?! Zero node name?
+	HRLM	T2,CNODE		;Save length of name in string block
+
+	MOVE	T3,[POINT 8,CNODE+1]	;Get pointer to destination
+OPNLN1:	ILDB	T4,T1			;Get byte from node name
+	IDPB	T4,T3			;Stuff it into the NSP. block
+	SOJG	T2,OPNLN1		;Loop till done
+
+OPNLN2:	MOVEI	T1,ENTACT		;Get addr for NSP.
+	NSP.	T1,			;Open up link to foreign node
+	  JRST	[SKIPE	ENTACT+.NSAA3	;[4] Already been here?
+		 CAIE	T1,NSPRV%	;[4] No, can we handle this error?
+		 JRST	OPNLNE		;[4] Punt--print nice error message
+		 SETZM	ENTACT+.NSAA3	;[4] Yes--give up on flow control
+		 JRST	OPNLN2]		;[4] Try it again
+	HRRZ	T1,ENTACT+.NSACH	;Get channel number
+	MOVEM	T1,NETCHN		;Save it for SNDMSG and REDMSG
+	MOVEM	T1,RCVBLK+.NSACH	;[6] Stuff it where REDMSG wants it
+
+	MOVEM	T1,RCCBLK+.NSACH	;Install channel number in CC block
+	MOVEM	T1,SLQBLK+.NSACH	;[4] Stuff into seq-quota block
+	MOVEI	T1,SLQBLK		;[4] Get arg for NSP.
+	NSP.	T1,			;[4] Change buffer quota and input %age
+	  TRN				;[4] Ignore this error
+	MOVEI	T1,RCCBLK		;Get arg for NSP.
+	NSP.	T1,			;Read Connect Confirm Data
+	  JRST	OPNLNE			;Report NSP. error
+	MOVE	T1,CCDATA+.NSAST	;Get NSP VER.ECO.USR
+	MOVEM	T1,VERFLG		;Remember which version of NML
+	JRST	.POPJ1
+
+OPNLNE:	POPJ	P,
+
+	;Routine to build an undocumented descriptor for by-address connect.
+
+BLDNNA:	LSH	T3,^D8			;Shift high byte to it's place
+	IOR	T2,T3			;Build node number
+	MOVE	T3,[POINT 6,T2]		;Pointer to fetch address with
+	MOVE	T4,[POINT 8,CNODE+1]	;Pointer to string block data
+
+BLDNN1:	ILDB	T1,T3			;Fetch 6 bits of address
+	ADDI	T1,40			;Convert to pseudo-ASCII
+	IDPB	T1,T4			;Store in string block
+	TLNE	T3,770000		;done with block?
+	 JRST	BLDNN1			;No
+
+	MOVEI	T1,^D6			;Byte count for SB
+	HRLM	T1,CNODE		;Store it
+	POPJ	P,			;Done
+	SUBTTL	Close NICE link to foreign node
+
+
+CLSLNK:	MOVE	T1,NETCHN		;Get network channel number
+	MOVEM	T1,DSCBLK+.NSACH	;Install it in NSP. block
+	MOVEI	T1,DSCBLK		;Get pointer to NSP. arg block
+	NSP.	T1,			;Do Synchronus Disconnect
+	  JRST	NSPERR			;Report NSP. error
+	MOVE	T1,NETCHN		;Get network channel number
+	MOVEM	T1,RELBLK+.NSACH	;Install it in NSP. block
+	MOVEI	T1,RELBLK		;Get arg for releasing channel
+	NSP.	T1,			;Drop the channel
+	  JRST	NSPERR			;Report NSP. error
+	POPJ	P,
+	SUBTTL	Network send and receive routines
+
+; Call:	MOVEI	T1,length-of-message
+;	MOVE	T2,[BP to message]
+;	PUSHJ	P,SNDMSG
+;	 <Return +1 Always>
+
+SNDMSG:	DMOVEM	T1,SNDBLK+.NSAA1	;Install byte count and byte pointer
+	MOVE	T1,NETCHN		;Get network channel number
+	MOVEM	T1,SNDBLK+.NSACH	;Install it
+	MOVEI	T1,SNDBLK		;Get address of arg block
+	NSP.	T1,			;Send the data
+	  JRST	NSPERR			;Report NSP. error
+	POPJ	P,			;Return happily
+
+; REDMSG will read data from the network.  It will return T1 with a byte count,
+; and T2 with a byte pointer.  T1 and T2 will be supplied by me, and ignored
+; if they are set up.
+
+
+REDMSG:	DMOVE	T1,[MSGLEN		;[6] Length of my buffer
+		    POINT 8,MSGBUF]	;Pointer to my buffer
+	DMOVEM	T1,RCVBLK+.NSAA1	;Install in NSP. arg block
+	MOVEI	T1,RCVBLK		;Get arg for NSP.
+	NSP.	T1,			;Read data from network
+	  JRST	NSPERR			;Report NSP. error
+	MOVEI	T1,MSGLEN		;Get size of message buffer
+	SKIPLE	RCVBLK+.NSAA1		;[6] Unless we truncated,
+	SUB	T1,RCVBLK+.NSAA1	;Compute number of bytes received
+	MOVE	T2,[POINT 8,MSGBUF]	;Get pointer to message buffer
+	POPJ	P,
+	SUBTTL	Special typeout routines
+
+; .TNNAM  Type out the standard style node name pointed to by T1
+.TNNAM:	IBP	T1
+	IBP	T1
+	PJRST	.TCASC
+
+; .TNNAD  Type out standard node address pointed to by T1
+.TNNAD:	PUSH	P,T1			;Save byte pointer
+	ILDB	T1,(P)			;Get first byte of address
+	ILDB	T2,(P)			;And second byte
+	LSH	T2,^D8			;Combine in T1
+	IOR	T1,T2			;...
+	MOVEM	T1,(P)			;Save
+	MOVEI	T1,"("			;Delimit node address
+	PUSHJ	P,.TCHAR##		;...
+	LDB	T1,[POINT 6,(P),25]	;Get area number
+	JUMPE	T1,TNNAD1		;Skip if no area number
+	PUSHJ	P,.TDECW##		;Type in decimal
+	MOVEI	T1,"."			;Add delimiter
+	PUSHJ	P,.TCHAR##		;...
+TNNAD1:	LDB	T1,[POINT 10,(P),35]	;Get node address
+	PUSHJ	P,.TDECW##		;Type in decimal
+	MOVEI	T1,")"			;Add delimiter
+	PUSHJ	P,.TCHAR##		;...
+	ADJSP	P,-1			;Clean stack
+	POPJ	P,			;And return
+
+
+; .TCASC  Type out a counted ASCII string pointed to by BP in T1
+; Enforced field length is in T2
+.TCASC:	PUSHJ	P,.SAVE3##		;Save several Ps
+	DMOVE	P1,T1			;Put BP and count in a safe place
+	ILDB	P3,P1			;Get number of chars into P3
+	SUB	P2,P3			;Calculate number of pad characters
+TCASC1:	JUMPE	P3,TCASC2		;Jump if no more bytes
+	ILDB	T1,P1			;Get another byte
+	PUSHJ	P,.TCHAR##		;Type it out
+	SOJA	P3,TCASC1		;Bop the count and start over
+TCASC2:	JUMPLE	P2,.POPJ		;Return if no more pads needed
+	PUSHJ	P,.TSPAC##		;Pad with a space
+	SOJA	P2,TCASC2		;Loop for all needed pads
+	SUBTTL	String conversion routines
+
+
+; CASSIX - Convert counted ASCII to SIXBIT
+
+CASSIX:	ILDB	T2,T1			;Get byte count
+	CAILE	T2,6			;More than six bytes
+	 MOVEI	 T2,6			;Yes, make it six
+	SETZ	T3,			;Clear receiving buffer
+CASSI1:	JUMPLE	T2,CASSI3		;Return when byte count hits zero
+	LSH	T3,6			;Make room for next byte
+	ILDB	T4,T1			;Get a byte from the string
+	SUBI	T4," "			;Make it SIXBIT
+	IOR	T3,T4			;Install new byte
+	SOJA	T2,CASSI1		;Do it all over again
+
+CASSI3:	MOVE	T1,T3			;Get data into right AC
+CASSI2:	SKIPE	T1			;Prevent infinite loops
+	TLNE	T1,770000		;Left justified yet??
+	 POPJ	 P,			;Yes, we're all done
+	LSH	T1,6			;No, try again
+	JRST	CASSI2			;. . .
+	SUBTTL	Error handling routines
+
+WRNRTN:	PUSHJ	P,.PSH4T##		;Save all the important acs
+	SETZ	T1,			;Fix output
+	PUSHJ	P,.TYOCH##
+	PUSH	P,T1
+	MOVE	T3,@-5(P)		;Get the instruction after PUSHJ to us
+	LDB	T4,[POINT 9,T3,8]	;Get the opcode
+	CAIE	T4,JUMP_-^D27		;Is it a jump?
+	 HALT	 .			;No, die horribly
+	MOVE	T1,0(T3)		;Get first arg for .ERMSG
+	MOVE	T2,1(T3)		;Get second arg for .ERMSG
+	PUSHJ	P,.ERMSG##		;Call the processor
+	PUSHJ	P,.TCRLF##		;Tie it off with a CRLF
+	POP	P,T1
+	PUSHJ	P,.TYOCH##		;RESTORE OUTPUT
+	PUSHJ	P,.POP4T##		;Restore the world
+	POPJ	P,
+
+ERRDIE:	PUSHJ	P,FIXOUT		;[6] Make sure of TTY: output
+	PUSHJ	P,.ERMSG##		;Issue the error message
+	PUSHJ	P,.TCRLF##		;Followed by a CRLF
+	PUSHJ	P,.CLRBF##		;Clear typeahead
+	MOVEI	T1,FIL			;Point to file channel
+	RESDV.	T1,			;Don't write new version
+	 JFCL				;Maybe it wasn't open yet
+	JRST	GETNOD			;And start over
+	SUBTTL	NSP. Error handling
+
+	;This routine reports NSP. UUO errors.
+	;Enter with error code in T1
+
+NSPERR:	PUSHJ	P,.SAVE1##		;Save an AC
+	MOVE	P1,T1			;Save error from NSP. uuo
+	PUSHJ	P,FIXOUT		;[6] Fix output
+	MOVE	T1,['GTNNSP']		;Get message prefix
+	MOVE	T2,["?",,[ASCIZ |NSP. error |]] ;Get error prefix
+	PUSHJ	P,.ERMSG##		;Print message
+	CAILE	P1,MAXERR		;Do we know this error code?
+	 SETZ	 P1,			;No, use general unknown
+	HRR	T1,NSPERC(P1)		;Get address of error text
+	PUSHJ	P,.TSTRG##		;Type it out
+	PUSHJ	P,.TCRLF##		;Type a <CRLF>
+	JRST	GETNOD			;And restart gracefully
+	;Table of NSP. error codes
+
+DEFINE ERRMAC(code,text),<
+	IF1,<IFN code-<.-NSPERC>,<
+		PRINTX ?NSP. error code out of order in NSPERC table>>
+	ERRMC1(\code,text)
+>
+DEFINE ERRMC1(code,text),<[ASCIZ |(code) text|]>
+
+NSPERC:	ERRMAC 0,     <Unknown Error, code in AC 1>
+	ERRMAC NSABE%,<Argument Block Format Error>
+	ERRMAC NSALF%,<Allocation failure>
+	ERRMAC NSBCN%,<Bad channel number>
+	ERRMAC NSBFT%,<Bad format type in process block>
+	ERRMAC NSCFE%,<Connect Block format error>
+	ERRMAC NSIDL%,<Interrupt data too long>
+	ERRMAC NSIFM%,<Illegal flow control mode>
+	ERRMAC NSILF%,<Illegal function>
+	ERRMAC NSJQX%,<Job quota exhausted>
+	ERRMAC NSLQX%,<Link quota exhausted>
+	ERRMAC NSNCD%,<No connect data to read>
+	ERRMAC NSPIO%,<Percentage input out of bounds>
+	ERRMAC NSPRV%,<No Privileges to Perform Function>
+	ERRMAC NSSTB%,<Segment size too big>
+	ERRMAC NSUKN%,<Unknown node name>
+	ERRMAC NSUXS%,<Unexpected State: Unspecified>
+	ERRMAC NSWNA%,<Wrong number of arguments>
+	ERRMAC NSWRS%,<Function called in wrong state>
+
+;New error codes (to be re-ordered):
+
+	ERRMAC NSCBL%,<Connect block length error>
+	ERRMAC NSPBL%,<Process block length error>
+	ERRMAC NSSBL%,<String block length error>
+	ERRMAC NSUDS%,<Unexpected State: Disconnect Sent>
+	ERRMAC NSUDC%,<Unexpected State: Disconnect Confirmed>
+	ERRMAC NSUCF%,<Unexpected State: No Confidence>
+	ERRMAC NSULK%,<Unexpected State: No Link>
+	ERRMAC NSUCM%,<Unexpected State: No Communication>
+	ERRMAC NSUNR%,<Unexpected State: No Resources>
+;Error codes which correspond to DECnet disconnect codes.
+
+	ERRMAC NSRBO%,<Rejected by Object>
+	ERRMAC NSDBO%,<Disconnected by Object>
+	ERRMAC NSRES%,<No Resources at Remote Node>
+	ERRMAC NSUNN%,<Unrecognized Node Name>
+	ERRMAC NSRNS%,<Remote Node Shut Down>
+	ERRMAC NSURO%,<Unrecognized Object>
+	ERRMAC NSIOF%,<Invalid Object Name Format>
+	ERRMAC NSOTB%,<Object Too Busy>
+	ERRMAC NSABM%,<Abort by Management>
+	ERRMAC NSABO%,<Abort by Object>
+	ERRMAC NSINF%,<Invalid Node Name Format>
+	ERRMAC NSLNS%,<Local Node Shut Down>
+	ERRMAC NSACR%,<Access Control Rejection>
+	ERRMAC NSNRO%,<No Response from Object>
+	ERRMAC NSNUR%,<Node Unreachable>
+	ERRMAC NSNLK%,<No Link>
+	ERRMAC NSDSC%,<Disconnect Complete>
+	ERRMAC NSIMG%,<Image Field Too Long>
+	ERRMAC NSREJ%,<Unspecified Reject Reason>
+
+	ERRMAC NSBCF%,<Bad combination of NS.EOM & NS.WAI flags>
+	ERRMAC NSADE%,<Address Error>
+MAXERR==.-NSPERC-1
+	SUBTTL	Pure data and Low segment
+
+STKPTR:	IOWD	STKLEN,STACK		;Set up stack from this word
+
+	XLIST				;Turn off listing for a moment
+	LIT				;Generate literals in hiseg
+	LIST				;Turn on listing after lits
+
+	RELOC	0
+
+; Argument block for mapping node numbers into node names
+NTMAP:	EXP	.NTLST
+	EXP	0
+	EXP	0
+	EXP	.NTMAP
+	EXP	0
+	EXP	0
+	POINT	8,MAPBUF
+	EXP	0
+	EXP	0
+
+MAPBUF:	BLOCK	<9+3>/4
+
+; Argument block for reading the executor node name
+NTREX:	EXP	.NTMAX
+	EXP	.NTNOD
+	EXP	0
+	EXP	.NTREX
+	EXP	0
+	EXP	0
+	POINT	8,X.NODE
+	EXP	0
+	EXP	0
+
+X.NODE:	BLOCK	3
+; The following is an NSP. arg block for doing an Enter Active to another NML
+
+ENTACT:	NS.WAI+.NSFEA_^D18+5		;[4] Enter Active, Please Wait
+	EXP	0			;Channel number
+	EXP	CBLK			;Connect Block pointer
+	EXP	70			;[4] Empirically seems to be enough
+	EXP	1			;[4] Small segment size & no flow control
+
+;[4] The following block is used to set the buffer allocation
+
+SLQBLK:	NS.WAI+.NSFSQ_^D18+4		;[4] Set link quotas
+	EXP	0			;[4] Channel number
+	EXP	^D100			;[4] A few buffers
+	EXP	^D99			;[4] Almost all for input
+
+; The following block is used to read the connect confirm data
+
+RCCBLK:	XWD	.NSFRC,5		;Read connect data function
+	EXP	0			;Channel number
+	EXP	CCDATA			;Pointer to string block
+	EXP	0
+	EXP	0
+
+CCDATA:	STRBLK	^D16			;Connect Confirm Data string block
+; The next block is used for sending data over the network
+
+SNDBLK:	NS.EOM+NS.WAI+.NSFDS_^D18+4	;Blocking data send and end of message
+	EXP	0			;Channel number goes here
+	EXP	0			;Byte count goes here
+	EXP	0			;Byte pointer goes here
+
+; This block is used for receiving data from the network (via NSP.)
+
+RCVBLK:	NS.EOM+NS.WAI+.NSFDR_^D18+4	;[6] Blocking data receive & truncate
+	EXP	0			;Channel number
+	EXP	0			;Byte count
+	EXP	0			;Byte pointer
+
+; This is a disconnect block
+
+DSCBLK:	XWD	.NSFSD,3		;Synchronus disconnect
+	EXP	0			;Channel number goes here
+	EXP	0			;No disconnect data
+
+; This is a channel release block
+
+RELBLK:	XWD	.NSFRL,2		;Release this channel
+	EXP	0			;Channel number goes here
+
+MSGBUF:	BLOCK	^D50			;Lotsa room for network data
+	MSGLEN==<.-MSGBUF>*4		;[6] # of 8 bit bytes
+; The following is a connect block for opening the network connections
+
+CBLK:	EXP	CBLEN			;.NSCNL
+	EXP	CNODE			;.NSCND
+	EXP	CSOURC			;.NSCSD
+	EXP	CDEST			;.NSCDD
+	EXP	0;CUSER			;.NSCUS
+	EXP	0;CPASS			;.NSCPW
+	EXP	0;CACC			;.NSCAC
+	EXP	CIDATA			;.NSCUD
+	CBLEN==.-CBLK
+
+CNODE:	STRBLK	6			;Max six chars for node names
+CDEST:	EXP	3			;.NSDFL
+	EXP	0			;.NSDFM
+	EXP	.OBNIC			;.NSDOB
+CSOURC:	EXP	5
+	EXP	1,0,0			;Format 1, no object type or PPN
+	EXP	SRCSTR			;Address of my name
+
+CUSER:	STRBLK	^D39			;USER-ID
+
+CPASS:	STRBLK	^D39			;PASSWORD
+
+CACC:	STRBLK	^D39			;ACCOUNT
+
+CIDATA:	XWD	3,CUDLEN		;Connect initiate user data
+	BYTE	(8) 4,1,0		;Our Maj.ECO.Usr NICE protocol version
+	CUDLEN==.-CIDATA
+
+SRCSTR:	STRBLK	^D6,<GETNOD>		;My name
+	;NICE message "SHOW KNOWN NODES SUMMARY"
+
+	%%SHOW==0		;SHOW command
+	%%LIST==200		;LIST command
+
+SHWNIC:	BYTE	(8) ^D20, 0_4+.NTNOD+%%SHOW,	-1
+	;FCN, OPT			,ENTITY
+
+SHWNLN==3	;Number of bytes in this NICE message
+
+	;NICE message "LIST KNOWN NODES SUMMARY"
+
+LSTNIC:	BYTE	(8) ^D20, 0_4+.NTNOD+%%LIST,	-1
+	;FCN, OPT			,ENTITY
+
+LSTNLN==3	;Number of bytes in this NICE message
+; The following two locations must be kept together
+NICCNT:	BLOCK	1			;Remaining byte count for NICE message
+NICBPT:	BLOCK	1			;NICE byte pointer
+
+VERFLG:	BLOCK	1		;-1=Phase 2, 0=phase 3, 1=phase 4
+NETCHN:	BLOCK	1			;Channel for NSP.'s
+REMNOD:	BLOCK	1			;Name of current node
+
+N.SPEC:	BLOCK	3			;Node name goes here
+N.ADDR:	BLOCK	1			;-1 if address mode connect
+STACK:	BLOCK	50
+	STKLEN==.-STACK
+; Control block for .ISCAN
+
+ISCARG:	XWD	ISCLEN,ISCBLK		;T1 for call to .ISCAN
+
+ISCBLK:	IOWD	CMDN,CMDTAB		;[6] Allowable monitor commands
+	XWD	OFFSET,'GTN'		;[6] CCL flag,,TMPCOR name
+	EXP	BTHOUT			;[6] Default input,,our output
+	EXP	0			;[6] No indirect file
+	EXP	0			;[6] Default prompt & monret
+	EXP	FS.INC			;[6] No CORE UUOs
+	ISCLEN==.-ISCBLK
+
+CMDTAB:	SIXBIT	/GETNOD/
+	SIXBIT	/GN/
+	SIXBIT	/G/
+	CMDN==.-CMDTAB
+
+PSCARG:	XWD	PSCLEN,PSCBLK
+
+PSCBLK:	IOWD	SWITL,SWITN
+	XWD	SWITD,SWITM
+	XWD	0,SWITP
+	XWD	1,HLPSTR
+	PSCLEN==.-PSCBLK
+
+;[6] .OSCAN argument pointer
+
+OSCARG:	XWD	OSCLEN,OSCBLK
+
+OSCBLK:	IOWD	SWITL,SWITN
+	XWD	SWITD,SWITM
+	XWD	0,SWITP
+	EXP	-1			;[6] Let SCAN do a GETTAB
+	OSCLEN==.-OSCBLK
+
+; Filespec parse data
+
+A.ZER:!
+A.DEV:	BLOCK	1		;DEVICE
+A.NAM:	BLOCK	1		;NAME
+A.NAMM:	BLOCK	1		;NAME MASK
+A.EXT:	BLOCK	1		;EXTENSION AND MASK
+A.MOD:	BLOCK	1		;MODIFIERS
+A.MODM:	BLOCK	1		;MODIFIER MASK
+A.DIR:	BLOCK	1		;DIRECTORY
+A.DIRM:	BLOCK	2*.FXLND-1	;DIRECTORY MASK
+	BLOCK	.FXLEN-<.-A.ZER> ;[6] Make sure it's long enough for STDSWC
+A.EZER==.-1
+
+A.OPEN:	BLOCK	3		;OPEN BLOCK
+A.LOOK:	BLOCK	.RBEST+1	;LOOKUP BLOCK
+
+A.BFR:	BLOCK	3		;BUFFER HEADERS FOR INDIRECT FILE
+BLKWRT:	BLOCK	1		;Blocks written
+NNODES:	BLOCK	1		;[4] Nodes written to file
+X.AREA:	BLOCK	1		;[4] Our "home" area
+OFFSET:	BLOCK	1		;[5] CCL entry flag
+PSCANA:	BLOCK	1		;[6] PSCAN argument memory
+PSCANP:	BLOCK	1		;[6] PSCAN PDL memory
+REPARS:	BLOCK	1		;[6] PSCAN restart memory
+U.PERM:	BLOCK 1
+U.VOLAT:	BLOCK 1
+;U.AREA:	BLOCK ^D<<64+35>/36>
+
+	END	GETNOD

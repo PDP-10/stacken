@@ -1,0 +1,51 @@
+The following characteristics are defined for control of the
+LN01 printer.  They select a set of print attributes (primarily
+font and orientation) and are mutually exclusive.  Author unknown.
+ 
+%	NORMAL		0		the normal line printer
+%	SLIDE		1
+%	CENTURY		2
+%	GOUDY		3
+%	TRIUMVIRATE	4
+%	FIXED		5
+%	TITAN10		6
+%	GOTHIC		7
+
+The following characteristics were added 8-Nov_83 by
+Paul Kyzivat in support of the xerox 8700 printer.
+They select the layout (font and orientation) and an
+overlay (electronic form) to be printed with the data.
+One layout and one overlay may be selected.
+(Added 29-Dec-83 by PHK: P80 and P65.)
+(Added 09-Feb-84 by PHK: SCRIBE - for debugging.)
+(Added 02-Apr-84 by PHK: TR(10 14 18)P_BOLD.)
+(Added 03-Apr-84 by PHK: IMAGE - for debugging.)
+(Added 06-Apr-84 by PHK: MR_CC_REPORT - private overlay.)
+
+%	L132		0	(layout) landscape 132 wide (normal printer)
+%	LANDSCAPE	0	(layout) L132 is the default landscape
+%	L100		50	(layout) landscape 100 wide
+%	P100		51	(layout) portrait 100 wide
+%	P90		52	(layout) portrait 90 wide
+%	PORTRAIT	52	(layout) P90 is the default portrait
+%	P75		53	(layout) portrait 75 wide
+%	P132D		54	(layout) like 2 reduced L132s stacked on portrait page
+%	UN11P_BOLD	55	(layout) portrait, 11pt bold proportional text
+					 lacks [\]^{|}~
+%	UN14P_BOLD	56	(layout) portrait, 14pt bold proportional text
+					 upper case only, few special chars
+%	UN18P_BOLD	57	(layout) portrait, 18pt bold, proportional text
+					 lacks [\]^{|}~
+%	P80		58	(layout) portrait 80 wide
+%	P65		59	(layout) portrait 65 wide
+%	SCRIBE		60	(layout) just for Scribe output
+%	TR10P_BOLD	61	(layout) portrait, 10pt bold proportional text
+%	TR14P_BOLD	62	(layout) portrait, 14pt bold proportional text
+%	TR18P_BOLD	63	(layout) portrait, 18pt bold proportional text
+%	IMAGE		64	(layout) just for testing EPIC image files
+
+%	CONDENSED	100	(overlay) boxes for P132D.  Implies P132D.
+%	OVERHEAD	101	(overlay) box and reduced margin for overhead
+					  transparencies. Implies UN11P_BOLD.
+%	MR_CC_REPORT	102	(overlay) special for cost center report.
+					  Implies L132.

@@ -1,0 +1,203 @@
+*
+*
+*
+*			       0000				     MMM
+*			     MMMMMMMMM				    MMMMM
+*			    MM	     MMMM			  MM   MM
+*			   MM		MMM			 MM   MMM
+*			  0MM		  MM			MM    MM
+*			  0MM		   MM		       MM
+*			    MM	   MM	    MM		      MM
+*			    MMMMMMMM	     MM 	     MM
+*			      000	      MM	    MM
+*					       MM	   MM
+*						MM	   MM
+*			  *AAAAAAAA.		 MM	  MM
+*			AAA	 AAAAAA.	  MM	  MM
+*		       *A.	      AAAA.	  MM	 MM	 .****.   $$
+*		       *A.		AAA.	   MM	 MM    $$$    $. . .$
+*			AA		   AAA.     MM	MM    $$$      $ $   $.
+*			 *AAAA		     AAA   ..MM MM.. $$        $$$$   $.
+*				       ..   .. AAA//$$//$$//$$	    $$$.$/.$   $.
+*				       $$   $$ $$  $/....$...$	 $$$$...$./.$	$
+*				       $$$  $$ $   $/./..$.0.$	$$.././.$*./.$.$$.
+*				       $/$$ $$ $  $/././$../.$.$$...$$./.$***./..$.
+*				       $//$$$$$   $././.$..//.$$./.$  $..$    */..$.
+*				  $$$  $//////$$$$..././$.././../.$    $  $    */..$$$$$$$.
+*				   $$$$$/  . .	 $$././..$..0.....$$$$$$...0000./././....$$$.
+*				    $$//$$/......  $$./.. $  00 ............................$$
+*				      $//$/.......  $$ .$$.$$$***^................./././././.$$
+*				     $$$// .........  $$$$   ...../.......     $$$  /./././..$$
+*				    $$//// ..  .   ..  $$ ***. ./...  $$ $    $  $$	     .$$
+*				   $$/////  .....**..  $$ * ** ../.. $$ $$.$  $$$	     /.$$
+*				  $$ $$$$$$  $$$$$$$$$	$$ **  ././..  $  $M	$$	     /M$$
+*				  $$$^	  $ $$	     $$   $ ** .././.  $$ $MMM. 	     MM$$.
+*					  $$$  ****.  *$  $$ **././.  $$$ $M/M/M/./.	  ../M/M$$
+*					  $$	*  **. *$  $$ .../.  $$$  $MM/M/././	   /./MM$$
+*					 $$    ***   *	    $$../. $$$ $  $MMM/M/..././././M/M/M$$.
+*					$$    .* *    *      $$    $$ $   $$MMM/M/./././../.M/MMM$.
+*					$$    *  *.   **  * * $$ $$$ $$    $*M/M.    ././/./M/M/M$.
+*					$$    *   ***  *** *   $$$   $	    $*M  $$$$$$$../M/M/MM$.
+*					 $$   *.   *	 *	    $$	     $$MM  ^..$$  (/(/MM$$
+*					 $$   .*. *^	.*	    $	      $$*M	 (((((($$
+*					  $$   ^***	*	   $$		$$$$$HH/HH/H$$$$
+*					  ^$1	  *	*	   $		 ^$$/^H^H^H^^  $$
+*					   $$	  **	*	   $		 $ $$		$$
+*					    $1	   *.  *^ $	  $$		 $  $		 $
+*					    $$1    ^****$$$	  $$		  $ $		 $$
+*					    $1$1	 $$	  $		  $ $		  $$
+*					    $1 $1      $$$	  $		  $ $$		  $$
+*					    $1	$$$  $$$/	 $$		  $  $		   $$
+*		     I I		     $1    \\  $$	 $$	 //	  $$ $		   $$.
+*		     $I$		     $1.      $$	  $.	 /	  .$ $		    $.
+*		      II		     $I.      $$	  $$	  /	  .$ $$ 	    $.
+*		      $$		    .$I   /    $$	 $$	  //	  $.  $.	    $$
+*		      $$I		   I$.	//    / $	  $$	   /	  $.  $$	    $$
+*		      $$$		   $I  //  /  /$$	  $$	   /	   *. .$	/    $.
+*		      $I$.		   $I	/ // //$$	   $$	   //	   $$  $.	//   $$
+*		     .$.$$I		  $I	    //$$	   $$	   //	    $$ $$	 //  $$
+*		      $I I$I		 $$	    / $$	    $.	    /	    $$	$$	  //  $.
+*		I      $ $ $$I	      I$$I	    ..1$$ .$	    $$		    $$	 $$	   /  $..
+*		$$     $  $  $$-  -$$$$ 	 $$$///$$$^I	I   $$		   $I	  $$	      $$.
+*		 $$$   $$  $   $$$$    II     ..$$////////$H   II    $. 	    $	   $$	      $$
+*		  $ $$	$.  $I	      II     $$$$$$$$$$$/$$    I     $. 	    $	    $$	      $.
+*		  $. $$$ $$.	  I  II    $$(((((((((((((    II     $$ 	   $$	     $$      .$.
+*		  ^$.  $$..$$	   III	 $$$(((((((((((((     I      .$ 	  $$	      $$     .$.
+*		   ^$.	 ^^*****    I	$$(((((((((((((((    II      $$ 	  $$	      $$     $$.
+*		    ^$		       $$((((((((((((((((	     .$ 	  $$   I       $$     $$
+*		     ^$$.	      $$((((((((((((((($$  $$	   I  $$	  .$   I       $$     $$
+*		       ^$$$	    $$$((((((^^^$$$$$$(($$$$$	   I  $$	 $$   II	$$   $$
+*			 ^$$$$$$$$$$^$$$$$^	   ^^$$$$$$$	  I   $$	 $$		$$   $$
+*			    ^****^   M		  .$$$$$$$$$	II     $.	 $$		 $$   $$
+*				    MM	   ..MMMMMMMM**.. $	       $$	  $   I I	 $$   $$
+*				   MMM ..MMMMMMMMMM***.   $	       .$	  $   I I	 $$  $MMM
+*				 MMMMMMMMMMMMMMM***...	  $  $		$.   I	 $$  I I	  $  $MMMM
+*				MMMMMMMMMMMMMMM***..	 O$$ $		$$   I	$$		  $  $MMMMM
+*			       MMMMMMMMMMMMMM***...	OOOO$		.$  II	$$		  $ $$MMMMMM
+*			      MMMMMMMMMMMMMM***...     OOOOO$		$$  I  $$/   I		   $$MMMMMMMM
+*			     MMMMMMMMMMMMMM***...     OOOOOO$.		.$  II$$     I		   $$MMMMMMMMM
+*			    MMMMMMMMMMMMMM***...    OOOOOOOO$$	$	 $$ I $$     I		   $$MMMMMMMMMM
+*			   MMMMMMMMMMMMMM***...    OOOOOOOOOO$$$$	 $   $$     I		   $MMMMMMMMMMMM
+*			  MMMMMMMMMMMMMM***...	  $   OOOOOOOOO$$ $	$$ $ $			  $$MMMMMMMMMMMMM
+*			 MMMMMMMMMMMMMM***...	$$$$	   OOOO$ $$	$$$$$$			   MMMMMMMMMMMMMMM
+*			MMMMMMMMMMMMMM***...   $$$$$   OOOOOOOO$$$     $$$ $			   MMMMMMMMMMMMMMMM
+*			MMMMMMMMMMMMXXX...    $$$$$$$  OOOOOOOOO$$	$  $			   MMMMMMMMMMMMMMMMM
+*		       MMMMMMMMMMMMXXX...    $$$$$$$$	OOOOOOOO$		    I		   MMMMMMMMMMMMMMMMM
+*		      MMMMMMMMMMMMMXXX...   $$$$$$$$$$	OOOOOOOO$		    I I 	   $MMMMMMMMMMMMMMMMM
+*		     .MMMMMMMMMMMMXXX...   $$$$$$$$$$$	OOOOOOOO$$   $		   I  I 	   $MMMMMMMMMMMMMMMMMM
+*		     MMMMMMMMMMMMMXXX...  $$$$$$$$$$$$ OOOOOOOOOO$$  $		  I  I		   $ MMMMMMMMMMMMMMMMM
+*		    MMMMMMMMMMMMMXXX...  $$$$$$$$$$$$  OOOOOOOOOOO$$$^		    I		    $ .MMMMMMMMMMMMMMMM
+*		    MMMMMMMMMMMMXXX...	$$$$$$$$$$$$$  OOOOOOOOOOO$$$				    $  .MMMMMMMMMMMMMMM
+*		   MMMMMMMMMMMMXXXX...I $$$$$$$$$$$$  OOOOOOOOOOOO$$				    $	.MMMMMMMMMMMMMM
+*		   MMMMMMMMMMMXXX...II	 $$$$$$$$$$$  OOOOOOOOOOOO$$				    $  .MMMMMMMMMMMMMMM
+*		  MMMMMMMMMMMXXX...I	   $$$$$$$$	OOOOOOOOOOO$$				    $ .MMMMMMMMMMMMMMM
+*		  MMMMMMMMMMMXXX..IIIIII      $$$  $$$$  OOOOOOOOOO$$				    $MMMMMMMMMMMMMMMMM
+*		  MMMMMMMMMMMXXX......I 	    $$$$  OOOOOOOOOO$$				    MMMMMMMMMMMMMMMMM
+*		   MMMMMMMMMMXXX....II....	     $$$  OOOOOOOOOOO$$   $$		    I	    MMMMMMMMMMMMMMMM
+*		    MMMMMMMMMMXXX..I.........	     $$$$  OOOOOOOOOOO$$$$$$		     I	M   MMMMMMMMMMMMMMM
+*		     MMMMMMMMMM**.............	     $$$$  OOOOOOOOOOOOOOO$$		   I  I  M  MMMMMMMMMMMMMM
+*		    XXMMMMMMMMMMMMMMMMMMMXXX.....     $$$ OOOOOOOOOOOOOOO$$$		    I  I  MMMMMMMMMMMMMMM
+*		   XXXXXMMMMMMMMMMMMMMMMMMMXXX.....  $$$$OOOOOOOOOOOOOOOO$$		     I	   MMMMMMMMMMMMM
+*		  XXXXXXXXMMMMMMMMMMMMMMMMMMMXXX.... $$$$O	OOOOOOOOO$$			    MMMMMMMMMMM
+*		 XXXXXXXXX  MMMMMMMMMMMMMMMMMMXXX...$$$$	 OOOOOO$$$	      I 	    MMMMMMMMMM
+*		XXXXXXXXX     MMMMMMMMMMMMMMMMXXXX. $$$$	 OOOOOOO$$	      I 	   MMMMMMMMMM
+*	       XXXXXXXXX    .X	MMMMMMMMMMMMMMXXX. $$$$ 	  OOOOOOO$$	      II	   M MMMMMMM
+*	      XXXXXXXXX    .X	  MMMMMMMMMMXXX.  $$$$		  OOOOOOO$$	$     II      M    M  MMMMM
+*	     XXXXXXXXX	   X	  X MMMMMMXXX.	$$$$$	     O	   OOOOOOO$$  $$$      I       MMMM   MMMM
+*	   .XXXXXXXXXX	  X	 X   MMX.XX.  $$$$$$	     O	    OOOOOOO$$$$        I       M   M   MM
+*	   XXXXXXXXXX	 X	X     $$$  $$$$$$$	    OOO       OOOOOOOOOO		M   M  M
+*	  .XXXXXXXXX	X      X      $$$$$$$$$  $  $	   OOOO 	*   OOOO	   I	M   M  M
+*	  XXXXXXXXXX   X      X      X $$$$$	$$$$	 OOOOOOO       ***** OO 	  I I	OOOOOMM
+*	 .XXXXXXXXX   X      X	    X  $   $   $	OOOOOOOOOO    ****** OO 	  II	 OOOOO
+*	 XXXXXXXXX   X	    X	   X  $   $   $        OOOOOOOOOOOOO	 ** OOO 	   I   M OOOOO
+*	 XXXXXXXXX  X	   X	  X   $  $   $	      OOOOOOOOOOOOOOOOO    OOOO       $ 	MOOOOOO
+*	.XXXXXXXX  X	  X	 X    $  $   $	     OOOOOOOOO	    OOOOOOOOOOOO     $$ 	 OOOOOO
+*	XXXXXXXXX X	 X	X      $ $  $	     OOOOOO	      OOOOOOOOOO    $$		 OOOOOO
+*       .XXXXXXXX X	X      X      X$ $ $	    OOOOO		OOOOOOOO    $$	     M	OOOOOOO
+*       XXXXXXXXXX      X      X      X $$  $$$$     OOOO		  OOOOOOOOOO$	      MMMOOOOOOO
+*      .XXXXXXXXX      X      X	    X	$ $	   OOOO 		   OOOOOOOO$	       MOOOOOOOO
+*      XXXXXXXXX      X	    X	   X	$ $	  OOOO			    OOOOOOO$		MOOOOOOO
+*      XXXXXXXX	    X	   X	  X	 $	  OOO			     OOOOOO$		MOOOOOOO
+*     .XXXXXXXX	   X	  X	 X	X$	  OOO			     OOOOO$		 MOOOOOOO
+*     XXXXXXXX	  X	 X	X      X $	 OOOO		OOOOO	      OO O$	      M  MOOOOOOO
+*     XXXXXXXX	 X	X      X      X $	 OOOO	      OOOOOOOOO       OOOO$	      M MOOOOOOOO
+*    .XXXXXXX	X      X      X      X $$     $$OOOOO	     OOOOOOOOOOO       OOO$	$$    MMMOOOOOOOO
+*    XXXXXXXX   X      X      X	    X  $$	OOOOOO	    OOOOOOOOOOOOO      OOOO$   $$     MOOOOOOOOO
+*    XXXXXXX   X      X	    X	   X   $$	OOOOOOO     OOOOOOOOOOOOO	OOOO$$$$      MOOOOOOOOO
+*    XXXXXXX  X	    X	   X	  X	$$$	OOOOOOO     OOOOOOOOOOOOOO	OOOOOO$       MOOOOOOOO
+*    XXXXXXX X	   X	  X	 X	X$$	OOOOOOOO    OOOOOOOOOOOOOO	OOOOOO$      MOOOOOOOO
+*   XXXXXXXXX	  X	 X	X      X $$	O.OOOOOO     OOOOOOOOOOOOO	OOOOO$	     MMMMMM
+*   XXXXXXXX	 X	X      X      X   $$$$$$.....OOOO     OOOOOOOOOOOOO	OOOOO$	     MM....
+*   XXXXXXX	X      X      X      X	  OOO...........OO     OOOOOOOOOOOO	OOOOO$	    .......
+*   XXXXXXX     X      X      X	    X	 OOOOOO................ OOOOOOOOOOO    OOOO..  ..   .......
+*  .XXXXXXX    X      X	    X	   X	 OOOOOOOOO.........................    .........    ......O
+*  XXXXXXX    X	    X	   X	  X	 OOOOOOOOOOOO......................    ........    ....OOOO
+*  XXXXXXX   X	   X	  X	 X	OOOOOOOOOOOO*	  .................   ..........   OOOOOOOOO
+* .XXXXXXX  X	  X	 X	X      XOOOOOOOOOOO *	  **OOOOOO........   .......OOO   OOOOOOOOOO
+* XXXXXXX  X	 X	X      X      X OOOOOOOOOO   ***** OOOOOOOOOOOOOOO  OOOOOOOOOOOO  OOOOOOOOOO
+* XXXXXXX X	X      X      X      X	 OOOOOOOO	  OOOOOOOOOOOOOOO  OOOOOOOOOOOOO OOOOOOOOOOO
+* XXXXXXXX      X      X      X	    X	 OOOOOOO	 OOOOOOOOOOOOOOOO OOOOOOOOOOOOOOOOOOOOOOOOOO
+* XXXXXXX      X      X	    X	   X	 OOOOOO 	OOOOOOOOOOOOOOOO OOOOOOOOOOOOOOOOOOOOOOOOOOO
+* XXXXXXX     X	    X	   X	  X	 OOOOO	       OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO O
+*  XXXXXXX   X	   X	  X	 X	XOOOO	      OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO O
+*  XXXXXXX  X	  X	 X	X      X OO	     OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO O
+*  XXXXXXX X	 X	X      X      X OO	   OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO O
+*  XXXXXXXX	X      X      X      X OO	  OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO O
+*  XXXXXXX      X      X      X	    X OO	 OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO  O
+*  XXXXXXX     X      X	    X	   X  OO       OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO  O
+*  XXXXXXX    X	    X	   X	  X   OO    OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO  O
+*  \XXXXXX   X	   X	  X	 X     OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO   O
+*   XXXXXX  X	  X	 X	X      X  OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO   O
+*   XXXXXX.X	 X	X      X      X   OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO OOOOOOOOOOOOOOOOOO   O
+*   XXXXXXX	X      X      X      X	  OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO  OOOOOOOOOOOOOOOOOOO    O
+*   XXXXXXX     X      X      X	    X	  OOOOOOOOOOOOOOOOOOOOOOOOOOOOO  OOOOOOOOOOOOOOOOOOOOOO    O
+*   XXXXXXX    X      X	    X	   X	  OOOOOOOOOOOOOOOOOOOOOOOOOO  OOOOOOOOOOOOOOOOOOOOOOOO	  O\
+*   \XXXXXX   X	    X	   X	  X	 X OOOOOOOOOOOOOOOOOOOOOOO  OOOOOOOOOOOOOOOOOOOOOOOOOO	  O
+*    XXXXXX  X	   X	  X	 X	X  OOOOOOOOOOOOOOOOOOOOO  OOOOOOOOOOOOOOOOOOOOOOOOOOO	  O
+*    XXXXXXXX	  X	 X	X      X   OOOOOOOOOOOOOOOOOOO	OOOOOOOOOOOOOOOOOOOOOOOOOOOO	  O
+*    XXXXXXX	 X	X      X      X    OOOOOOOOOOOOOOOOOO  OOOOOOOOOOOOOOOOOOOOOOOOOOOOO	  O
+*    \XXXXXX .XXXXXXX.  X      X      X	    OOOOOOOOOOOOOOOO  OOOOOOOOOOOOOOOOOOOOOOOOOOOOO	  O
+*     XXXXXXXX\	   \XXX.     X	    X	   XOOOOOOOOOOOOOOO  OOOOOOOOOOOOOOOOOOOOOOOOOOOOO	  O
+*     XXXXXX	       XXX. X	   X	  X OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO	  O
+*      XXXXXX		 \XX	  X	 X  OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO	  O
+*      XXXXXX		   \XXX. X	X   OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO	 O\
+*       XXXXX		      \XXX.    X     OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO 	 O
+*	XXXX			 \XXXXX.     OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO		 O
+*	XXXXX			      \XXXXXXOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO		 O
+*	 XXXX				     OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO		OO
+*	  XXX				     OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO	       OOO
+*	   XXX				     OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO		     OOOO\
+*	    XX				     OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO		   OOOOOO
+*	     X				     OOOOOOOOOOOOOOOOOOOOOOOOOOOOO		 OOOOOOOO
+*					     OOOOOOOOOOOOOOOOOOOOOOOOOOO	      OOOOOOOOOOO
+*					     OOOOOOOOOOOOOOOOOOOOOOOOO		   OOOOOOOOOOOOOO
+*					     \OOOOOOOOOOOOOOOOOOOOOO	       OOOOOOOOOOOOOOOOOO
+*					      OOOOOOOOOOOOOOOOOOO	    OOOOOOOOOOOOOOOOOOOO\
+*					      OOOOOOOOOOOOOOOO	       OOOOOOOOOOOOOOOOOOOOOOOOO
+*					      OOOOOOOOOOOOO	 OOOOOOOOOO OOOOOOOOOOOOOOOOOOOO
+*					      OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+*					      \OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+*					       OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO\
+*					       OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+*					       OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+*					       \OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+*						OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+*						OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO\
+*						\OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+*						 OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO\
+*						 OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO	**
+*					     **  OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO $$$$$$.
+*					   .$$$$$$OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO$$$$$	$$$$
+*					   $$$$   $$$$***OOOOOOOOOOOOOOOOOOOOOOO...**$$$$ $$	 $$$
+*					   $$$	  $$	^$$$$$*************$$$$$$$$	  $$	$$$
+*					   $$$	   $$					 $$    $$$
+*					   ^$$$     $$					$$    $$$
+*				      **$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$*
+*			    $$$$$**$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$	     *$ $$$$$$$$$$$$$$$$$$$$$$
+*			$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$	   *$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+*		   $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$   $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$*
+*	       $$$$$$$\  \$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ *$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$*
+*	       $$$$$$$,  ,,$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$.
+*	       $$$$$$$****$$$$$$$$$$$$$$\\\\\\\$$$$$$$$$$$$$$$$$$$$$$$$$ *$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+*		$$$$$$$$$$\				\\$$$$$$$$$$$$$   *$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+*							       \$$$$$\	     $$$$$$$$$$\\\\\		\\\\\$$$$$$$$$$$$$$$$$$^

@@ -1,0 +1,186 @@
+MODULE DAPT10(
+              IDENT='2',
+              ENTRY(S$DTSTR, S$STRDT, S$JFN_STR)
+              )=
+BEGIN
+!  COPYRIGHT (C) DIGITAL EQUIPMENT CORPORATION 1986.
+!  ALL RIGHTS RESERVED.
+!  
+!  THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED  AND
+!  COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE AND WITH
+!  THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS  SOFTWARE  OR
+!  ANY  OTHER  COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE
+!  AVAILABLE TO ANY OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE
+!  SOFTWARE IS HEREBY TRANSFERRED.
+!  
+!  THE INFORMATION IN THIS SOFTWARE IS  SUBJECT  TO  CHANGE  WITHOUT
+!  NOTICE  AND  SHOULD  NOT  BE CONSTRUED AS A COMMITMENT BY DIGITAL
+!  EQUIPMENT CORPORATION.
+!  
+!  DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF
+!  ITS SOFTWARE ON EQUIPMENT THAT IS NOT SUPPLIED BY DIGITAL.
+
+!++
+! FACILITY:
+!   DAP-20.
+!
+! ABSTRACT:
+!   This module contains various interface routines to TOPS-20.
+!
+! ENVIRONMENT:
+!   TOPS-20 user mode, XPORT.
+!
+! AUTHOR: Larry Campbell, CREATION DATE: 21 Oct 1982
+!
+! MODIFIED BY: Andrew Nourse
+!
+! Edit (%O'1', '12-Apr-84', 'Sandy Clemens')
+! %( Add the TOPS-10 DAP sources for DIL V2.  Use the standard DIL
+!    edit history format.
+! )%
+!
+! Edit (%O'2', '23-May-84', 'Sandy Clemens')
+!  %( Add a CRLF to the end of a bunch of files because without it, if
+!     you copy the file to another system with FTS, you will lose the
+!     last line of the file!  FILES:  DAPBLK.10-REQ, DAPERR.BLI,
+!     DIRLST.10-BLI, DIR10.10-B36, DAPT10.10-B36.
+!  )%
+!
+! Edit (%O'5', '5-Oct-84', 'Sandy Clemens')
+!  %( Add new format of COPYRIGHT notice.  FILES:  ALL )%
+!
+!
+! 02 -    Start TOPS-10 support [Doug Rayner]
+! 01 -    Move these routines from FTST20 to DAPT20 (this module)
+!--
+
+
+FORWARD ROUTINE
+    s$dtstr : NOVALUE,                  ! Convert date/time to string
+    s$strdt,                            ! convert string to date/time
+    s$jfn_str;                          ! Convert JFN to string
+
+!
+! INCLUDE FILES:
+!
+LIBRARY 'BLI:XPORT';
+%IF %SWITCHES(TOPS20)
+%THEN
+LIBRARY 'BLI:MONSYM';
+REQUIRE 'JSYSDEF';
+%FI
+
+
+!
+! MACROS:
+!
+MACRO
+    lh = 18, 18 %,
+    rh =  0, 18 %;
+
+
+!
+! EQUATED SYMBOLS:
+!
+
+
+GLOBAL ROUTINE s$dtstr (date_time, p_descr) : NOVALUE =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   Convert internal date/time to string.
+!
+! FORMAL PARAMETERS:
+!   date_time           - date and time in universal internal format
+!                         (-1 means now)
+!   p_descr             - pointer to descriptor to receive string
+!
+! IMPLICIT INPUTS:
+!   NONE
+!
+! IMPLICIT OUTPUTS:
+!   NONE
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   NONE
+!
+! SIDE EFFECTS:
+!   NONE
+!
+!--
+    BEGIN
+
+    BIND
+        descr = .p_descr : $STR_DESCRIPTOR ();
+
+    $STR_COPY (STRING = %STRING('** Not Implemented **'), TARGET = descr,
+               OPTION = TRUNCATE);
+    END;                                ! End of s$dtstr
+
+GLOBAL ROUTINE s$strdt (p_descr) =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   Convert string to internal date/time
+!
+! FORMAL PARAMETERS:
+!   p_descr             - pointer to descriptor to string
+!
+! IMPLICIT INPUTS:
+!   NONE
+!
+! IMPLICIT OUTPUTS:
+!   NONE
+!
+! ROUTINE VALUE
+!   Internal Date/Time
+!
+! SIDE EFFECTS:
+!   NONE
+!
+!--
+    BEGIN
+
+    BIND
+        descr = .p_descr : $STR_DESCRIPTOR ();
+
+    RETURN (0)    ! Returned value
+    END;                                ! End of s$strdt
+
+GLOBAL ROUTINE s$jfn_str (jfn, p_desc, bits) =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   Convert a JFN to a filespec string.
+!
+! FORMAL PARAMETERS:
+!   jfn         - the JFN
+!   p_desc      - address of descriptor to receive the string
+!   bits        - format control bits (AC3 of JFNS call).  If 0, this
+!                 defaults to the usual case (supply and punctuate everything)
+!
+! IMPLICIT INPUTS:
+!   NONE
+!
+! IMPLICIT OUTPUTS:
+!   NONE
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   The length of the filespec string is returned, or 0 if any errors (which
+!   are also signalled).
+!
+! SIDE EFFECTS:
+!   NONE
+!
+!--
+    BEGIN
+
+    BIND
+        descr = .p_desc : $STR_DESCRIPTOR ();
+
+    $STR_COPY (STRING = %STRING('** Not Implemented **'), TARGET = descr,
+               OPTION = TRUNCATE);
+
+    RETURN(.descr[STR$H_LENGTH])
+
+    END;                                ! End of s$jfn_str
+END ELUDOM			! End of Module

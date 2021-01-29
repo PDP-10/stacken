@@ -1,0 +1,34 @@
+	TITLE	WHOMAN - Produce ASCII feature test switch file for WHO.MAN
+
+	SEARCH	WHOMAC
+
+	RIM10
+;;	LOC	0
+
+	SALL
+
+DEFINE STR(TEXT),<
+	ASCII	|TEXT|
+>
+
+DEFINE FT(SWT),<
+   IFN FT'SWT,<
+	IFN ..CNT,<STR<,>>
+	..CNT==..CNT+1
+	STR(FT'SWT)
+	IF2,PRINTX [Including VARIANT FT'SWT]
+    >
+>
+
+	..CNT==0
+	STR	<WHO.RNM/VARIANT:(>
+	FT	IPC
+	FT	MDC
+	FT	TUFTS
+	FT	LGNQ
+	FT	SERV
+	FT	POWER
+	STR	<)
+>
+
+	END

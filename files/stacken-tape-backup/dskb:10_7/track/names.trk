@@ -1,0 +1,136 @@
+CP0I CPU0 IDLE TIME %                                       
+CP0L CPU0 LOST TIME %                                       
+CP0O CPU0 OVERHEAD TIME %                                   
+CP0C CPU0 CONTEXT-SWITCHES / SECOND                         
+CP0U CPU0 UUOS/SECOND                                       
+L0SN CPU0 CACHE-SWEEPS/SECOND                               
+CP1I CPU1 IDLE TIME %                                       
+CP1L CPU1 LOST TIME %                                       
+CP1O CPU1 OVERHEAD TIME %                                   
+CP1C CPU1 CONTEXT-SWITCHES / SECOND                         
+CP1U CPU1 UUOS/SECOND                                       
+L1SN CPU1 CACHE-SWEEPS / SECOND                             
+SWPS PAGES OF SWAPPING SPACE LEFT                           
+JLGN NUMBER OF JOBS LOGGED IN                               
+PFCU % OF FREE CORE IN USE                                  
+PTCU % TTY CHUNKS IN USE                                    
+SXMT SCANNER XMIT-INTERRUPTS / SECOND                       
+SRCV SCANNER RECV-INTERRUPTS / SECOND                       
+UDIO NUMBER OF USER DSK BLOCKS READ & WRITTEN               
+SWIO NUMBER OF DISK BLOCKS SWAPPED / SECOND                 
+UKCS ACCUMULATED KCS / SECOND                               
+AVRT AVG TIME TO TTY RESPONSE IN MS                         
+ACCR % PHYSICAL CORE IN USE BY ACTIVE JOBS                  
+PHCR % PHYSICAL CORE IN USE BY ALL JOBS                     
+AVJS AVG JOB SIZE IN PAGES OR K                             
+NRJR NUMBER OF JOBS IN RUN QUEUES                           
+PRJC % RUNNABLE JOBS WHICH ARE IN CORE                      
+TIOW NUMBER OF JOBS IN TTY IO WAIT QUEUE                    
+IOW  NUMBER OF JOBS IN NON-TTY IO WAIT QUEUES               
+JSHQ NUMBER OF JOBS IN SHARRABLE RESOURCE WAIT QUEUE        
+DISK DISK                                                   
+CHAN CHANNEL                                                
+CP2I CPU2 IDLE TIME %'                                      
+CP2L CPU2 LOST TIME %                                       
+CP2O CPU2 OVERHEAD TIME %                                   
+CP2C CPU2 CONTEXT-SWITCHES / SECOND                         
+CP2U CPU2 UUOS/SECOND                                       
+L2SN CPU2 CACHE-SWEEPS/SECOND                               
+CP3I CPU3 IDLE TIME %                                       
+CP3L CPU3 LOST TIME %                                       
+CP3O CPU3 OVERHEAD TIME %                                   
+CP3C CPU3 CONTEXT-SWITCHES / SECOND                         
+CP3U CPU3 UUOS/SECOND                                       
+L3SN CPU3 CACHE-SWEEPS / SECOND                             
+CP4I CPU4 IDLE TIME %'                                      
+CP4L CPU4 LOST TIME %                                       
+CP4O CPU4 OVERHEAD TIME %                                   
+CP4C CPU4 CONTEXT-SWITCHES / SECOND                         
+CP4U CPU4 UUOS/SECOND                                       
+L4SN CPU4 CACHE-SWEEPS/SECOND                               
+CP5I CPU5 IDLE TIME %                                       
+CP5L CPU5 LOST TIME %                                       
+CP5O CPU5 OVERHEAD TIME %                                   
+CP5C CPU5 CONTEXT-SWITCHES / SECOND                         
+CP5U CPU5 UUOS/SECOND                                       
+L5SN CPU5 CACHE-SWEEPS / SECOND                             
+L0LT CPU0 CACHE LOST TIME %                                 
+L1LT CPU1 CACHE LOST TIME %                                 
+L2LT CPU2 CACHE LOST TIME %                                 
+L3LT CPU3 CACHE LOST TIME %                                 
+L4LT CPU4 CACHE LOST TIME %                                 
+L5LT CPU5 CACHE LOST TIME %                                 
+EXEC CPU0 EXEC MODE TIME %                                  
+EXE1 CPU1 EXEC MODE TIME %                                  
+EXE2 CPU2 EXEC MODE TIME %                                  
+EXE3 CPU3 EXEC MODE TIME %                                  
+EXE4 CPU4 EXEC MODE TIME %                                  
+EXE5 CPU5 EXEC MODE TIME %                                  
+L0LN CPU0 SWEEP/REQUESTS PER SEC                            
+L1LN CPU1 SWEEP/REQUESTS PER SEC                            
+L2LN CPU2 SWEEP/REQUESTS PER SEC                            
+L3LN CPU3 SWEEP/REQUESTS PER SEC                            
+L4LN CPU4 SWEEP/REQUESTS PER SEC                            
+L5LN CPU5 SWEEP/REQUESTS PER SEC                            
+L0RN CPU0 SWP REQ SWEPT PER SEC                             
+L1RN CPU1 SWP REQ SWEPT PER SEC                             
+L2RN CPU2 SWP REQ SWEPT PER SEC                             
+L3RN CPU3 SWP REQ SWEPT PER SEC                             
+L4RN CPU4 SWP REQ SWEPT PER SEC                             
+L5RN CPU5 SWP REQ SWEPT PER SEC                             
+L0SD CACHE SWEEPS FOR SWAPPER PER SEC                       
+MBXR CPU0 MBOX REFS K/SEC                                   
+MBX1 CPU1 MBOX REFS K/SEC                                   
+MBX2 CPU2 MBOX REFS K/SEC                                   
+MBX3 CPU3 MBOX REFS K/SEC                                   
+MBX4 CPU4 MBOX REFS K/SEC                                   
+MBX5 CPU5 MBOX REFS K/SEC                                   
+SDGS DECTAPE GENERATED SLEEPS #                             
+SMGS MAGTAPE GENERATED SLEEPS #                             
+SEWS EVENT WAIT SATISFIED #                                 
+STIS TTY INPUT WAIT SATISFIED #                             
+STOS TTY OUTPUT WAIT SATISFIED #                            
+SPIS PTY INPUT WAIT SATISFIED #                             
+SPOS PTY OUTPUT WAIT SATISFIED #                            
+SRS1 SS REQUEUE TO PQ1 #                                    
+SRW1 WAKE REQUEUE TO PQ1 #                                  
+SRD1 DAEMON SATISFIED REQUEUE TO PQ1 #                      
+SRO1 ALL OTHER REQUEUE TO PQ1 #                             
+SQR1 PQ1 JOBS EXPIRING QUANTUM #                            
+SQR2 PQ2 JOBS EXPIRING QUANTUM #                            
+SQRH HPQ JOBS EXPIRING QUANTUM #                            
+SIP1 PQ1 JOBS EXPIRING ICPT #                               
+SIP2 PQ2 JOBS EXPIRING ICPT #                               
+SIPH HPQ JOBS EXPIRING ICPT #                               
+SKS1 PQ1 SWAP IN MEMORY #                                   
+SKS2 PQ2 SWAP IN MEMORY #                                   
+SKSH HPQ SWAP IN MEMORY #                                   
+SNJ1 PQ1 JOBS SWAPPED IN #                                  
+SNJ2 PQ2 JOBS SWAPPED IN #                                  
+SNJH HPQ JOBS SWAPPED IN #                                  
+STC1 PQ1 EBOX/MBOX TICKS #                                  
+STC2 PQ2 EBOX/MBOX TICKS #                                  
+STCH HPQ EBOX/MBOX TICKS #                                  
+WASK AVERAGE WASTED CORE P                                  
+CPSI AVG PQ1/CMQ SWAP IN RESPONSE TICKS                     
+CPUT USER CPU JIFFIES/SECOND                                
+SWPN SWAPPER NULL TIME                                      
+SWPL SWAPPER LOST TIME                                      
+UNWD UNWIND COUNT                                           
+SWPF SWAPPER FORCE COUNT                                    
+RESP TERMINAL RESPONSE TIME (MS)                            
+MSI  Microscheduling Interval                                  
+PQ1  PQ1 Quantum Runtime                                    
+PQ2  PQ2 Quantum Runtime                                    
+MCOR Minimum Core Utilization per Job                       
+MMUL Minimum Core Utilization Multiplier                    
+MREQ Minimum Core Utilization requeue Constant              
+MMAX Minimum Core Utilization  Maximum                      
+SWP1 Time % to scan Queue Swapped in before sub-queue       
+SWP2 Swap Scan Time                                         
+FAR1 Scheduler Fairness Factor                              
+FAR2 Swapper Fairness Factor                                
+FAR3 Incore Fairness Factor                                 
+SCDC SCDCOR                                                 
+BBAT Background Batch Class Number                          
+BSWP Background Batch Swaptime Interval                     

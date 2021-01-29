@@ -1,0 +1,436 @@
+TITLE	WLDPAR - Wildcard filespec parser for GLXLIB
+;
+;   Written by Sven Erik Enblom in December 1985
+;
+;   This is really the pre-first version, without documentation,
+;   but it should at least be safe to use.
+;
+SEARCH	GLXMAC,WLDMAC,WLDINT
+PROLOG	WLDPAR
+
+SCHARW=="%"				; Single-character wildcard
+
+; Entry points in this module
+;
+ENTRY	W$PTXT				; Parse a text and return an FD
+ENTRY	W$WWFD				; Write a wild FD
+
+$DATA	ERRPDL				; Contents of P at entry of parser
+$DATA	BACKBP				; Reeat byte pointer
+$DATA	PTHBLK,.PTMAX			; PATH. argument block
+ZERBEG:!
+$DATA	PROTFD,FDXSIZ			; "Prototype" FD, used by parser
+$DATA	MASKFD,FDXSIZ			; Mask words for FD, used by parser
+ZEREND:!
+	SUBTTL	W$PTXT
+
+; W$PTXT - Parse wild file spec from an ASCIZ string
+;
+;   Accepts in	S1/ Byte pointer to string
+;
+;   Returns in	S1/ Updated byte pointer
+;		S2/ Length,,address of a wild FD
+;
+W$PTXT:	$SAVE	<P1,P2,P3,P4,F>
+	MOVEM	P,ERRPDL		; Prepare for error returns
+	TLC	S1,-1			; Complement left half of pointer
+	TLCN	S1,-1			; Generic byte pointer?
+	 HRLI	S1,(POINT 7)		;  Yes, make a real one
+	MOVE	P1,S1			; Keep it
+	SETZB	F,ZERBEG		; Reset flag word
+	MOVE	T1,[ZERBEG,,ZERBEG+1]
+	BLT	T1,ZEREND-1
+	$CALL	.PDEV			; Get device name, if any
+	$CALL	.PFILE			; Check for file name
+	TXNN	F,F$NAM!F$EXT		; Anything found?
+	 JRST	PTXT1			;  No, check for path
+	$CALL	.PPATH			; Yes, so now get path, if any
+	JRST	PTXT2			; Join common code
+PTXT1:	$CALL	.PPATH			; Check for path
+	JUMPF	PTXT2			; Not there, so join common code
+	$CALL	.PFILE			; Found, check for file name
+PTXT2:	MOVSI	T1,'DSK'		; Default device name
+	TXNN	F,F$DEV			; Any device specified?
+	 MOVEM	T1,PROTFD+.FDSTR	;  No, say DSK: then
+	MOVE	T1,PROTFD+.FDSTR	; Get device name
+	DEVNAM	T1,			; Make it more physical...
+	 JRST[	RETERR	<No such device>]
+	MOVEM	T1,PROTFD+.FDSTR
+	MOVEM	T1,PTHBLK
+	MOVE	T1,[.PTMAX,,PTHBLK]
+	PATH.	T1,			; Read path of the device
+	 JRST[	RETERR	<Not a disk device>]
+	MOVE	T1,PTHBLK+.PTSWT	; Get switches
+	TXNN	T1,PT.DLN		; Is this a logical name?
+	 JRST	PTXT3			;  No, ersatz or physical device
+	MOVE	T2,PTHBLK+.PTSTR	; Yes, get structure name
+	MOVEM	T2,PROTFD+.FDSTR	; Use this instead of logical name
+	MOVE	T1,[.PTPPN+1,,T2]
+	PATH.	T1,			; Read flags of structure name
+	 JRST[	RETERR	<Bad logical name specified>]
+	MOVEM	T3,PTHBLK+.PTSWT	; Store new flags
+PTXT3:	LOAD	T1,PTHBLK+.PTSWT,PT.SLT	; Get search list type
+	STORE	T1,F,F$SLT		; Keep it in flag word
+	MOVE	T1,PTHBLK+.PTPPN	; Get PPN of device
+	TXNN	F,F$PRJ			; Project number specified?
+	 HLLM	T1,PROTFD+.FDPPN
+	TXNN	F,F$PRG			; Programmer number specified?
+	 HRRM	T1,PROTFD+.FDPPN
+	TXNE	F,F$PTH			; Any path at all specified
+	 JRST	PTXT4			;  Yes, so skip this part
+	MOVE	T1,[PTHBLK+.PTSFD,,PROTFD+.FDPAT]
+	BLT	T1,PROTFD+.FDPAT+4
+PTXT4:	MOVEM	F,PROTFD+FD$FLG		; Store flag word in FD
+	MOVSI	T1,-5			; Get max. SFD level
+	SETO	T2,			; Get a -1 word
+	SETZ	T3,
+PTXT5:	SKIPN	PROTFD+.FDPAT(T1)	; Blank SFD?
+	 JRST	PTXT6			;  Yes, end of path
+	CAME	T2,MASKFD+.FDPAT(T1)	; Is this a * field?
+	 MOVEI	T3,1(T1)		;  No, perhaps the next one is
+	AOBJN	T1,PTXT5		; Loop through all SFDs
+PTXT6:	TLZ	T1,-1			; Remove counter half
+	CAMLE	T3,T1
+	 MOVE	T3,T1
+	STORE	T3,PROTFD+FD$FLG,F$LEV0	; Store first...
+	STORE	T1,PROTFD+FD$FLG,F$LEV1	; ...and last level
+	MOVE	S1,P1			; Get updated byte pointer...
+	MOVE	S2,[FD$SIZ,,PROTFD]	; ...and address of FD
+	$RETT
+
+.PDEV:	MOVE	P2,P1			; Keep pointer to start of field
+	$CALL	.PNAME			; Check for a name
+	$CALL	.PCHAR			; Get next character
+	CAIE	T1,":"			; Good device delimiter?
+	 JRST[	MOVE	P1,P2		;  No, un-read this field
+		$RETT]
+	JUMPN	S2,[			; Wildcards in device?
+		RETERR	<Wildcards illegal in device name>]
+	JUMPE	S1,[			; Any name at all found?
+		RETERR	<Blank device name illegal>]
+	MOVEM	S1,PROTFD+.FDSTR	; Store device name
+	TXO	F,F$DEV			; Indicate that we got the device
+	$RETT
+
+.PFILE:	$CALL	.PNAME			; Try to get a name field
+	JUMPF	.PFIL1			; If not a name, check for extension
+	MOVEM	S1,PROTFD+.FDNAM
+	MOVEM	S2,MASKFD+.FDNAM
+	TXO	F,F$NAM			; Indicate that we found the name
+.PFIL1:	$CALL	.PCHAR			; Get delimiter
+	CAIE	T1,"."			; Could there be an extension?
+	 PJRST	.REEAT			;  No, restore delimiter and return
+	$CALL	.PNAME			; Yes, try to read it
+	SKIPT				; Anything there?
+	 SETZB	S1,S2			;  No, explicit blank extension
+	HLLZM	S1,PROTFD+.FDEXT
+	HLLZM	S2,MASKFD+.FDEXT
+	TXO	F,F$EXT
+	SKIPN	MASKFD+.FDNAM		; Wild name?
+	 SKIPE	MASKFD+.FDEXT		;  Or wild extension?
+	  TXO	F,F$WFIL		;   Yes, say wild file
+	$RET
+
+.PPATH:	$CALL	.PCHAR			; Get first character
+	SETZ	P2,
+	CAIN	T1,"<"
+	 MOVEI	P2,">"
+	CAIN	T1,"["
+	 MOVEI	P2,"]"
+	JUMPE	P2,[			; Legal path delimiter?
+		$CALL	.REEAT		;  No, put it back...
+		$RETF]			;  ...and say nothing found
+	TXO	F,F$PTH			; Remember that path has been seen...
+	TXZ	F,F$AFW			; ...but no "**" yet
+	$CALL	.POCT			; Check for project number now
+	SKIPE	S1			; Did we get anything?
+	 TXO	F,F$PRJ			;  Yes, indicate it
+	HLLM	S1,PROTFD+.FDPPN
+	HRLM	S1,MASKFD+.FDPPN
+	TXNE	F,F$AFW			; Did we see a "**"?
+	 JRST[	HLLOS	MASKFD+.FDPPN	;  Yes, make wild programmer number
+		HLLOS	PROTFD+.FDPPN
+		TXO	F,F$PRG		;  Say that we saw it too
+		MOVSI	P3,-5
+		JRST	.PPAT3]		;  Make all SFDs wild too
+	$CALL	.PCHAR			; Get delimiter
+	CAIE	T1,","			; This has to be a comma
+	 JRST[	RETERR	<Bad character after project number>]
+	$CALL	.POCT			; Now try to get programmer number
+	SKIPE	S1			; Found?
+	 TXO	F,F$PRG			;  Yes, indicate it
+	HLRM	S1,PROTFD+.FDPPN
+	HRRM	S1,MASKFD+.FDPPN
+	MOVSI	P3,-5
+.PPAT1:	TXNE	F,F$AFW			; Have we seen a "**"?
+	 JRST	.PPAT3			;  Yes, make rest of path wild
+	$CALL	.PCHAR			; Get next character
+	CAMN	T1,P2			; End of path?
+	 $RETT				;  Yes, be happy...
+	CAIE	T1,","			; Are there more SFDs then?
+	 JRST[	RETERR	<Bad character in path>]
+	$CALL	.PNAME
+	JUMPF[	RETERR	<Blank SFD name illegal>]
+	MOVEM	S1,PROTFD+.FDPAT(P3)
+	MOVEM	S2,MASKFD+.FDPAT(P3)
+	AOBJN	P3,.PPAT1		; Can we read more SFDs?
+.PPAT2:	$CALL	.PCHAR			; No, get delimiter
+	CAMN	T1,P2			; End of path?
+	 $RETT				;  Yes, good
+	RETERR	<Bad character after path>
+
+.PPAT3:	SETOM	PROTFD+.FDPAT(P3)
+	SETOM	MASKFD+.FDPAT(P3)
+	AOBJN	P3,.PPAT3
+	JRST	.PPAT2
+
+; .PNAME - Parse a possibly wild name field at current position
+;
+;   Returns in	S1/ Name word
+;		S2/ Mask word
+;
+.PNAME:	SETZB	S1,S2			; Nothing found yet
+.PNAM1:	$CALL	.PCHAR			; Get a character
+	JUMPE	T1,.PNAM5		; End of string?
+	CAIN	T1,SCHARW		; Single-char wildcard?
+	 JRST[	MOVEI	T1,77
+		MOVEI	T2,77
+		JRST	.PNAM4]
+	JUMPN	T2,[			; Is it a letter or a digit?
+		SUBI	T1,"A"-'A'	;  Yes, make sixbit
+		SETZ	T2,		;  It's non-wild
+		JRST	.PNAM4]
+	CAIE	T1,"*"			; Last try, multi-char wildcard?
+	 JRST	.PNAM5			;  No, end of field then
+.PNAM2:	TLNN	S1,(77B5)		; Yes, check if name needs...
+	 TLNE	S2,(77B5)		;  ...to be filled out
+	  JRST	.PNAM3			;   It's full now, continue
+	LSHC	S1,6			; Room left, so shift it one char...
+	TRO	S1,77			; ...and mark as wildcard
+	TRO	S2,77
+	JRST	.PNAM2			; Fill the whole name
+.PNAM3:	$CALL	.PCHAR			; Now get character after "*"
+	JUMPN	T2,[			; Letter or digit?
+		RETERR	<Misplaced *, must be last in field>]
+	CAIE	T1,"*"			; Was it a "**"?
+	 JRST[	$CALL	.REEAT		;  No, put it back
+		$RETT]
+	TXO	F,F$AFW			; Yes, remember it
+	$RETT
+;
+; Come here with a character in T1 and wildcard mask in T2 to store them
+;
+.PNAM4:	TLNN	S1,(77B5)
+	 TLNE	S2,(77B5)
+	  JRST	.PNAM1
+	LSHC	S1,6
+	IOR	S1,T1
+	IOR	S2,T2
+	JRST	.PNAM1
+;
+; Come here when end of field is detected
+;
+.PNAM5:	$CALL	.REEAT			; Put end-of-field character back
+	JUMPE	S1,.RETF
+.PNAM6:	TLNN	S1,(77B5)
+	 TLNE	S2,(77B5)
+	  $RETT
+	LSHC	S1,6
+	JRST	.PNAM6
+
+; .POCT - Parse a wild octal number
+;
+;   Returns in	S1/ Number,,mask
+;
+.POCT:	SETZ	S1,			; Nothing found yet
+.POCT1:	$CALL	.PCHAR			; Get first character
+	CAIN	T1,SCHARW		; Single-char wildcard?
+	 JRST[	MOVEI	T1,7		;  Yes
+		MOVEI	T2,7		;  Get wildcard mask...
+		JRST	.POCT2]		;  ...and store it
+	CAIL	T1,"0"
+	 CAILE	T1,"7"
+	  TRNA				; ...non-digit, check for "*"
+	   JRST[SUBI	T1,"0"		;  Digit, make it "binary"...
+		SETZ	T2,		;  ...it's non-wild...
+		JRST	.POCT2]		;  ...store it
+	CAIE	T1,"*"			; Multi-char wildcard?
+	 PJRST	.REEAT			;  No, put it back and return now
+	JUMPN	S1,[			; Yes, but it must be alone
+		RETERR	<Misplaced * in octal number field>]
+	SETO	S1,			; Get full wildcard mask
+	$CALL	.PCHAR			; Now get next character
+	CAIE	T1,"*"			; Also wildcard?
+	 PJRST	.REEAT			;  No, put it back and return
+	TXO	F,F$AFW			; Yes, indicate "**" sequence seen
+	$RET
+;
+; Come here to store one digit in number
+;
+.POCT2:	TXNE	S1,7B2!7B20		; Is there room for more digits?
+	 JRST[	RETERR	<Too many characters in octal number>]
+	LSH	S1,3			; Yes, make room
+	TLO	S1,(T1)			; Insert digit...
+	TRO	S1,(T2)			; ...and mask
+	JRST	.POCT1
+
+; .PCHAR - Get one character from string at current position
+;
+;   Returns in	T1/ The character, upcased, or zero if end of string
+;		T2/ Flag, -1 if letter, digit or ^V-quoted legal
+;			sixbit character found, else 0
+;
+.PCHAR:	MOVEM	P1,BACKBP		; Keep a "reeat" pointer
+	ILDB	T1,P1
+	JUMPE	T1,.REEAT		; Make end-of-string permanent
+	CAIN	T1,.CHCNV		; Control-V, the quote character?
+	 JRST	.PCHR1			;  Yes, check if legal sixbit
+	CAIN	T1,"^"			; Control-prefix?
+	 JRST[	ILDB	T1,P1		;  Yes, get next character
+		CAIN	T1,"V"		;  Is this "^V"?
+		 JRST	.PCHR1		;   Yes, check if legal sixbit
+		RETERR	<Illegal ^-sequence>]
+	SETZ	T2,
+	CAIL	T1,"0"
+	 CAILE	T1,"9"
+	  TRNA
+	   SOJA	T2,.POPJ
+	CAIL	T1,"A"
+	 CAILE	T1,"Z"
+	  TRNA
+	   SOJA	T2,.POPJ
+	CAIL	T1,"a"
+	 CAILE	T1,"z"
+	  $RET
+	SUBI	T1,"a"-"A"
+	SETO	T2,
+	$RET
+
+.PCHR1:	ILDB	T1,P1			; Get next character
+	CAIL	T1,"a"
+	 CAILE	T1,"z"
+	  TRNA
+	   SUBI	T1,"a"-"A"		; ...make upper case
+	CAIL	T1," "			; In SIXBIT range?
+	 CAILE	T1,"_"			; ...
+	  JRST[	RETERR	<Bad control-V quoting>]
+	SETO	T2,
+	$RET
+
+.REEAT:	MOVE	P1,BACKBP
+	$RET
+	SUBTTL	W$WWFD - Write wild FD
+
+; W$WWFD - Write wild FD
+;
+;   Accepts in	S1/ Byte pointer to string space
+;		    or address of routine a'la TOR
+;		S2/ Address of a wild FD
+;
+W$WWFD:	$SAVE	<P1,P2,P3,P4>
+	MOVE	P1,S2			; Save address of FD
+	TLCN	S1,-1			; Routine address?
+	 JRST[	MOVE	P2,S1		;  Get routine address...
+		HRLI	P2,($CALL)	;  ...and insert instruction
+		JRST	WWFD1]		;  Join common code
+	TLCN	S1,-1			; Generic byte pointer?
+	 HRLI	S1,(POINT 7)		;  Yes, make a real one
+	MOVE	P2,[			; Own character consumer
+		IDPB	S1,BACKBP]
+	MOVEM	S1,BACKBP		; Save given byte pointer
+WWFD1:	MOVE	P3,FD$FD+.FDSTR(P1)	; Get structure name
+	SETZ	P4,			; It can never be wild
+	$CALL	.WSIX
+	MOVEI	S1,":"
+	XCT	P2
+	MOVE	P3,FD$FD+.FDNAM(P1)	; Get file name...
+	MOVE	P4,FD$MSK+.FDNAM(P1)	; ...and mask
+	$CALL	.WSIX
+	HLLZ	P3,FD$FD+.FDEXT(P1)	; Get extension...
+	HLLO	P4,FD$MSK+.FDEXT(P1)	; ...and mask
+	JUMPE	P3,WWFD2		;  Don't write blank extension
+	MOVEI	S1,"."
+	XCT	P2
+	$CALL	.WSIX
+WWFD2:	MOVE	T1,FD$FLG(P1)		; Get flag word
+	MOVEI	S1,"["
+	XCT	P2
+	HLL	P3,FD$FD+.FDPPN(P1)	; Get project number...
+	HLR	P3,FD$MSK+.FDPPN(P1)	; ...and mask
+	$CALL	.WOCT
+	MOVEI	S1,","
+	XCT	P2
+	HRL	P3,FD$FD+.FDPPN(P1)	; Get programmer number...
+	HRR	P3,FD$MSK+.FDPPN(P1)	; ...and mask
+	$CALL	.WOCT
+	HRLI	P1,-5			; Insert max SFD level
+WWFD3:	MOVE	P3,FD$FD+.FDPAT(P1)	; Get SFD name...
+	MOVE	P4,FD$MSK+.FDPAT(P1)	; ...and mask
+	JUMPE	P3,WWFD4		;  End of path?
+	MOVEI	S1,","
+	XCT	P2
+	$CALL	.WSIX
+	AOBJN	P1,WWFD3
+WWFD4:	MOVEI	S1,"]"
+	XCT	P2
+WWFD5:	MOVE	S1,BACKBP		; Get (perhaps) updated pointer...
+	$RETT				; ...and return
+
+; .WSIX - Write a wild sixbit word
+;
+;   Accepts in	P3/ Non-wild part
+;		P4/ Wildcard mask
+;
+.WSIX:	JUMPE	P3,.POPJ		; Don't write blank word
+	CAMN	P4,[EXP -1]		; Fully wildcarded word?
+	 JRST[	MOVEI	S1,"*"		;  Yes, say so
+		XCT	P2
+		$RET]
+	TLZE	P4,(77B5)		; Wild character?
+	 JRST[	MOVEI	S1,SCHARW	;  Yes, get one...
+		JRST	.WSIX1]		;  ...and write it out
+	LDB	S1,[POINT 6,P3,5]	; No, get character
+	ADDI	S1,"A"-'A'		; Make it ASCII
+	CAIL	S1,"0"
+	 CAILE	S1,"9"
+	  TRNA				; ...not a digit?
+	   JRST	.WSIX1			; ...digit, so write it
+	CAIL	S1,"A"
+	 CAILE	S1,"Z"
+	  TRNA				; ...not a letter?
+	   JRST	.WSIX1			; ...letter, so write it
+	HRLM	S1,(P)			; Neither letter nor digit, so save it
+	MOVEI	S1,"^"			; Control-prefix...
+	XCT	P2
+	MOVEI	S1,"V"			; Say control-V...
+	XCT	P2
+	HLRZ	S1,(P)			; Get the character back
+.WSIX1:	XCT	P2			; Write it out
+	LSHC	P3,6
+	TRO	P4,77
+	JRST	.WSIX
+
+; .WOCT - Write a wild octal number
+;
+;   Accepts in	P3/ Number,,mask
+;
+.WOCT:	HRRZ	T1,P3			; Get mask half
+	CAIN	T1,-1			; Full mask?
+	 JRST[	MOVEI	S1,"*"		;  Yes, say so
+		XCT	P2
+		$RET]
+	MOVEI	P4,6			; Max. number of digits
+.WOCT1:	TLNE	P3,(7B2)		; Left justified?
+	 JRST	.WOCT2			;  Yes, start writing
+	LSH	P3,3			; No, shift it one digit...
+	SOJA	P4,.WOCT1		; ...and loop
+.WOCT2:	TRZE	P3,7B20			; Wild digit?
+	 SKIPA	S1,[EXP "%"-"0"]	;  Yes, get a wildcard...
+	  LDB	S1,[POINT 3,P3,2]	;   No, get "binary" digit
+	ADDI	S1,"0"			; Make it ASCII
+	XCT	P2			; Write it out
+	SOJE	P4,.POPJ		; Anything left to write?
+	LSH	P3,3			; Yes, shift to next digit...
+	JRST	.WOCT2			; ...and loop
+
+END

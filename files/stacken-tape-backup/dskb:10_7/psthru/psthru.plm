@@ -1,0 +1,546 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+           PSTHRU.PLM - Documentation for PSTHRU
+                                                      Page 2
+
+
+Copyright (C) 1982
+Digital  Equipment  Corporation,   Maynard,   Massachusetts,
+U.S.A.
+
+This software is furnished under a license and may  be  used
+and copied only in accordance with the terms of such license
+and with the inclusion of the above copyright notice.   This
+software  or any other copies thereof may not be provided or
+otherwise made available to any other person.  No  title  to
+and ownership of the software is hereby transferred.
+
+The information  in  this  software  is  subject  to  change
+without  notice  and should not be construed as a commitment
+by Digital Equipment Corporation.
+
+Digital assumes no responsibility for the use or reliability
+of  its  software  on  equipment  which  is  not supplied by
+Digital.
+PSTHRU.PLM                                                      Page 3
+General information
+
+
+          I.  General information
+
+               PSTHRU is a program which allows connects  to  be  made
+          from  any  accessable  DECnet-10  or ANF-10 node through the
+          host node to any other DECnet-10 or  ANF-10  node  which  is
+          visible to the host node.  The links need not be homogenous.
+
+               PSTHRU runs completely asynchronously and  handles  all
+          incoming  connects  to the PSTHRU object (object 123 decimal
+          for DECnet-10 or 173 octal for ANF-10).  Only one  job  need
+          be run per installation unless link quotas are such that one
+          job cannot handle the required number of links.  One channel
+          (of  the  appropriate  type)  is required for each side of a
+          link (total of two channels per link).
+
+               PSTHRU should be started up via SYSJOB.INI.  If  it  is
+          not  logged  in,  then  it  will  log  in  to  [2,5].  It is
+          recommended  that  it  be  run  under  [1,2],  although   no
+          privileges  are  required unless the log file (see below) is
+          to be written to an  area  to  which  only  [1,2]  has  file
+          access.
+
+               If the  PATHological  name  PSTLOG  exits  and  logging
+          support   is  enabled,  PSTHRU  will  log  all  connections,
+          rejections, failures, and disconnects in the specified file.
+          If  the  specification  is undefined and logging is enabled,
+          then one message will be  sent  to  ORION  stating  PSTHRU's
+          inability to set logging.
+
+               PSTHRU is written to run under TOPS-10  7.02  monitors.
+          DECnet  support  is required only if the DECnet interface is
+          desired.  The MACSYM universal  file  is  required  for  the
+          BEGSTR/ENDSTR macros.
+
+               Known restrictions:
+
+               1.  ANF-10 supports only 32-bit modes (byte mode;   I/O
+                   mode  3).   This  is true both for heterogenous and
+                   homogenous  connects.   This  restriction   is   to
+                   provide  a  common  "known"  mode for communicating
+                   through  the  PSTHRU  task  to   maintain   correct
+                   resolution and byte counts.
+
+               2.  ANF-10 links take precedence over DECnet links when
+                   ambiguity  is  present (i.e.  the same node name in
+                   both networks and the requested  connection  object
+                   exists on the ANF node).
+
+               3.  Error messages are always a la' DECnet style,  even
+                   if DECnet support is not build in.
+
+          II.  Assembly instructions
+PSTHRU.PLM                                                      Page 4
+Assembly instructions
+
+
+               Feature tests:
+
+               1.  FTDECNET:  if on (-1),  include  DECnet-10  support
+                   code.   If  off  (0)  do  not.   One of FTDECNET or
+                   FTANF10 must be on.
+
+               2.  FTANF10:  if on (-1) include ANF-10  support  code.
+                   If  off  (0),  do  not.  One of FTDECNET or FTANF10
+                   must be on.
+
+               3.  FTDEBUG:   if  on  (-1)   include   a   few   extra
+                   consistency checks.
+
+               4.  FTLOG:  if on (-1) include  support  for  producing
+                   log files.
+
+               5.  FTDETACH:   if  on  (-1),  then  DETach  from   the
+                   terminal  on  which  the  program is started.  This
+                   feature should be turned  off  only  for  debugging
+                   purposes.
+
+          The default list of  feature  tests  is  to  have  FTDECNET,
+          FTANF10,  FTDETACH,  and  FTLOG  all  turned  on and FTDEBUG
+          turned off.
+
+               Required files:
+          
+                PSTHRU.MAC
+                UUOSYM.UNV
+                MACTEN.UNV
+                MACSYM.UNV
+                NETPRM.UNV
+                JOBDAT.UNV
+
+               Assembly instructions:
+          
+                .LOAD PSTHRU
+                .SSAVE
+
+               There are a few additional  assembly  parameters  which
+          may also be changed:
+
+               1.  BUFNUM (default=6):  This is the number of  message
+                   buffers  built  at  initialization  time.  The list
+                   will be expanded as is necessary, but  buffers  are
+                   never  returned  to the free core list (only to the
+                   free buffer list).
+
+               2.  BUFSIZ (default=100):  This is the data size  of  a
+                   buffer  for  input.  Messages larger than this will
+                   be fragmented.   This  is  the  size  of  the  data
+                   portion of the buffer only and does not include any
+                   overhead   words   (currently   there   are   three
+                   additional words).
+PSTHRU.PLM                                                      Page 5
+Assembly instructions
+
+
+               3.  QUEMAX (default=20):  This parameter  dictates  the
+                   maximum  number  of  buffers which may be queued up
+                   for writing on one side of a  link.   The  absolute
+                   maximum  number  is  also  governed  by  the MAXRED
+                   parameter and is equal to QUEMAX+MAXRED.   At  this
+                   point   no   data   available  interrupts  will  be
+                   acknowledged on the read side of the link until the
+                   write  side's  queue  is  empty.   Note  that  this
+                   restriction is  held  only  as  long  as  the  link
+                   remains  in  RN state.  This is so that if the read
+                   side of the link is just slow and the write side is
+                   trying to disconnect, it will be able to.
+
+               4.  MAXRED (default=10):  This is the maximum number of
+                   buffers  which  will  be  read on a read request if
+                   infinited   data   were   available.     See    the
+                   documentation  on  QUEMAX for other effects of this
+                   parameter.
+
+               5.  QUMLEN (default=132):  This is the  maximum  length
+                   of  any  error  message  which  will be sent to the
+                   operator.
+
+PSTHRU.PLM                                                      Page 6
+Edit history
+
+
+          III.  Edit history
+
+          1.  (1) Design and implement original features.
+
+          2.  (2) Fix core allocation bug for one word
+
+          3.  (3) Fix bug where a NSP returns no data,  but  there  is
+              more to be read.  This could cause a hang after such.
+
+          4.  (4) Fix NPDSTR:  doing a HLRI  instead  of  a  HRLI  and
+              CPYOBJ  doing  a  HRLI  T3,(POINT  8,,)  instead of HRLI
+              T3,(POINT 8,,35).  Symptom:  causes  connections  to  be
+              made with junk object names (format type 1).
+
+          5.  (5) Change dump area to XPN:
+
+          6.  (6) Change default buffer size from 100 to 200 (octal)
+
+          7.  (7) Update for new DNET.  UUO.
+
+          8.  (10)  Make  DECnet  Send/Read   Normal/Interrupt   ABORT
+              stopcodes  instead  of  INFO.  Make ABORT stopcodes work
+              better.
+
+          9.  (11) Range check the size of fields  in  access  control
+              information
+
+         10.  (12) Make sure there's a <NUL> at the end of the  string
+              for  the  QUEUE.   UUO so that the message sent to ORION
+              doesn't have old garbage in it.  Clean up DIE;  remove a
+              HALT  that  can't  be  executed and zero out the PPN and
+              access stuff field of the LOOKUP block  (which  are  the
+              PPN and reserved fields of the SAVE.  block) before each
+              LOOKUP.
+
+         11.  (13) Edit 11 wasn't complete - changing  SOSLE  to  SOSL
+              causes a bit spray because a core block is allocated and
+              pointed to before we decide the  string  is  terminated.
+              Change  it back to a SOSLE and then check to be sure the
+              last character is a quote, eating one more and  checking
+              it if it is not.
+
+         12.  (14) Make NPD  object  numbers  read  octal  instead  of
+              decimal.
+
+         13.  (15)  Don't  assume  "last  link"  just  because  access
+              control  info  is  given;   this allows users to specify
+              access control info for the PSTHRU they want to  connect
+              to (it will have meaning for DECnet at least).
+
+         14.  (16) ANFEOF must clear T2 if it doesn't call ANFRD so we
+              won't think there are any buffers to deallocate.
+
+PSTHRU.PLM                                                      Page 7
+Edit history
+
+
+          IV.  Architecture philosophies
+
+               This section  deals  with  the  various  implementation
+          decisions that were made in creating the PSTHRU interface.
+
+               As was mentioned earlier, all connections are  made  in
+          32-bit  mode.   This  decision  was made to provide (also as
+          mentioned earlier)  a  standard  connect  mode  which  would
+          maintain proper resolution and byte size.  As you might also
+          guess, it's due to ease of programming  due  to  the  DECnet
+          interface which is byte oriented.
+
+               ANF   connections   take   precedence    over    DECnet
+          connections:   this  is in conformance with the behaviour of
+          SET HOSTES.
+
+               Note also that  PSTHRU  declares  itself  to  the  next
+          succeeding  part of the link as whatever it was connected to
+          with.  This is in conformance to  the  behaviour  of  PSTHRU
+          objects on other systems.
+
+               Below is a quote from the NFT program, reproduced  here
+          for  your edification, which describes the philosophy of the
+          ANF interface:
+
+                    As ANF-10 basically doesn't  support  any  of  the
+               "wonderous" errata of DECnet such as user-id, password,
+               ad nauseum, the TSK.  monitor call was invented to give
+               the  user fuller control over the network logical link.
+               In particular, in conjunction with versions 3 and later
+               of  the  DECnet  Compatible  Port  (in  the  DN8x), the
+               "network process descriptor" was made available to  the
+               "user"  in order to encode all that stuff in such a way
+               that the DCP can convert it into something  the  DECnet
+               side  understood.   The  result  is  a  very arcane NPD
+               string (for which honesty requires that I not claim any
+               credit)  given  to  the TSK.  in the active and passive
+               init functions.  The form of that NPD string,  for  the
+               first time anywhere ever put in writing, is:
+                <0>             ;leading null byte
+                DST             ;"destination" process identifier
+                <0>             ;punctuation byte
+                SRC             ;"source" process identifier
+                <0>             ;punctuation byte
+                USERID          ;user id string
+                <0>             ;punctuation byte
+                PASSWORD        ;password string for user id
+                <0>             ;punctuation byte
+                ACCOUNT         ;account string for user id
+                <0>             ;punctuation byte
+                OPTDATA         ;"optional user data" a la DECnet connect init
+                <0>             ;punctuation byte
+               
+               DST and SRC both are one of the following forms:
+PSTHRU.PLM                                                      Page 8
+Architecture philosphies
+
+
+               
+                OBJ             ;format 0: DECnet object type
+                OBJ.NAM         ;format 1: DECnet object type and task name
+                                ;          note the "." punctuation character
+               
+               OBJ is the object type as an ASCII octal number - e.g.,
+               "21" for DAP.   NAM,  USERID,  PASSWORD,  ACCOUNT,  and
+               OPTDATA are all "ASCII" character strings - i.e., 7-bit
+               bytes (with no nulls).
+PSTHRU.PLM                                                      Page 9
+Architecture philosphies
+
+
+          V.  Program messages and stop codes
+
+               PSTHRU is built to notify the  operator  about  various
+          problems which can occur.  These are listed below in detail.
+
+               In general, most messages are accompanied by  a  STOPCD
+          dump.   The  program  dumps  on  its  default  path (usually
+          [1,2]).  The name of the first dump file is  PSDMP.EXE.   If
+          creating  a  new  dump would overwrite a previous dump, then
+          the last SIXBIT character of the name will be incremented by
+          one  until  a  unique  name is found.  The increment process
+          will continue through the next high order letters if that is
+          necessary.   Thus,  the second dump to be written would have
+          the name PSDMP!.EXE.  Each STOPCD dump is accompanied  by  a
+          message  to  the  operator which will also appear in ORION's
+          log file.
+
+               If any UUO necessary for the dump fails during stopcode
+          processing, then the program will halt and have to be dumped
+          and restarted manually.
+
+               Five types of STOPCDs are recognized:
+
+               1.  STOP - The problem is a serious system failure  and
+                   the program will not continue.  This usually occurs
+                   if some UUO fails which never should.  The  program
+                   will  not try to reload itself due to the fact that
+                   the failure probably won't go away.
+
+               2.  RELOAD - A serious internal error occured,  but  it
+                   is probably the fault of the PSTHRU program itself.
+                   The program  will  reload,  which  will  cause  all
+                   existing links to be aborted.
+
+               3.  ABORT - The current  link  in  which  this  problem
+                   occured  will  be  aborted.  PSTHRU continues after
+                   the link is aborted.
+
+               4.  INFO  -  Something  happened  which  may  be  worth
+                   knowing about, but is probably not serious.  PSTHRU
+                   continues  from  the  dump  point  as  if   nothing
+                   happened.
+
+               5.  NODUMP - Something  happened  which  may  be  worth
+                   knowing  about, but it's not even serious enough to
+                   warrant a dump file.  PSTHRU continues normally.
+
+          The following is a list of the stopcodes which can occur.
+
+      1.  Message:  "Can't get core for initial buffers"
+          Type:  STOP
+PSTHRU.PLM                                                     Page 10
+Program messages and stop codes
+
+
+               The CORE UUO to  set  up  the  initial  BUFNUM  buffers
+          failed.
+
+      2.  Message:  "Can't initialize PSISER"
+          Type:  STOP
+
+               The  PIINI.   UUO  to  set  up  the  priority  software
+          interrupt system failed.  See AC T1 for the error code.
+
+      3.  Message:  "Can't set up PSISER for NSP."
+          Type:  STOP
+
+               The PISYS.  UUO to add NSP. conditions to the  priority
+          software interrupt system failed.  Error code in T1.
+
+      4.  Message:  "Can't set initial DECnet link up"
+          Type:  INFO
+
+               Routine DCNENT does an ENTER PASSIVE function to set up
+          a  DECnet  link.   It  returned  non-skip,  which  means the
+          function failed.  Error code to the NSP. UUO  in  T1.   Note
+          that  PSTHRU  will  not  be accepting any DECnet connects if
+          this error occurs.
+
+      5.  Message:  "Can't set initial ANF link up"
+          Type:  INFO
+
+               Routine ANFENT does an ENTER PASSIVE function to set up
+          an ANF link.  It returned non-skip, which means the function
+          failed.
+
+      6.  Message:  "DEBRK. not implemented"
+          Type:  STOP
+
+               A DEBRK. UUO failed with the non-skip return.
+
+      7.  Message:  "DECnet REJECT failed"
+          Type:  INFO
+
+               A NSP. function to reject an incoming  connect  failed.
+          PSTHRU  should  only  be trying to reject a connection if it
+          could  not  create  an  additional  channel   to   have   an
+          ever-present  channel  in  connect wait, or if accepting the
+          connection failed.  Error code for the NSP. UUO in T1.
+
+      8.  Message:  "DECnet Read Disconnect Information failed"  Type:
+          Info
+
+               The .NSFRD function failed.  Error code in T1.
+
+      9.  Message:  "DECnet RELEASE failed"
+          Type:  INFO
+PSTHRU.PLM                                                     Page 11
+Program messages and stop codes
+
+
+               The .NSFRL function failed.   Usually  this  means  the
+          channel was already gone.  Error code in T1.
+
+     10.  Message:  "Link isn't DECnet or ANF"
+          Type:  RELOAD
+
+               PSTHRU can't determine whether a link is of type DECnet
+          or  ANF.   This  implies  the  internal  data  base has been
+          trashed.
+
+     11.  Message:  "ANF RELEASE failed"
+          Type:  INFO
+
+               A FILOP.  to release an ANF channel  failed.   Probably
+          the channel was already released.  The error code is in T1.
+
+     12.  Message:  "Can't turn PSISER on"
+          Type:  STOP
+
+               A PISYS. UUO to turn the  priority  software  interrupt
+          system back on failed.  Error code in T1.
+
+     13.  Message:  "Can't turn PSISER off"
+          Type:  STOP
+
+               A PISYS. UUO to turn the  priority  software  interrupt
+          system off failed.  Error code in T1.
+
+     14.  Message:  "DECnet READ NORMAL failed"
+          Type:  ABORT
+
+               A NSP. function to read normal data from a DECnet  link
+          failed.  The error code is in T1.  Data may have been lost.
+
+     15.  Message:  "DECnet READ INTERRRUPT failed"
+          Type:  ABORT
+
+               A NSP. UUO to read interrupt data failed.   Error  code
+          in T3.  Some data may have been lost.
+
+     16.  Message:  "DECnet buffer queued for write twice"
+          Type:  RELOAD
+
+               The same buffer was queued for write twice on  a  given
+          link.  This only occurs under FTDEBUG.
+
+     17.  Message:  "DECnet SEND INTERRUPT failed"
+          Type:  ABORT
+
+               A NSP. function to send  interrupt  data  failed.   The
+          error code is in T1.  Some data may be lost.
+PSTHRU.PLM                                                     Page 12
+Program messages and stop codes
+
+
+     18.  Message:  "DECnet SEND NORMAL failed"
+          Type:  ABORT
+
+               The NSP. UUO to send normal data failed.  Error code in
+          T1.  Some data may have been lost.
+
+     19.  Message:  "Can't put TSK. link into IDLE state"
+          Type:  INFO
+
+               The TSK. function to set a TSK  link  into  idle  state
+          failed.   The error code is in T1.  Actually, this can occur
+          under normal circumstances if the other  side  released  the
+          link already.
+
+     20.  Message:  "I/O error on TSK. link"
+          Type:  ABORT
+
+               A TSK link suffered an I/O error.
+
+     21.  Message:  "Can't add DECnet channel to the PI system"
+          Type:  INFO
+
+               Routine DNPION which does the NSP. UUO to add a  DECnet
+          channel  to  the  priority  software interrupt system didn't
+          skip.  Note that the affected link half is probably dead.
+
+     22.  Message:  "Can't add ANF channel to the PI system"
+          Type:  INFO
+
+               ANPION, which does the appropriate PISYS. UUO to add  a
+          new  ANF  channel to the priority software interrupt system,
+          failed and didn't skip.  Note that the affected link half is
+          probably dead.
+
+     23.  Message:  "Couldn't open log file, logging turned OFF"
+          Type:  NODUMP
+
+               PSTHRU couldn't open the log file.  This usually  means
+          the  appropriate  logical name, PSTLOG, hasn't been defined.
+          Logging of events will not occur.
+
+     24.  Message:  "Logging output failed"
+          Type:  INFO
+
+               An OUT UUO to the log file failed.  The log  file  will
+          be closed.
+
+     25.  Message:  "CORE UUO failed"
+          Type:  RELOAD
+
+               A CORE UUO to create more free core or buffers failed.
+PSTHRU.PLM                                                     Page 13
+Program messages and stop codes
+
+
+     26.  Message:  "Returning junk core block"
+          Type:  RELOAD
+
+               This  is  only  enabled  under   FTDEBUG.    The   core
+          de-allocator  was  called with either a base address of zero
+          or a length of zero to return to the free core pool.
+

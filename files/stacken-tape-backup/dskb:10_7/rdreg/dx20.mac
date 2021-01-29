@@ -1,0 +1,341 @@
+	UNIVERSAL DEFS -- DX20 specific macro definitions for RDREG
+	SUBTTL	G.M. Uhler/GMU
+
+
+;This file contains the DX20 specific macro definitions for RDREG
+;to interpret the DX20 massbus registers.  The format of the macros
+;is decribed when each macro is defined.  The RDREG formats are
+;intended to be general enough so that the only work necessary to
+;make RDREG support a new device connected to an RH20 is to provide
+;a new universal file containing the macro definitions for that
+;device.  This is the first such universal file.
+
+
+	.DIRECTIVE .XTABM,FLBLST,.NOBIN
+	SALL
+
+
+;Copyright (C) 1980,1981,1982,1983 by
+;Digital Equipment Corporation, Maynard, Mass.
+;
+;
+;This software is furnished under a license and may be used and copied
+;only  in  accordance  with  the  terms  of  such license and with the
+;inclusion of the above copyright notice.  This software or any  other
+;copies thereof may not be provided or otherwise made available to any
+;other person.  No title to and ownership of the  software  is  hereby
+;transferred.
+;
+;The information in this software is subject to change without  notice
+;and  should  not  be  construed  as a commitment by Digital Equipment
+;Corporation.
+;
+;Digital assumes no responsibility for the use or reliability  of  its
+;software on equipment which is not supplied by Digital.
+
+
+	DX2VER==1		;Major version
+	DX2MIN==0		;Minor version
+	DX2EDT==2		;Edit number
+	DX2WHO==0		;Who edited
+	SUBTTL	Assembly parameters and drive type register definitions
+
+
+;The following definition controls whether RDREG will ask for the
+;DATAO/DATAI drive select field in addition to the RH20 device
+;code.  For those devices that are always in massbus slot 0 (the
+;DX20 for example), set FTDSEL to a 0 and RDREG will always use
+;a drive select field of zero.  For those devices that do require
+;a drive select code, set FTDSEL to -1 and RDREG will ask for and
+;use the drive select value specified by the user.
+
+FTDSEL==0			;Don't need drive select for DX20s
+
+
+
+
+;The following macro defines the drive type register values for those
+;devices that we can interpret.  The arguments to the DTRTYP macro
+;are as follows:
+;
+;	1 - Octal value of drive type (right 9 bits)
+;	2 - Corresponding mnemonic for this drive type (this mnemonic
+;	    is used in the second level macro definitions below)
+
+DEFINE DRVTYP,<
+	DTRTYP	60,TX02		;;Tape style DX20s have a DT of 60
+	DTRTYP	61,RP20		;;Disk style DX20s have a DT of 61
+>
+	SUBTTL	First level massbus register definitions
+
+
+;The following macro defines the registers that we want to read and
+;interpret in the device.  The arguments to the XX macro are as
+;follows:
+;
+;	1 - Massbus register number (register select field)
+;	2 - Mnemonic for the register
+;
+;Note that the CONI definition MUST be first.  RDREG depends on this
+;and will work incorrectly if it is not.
+
+DEFINE REGS,<
+	XLIST
+	XX	0,CONI		;;CONI - Must be first
+	XX	0,CR		;;Control register
+	XX	1,SR		;;Status register
+	XX	2,ER		;;Error register
+	XX	3,MR		;;Maintenance register
+	XX	4,AS		;;Attention summary register
+	XX	6,DT		;;Drive type register
+	XX	20,GPR0		;;General purpose register 0
+	XX	21,GPR1		;;General purpose register 1
+	XX	22,GPR2		;;General purpose register 2
+	XX	23,GPR3		;;General purpose register 3
+	XX	24,GPR4		;;General purpose register 4
+	XX	25,GPR5		;;General purpose register 5
+	XX	26,GPR6		;;General purpose register 6
+	XX	27,GPR7		;;General purpose register 7
+	XX	30,DIA0		;;Diagnostic register 0
+	XX	31,DIA1		;;Diagnostic register 1
+	XX	32,DIA2		;;Diagnostic register 2
+	XX	33,DIA3		;;Diagnostic register 3
+	XX	34,DIA4		;;Diagnostic register 4
+	XX	35,DIA5		;;Diagnostic register 5
+	XX	36,DIA6		;;Diagnostic register 6
+	XX	37,DIA7		;;Diagnostic register 7
+	XX	70,SBAR		;;Secondary block address register
+	XX	71,STCR		;;Secondary transfer control register
+	XX	72,PBAR		;;Primary block address register
+	XX	73,PTCR		;;Primary transfer control register
+	XX	74,IVIR		;;Interrupt vector index register
+	LIST
+>
+	SUBTTL	Second level massbus register definitions
+
+
+;The following macros define the bits and fields in each of the
+;massbus registers that we want to interpret.  For each massbus
+;register mnemonic that we defined in the first level macro definition
+;above, we define a macro with the same name here that gives the
+;bit and field definitions for that register.  The arguments to
+;the FIELDS macro are as follows:
+;
+;	1 - The bit mask of the bit or field in the 36 bit word
+;	2 - The text associated with the bit or field
+;	3 - One of BIT, VAL, or NVAL to indicate that this entity is a
+;	    bit, a field containing a positive number, or a field containing
+;	    a negative number, repectively.  RDREG only interprets BIT values
+;	    if the bit is on.  VAL values are always printed as a field. NVAL
+;	    values are first negated and then always printed as a field.
+;	4 - Either ALL or one of the drive type mnemonics defined by
+;	    the DRVTYP macro above.  ALL values are interpreted for
+;	    all of the legal drive types. Values that are given with
+;	    a specific drive type mnemonic are only interpreted if the
+;	    device is of that drive type.
+
+
+DEFINE CR,<
+	FIELDS	1B35,<Go>,BIT,ALL
+	FIELDS	77B35,<Fnc>,VAL,ALL
+>
+
+DEFINE SR,<
+	FIELDS	1B20,<Attention>,BIT,ALL
+	FIELDS	1B21,<Composite error>,BIT,ALL
+	FIELDS	1B22,<Link present>,BIT,ALL
+	FIELDS	1B23,<MP run>,BIT,ALL
+>
+
+DEFINE ER,<
+	FIELDS	1B35,<ILF>,BIT,ALL
+	FIELDS	1B34,<ILR>,BIT,ALL
+	FIELDS	1B33,<RMR>,BIT,ALL
+	FIELDS	1B32,<CB par err>,BIT,ALL
+	FIELDS	1B31,<DB par err>,BIT,ALL
+	FIELDS	1B30,<UB par err>,BIT,ALL
+	FIELDS	1B29,<MP stop>,BIT,ALL
+	FIELDS	1B28,<MP err>,BIT,ALL
+	FIELDS	17B27,<Error class>,VAL,ALL
+	FIELDS	17B23,<Sub-class>,VAL,ALL
+>
+DEFINE MR,<
+	FIELDS	1B31,<Single cycle>,BIT,ALL
+	FIELDS	1B32,<Even parity>,BIT,ALL
+	FIELDS	1B33,<MP start>,BIT,ALL
+	FIELDS	1B34,<DX reset>,BIT,ALL
+>
+
+DEFINE AS,<
+	FIELDS	377B35,<Attentions>,VAL,ALL
+>
+
+DEFINE DT,<
+	FIELDS	377B35,<Drive type>,VAL,ALL
+>
+
+DEFINE GPR0,<
+	FIELDS	1B21,<Status modifier>,BIT,ALL
+	FIELDS	1B22,<Control unit end>,BIT,ALL
+	FIELDS	1B23,<Busy>,BIT,ALL
+	FIELDS	1B24,<Channel end>,BIT,ALL
+	FIELDS	1B25,<Device end>,BIT,ALL
+	FIELDS	1B26,<Unit check>,BIT,ALL
+	FIELDS	1B27,<Unit exception>,BIT,ALL
+	FIELDS	1B28,<Status update>,BIT,ALL
+	FIELDS	177B35,<Status index>,VAL,ALL
+>
+
+DEFINE GPR1,<
+	FIELDS	377B35,<Drive>,VAL,RP20
+	FIELDS	1B21,<Status modifier>,BIT,RP20
+	FIELDS	1B22,<Control unit end>,BIT,RP20
+	FIELDS	1B23,<Busy>,BIT,RP20
+	FIELDS	1B24,<Channel end>,BIT,RP20
+	FIELDS	1B25,<Device end>,BIT,RP20
+	FIELDS	1B26,<Unit check>,BIT,RP20
+	FIELDS	1B27,<Unit exception>,BIT,RP20
+	FIELDS	377B35,<Drive number>,VAL,TX02
+	FIELDS	17B27,<Drive mode>,VAL,TX02
+	FIELDS	17B23,<Data mode>,VAL,TX02
+>
+
+DEFINE GPR2,<
+	FIELDS	1B21,<Ignore length>,BIT,RP20
+	FIELDS	1B22,<Diagnostic mode>,BIT,RP20
+	FIELDS	1B23,<Command retry>,BIT,RP20
+	FIELDS	1B25,<Disable sense>,BIT,RP20
+	FIELDS	1B26,<Force sense>,BIT,RP20
+	FIELDS	1B27,<Whole track>,BIT,RP20
+	FIELDS	377B35,<Argument>,VAL,RP20
+	FIELDS	377B35,<Size of EST>,VAL,TX02
+>
+DEFINE GPR3,<
+	FIELDS	377B35,<Drive number>,VAL,RP20
+	FIELDS	377B35,<TIE byte>,VAL,TX02
+	FIELDS	1B25,<Disable sense>,BIT,TX02
+	FIELDS	1B26,<Force sense>,BIT,TX02
+	FIELDS	1B27,<Enable TIE recovery>,BIT,TX02
+>
+
+DEFINE GPR4,<
+	FIELDS	177777B35,<Cylinder>,VAL,RP20
+	FIELDS	377B35,<Drive>,VAL,TX02
+	FIELDS	1B21,<Status modifier>,BIT,TX02
+	FIELDS	1B22,<Control unit end>,BIT,TX02
+	FIELDS	1B23,<Busy>,BIT,TX02
+	FIELDS	1B24,<Channel end>,BIT,TX02
+	FIELDS	1B25,<Device end>,BIT,TX02
+	FIELDS	1B26,<Unit check>,BIT,TX02
+	FIELDS	1B27,<Unit exception>,BIT,TX02
+>
+
+DEFINE GPR5,<
+	FIELDS	377B27,<Head>,VAL,RP20
+	FIELDS	377B35,<Record>,VAL,RP20
+	FIELDS	177777B35,<Byte count>,NVAL,TX02
+>
+
+DEFINE GPR6,<
+	FIELDS	177777B35,<Extended status 0>,VAL,ALL
+>
+
+DEFINE GPR7,<
+	FIELDS	177777B35,<Extended status 1>,VAL,ALL
+>
+
+DEFINE DIA0,<
+	FIELDS	177777B35,<Microcontroller instruction register>,VAL,ALL
+>
+
+DEFINE DIA1,<
+	FIELDS	1B20,<IR enable>,BIT,ALL
+	FIELDS	1B21,<Microstore enable>,BIT,ALL
+	FIELDS	1B22,<PC enable>,BIT,ALL
+	FIELDS	1B23,<PC auto increment>,BIT,ALL
+	FIELDS	7777B35,<PC>,VAL,ALL
+>
+
+DEFINE DIA2,<
+	FIELDS	377B27,<ALU B input>,VAL,ALL
+	FIELDS	377B35,<ALU A input>,VAL,ALL
+>
+DEFINE DIA3,<
+	FIELDS	377B27,<Source ROM outputs>,VAL,ALL
+	FIELDS	377B35,<Destination ROM outputs>,VAL,ALL
+>
+DEFINE DIA4,<
+	FIELDS	377B27,<FROM7-FROM0>,VAL,ALL
+	FIELDS	1B28,<IR par>,BIT,ALL
+	FIELDS	1B29,<BALU par gen>,BIT,ALL
+	FIELDS	1B30,<AC par>,BIT,ALL
+	FIELDS	1B31,<SMUX par>,BIT,ALL
+	FIELDS	17B35,<UBUS int>,VAL,ALL
+>
+
+DEFINE DIA5,<
+	FIELDS	377B27,<BALU7-BALU0>,VAL,ALL
+	FIELDS	377B35,<MEM7-MEM0>,VAL,ALL
+>
+
+DEFINE DIA6,<
+	FIELDS	377B27,<IMUX7-IMUX0>,VAL,ALL
+	FIELDS	377B35,<BR7-BR0>,VAL,ALL
+>
+
+DEFINE DIA7,<
+	FIELDS	1B20,<C>,BIT,ALL
+	FIELDS	1B21,<Z>,BIT,ALL
+	FIELDS	1B22,<IR par err>,BIT,ALL
+	FIELDS	1B23,<St O/U flw>,BIT,ALL
+	FIELDS	1B24,<ALU A par err>,BIT,ALL
+	FIELDS	1B25,<ALU B par err>,BIT,ALL
+	FIELDS	1777B35,<MA9-MA0>,VAL,ALL
+>
+
+DEFINE SBAR,<
+	FIELDS	377B27,<Head>,VAL,RP20
+	FIELDS	377B35,<Record>,VAL,RP20
+	FIELDS	177777B35,<Byte count>,NVAL,TX02
+>
+
+DEFINE STCR,<
+	FIELDS	1777B29,<Block count>,NVAL,ALL
+	FIELDS	77B35,<Command>,VAL,ALL
+>
+
+DEFINE PBAR,<
+	FIELDS	377B27,<Head>,VAL,RP20
+	FIELDS	377B35,<Record>,VAL,RP20
+	FIELDS	177777B35,<Byte count>,NVAL,TX02
+>
+
+DEFINE PTCR,<
+	FIELDS	1777B29,<Block count>,NVAL,ALL
+	FIELDS	77B35,<Command>,VAL,ALL
+>
+
+DEFINE IVIR,<
+	FIELDS	777B35,<EPT relative interrupt offset>,VAL,ALL
+>
+DEFINE	CONI,<
+	FIELDS	1B18,<DB par err>,BIT,ALL
+	FIELDS	1B19,<Drv exc>,BIT,ALL
+	FIELDS	1B20,<Long WC>,BIT,ALL
+	FIELDS	1B21,<Short WC>,BIT,ALL
+	FIELDS	1B22,<Chan err>,BIT,ALL
+	FIELDS	1B23,<Drive resp err>,BIT,ALL
+	FIELDS	1B24,<Reg acc err>,BIT,ALL
+	FIELDS	1B25,<Chan rdy>,BIT,ALL
+	FIELDS	1B26,<Overrun>,BIT,ALL
+	FIELDS	1B27,<MBE>,BIT,ALL
+	FIELDS	1B28,<Attn>,BIT,ALL
+	FIELDS	1B29,<STCR full>,BIT,ALL
+	FIELDS	1B30,<AIE>,BIT,ALL
+	FIELDS	1B31,<PTCR full>,BIT,ALL
+	FIELDS	1B32,<Done>,BIT,ALL
+	FIELDS	7B35,<PI>,VAL,ALL
+>
+
+
+	END

@@ -1,0 +1,247 @@
+%TITLE 'XPNDIS - Disconnect a logical link'
+MODULE xpndis (
+               ENTRY ( XPN$DISCONNECT )
+              ) =
+BEGIN
+!  COPYRIGHT (C) DIGITAL EQUIPMENT CORPORATION 1986.
+!  ALL RIGHTS RESERVED.
+!  
+!  THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED  AND
+!  COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE AND WITH
+!  THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS  SOFTWARE  OR
+!  ANY  OTHER  COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE
+!  AVAILABLE TO ANY OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE
+!  SOFTWARE IS HEREBY TRANSFERRED.
+!  
+!  THE INFORMATION IN THIS SOFTWARE IS  SUBJECT  TO  CHANGE  WITHOUT
+!  NOTICE  AND  SHOULD  NOT  BE CONSTRUED AS A COMMITMENT BY DIGITAL
+!  EQUIPMENT CORPORATION.
+!  
+!  DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF
+!  ITS SOFTWARE ON EQUIPMENT THAT IS NOT SUPPLIED BY DIGITAL.
+
+!++
+! FACILITY: Blissnet
+!   Transportable BLISS interface to DECNET-10.
+!
+! ABSTRACT:
+!   This module contains the code to implement the $XPN_DISCONNECT macro.
+!
+! ENVIRONMENT:
+!   TOPS-10 user mode.
+!
+! AUTHOR:  Larry Campbell, CREATION DATE:  January 11, 1982
+!
+! MODIFIED BY: Doug Rayner
+!
+! 01    - Start TOPS-10 support [Doug Rayner]
+!
+! Start using the DIL standard edit history format.
+!
+! Facility Blissnet
+!
+! Edit (%O'2', '12-Apr-84', 'Sandy Clemens')
+!  %( Add the TOPS-10 BLISSnet sources for DIL V2.  )%
+!
+! Edit (%O'6', '5-Oct-84', 'Sandy Clemens')
+!  %( Add new format of COPYRIGHT notice.  FILES:  ALL )%
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+FORWARD ROUTINE
+    xpn$disconnect,                     ! Called by $XPN_DISCONNECT macro
+    xpn$$disconnect;                    ! Does the actual work
+!
+! INCLUDE FILES:
+!
+LIBRARY 'BLI:XPORT';
+LIBRARY 'BLISSNET';
+LIBRARY 'BLI:UUOSYM';
+LIBRARY 'BLSN10';
+LIBRARY 'BLI:TENDEF';
+LIBRARY 'UUODEF';
+!
+! MACROS:
+!
+
+!
+! EQUATED SYMBOLS:
+!
+
+!
+! OWN STORAGE:
+!
+
+!
+! EXTERNAL REFERENCES:
+!
+
+EXTERNAL ROUTINE
+    xpn$$valid_nlb,                     ! Validate an NLB
+    xpn$$link_status;                   ! Read link status
+
+
+GLOBAL ROUTINE xpn$disconnect (nlb, success_routine, failure_routine) =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   This routine is called by the $XPN_DISCONNECT macro to disconnect
+!   a logical link.
+!
+! FORMAL PARAMETERS:
+!   nlb                 - address of the Network Link Block
+!   success_routine     - (optional) routine to call on success
+!   failure_routine     - (optional) routine to call on failure
+!
+! IMPLICIT INPUTS:
+!   NONE
+!
+! IMPLICIT OUTPUTS:
+!   NONE
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   NONE
+!
+! SIDE EFFECTS:
+!   NONE
+!
+!--
+    BEGIN
+
+    MAP
+        nlb : REF $XPN_NLB();
+
+    LOCAL
+        original_primary_code,
+        primary_code,
+        secondary_code,
+        retcode;
+
+    nlb_binds;                          ! create nice names for NLB fields
+    !
+    ! validate the NLB
+    !
+    retcode = xpn$$valid_nlb (.nlb);
+    IF NOT .retcode THEN
+        BEGIN
+        original_primary_code = XPN$_BAD_NLB;
+        secondary_code = .retcode
+        END
+    ELSE
+        BEGIN
+	original_primary_code = xpn$$disconnect (.nlb);
+        nlb[NLB$G_COMP_CODE] = .original_primary_code;
+        secondary_code = .nlb[NLB$G_2ND_CODE]
+        END;
+    !
+    ! Check completion code and call success or failure routine as required
+    !
+    IF .original_primary_code THEN
+        IF .success_routine NEQ 0 THEN
+            primary_code =
+                (.success_routine) (XPN$K_DISCONNECT, .original_primary_code,
+                    .secondary_code, .nlb)
+        ELSE
+            primary_code = .original_primary_code
+    ELSE
+        IF .failure_routine NEQ 0 THEN
+            primary_code =
+                (.failure_routine) (XPN$K_DISCONNECT, .original_primary_code,
+                    .secondary_code, .nlb)
+        ELSE
+            primary_code = .original_primary_code;
+    !
+    ! Unless the NLB was bad, store the completion code there
+    !
+    IF .original_primary_code NEQ XPN$_BAD_NLB
+    THEN
+        nlb[NLB$G_COMP_CODE] = .primary_code;
+    RETURN (.primary_code)
+    END;			!End of xpn$disconnect
+
+ROUTINE xpn$$disconnect (p_nlb) =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   This routine does the actual work of disconnecting a logical link.
+!
+! FORMAL PARAMETERS:
+!   p_nlb           - pointer to the Network Link Block
+!
+! IMPLICIT INPUTS:
+!   NONE
+!
+! IMPLICIT OUTPUTS:
+!   NONE
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   NONE
+!
+! SIDE EFFECTS:
+!   NONE
+!
+!--
+    BEGIN
+
+    LOCAL
+	str_len,
+	link_status,
+	nsp_arg_blk : MONBLOCK[$NSAA1+1] INITIAL (0),
+	reason_string_ptr : VECTOR[XPN$K_OPTDT_MAX_LEN_W]
+	    INITIAL (XPN$K_OPTDT_MAX_LEN_W);
+
+    REGISTER
+	t1;
+
+    BIND
+        nlb = .p_nlb : $XPN_NLB (),
+	reason_size = reason_string_ptr[0],
+        output_descriptor = .nlb[NLB$A_OUTPUT] : $XPO_DESCRIPTOR ();
+
+    nlb_binds;                          ! Get concise names for popular fields
+
+    IF NOT .nlb[NLB$V_OPEN]
+    THEN
+        RETURN (XPN$_NOT_OPEN);
+    link_status = xpn$$link_status (nlb);
+    IF .nlb[NLB$B_SUBFUNC] EQL NLB$K_REJECT
+    THEN
+        BEGIN
+        !
+        ! Insure that this is a passive link with conn req pending
+        !
+        IF NOT passive
+        THEN
+            RETURN (XPN$_ILLOGIC);
+        IF .POINTR(link_status,NS$STA) NEQ $NSSCR THEN RETURN (XPN$_ILLOGIC)
+        END;
+
+    nlb[NLB$V_CONNECTED] = 0;
+    IF .POINTR(link_status,NS$STA) NEQ $NSSRN THEN RETURN(XPN$_DISCONN);
+
+    str_len = MIN (XPN$K_OPTDT_MAX_LEN_C,.output_descriptor[XPO$H_LENGTH]);
+    IF (reason_size<lh> = .str_len) GTR 0
+    THEN
+    CH$MOVE (str_len,
+            .output_descriptor[XPO$A_ADDRESS],
+            CH$PTR(reason_string_ptr[1],0,8));
+
+    nsp_arg_blk[$NSAFN,NS$AFN] = $NSFSD;		!function
+    nsp_arg_blk[$NSAFN,NS$ALN] = $NSAA1 + 1;		!size of block
+    nsp_arg_blk[$NSACH,$WORD] = .nlb[NLB$H_JFN];	!channel
+    nsp_arg_blk[$NSAA1,$WORD] = reason_string_ptr[0];	!optional data
+    t1 = nsp_arg_blk[0,$WORD];
+
+    NSP$_UUO(t1);
+
+    IF .nlb[NLB$B_SUBFUNC] EQL NLB$K_ABORT
+    THEN
+        nlb[NLB$V_ABORTED] = 1;
+    nlb[NLB$V_DISCONNECTED] = 1;
+    RETURN (XPN$_NORMAL)
+    END;                                !End of xpn$$disconnect
+
+END
+ELUDOM

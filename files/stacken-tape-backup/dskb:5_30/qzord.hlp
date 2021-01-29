@@ -1,0 +1,18 @@
+QZORD
+=====
+
+QZORD (qzord) och QZDRO (qzdro) {r tv} demonstrationsprogram
+som spelar ett MASTER-MIND-liknande spel med ord.
+
+QZORD (qzord) gissar ett 5-bokstavigt ord d{r alla bokst{ver
+m}ste vara olika. QZORD klarar normalt inte ord som {r namn
+eller b|jningsformer. Allts} inte B\RJE, L]DOR eller B\JDE.
+
+QZDRO (qzdro) l}ter anv{ndaren gissa ett ord enligt ovan.
+Vissa b|jningar kan f|rekomma, t.ex. YNGST, ROLIG etc.
+OBS! Detta senare program {r - av uppenbara sk{l - betydligt
+billigare att k|ra {n QZORD.
+
+G|r .RUN GAM:QZORD resp .RUN GAM:QZDRO f|r ytterligare info.
+
+	<Slut p} QZORD.HLP - 770602>

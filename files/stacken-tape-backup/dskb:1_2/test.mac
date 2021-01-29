@@ -1,0 +1,26 @@
+title	test -- test UDP device.
+
+.text	"/symseg:low/locals"
+
+search	jobdat, uuosym, macten
+
+exp	0
+
+test:	jfcl
+	reset
+	movei	1,[
+		exp 0,[	byte (8) ^D224, 0, 0, 0
+			byte (9) 4, 0
+			exp 0]]
+	call	1,[sixbit 'iprou.']
+	 halt
+	movei	1,[
+		exp 0,[	byte (8) ^D240, 0, 0, 0
+			byte (9) 4, 0
+			exp 0]]
+	call	1,[sixbit 'iprou.']
+	 halt
+	monrt.
+	jrst	test
+
+end	test

@@ -1,0 +1,5037 @@
+Subttl	Ed  Fortmiller/EGF/RDH	16-Jan-86
+;
+;
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1975,1979,1984,1986. 
+;ALL RIGHTS RESERVED.
+;
+;
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+;ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+;INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+;COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+;OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+;TRANSFERRED.
+;
+;THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+;AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+;CORPORATION.
+;
+;DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+;SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+;
+;Assembly and Loading Instructions:
+;
+;	.LOAD NETLDR			;HELPER.REL must be on REL:
+;					; (if FTBOOT .eq. 0) normal case
+;	.LOAD NETLDR,BOOTSTRAP		; (if FTBOOT .ne. 0)
+;	.SSAVE NETLDR
+
+;To debug NETLDR:
+;
+;	.DEBUG %"SEGMENT:LOW" NETLDR.MAC,(bootstrap if FTBOOT .ne. 0)
+;
+;		or
+;
+;	.DEBUG NETLDR.MAC,(bootstrap if FTBOOT .ne. 0)
+;	.SSAVE NETLDR
+;	.GET NETLDR
+;	.DDT
+;
+;If debugging auto start problems:
+;
+;	Delete NETLDR.EXE on SYS:
+;	Do .DEBUG command as above
+;	CCL$G
+;	Setting "AUTDEB" nonzero will cause NETLDR to look for
+;	a BOOT request every "BOTWAT" seconds.
+;	If it is desired to use a NETLDR.INI on [1,2] instead of
+;	SYS: change contents of "INIDEV" to be sixbit "DSK".
+;	If NETLDR is running detached and BOMBS out, setting
+;	JLOG in JBTSTS (in monitor) will allow the job to be
+;	attached to.
+
+	.REQUIR	REL:HELPER.REL		;[103] Get "HELPER" from REL:
+
+	.TEXT	"/SYMSEG:HIGH/LOCALS"
+
+	SEARCH	JOBDAT,MACTEN,UUOSYM	;
+
+	%%JOBD==%%JOBD			;Show JOBDAT version
+	%%MACT==%%MACT			;Show MACTEN version
+	%%UUOS==%%UUOS			;Show UUOSYM version
+
+;Version Information
+;
+	NETVER==4			;Major version number
+	NETMIN==0			;Minor version number
+	NETEDT==146			;Edit level
+	NETWHO==0			;Who last patched
+
+;Store Version Number in JOBVER
+;
+	LOC	137
+.JBVER::VRSN.	NET
+Subttl	Title Macros
+
+;Define a Macro to call the .NAME macro with the right args [113]
+; Define the .NAME Macro to be what you want, then call this Macro.
+; it's used to generate NETLDR'S version correctly
+
+	DEFINE	.CLNAM<
+	  DEFINE  .CLNM(LETTER,WHO)<
+	    IRPC LETTER,<
+	      IFE "A"-"'LETTER'"+NETMIN-1,<
+		STOPI
+		IFIDN <LETTER><@>,<
+		  IFE NETWHO,< .NAME(\NETVER,,\NETEDT,)>
+		  IFN NETWHO,< .NAME(\NETVER,,\NETEDT,-WHO)>>
+		IFDIF <LETTER><@>,<
+		  IFE NETWHO,< .NAME(\NETVER,LETTER,\NETEDT,)>
+		  IFN NETWHO,< .NAME(\NETVER,LETTER,\NETEDT,-WHO)>>>>>
+	IFGE NETMIN-^D26,< NETMIN==0
+	  PRINTX %Minor version too large - ignored>
+	IFGE NETWHO-7,< NETMIN== 
+	  PRINTX %NETWHO is too large - ignored>
+	.CLNM(@ABCDEFGHIJKLMNOPQRSTUVWXYZ,\NETWHO)
+>
+
+;Now Define a .NAME Macro to make a Title
+
+	DEFINE	.NAME(V,M,E,W)<
+TITLE	NETLDR	DECsystem-10 Program to Downline Load Remote Stations - Ver V'M'('E')'W
+>
+
+;Now make a Title
+;
+	.CLNAM
+Subttl	Conditional Assembly Switches
+
+;Conditional Assembly Switches
+;
+	ND	FT2SEG,-1		;Default is two seg program
+	ND	FTXPN,-1		;[110] Default is to disallow dumps
+					;[110] onto other than [10,1] by the
+					;[110] Remote Operator.
+	ND	FTCVRT,0		;Default is no /CONVERT switch
+					; This feature is used to convert
+					; a bootstrap .BIN file produced
+					; by MACDLX to a .MAC file to be
+					; loaded with NETLDR. The .BIN file
+					; produced by MACDLX must be
+					; contiguous.
+	ND	FTBOOT,0		;Default is not to accept a
+					; bootstrap message.
+	ND	FTDDT,0			;Default is no /DDT switch
+	ND	PATSIZ,0		;Patch area - default is none
+Subttl	Edit History
+
+Comment	_
+
+
+146	Fix CORE UUO errors under 7.03 (weirdness vis-a-vis INBUFs!)
+145	Do Copyrights.
+144	Prevent netldr from trying to type blank lines.
+143	Fix typeout of path in "loading from ..."
+142	Change MAXNOD to handle larger node numbers.
+141	Put host name in message sent to CTY on remote station
+140	Netldr keeps it's local symbols around now.
+137	Netldr learned to use the QUEUE. UUO when telling the operator
+	about automatic reloads.
+136	Netldr was taught about FRCLIN.  It now detaches if it finds
+	itself running on it.  The check for LOCK privs was also
+	removed since this is no longer required
+135	Added DAEMON. load/dump logging and the /LOCK switch.
+132-134	Skipped due to version confusion
+131	Fix some errors in CHKOK
+130	Fix error in max message length we will accept
+127	Add more types in the default switch /TYPE
+126	Add /DDT switch which will goto DDT if loaded
+	 (This requires FTDDT to be turned on)
+125	Fix loop trying to output error message to DN200
+124	Add checking of AUTDEB in the LOGOFF routine so that is
+	 AUTDEB is nonzero instead of exiting NETLDR will be
+	 started at the CCL entry point and wait for another
+	 boot request.
+123	Ignore NETLDR.INI switches such as /IGNORE,/SERIAL when
+	 not using NETLDR.INI, this prevents some ambiguous switches
+	 for the user.
+122	Fix bug in edit 120
+121	Change more errors to goto STARTE instead of CLEXIT
+	 which now allows the user to type another command
+	 without having to restart NETLDR where there is
+	 an error in the command string.
+120	Put /CONVRT and Bootstrap code under feature tests
+	 FTCVRT and FTBOOT which are normally turned off.
+117	Allow more than one name in the TYPES Macro and fix
+	 code to support more than one type of name.
+	 ie:	DN92,DAS92
+116	Change some of the errors to goto STARTE instead
+	of CLEXIT which now allows the user to type another
+	command to NETLDR without having to restart it.
+115	Change some of the error messages
+114	Lots of changes, some of which are described below:
+	a.	Redefined the AC's T0-T4 are now T1-T5
+	b.	Added code to support the Message function (6)
+	c.	Added code to support secondary boot requests
+	d.	Added code to allow /TYPE so when dumping
+		 the dump range need not be specified. The defaults
+		 are now:
+			DC71	8K
+			DC72	8K
+			DN82	8K
+			DN92	12K
+			DN200	28K
+	e.	/CONVRT switch added to take the secondary
+		 boot .BIN file and make a .MAC file
+		 which can be assembled with MACRO-10 and
+		 loaded with NETLER.
+	f.	Fix a few minor bugs
+113	Changed TITLE Macro to take care of minor versions
+112	Edit 110 made the PPN become sticky on commands from
+	 the remote node.
+111	If there are extra CRLF's in NETLDR.INI and there no
+	 match was found NETLDR gave ?File spec missing message
+	 rather than no match found message in NETLDR.INI.
+110	Remote oprerator could destroy any file on the system via
+	 the /DUMP command. Only allow dumps onto [10,1] when the
+	 remove operator is dumping.
+107	If the command line in NETLDR.INI for a PDP8 doesn't have
+	 /TYPE before the ='s and doesn't have /8 or /PDP8 after
+	 the ='s and the line before it was for a PDP11 and it
+	 had a /TYPE switch, NETLDR assumes its taking care of
+	 a PDP11.  If the remote supplied a Type, use it.
+106	Error continue doesn't always work for commands from TTY
+105	Fix format of dump listings
+104	After clearing JACCT with SETNAM, make sure it cleared.
+103	Use .REQUIR to load HELPER.REL from REL:
+102	FOO/LOAD,FOO/START:200 in NETLDR.INI doesn't work
+		do a RELEASE at CHKOK of the input file
+		Init some bits in AC(F) and clear ORIGIN and
+		BUFCNT, and NUMDAT.
+101	Fix illegal address return
+100	Add types DAS92 and DAS98
+_
+;Macro Definitions
+;
+	DEFINE	TELLCR	(STRING),<
+	XLIST
+	PUSHJ	P,[MOVEI T1,[ASCIZ	\" STRING
+\]
+		JRST	TYPASC]
+	LIST	>
+
+	DEFINE	TELL	(STRING),<
+	XLIST
+	PUSHJ	P,[MOVEI T1,[ASCIZ	\" STRING\
+]
+		JRST	TYPASC]
+	LIST	>
+
+	DEFINE	TELLND	(STRING),<
+	XLIST
+	PUSHJ	P,[PUSHJ P,TYPND			;TYPE " NODE ...
+		MOVEI T1,[ASCIZ \ STRING
+\]
+	JRST	TYPASC]
+	LIST	>
+Subttl	The Message Macro
+
+;Call is:
+;	MSG(CODE,TYPE,CRLF,BODY)
+;
+;Where
+;	CODE		Is the three letter error code
+;	TYPE		is one of:
+;		E	Error (?)
+;		W	Warning (%)
+;		M	Message ([)
+;
+;	CRLF		is either (Y) to append a <CR> or (N)
+;	BODY		is the message itself
+;
+
+;First a Macro to generate an ASCIZ string with a CRLF tacked on
+;
+	DEFINE ASCIC(STRING),<
+	XLIST
+	ASCIZ \STRING
+\
+	LIST
+	SALL>
+
+;Define Macro to generate ASCIZ string without CRLF
+;
+	DEFINE ASCIN(string),<
+	XLIST
+	ASCIZ	\STRING\
+	LIST
+	SALL
+>
+
+;The MSG Macro lives on the next page because of it's size
+;Now the MSG Macro
+;
+DEFINE	MSG(CODE,TYPE,CRLF,BODY),<
+	XLIST
+	IFDIF <TYPE> <E>,<
+	IFDIF <TYPE> <W>,<
+	IFDIF <TYPE> <M>,<
+	PRINTX	?Illegal .TYPE. Argument to MSG Macro - CODE
+	PASS2
+	END>>>
+	IFDIF <CRLF> <Y>,<
+	IFDIF <CRLF> <N>,<
+	PRINTX	?Illegal .CRLF. Argument to MSG Macro - CODE
+	PASS2
+	END>>
+	IF1 <
+	IFDEF CODE'% ,<
+	PRINTX	?Multiply defined error mnemonic - CODE
+	PASS2
+	END>>
+CODE'%:	BLOCK	0		;;DEFINE THE STARTING LOCATION
+
+	IFIDN <TYPE> <E>,<
+	IFIDN <CRLF> <Y>,<
+	ASCIC<?^GNET'CODE' 'BODY>
+	XLIST
+>
+	IFIDN <CRLF> <N>,<
+	ASCIZ \?^GNET'CODE' 'BODY\
+>>
+	IFIDN <TYPE> <W>,<
+	IFIDN <CRLF> <Y>,<
+	ASCIC<%NET'CODE' 'BODY>
+	XLIST
+>
+	IFIDN <CRLF> <N>,<
+	ASCIZ \%NET'CODE' 'BODY\
+>>
+	IFIDN <TYPE> <M>,<
+	IFIDN <CRLF> <Y>,<
+	ASCIC<[NET'CODE' 'BODY]>
+	XLIST
+>
+	IFIDN <CRLF> <N>,<
+	ASCIZ \[NET'CODE' 'BODY\
+>>
+	LIST
+	SALL
+>
+Subttl	Error Macro
+
+;Error Macro Call
+;
+;	1ST arg	NUM	How to handle the Error call
+
+			E.%==	0	;Give a "%".
+			E.Q==	1	;Give a "?".
+			E.T1==	2	;0 = No code, 1 = Code in T1 to output
+			E.NC==	4	;0 = CRLF, 1 = No CRLF
+			E.EC==	10	;0 = Don't set F.ERRC, 1 = set F.ERRC
+					; to continue to next command
+;
+;	2ND arg	CODE	Unique 3 letter code to be tacked onto NET
+;
+;	3RD arg	TXT	Message to be printed after NET??? -
+;
+;	4TH arg	WHERE	Where to go after Error call.  There is a
+;			Max of 31. places to go.  These places are
+;			placed on the PDL, so each place called must
+;			exit via a POPJ P,.  The last arg in WHERE
+;			is the final destination, and before going
+;			to the final destination AC'S T1-T5 are
+;			restored.
+;
+	DEFINE	ERROR	(NUM,CODE,TXT,WHERE),<
+	XLIST
+S..'CODE:!JRST	[PUSHJ	P,ERR
+	XWD	<<Z..'CODE>_<^D18-5>>!NUM,[ASCIZ \TXT\]
+	Z..'CODE=0
+	IFB	<WHERE>,<PRINTX ?Destination arg missing for NET'CODE in Error Macro Call.>
+	IRP	WHERE,<
+	IFE	Z..'CODE,<	XWD	''CODE'',WHERE	;3 CHAR CODE,,FINAL DESTINATION>
+	IFN	Z..'CODE,<	XWD	0,WHERE>
+	IFG	<Z..'CODE-37>,<PRINTX ?Too many places to go in NET'CODE'.>
+	Z..'CODE==Z..'CODE+1>]
+	LIST	>;End define ERROR
+
+Subttl	Other Macros
+
+;Macro to generate a POPJ P,
+;
+	DEFINE	RETURN <
+	XLIST
+	POPJ	P,
+	LIST>
+
+;Macro to switch to High Seg
+;
+	DEFINE	$HIGH	(X),<
+	IFN	FT2SEG,	<RELOC	X>
+	>;End define $HIGH
+
+;Macro to switch to Low Seg
+;
+	DEFINE	$LOW	(X),<
+	IFN	FT2SEG,	<RELOC	X>
+	>;End define $LOW
+
+;Macro to turn off a bit in AC(F)
+;
+	DEFINE	OFF(BIT),<
+	TXZ	F,BIT			;TURN OFF BIT
+	>;End define OFF
+
+;Macro to turn on a bit in AC(F)
+;
+	DEFINE	ON(BIT),<
+	TXO	F,BIT			;TURN ON BIT
+	>;End define ON
+Subttl	OPDEF'S
+
+	OPDEF	NODE.	[CALLI	0,157]		;NODE UUO
+	OPDEF	TRO	[IORI]			;IORI is faster on KL
+	OPDEF	TRZ	[ANDCMI]		;ANDCMI is faster on KL
+	OPDEF	TDO	[IOR]			;IOR is faster on KL
+	OPDEF	TDZ	[ANDCM]			;ANDCM is faster on KL
+
+	RELOC
+
+
+;Define the AC's
+;
+	F=	0			;Flags
+	T1=	F+1			;Temporary
+	T2=	T1+1			;Temporary
+	T3=	T2+1			;Temporary
+	T4=	T3+1			;Temporary
+	T5=	T4+1			;Temporary
+	P1=	T5+1			;Mostly Permanent
+	P2=	P1+1			;Mostly Permanent
+	P3=	P2+1			;Mostly Permanent
+	P4=	P3+1			;Mostly Permanent
+	P5=	P4+1			;Mostly Permanent
+	ORIGIN=	P5+1			;Location counter
+	CMDWRD=	ORIGIN+1		;Bit set for each Switch
+	CPU=	CMDWRD+1		;CPU type 0 for 8, 1 for 11
+	P=	17			;Pointer to Pushdown List
+
+;Define the bits in AC (F)
+;
+	F.NLDR==1B35			;In data portion of binary file
+	F.WRD==	1B34			;Assembling a word
+	F.ORG==	1B33			;Assembling the origin
+	F.FLD==	1B32			;Assembling the field
+	F.ORGL==1B31			;Origin was before data
+	F.ADRC==1B30			;Address change
+	F.VIR==	1B29			;0 = used, 1 = virgin
+	F.377==	1B28			;Set on 377, cleared on next 377
+	F.SADR==1B27			;Starting address in file
+	F.LOCK==1B26			;0 =not locked, 1 = locked
+	F.CCL==	1B25			;0=normal entry, 1 = started at +1
+	F.NLOG==1B24			;0 = logged in, 1 = not logged IN
+	F.EXTB==1B23			;0 = not extensible, 1 = extensible
+	F.NINI==1B22			;0 = filespec from remote, 1 = use NETLDR.INI
+	F.EOF==	1B21			;0 = not end of NETLDR.INI, 1 = end of NETLDR.INI
+					; if not NETLDR.INI(F.NINI=0) then F.EOF
+					;  gets set on a LF (12) character.
+	F.EOL==	1B20			;0 = not end of line (12), 1 = end of line (12)
+	F.MATC==1B19			;0 = no command match, 1 = command match
+	F.DEV==	1B18			;0 = no device input, 1 = device input
+	F.DEFD==1B17			;0 = using inputed dev, 1 = using a default dev
+	F.INDX==1B16			;0 = not using dump index, 1 = using dump index
+	F.DMPF==1B15			;1 = get char from index file
+	F.ERRC==1B14			;1 = try for another command on error
+	F.CTLZ==1B13			;1 = Cntl-Z typed
+	F.TYRM==1B12			;1 = have type remote info, 0 = have not
+	F.RTY==	1B11			;1 = retrying in /IMAGE for PDP11
+	F.TYF==	1B10			;1 = type the function
+	F.DPPN==1B9			;[112] 1 = using a default PPN
+	F.MSG==	1B8			;1 = remote is allowed to get messages
+	F.MSGX==1B7			;1 = remote can get allowed messages
+	F.BOOT==1B6			;1 = received "BOOT" req from remote
+	F.MIP==	1B5			;1 = outputting a message to a remote node
+	F.TLCK==1B4			;1 = /LOCK switch said lock for node. uuo
+	F.NLOG==1B3			;1 = /NOLOG don't try to log reloads
+;Define each Type of Remote
+;
+	T.D71==	1			;PDP8I
+	T.D72==	2			;PDP8E
+	T.D82U==3			;PDP11/40 with a DUP11
+	T.D82Q==4			;PDP11/40 with a DQ11
+	T.D92==	5			;PDP8A
+	T.D200==6			;PDP11/34
+	T.MAX==	6			;Highest type code
+;Miscellaneous Defines
+;
+	CPU.8==	0			;PDP8 CPU
+	CPU.11==1			;PDP11 CPU
+	A.ORG==	1B27			;Bit to add to low byte in buffer
+					; to flag origin. binary files ARE
+					; read into a buffer in memory
+					; before sending the data to
+					; the Node. The data is packed
+					; in 9 bit bytes with the high
+					; order bit set to indicate the
+					; start of an address.
+	EXTENB==1B28			;Extensible bit position
+
+
+;DEFINITIONS FOR DAEMON ERROR-LOGGING CALLS
+
+;FILE SPEC BLOCK FOR ERROR LOGGING (USED TO REPORT LOAD/DUMP FILES)
+	ERFSFN==0		;FILE NAME
+	ERFSEX==1		;EXTENSION
+	ERFSDV==2		;DEVICE
+	ERFSXX==3		;PATH. BITS
+	ERFSPN==4		;PPN
+	ERFSSF==5		;SFD #1
+	ERFSLN==ERFSSF+6	;LENGTH OF A FILE-SPEC BLOCK
+
+Subttl	Node UUO Defines
+
+;Define Node UUO functions
+;
+	N.EXR==	1			;Examine request <L><1><ADR1><ADR2>
+	N.DEP==	2			;Deposit <L><2><ADR><DATA>
+	N.GOTO==3			;Goto <L><3><ADR>
+	N.CLR==	4			;Clear <L><4><ADR1><ADR2>
+	N.DEB==	5			;Debug <L><5>
+	N.MSG==	6			;Message <L><6><DATA,0>
+	N.BOTD==7			;Boot data <L><7><CNT><DATA>
+	N.ACC==	11			;Accept <L><11>
+	N.EXD==	12			;Examine data <L><12><ADR><DATA>
+	N.REJ==	13			;Reject <L><13>
+	N.RQBT==14			;Request boot <L><14><TYPE><SER><MEM SIZE>
+	N.RQLD==15			;Request load <L><15><TYPE><SER><ASCII TEXT>
+
+;Define the errors from the Node UUO
+;
+	NE.IAL==1			;Illegal ARG list
+	NE.ILL==2			;Illegal Node number or name
+	NE.UNP==3			;User not priv
+	NE.RNC==4			;Remote Node control is not available
+	NE.LOK==5			;Job is not locked
+	NE.TIM==6			;Time out error
+
+;Define the I/O channels
+;
+	INDEV==	1			;Channel 1 for input
+	OUTDEV==2			;Channel 2 for dump output and dump index file output
+	INDEVF==3			;Channel 3 for input of NETLDR.INI
+	INDMPF==4			;Channel 4 for input of dump index file
+Subttl	More conditionals
+
+;Values other than the ones supplied here are NOT supported
+;
+ND	MAXSND,^D120		;Max bytes to send
+ND	MAXRCV,^D512		;Max bytes to receive
+ND	MAXEXM,^D100		;Max bytes to examine
+ND	MAXLIN,^D15		;Maximum line number allowed
+ND	MAXNOD,377		;Maximum Node number allowed
+ND	NODTIM,^D12		;Seconds for NODE UUO to sleep before error
+ND	TRYNOD,^D5		;Number of times to try NODE UUO on error
+ND	MULNOD,^D2		;Factor to increase TRYNOD when not logged in
+ND	TRYBOT,^D5		;Number of times to try NODE UUO or error when Booting
+ND	MULBOT,^D1		;Factor to increase TRYBOT by when not logged in
+
+ND	LINPAG,^D30		;Lines per page
+ND	TRYLOK,^D5		;Number of times to try and lock before error
+ND	MULLOK,^D2		;Factor to increase TRYLOK when not logged in
+ND	SLPLOK,^D2		;Seconds to sleep between lock retrys
+ND	TRYCOR,^D5		;Number of times to do CORE UUO before error
+ND	SLPCOR,^D2		;Seconds to sleep between CORE UUO retrys
+ND	MULCOR,^D2		;Factor to increase TRYCOR by when not  logged in
+ND	ENTTRY,^D10		;Number of times to try Entering ? file
+				; names before giving up.
+ND	BOTSIZ,^D300		;Maximum number of bytes expecting
+ND	OPRCHR,<BOTSIZ+^D72>	;Maximum number of chars allowed in
+				; the buffer to go to OPR
+ND	MSGWID,^D72		;Width of line for message message
+ND	BOTWAT,^D1		;Lenth of time to wait in seconds
+				; before trying to get another boot/load
+				; request (only vaild if AUTDEB non 0)
+IFN FT2SEG <
+	TWOSEG
+	RELOC	400000
+>
+
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1975,1986. ALL RIGHTS RESERVED.
+\;END COPYRIGHT MACRO
+
+
+
+Repeat	0,<				;May be implemented later
+
+Subttl	LUUO Definitions
+
+;LUUO definitions
+;
+;  OP-CODE definitions
+;
+	OPDEF	TELLA	[001000,,0]	;Write ASCIZ string
+	OPDEF	TELL6	[002000,,0]	;Write Sixbit word
+	OPDEF	CHR	[003000,,0]	;Write immediate character
+	OPDEF	RAD10	[004000,,0]	;Print decimal number
+	OPDEF	RAD08	[005000,,0]	;Print octal number
+
+;Destination of UUO is determined by AC field as follows:
+;
+	OPR==	1			;Tell operator
+	USR==	2			;Tell user
+	REM==	4			;Tell remote
+	NAC==	10			;Suppress action characters on TELL UUO
+
+
+;destination field bits right justified
+;
+	UU.OPR==1B35			;Operator
+	UU.USR==1B34			;User
+	UU.REM==1B33			;Remote
+	UU.NAC==1B32			;Don't suppress 6bit blanks
+
+
+	>;End Repeat 0
+Subttl	Switch Definations
+;
+;	LALL
+;
+	FUNCTX==1
+	S.ZZZZ==0
+;
+;define Macro (NAMES) for Switch Names
+;
+;	1ST arg	NAME	switch name
+;	2ND arg	CMDBIT	unique bit for each switch C.'CMDBIT
+;	3RD arg	DSP	addr to dispatch to if NON 0
+;	4TH arg	HV	high value gets put here for switches that can have two args (HV-LV)
+;	5TH arg	LV	low value gets put here for switches that can have two ARGS (HV-LV)
+;			 or if switch can only have one arg than it gets put here
+;	6TH arg	CHKBIT	bits to check
+
+	ARGILL==(1B17)			;argument is illegal
+	ARGREQ==(1B16)			;argument is required
+	DCMILL==(1B15)			;double argument is illegal
+	DECVAL==(1B14)			;decimal value for switch
+	NMNINI==(1B13)			;switch has no meaning if not using NETLDR.INI
+	AUTILL==(1B12)			;switch is illegal either in NETLDR.INI or
+					; in a command line from the remote
+	DUMSWT==(1B11)			;dummy switch
+
+		DEFINE	NAMES,<
+	SWT	8,8,S8,0,0,ARGILL!DCMILL	;/8
+	SWT	11,11,S11,0,0,ARGILL!DCMILL	;/11
+	IFN	FTBOOT,<
+	SWT	BOOT,BOOT,0,0,0,ARGILL!DCMILL	;/BOOT
+	>;End IFN FTBOOT
+	SWT	CLEAR,CLR,0,A.CLRH,A.CLRL,0	;/CLEAR
+	IFN	FTCVRT,<
+	SWT	CONVRT,CVRT,0,0,0,ARGILL!DCMILL	;/CONVRT
+	>;End IFN FTCVRT
+	IFN	FTDDT,<
+	SWT	DDT,DDT,DDTX,0,0,ARGILL!DCMILL!AUTILL	;/DDT
+	>;End IFN FTDDT
+	SWT	DUMP,DUMP,0,A.DMPH,A.DMPL,0	;/DUMP
+	SWT	EXIT,EXIT,EXITP,0,0,ARGILL!DCMILL	;/EXIT
+	SWT	H,H,HELP,0,0,ARGILL!DCMILL	;/H(ELP)
+	SWT	HELP,HELP,HELP,0,0,ARGILL!DCMILL	;/HELP
+	SWT	HPQ,HPQ,HPQX,0,0,ARGREQ!DCMILL	;/HPQ
+	SWT	IGNORE,IGN,IGNORE,0,0,ARGILL!DCMILL!NMNINI	;/IGNORE
+	SWT	IMAGE,IMAG,0,0,0,ARGILL!DCMILL	;/IMAGE
+	SWT	LINE,LINE,0,0,A.LINE,ARGREQ!DCMILL	;/LINE
+	SWT	LOAD,LOAD,0,0,0,ARGILL!DCMILL	;/LOAD
+	SWT	LOCK,LOCK,LOCKX,0,0,ARGILL!DCMILL ;/LOCK (DO LOCK UUO)
+	IFN	FTBOOT,<
+	SWT	MEMSIZ,MEM,0,0,A.MEM,ARGREQ!DCMILL	;/MEMSIZE (BOOT)
+	>;End IFN FTBOOT
+	SWT	NODE,NODE,NODEX,0,0,ARGREQ!DCMILL	;/NODE
+	SWT	NOLOG,NOLOG,NOLOGX,0,0,ARGILL!DCMILL	;/NOLOG
+	SWT	PACKED,PACK,0,0,0,ARGILL!DCMILL	;/PACKED
+	SWT	PDP8,P8,S8,0,0,ARGILL!DCMILL	;/PDP8
+	SWT	PDP11,P11,S11,0,0,ARGILL!DCMILL	;/PDP11
+	SWT	SELF,SELF,0,0,0,ARGILL!DCMILL	;/SELF
+	SWT	SERIAL,SER,0,0,A.SER,ARGREQ!DCMILL!NMNINI	;/SERIAL
+	SWT	START,STRT,0,0,A.STRT,ARGREQ!DCMILL	;/START
+	SWT	TYPE,TYPE,TYPE,0,0,ARGREQ!DCMILL	;/TYPE
+	>;	END DEFINE NAMES
+
+
+	DEFINE	SWT(NAME,CMDBIT,DSP,HV,LV,CHKBIT),<
+	SIXBIT \NAME\			;/'NAME
+	C.'CMDBIT'==FUNCTX
+	S.'NAME'==S.ZZZZ
+	XLIST
+	FUNCTX==FUNCTX*2
+	S.ZZZZ==S.ZZZZ+1
+	LIST
+>
+
+SWTTAB:	NAMES
+SWTLEN==.-SWTTAB
+
+PAGE
+
+	DEFINE	SWT(NAME,CMDBIT,DSP,HV,LV,CHKBIT),<
+	XWD	CHKBIT,DSP		;/'NAME
+>
+
+DSPTAB:	NAMES
+
+PAGE
+
+	DEFINE	SWT(NAME,CMDBIT,DSP,HV,LV,CHKBIT),<
+	XWD	HV,LV			;/'NAME
+>
+
+DATTAB:	NAMES
+
+;Some easier to use Switch Combinations
+;
+C..CPU==C.8!C.P8!C.11!C.P11		;ALL CPU'S
+C..STK==C..CPU!C.NODE!C.LINE!C.SELF!C.TYPE	;STICKY SWITCHES
+Subttl	Beginning of program
+
+	SALL
+
+STARTE:	TXNE	F,F.CCL			;LOGGED IN?
+	  JRST	[TXNN	F,F.ERRC	;NO, TRY ANOTER CMD
+		PUSHJ	P,LOGOFF	;NO
+		JRST	DONE		;YES
+]
+STARTZ:	TXZE	F,F.CTLZ		;CNTL-Z TYPED?
+	  EXIT	1,			;YES, EXIT
+	CLRBFI				;CLEAR TTY INPUT IF ERROR
+START:	TDZA	F,F			;CLEAR FLAG
+CCL:	MOVEI	F,F.CCL			;REMEMBER CCL ENTRY
+	RESET				;INIT THE WORLD
+IFN	FT2SEG,<
+	MOVE	1,[XWD	LOWBLK,LOW]	;SETUP THE LOW
+	BLT	1,LOW+LOWLEN-1		; SEGMENT.
+>;END IFN FT2SEG
+	STORE	(1,FIRZRO,LSTZRO,0)	;CLEAR FROM FIRZRO through LSTZRO
+	MOVE	1,.JBFF			;REMEMBER THE FIRST
+	MOVEM	1,CORSIZ		; FREE CORE LOCATION
+	STORE	(17,1,17,0)		;CLEAR AC'S 1-17
+	MOVE	P,[IOWD	PDSIZ,PDLST]	;SETUP PUSHDOWN LIST
+;	MOVE	T1,[PUSHJ P,UUO0]	;WHAT TO DO ON AN LUUO
+;	MOVEM	T1,.JB41		;WHERE MONITOR WILL FIND IT
+	PUSHJ	P,TYPOPS		;SETUP FOR OPR MESSAGE
+
+;SEE IF WE ARE ON FRCLIN.  IF SO, DETACH
+	SETOM	T1			;GET OUR LINE NUMBER USING THE
+	GETLCH	T1			;  -1 MEANS "ME" CONSTRUCT
+	ANDI	T1,^O777		;GET JUST THE LINE NUMBER
+	MOVX	T2,%CNFLN		;NOW DETERMINE WHICH LINE
+	GETTAB	T2,			;  "FRCLIN" IS.
+	  SETOM	T2			;IF NO "FRCLIN" THEN NEVER DETACH
+	CAIE	T2,(T1)			;IF WE ARE NOT,
+	JRST	GPPN			;IF NOT ON FRCLIN, DON'T DETACH
+	MOVSI	T1,.UXTRM(T1)		;SETUP "XWD UDX,0" FOR DETACH
+	ATTACH	T1,			;DO THE DETACH TO FREE FRCLIN
+	  JFCL				;SHOULDN'T HAPPEN
+	TXO	F,F.CCL			;WE ARE ALSO IN "AUTO" MODE
+GPPN:	GETPPN	T1,			;GET OUR PPN
+	  JFCL				;DON'T CARE
+	MOVEM	T1,MYPPN		;REMEMBER OUR PPN
+GETJOB:	PJOB	T1,			;ALSO GET OUR JOB
+	MOVEM	T1,MYJOBN		; NUMBER AND REMEMBER IT
+	MOVNS	T1			;-MYJOBN
+	ON	F.TYRM			;FLAGGED WE HAVE TYPED REMOTE
+					; INFO SO NEXT FEW ERRORS WON'T CALL TYPREM
+GETJBS:	JOBSTS	T1,			;GET JOB STATUS TO SEE
+GETJB1:	  ERROR	<E.Q>,<JSU>,<JOBSTS UUO failed>,<LOGOFF>
+	TXNN	T1,JB.ULI		; IF WE ARE LOGGED IN.
+	JRST	[ON	F.NLOG		;FLAG NOT LOGGED IN
+		JRST	AUTOLD		;DO AUTO STUFF
+]
+	HRROI	T1,.GTPRV		;-1,,.GTPRV
+GETPRV:	GETTAB	T1,			;GET PRIV WORD
+	  ERROR	<E.Q>,<GTP>,<GETTAB UUO for privilege word failed>,<LOGOFF>
+	TXNN	T1,JP.POK		;MUST HAVE POKE PRIVS IF LOGGED IN
+	  ERROR	<E.Q>,<POK>,<Must have POKE privileges>,<LOGOFF>
+	TXNN	F,F.CCL			;IF CCL ENTRY THEN MUST BE [1,2]
+	  JRST	STARTB			;NOT CCL ENTRY SO CAN BE ANYTHING
+	MOVE	T1,MYPPN		;GET OUR PPN
+ONETWO:	CAME	T1,[XWD	1,2]		;SEE IF WE ARE [1,2]
+	  ERROR	<E.Q>,<NOT>,<Must be logged in as [1,2]>,<LOGOFF>
+STARTB:	HRROI	T1,.GTPRG		;-1,,.GTPRG
+	GETTAB	T1,			;GET PROGRAM NAME
+	  ERROR	<E.Q>,<GTN>,<GETTAB UUO failed getting the program name>,<LOGOFF>
+	SETNAM	T1,			;THIS CLEARS JACCT
+	MOVN	T1,MYJOBN		;GET MY JOB NUMBER
+	JOBSTS	T1,			;GET JBTSTS
+	  PUSHJ	P,GETJB1		;JOBSTS UUO FAILED
+	TXNE	T1,JB.UJC		;[104] SEE IF STILL JACCT
+	  ERROR	<E.Q>,<JAC>,<SETNAM failed to clear JACCT>,<LOGOFF> ;[104]
+	TXNE	F,F.CCL			;IF CCL ENTRY DO AUTO STUFF
+	  JRST	AUTOLD			;DO AUTO ENTRY
+;[146]	HLRZ	T2,.JBSA		;GET RID OF EXTRA CORE
+;[146]	PUSHJ	P,GETCOR		;SHRINK CORE
+	SETZB	CMDWRD,REMCMD		;ZERO THE COMMAND WORD
+STARTA:	PUSHJ	P,GETCOM		;GET THE COMMAND
+	TXNN	F,F.CCL			;CCL ENTRY?
+	  JRST	START3			;NO
+	PUSHJ	P,TYPREM		;TYPE DATA RECEIVED FROM REMOTE
+	SKIPN	T1,REMCMD		;IF WE HAVE INFO USE IT
+					; WILL ALWAYS HAVE IT FIRST TIME
+	  JRST	START3			;SECOND OR LATER TIME
+	TXZ	T1,-<C..STK>-1		;KEEP STICKY STUFF
+	MOVEM	T1,STKWRD		;MAKE FIRST REMOTE STUFF STICKY
+	SETZM	REMCMD			;ITS NOW STICKY STUFF
+	MOVE	T1,R.TYPE		;GET REMOTE TYPE
+;[107]	TXNN	CMDWRD,C..CPU		;SEE IF CPU GIVEN IN FILE
+	TXNE	CMDWRD,C..CPU		;[107] SEE IF CPU GIVEN IN FILE
+	  JRST	START3			;[107] CPU TYPE GIVEN IN FILE-SPEC
+					; CPU WILL GET SET PROCESSING
+					; THE /8 OR /11 SWITCH.
+	TDO	CMDWRD,CPUIDT(T1)	;NO, SO USE TYPE DECODED
+	HRRZ	CPU,CPUTYP(T1)		;[107] MAKE SURE CPU AGREES WITH CMDWRD
+START3:	MOVSI	T1,-STKLNG		;CHECK FOR STICKY STUFF
+CHKSTK:	MOVE	T2,STKWRD		;GET STICKY CMDS
+	AND	T2,STKTAB(T1)		;KEEP ONES INTERESTED IN
+	TDNN	CMDWRD,STKTAB(T1)	;SEE IF ALREADY HAVE THEM
+	  IOR	CMDWRD,T2		;NO, USE A STICKY ONE.
+	AOBJN	T1,CHKSTK		;LOOP THOUGH TABLE
+	MOVSI	T1,-ILLCLE		;CHECK FOR COMMAND COMBINATIONS
+	SETCM	T2,CMDWRD		;GET COMPLEMENT OF COMMANDS
+CHKILC:	TDNN	T2,ILLCOM(T1)		;SEE IF ILLEGAL COMBINATION
+	 ERROR	<E.Q!E.NC>,<ISC>,<Illegal switch combination>,<ISCSWI>
+	AOBJN	T1,CHKILC		;SCAN ENTIRE TABLE
+	SKIPN	CMDWRD			;SEE IF ANY SWITCHS GIVEN
+	 PUSHJ	P,[HLLZ	T1,EXT		;GET EXTENSION
+		IOR	T1,NAME		;
+		IOR	T1,DEV		;
+		IOR	T1,DIRECT	;
+		JUMPE	T1,STARTE	;IF NOT (NAME.OR.DEV.OR.EXT.OR.DIRECT) PROMPT AGAIN
+		 ERROR	<E.Q!E.NC>,<NSS>,<No switches specified>,<HLPMSG>
+]
+	IFN	FTCVRT,<
+	TXNE	CMDWRD,C.CVRT		;CONVERT .BIN FILE TO .MAC?
+	  JRST	CONCVT			;YES
+	>;End IFN FTCVRT
+	TXNN	CMDWRD,C.NODE		;/NODE IS A REQUIRED SWITCH
+	 ERROR	<E.Q!E.NC>,<NSR>,</NODE switch required>,<HLPMSG>
+	TXNN	CMDWRD,C.LINE!C.SELF	;/LINE OR /SELF SWITCH REQUIRED
+	 ERROR	<E.Q!E.NC>,<LSR>,</LINE or /SELF switch required>,<HLPMSG>
+	TXNE	CMDWRD,C.LINE		;/LINE or /SELF?
+	  JRST	COMSLF			;ITS /SELF
+	SETOM	A.LINE			;FOR /SELF SET A.LINE TO -1
+	JRST	CHKCPT			;
+COMSLF:	SKIPL	T1,A.LINE		;GET AND CHECK LINE NUMBER
+	 CAILE	T1,MAXLIN		; FOR 0-17 (OCTAL)
+	  ERROR	<E.Q!E.NC>,<LTL>,<Line number greater than 17>,<HLPMSG>
+CHKCPT:	TXNN	CMDWRD,C..CPU!C.TYPE	;SEE IF CPU TYPE SPECIFIED
+	 ERROR 	<E.Q!E.NC>,<CSR>,</PDP8, /PDP11, /TYPE or switch required>,<HLPMSG>
+	TXNE	CMDWRD,C.IMAG!C.PACK	;SEE IF MODE SPECIFIED
+	  JRST	COMDEF			;MODE SPECIFIED
+	TDO	CMDWRD,MODTAB(CPU)	;SET DEFAULT MODE
+					; IMAGE FOR /PDP8, PACKED FOR /PDP11
+COMDEF:	TXNE	CMDWRD,C.DUMP		;SEE IF /DUMP
+	  PJRST	DUMP			;YES
+	IFN	FTBOOT,<
+	TXNE	CMDWRD,C.BOOT		;SEE IF /BOOT
+	  PJRST	BOOT			;YES
+	>;End IFN FTBOOT
+	PUSHJ	P,CLEAR			;DO /CLEAR FUNCTION
+	IFN	FTCVRT,<CONCVT:>;End IFN FTCVRT
+	SKIPN	NAME			;IF NO DEV AND NO NAME THEN IT MAY
+	  JRST	START6			;NO NAME
+					; BE A START ONLY. IF NAME ONLY GIVE
+					;  DSK AS THE DEV, IF DEV ONLY IT
+					;   MUST BE A NON-DIR DEV.
+	PUSHJ	P,DEFDEV		;SET DEV IF NON GIVEN
+	JRST	NOTPTR			;
+START6:	TXNN	F,F.DEV			;IF NO DEVICE THEN CHECK FOR ONLY START
+	  JRST	[
+	IFN	FTCVRT,<
+		TXNN	CMDWRD,C.CVRT	;MUST HAVE A FILE-SPEC IF /CONVRT
+	>;End IFN FTCVRT
+		 TXNN	CMDWRD,C.STRT	;IF NO NAME, NO FILE, IF NOT /START
+					; THEN ITS AN ERROR
+		  ERROR	<E.Q!E.NC>,<FSM>,<File-spec missing>,<HLPMSG>
+		JRST	GO2		;/START:X
+				]
+	MOVE	T4,DEV			;GET DEVICE NAME
+	DEVCHR	T4,			;GET DEVICE CHARACTERICS
+	TXNN	T4,DV.IN		;MUST BE AN INPUT DEVICE
+	  ERROR	<E.Q!E.NC!E.EC>,<DIN>,<Can't do INPUT from device>,<COIERR>
+	TXNE	T4,DV.DIR		;IF DIRECTORY DEV AND NO FILE
+	 ERROR	<E.Q!E.EC>,<FNM>,<File name missing>,<STARTE>
+	IFN	FTCVRT,<
+	TXNE	CMDWRD,C.CVRT		;/CONVERT?
+	 TXNE	T4,DV.DSK		;YES, IS DEVICE A DISK?
+	  CAIA				;AOK
+	  ERROR	<E.Q>,<DSK>,</CONVRT requires a DSK type device>,<STARTE>
+	>;End IFN FTCVRT
+	TXNN	T4,DV.PTR		;IF PTR FORCE IMAGE MODE
+	  JRST	NOTPTR			;NOT PTR
+	TXZ	CMDWRD,C.PACK		;ZERO THIS BIT
+	TXO	CMDWRD,C.IMAG		;SET IMAGE
+NOTPTR:	MOVEI	T1,.IOIMG		;IMAGE MODE ( 10 )
+	MOVE	T2,DEV			;GET DEVICE FOR OPEN
+	MOVEI	T3,INHDR		;HEADER BLOCK FOR INPUT
+	OPEN	INDEV,T1		;OPEN THE DEVICE
+	  ERROR	<E.Q!E.NC!E.EC>,<COI>,<Can't OPEN input device>,<COIERR>
+	MOVE	T1,NAME			;GET FILE NAME GIVEN
+	SKIPN	T2,EXT			;SEE IF EXTENSION OR DOT
+	  MOVSI	T2,'BIN'		;TRY .BIN THEN NULL
+	TRZ	T2,-1			;CLEAR DOT FLAG
+RELOOK:	SETZ	T3,			;CLEAR WORD
+	MOVE	T4,DIRECT		;GET PPN
+	LOOKUP	INDEV,T1		;LOOKUP THE FILE
+	  JRST	[HRRZ	T5,T2		;GET THE ERROR CODE
+		SKIPE	EXT		;SKIP IF WE SHOULD TRY NULL
+		 TLZ	T2,-1		;USED EXT SO FLAG AS NULL
+		 TLZE	T2,-1		;IF NULL TRIED NO FILE THEN
+		 JUMPE	T2,RELOOK	;BIN WAS TRIED SO TRY NULL
+		 MOVE	T1,T5		;GET THE ERROR CODE
+		 ERROR	<E.Q!E.T1!E.NC!E.EC>,<LUF>,<LOOKUP failed>,<LOOKER>
+]
+	MOVEM	T1,LODFIL+ERFSFN	;SAVE THE FILENAME
+	HLLZM	T2,LODFIL+ERFSEX	;  AND THE EXTENSION
+	MOVEI	T1,INDEV		;GET THE INPUT CHANNEL NUMBER
+	MOVEM	T1,LODFIL+ERFSDV	;  AND PUT IT WHERE PATH. CAN FIND IT
+	MOVE	T1,[XWD ERFSLN-ERFSDV,LODFIL+ERFSDV] ;SET UP AND DO THE
+	PATH.	T1,			;  UUO TO READ THE PATH
+	  ERROR	E.%,PRI,<PATH. UUO to read input filespec failed.>,<RELOO1>
+RELOO1:	HLLM	T2,EXT			;REMEMBER EXTENSION WE USED
+	INBUF	INDEV,0			;BUILD THE BUFFERS
+	IFN	FTCVRT,<
+	TXNE	CMDWRD,C.CVRT		;/CONVRT?
+	  PJRST	CONVRT			;YES, GO TO ROUTINE
+	>;End IFN FTCVRT
+	TXZE	F,F.RTY			;SEE IF RETRYING
+	  JRST	START7			;YES, FORGET THE MESSAGE
+	PUSHJ	P,TYPND			;TYPE NODE ID
+	MOVEI	T1,[ASCIZ \ Loading from \]
+	PUSHJ	P,TYPASC		;TYPE
+	PUSHJ	P,TYPFLC		;TYPE FILE SPEC WITH CRLF
+START7:	OFF	F.NLDR!F.WRD!F.ORG!F.FLD!F.ORGL!F.ADRC!F.377	;[102] CLEAR THESE BITS
+	SETZB	ORIGIN,NUMDAT		;[102] INIT THESE
+	SETZM	BUFCNT			;[102] CLEAR COUNT
+	MOVE	T1,.JBFF		;GET FIRST FREE FOR BUFFER
+	HRLI	T1,(POINT 9)		;9 BIT BYTE POINTER
+	MOVEM	T1,BUFPNT		;STORE IDPB POINTER
+	HRRZM	T1,BEGBUF		;REMEMBER BEGINNING OF THE BUFFER
+	JRST	@LDTAB(CPU)		;GO TO THE LOAD ROUTINE
+
+Subttl	Here to Load a PDP8
+;
+;	P1	NOT USED
+;	P2	NOT USED (BEWARE OF "GETBYT")
+;	P3	CHECK SUM
+;	P4	NOT USED
+;	P5	NOT USED
+;
+LD8:	SETZ	P3,			;ZONK THE CHECK SUM AC
+	TXNE	CMDWRD,C.IMAG		;MAKE SURE /IMAGE
+	CAIE	CPU,CPU.8		;MAKE SURE PDP8 INDEX
+	  PUSHJ	P,CONFUS		;CONFUSED ABOUT THIS
+LD8A:	PUSHJ	P,GETBYT		;GET A WORD
+	CAIN	T1,377			;SEE IF RUBOUT
+	 TXCA	F,F.377			;FLIP SWITCH
+	  TXNE	F,F.377			;IF NOT 377 AND SW NOT SET FALL THROUGH
+	JRST	LD8A			;THROW LAST AWAY AND GET ANOTHER
+	LDB	T2,[POINT 2,T1,29]	;GET FUNCTION CODE
+	JRST	@FTAB8(T2)		;GO DO THE FUNCTION
+
+FTAB8:	DATA8				;DATA OR CHECKSUM
+	ORIG8				;ORIGIN
+	LEAD8				;LEADER
+	FIELD8				;FIELD
+
+;HERE IF DATA DETECTED FOR PDP8
+;
+DATA8:	ON	F.WRD			;FLAG ASSEMBLING A WORD
+	OFF	F.ORGL!F.FLD		;NOT THESE
+	TXZE	F,F.ORG			;WAS LAST THING ORIGIN?
+	  ON	F.ORGL			;YES, REMEMBER IT WAS AS IT MAY
+					; BE A STARTING ADDRESS IF THIS IS THE
+					;  CHECKSUM.
+	AOS	NUMDAT			;COUNT NUMBER OF WORDS
+	ADD	P3,T1			;CALCULATE THE CHECKSUM
+	HRLZM	T1,DATA			;REMEMBER HIGH ORDER OF DATA
+	TXZE	F,F.ADRC		;SEE IF ADDRESS CHANGE (ORIGIN OR FIELD)
+	  JRST	[LDB	T1,[POINT 8,ORIGIN,35]	;GET LOW ORDER OF ADDR
+		TRO	T1,A.ORG	;SET BIT FOR UNPACKER
+		PUSHJ	P,PUTBF1	;PUT LOW IN BUFFER
+		LDB	T1,[POINT 7,ORIGIN,27]	;GET HIGH ORDER OF ADDR
+		PUSHJ	P,PUTBF1	;PUT HIGH IN BUFFER
+		JRST	DATA8A		;DO THING FOR DATA NOW
+]
+DATA8A:	PUSHJ	P,GETBYT		;GET BYTE FROM INPUT FILE
+	TRNE	T1,300			;SEE IF ANY RUBISH WITH IT
+	 ERROR	<E.Q!E.EC>,<JDF>,<Junk bits in second data frame>,<STARTE>
+	ADD	P3,T1			;ACCUMULATE THE CHECK SUM
+	HRRM	T1,DATA			;PUT LOW ORDER PART IN
+	MOVE	T1,DATA			;GET BOTH HALVES
+	PUSHJ	P,PUTBF2		;PUT BOTH BYTES IN THE BUFFER
+	LDB	T1,[POINT 12,ORIGIN,35]	;INCREMENT ORIGIN INCASE OF FIELD
+	ADDI	T1,1			; CHANGE ONLY
+	DPB	T1,[POINT 12,ORIGIN,35]	; ONLY THE 12BIT ADR WAS +1'ED
+	JRST	LD8A			;GET NEXT FRAME
+
+;HERE IF ORIGIN FOR PDP8
+;
+ORIG8:	ON	F.ORG			;FLAG ORIGIN
+	OFF	F.FLD!F.WRD		;ERASE OTHER MODES
+	ADD	P3,T1			;ACCUMULATE THE CHECK SUM
+	TRZ	T1,777700		;KEEP ONLY THE ADR PORTION
+	LSH	T1,6			;PUT IT IN THE HIGH ORDER POSITION
+	TRZ	ORIGIN,7777		;LEAVE ONLY FIELD PORTION
+	IORM	T1,ORIGIN		;PUT HIGH PART OF ADR IN
+	PUSHJ	P,GETBYT		;GET LOW ORDER
+	ADD	P3,T1			;ACCUMULATE THE CHECK SUM
+	TRZE	T1,777700		;SEE IF ANY JUNK WITH IT
+	 ERROR	<E.Q!E.EC>,<JOF>,<Junk bits in second origin frame>,<STARTE>
+	IORM	T1,ORIGIN		;PUT LOW ORDER OF ADR IN
+	ON	F.ADRC			;FLAG AN ADR CHANGE
+	JRST	LD8A			;DO NEXT FRAME
+
+;HERE IF LEADER OR TRAILER
+;
+LEAD8:	TXNN	F,F.WRD!F.FLD!F.ORG	;IF ONE OF THESE IT MUST BE TRAILER
+	  JRST	LD8A			;LEADER, SO FIND SOMETHING ELSE
+	SOSG	NUMDAT			;IF NO DATA THEN WHY SEND???
+	 ERROR	<E.Q!E.EC>,<NDS>,<No data in the file to send>,<STARTE>
+	TXNE	F,F.ORGL		;WAS LAST AN ORIGIN?
+	  JRST	[TXNE	CMDWRD,C.STRT	;IF START OR LOAD NOT SPECIFIED
+						; THEN FORCE START.
+		JRST	LEAD8A		;START SPECIFIED
+		TXNN	CMDWRD,C.LOAD	;NO FORCE START
+		TXO	CMDWRD,C.STRT	;FORCE AUTO START
+		ON	F.SADR		;REMEMBER STARTING ADDRESS IN FILE
+		LDB	T1,[POINT 12,ORIGIN,35]	;MUST SUB 1 SINCE IT
+		SUBI	T1,1		; WAS +1'ED IN DATA ROUTINE
+		DPB	T1,[POINT 12,ORIGIN,35]	;
+		MOVEM	ORIGIN,A.STRT	;ADDRESS TO START AT
+		JRST	LEAD8A		;CHECK CHECK SUM
+]
+LEAD8A:	MOVNI	T1,2			;-2
+	ADDM	T1,BUFCNT		;SUBTRACT 2 FROM COUNT FOR CHECKSUM THAT 
+					; WAS PUT IN.
+	TXNE	F,F.ORGL		;IF LAST WAS ORIGIN THAT WAS COUNTED TO
+	  ADDM	T1,BUFCNT		;SUBRTRACT 2 FOR ORIGIN THAT WAS INCLUDED
+	HLRZ	T1,DATA			;HIGH ORDER OF CHECK SUM
+	HRRZ	T3,DATA			;LOW ORDER OF CHECK SUM
+	ADD	T1,T3			;MUST SUB THIS AS THIS WAS ADDED
+	SUB	P3,T1			;SUB THAT WHICH WAS ADDED
+					; TO THE CHECK SUM
+	ANDI	P3,7777			;ONLY 12 BITS ALLOWED (PDP8)
+	HLRZ	T1,DATA			;NOW SEE IF CHECK SUMS AGREE
+	LSH	T1,6			;POSITION HIGH
+	HRR	T3,DATA			;PUT LOW IN
+	IOR	T1,T3			;
+	CAME	T1,P3			;DO THEY AGREE??
+CHKFAL:	 ERROR	<E.Q!E.EC>,<CSE>,<Checksum error>,<STARTE>
+	JRST	CHKOK			;THEY AGREE!!!
+
+;HERE IF FIELD
+;
+FIELD8:	ON	F.FLD			;FLAG FIELD
+	OFF	F.ORG!F.WRD		;NOT THESE
+	TRZ	T1,777707		;GET THE FIELD
+	LSH	T1,^D<32-23>		;POSITION
+	MOVE	T2,ORIGIN		;GET THE LAST FIELD
+	TRZ	T2,707777		;KEEP ONLY IT
+	CAMN	T1,T2			;SAME AS LAST TIME?
+	JRST	LD8A			;WHY CHANGE ANYTHING IF SAME
+	TRZ	ORIGIN,70000		;ZERO FIELD
+	IORM	T1,ORIGIN		;PUT NEW FIELD IN
+	ON	F.ADRC			;FLAG AN ADR CHANGE
+	JRST	LD8A			;GET NEXT FRAME
+
+Subttl	Here if to Load an 11
+;
+;	P1	COUNTER FOR DATA BYTES
+;	P2	FILE BYTE POSITION
+;	P3	CHECK SUM
+;	P4	NOT USED
+;	P5	NOT USED
+;
+LD11:	SETOM	P2			;PRESET FILE BYTE POSITION
+	CAIE	CPU,CPU.11		;MAKE SURE WE'RE SET FOR 11
+	  PUSHJ	P,CONFUS		;CONFUSED ABOUT THIS
+LD11A:	PUSHJ	P,GET21B		;GET A BYTE FROM FILE
+	JUMPE	T1,LD11A		;LOOP UNTIL LEADER GONE
+	CAIN	T1,377			;DISCARD DELETES
+	  JRST	LD11A			;GET NEXT BYTE FROM FILE
+	CAIE	T1,1			;SEE IF BEGINNING OF GROUP
+	 ERROR	<E.Q!E.EC>,<JI1>,<File group has junk instead of constant 1>,<STARTE>
+	MOVE	P3,T1			;INIT CHECK SUM
+	PUSHJ	P,GET21B		;GET NEXT BYTE - SHOULD BE 0
+	SKIPE	T1			;SKIP IF 0, OTHER WISE ERROR
+	 ERROR	<E.Q!E.EC>,<JI0>,<File group has junk instead of constant 0>,<STARTE>
+	PUSHJ	P,GETWRD		;GET THE BYTE COUNT
+	TXNN	CMDWRD,C.IMAG		;SKIP IF IMAGE MODE
+	 SKIPE	T1			;SEE IF ZERO BYTE COUNT
+	  JRST	LD11B			;OK
+	ERROR	<E.%>,<ZBC>,<File zero byte count--trying again in /IMAGE mode>,<LD11W>
+LD11W:	TXC	CMDWRD,C.PACK!C.IMAG	;SET IMAGE MODE
+	TXO	F,F.RTY			;INDICATE RETRYING
+					; ONLY FOR A MESSAGE.
+	CLOSE	INDEV,			;CLOSE FILE
+	JRST	NOTPTR			;GO TRY IN IMAGE MODE
+
+LD11B:	MOVEI	P1,-6(T1)		;GET NUMBER OF DATA BYTES
+	SKIPGE	P1			;SEE IF 6 OR MORE
+	 ERROR	<E.Q!E.EC>,<BL6>,<File group byte count less than 6>,<STARTE>
+	PUSHJ	P,GETWRD		;GET THE ADDRESS
+	MOVEM	T1,ORIGIN		;SAVE IN CASE OF START
+	JUMPE	P1,STA11		;JUMP IF START BLOCK
+	LDB	T1,[POINT 8,ORIGIN,35]	;GET LOW BYTE
+	TRO	T1,A.ORG		;FLAG FOR UNPACKER AN ADDRESS
+	PUSHJ	P,PUTBF1		;PUT IN BUFFER
+	LDB	T1,[POINT 8,ORIGIN,27]	;GET MIDDLE ADR BYTE
+	PUSHJ	P,PUTBF1		;STORE ADDRESS IN BUFFER
+	SETZ	T1,			;HIGHEST BYTE IS 0
+	PUSHJ	P,PUTBF1		;STORE IT
+LD11C:	PUSHJ	P,GET21B		;GET LOW DATA BYTE
+	PUSHJ	P,PUTBF1		;PUT LOW DATA BYTE IN BUFFER
+	SOJE	P1,LD11D		;IF DONE CHECK CHKSUM
+	PUSHJ	P,GET21B		;GET HIGH DATA BYTE
+	PUSHJ	P,PUTBF1		;PUT HIGH DATA BYTE IN BUFFER
+	SOJN	P1,LD11C		;IF NOT DONE DO ANOTHER ROUND
+LD11D:	PUSHJ	P,CHKS11		;CHECK CHECKSUM
+	JRST	LD11A			;DO NEXT GROUP
+STA11:	PUSHJ	P,CHKS11		;CHECK CHECKSUM
+	TRNN	ORIGIN,1B35		;IF ODD NO AUTO START
+	  TXNE	CMDWRD,C.STRT		;SEE IF HE SPECIFIED LOAD OR START
+	 JRST	CHKOK			;YES, SWITCH SPECIFIED OR NO AUTO START
+	TXNN	CMDWRD,C.LOAD		;SEE IF LOAD ONLY
+	 TXO	CMDWRD,C.STRT		;FORCE A START
+	ON	F.SADR			;REMEMBER A STARTING ADR
+	MOVEM	ORIGIN,A.STRT		;SET START ADDRESS
+	JRST	CHKOK			;GO SEND DATA IN BUFFER TO PDP11
+
+CHKS11:	PUSHJ	P,GET21B		;GET CHECKSUM BYTE
+	TRNN	P3,377			;SHOULD BE 0
+	 RETURN
+	JRST	CHKFAL			;REPORT CHECKSUM FAILURE
+Subttl	Here to send the file read by LD8 or LD11 to the remote
+
+;HERE WHEN THE FILE TO LOAD HAS BEEN READ
+;AND FORMATTED INTO A BUFFER AND THE CHECKSUM
+;WAS FOUND TO BE OK.
+;THIS ROUTINE UNPACKES THE BUFFER AND OUTPUTS
+;THE DATA VIA THE NODE UUO
+;
+;	P1	POINTER TO BUFFER BEING SENT TO REMOTE
+;	P2	POINTER TO DATA PACKED BY LD8 OR LD11
+;	P3	COUNTER FOR BUFFER BEING FILLED (LH)=SIZE OF BUF,(RH) = BYTES BUT IN BUF
+;	P4	ADDRESS BYTE COUNT DOWN
+;	P5	SHIFT COUNTER
+;
+CHKOK:	TXNN	F,F.BOOT		; NO DEVICE IF BOOT
+	RELEAS	INDEV,			;[102] GET RID OF INPUT DEVICE
+CHKOK1:	SETZM	CNTBOT			; BOOTSTRAP COUNT STARTS AT 0
+	PUSHJ	P,LOKJOB		; LOCK THE JOB IN CORE
+	ON	F.VIR			; INDICATE FIRST TIME
+	MOVSI	P2,(POINT 9)		; BUILD A BYTE POINTER TO POINT TO
+	HRR	P2,BEGBUF		;  THE DATA JUST READ IN
+	PUSHJ	P,PUTB2			; SETUP P1 AND P3
+CHKOKA:	PUSHJ	P,GETB			; GET A BYTE FROM DATA READ IN
+CHKOKB:	  JRST	[SETOM	CNTBOT		; FLAG THIS IS THE END FOR
+					;  BOOTSTRAP
+		PUSHJ	P,NODDEP	; SETUP AND DO DEPOSIT FUNCTION
+		TELLND	Loaded
+		PUSHJ P,ERRLOA		;GO LOG THE RELOAD
+		JRST	GO		; SEND START INFO
+]
+	TRZN	T1,A.ORG		; SEE IF ORIGIN
+	  JRST	CHKOKG			; NO, ITS DATA
+CHKOKC:	MOVE	P4,ADRBYT(CPU)		; NUMBER OF BYTES OF ADDRESS
+	MOVEM	ORIGIN,ORGNXT		; SAVE SO NEXT TIME WE SEE
+					;  AN ORIGIN AND IF ITS A BOOT
+					;  THEN THEY MUST MATCH
+	MOVEM	T1,ORIGIN		; SAVE THE ORIGIN
+	TXZE	F,F.VIR			;[131] IF FIRST TIME NOTHING TO SEND
+	  JRST	CHKOKD			; FIRST TIME
+	PUSHJ	P,NODDEP		; SETUP AND DO DEPOSIT FUNCTION
+	PUSHJ	P,PUTB2			; RESET P1 AND P3
+CHKOKD:	SETZ	P5,			; SHIFT COUNTER
+	SKIPA	T1,ORIGIN		; GET THE NEW ORIGIN
+CHKOKE:	  PUSHJ	P,GETBNE		; GET A ADR BYTE
+	TXNN	F,F.BOOT		; IF BOOTING THEN NO ADR
+	  PUSHJ	P,PUTBNE		; PUT IT IN BUF TO SEND
+	LSH	T1,(P5)			; GET IN CORRECT POSITION
+	IORM	T1,ORIGIN		;  AND MAKE A FULL ADDRESS
+	ADDI	P5,^D8			; UPDATE SHIFT COUNT
+	SOJG	P4,CHKOKE		; SEE IF TO CONTINUE FORMING ADR
+	TXZN	F,F.VIR			; SKIP IF NOT FIRST TIME AND
+					;  CLEAR F.VIR
+	 TXNN	F,F.BOOT		; BOOTING A REMOTE?
+	  JRST	CHKOKF			; NO
+	CAME	ORIGIN,ORGNXT		; SEE IF NEW ORIGIN MATCHES
+					;  WHERE WE LEFT OFF
+	  ERROR	<E.Q>,<NIS>,<Boot file is not in sequence>,<LOGOFF>
+CHKOKF:	MOVEM	ORIGIN,ORGSAV		; REMEMBER THE ORIGIN
+	JRST	CHKOKA			; FILL THE BUFFER
+CHKOKG:	MOVEM	T1,DATA			; SAVE LOW DATA INCASE BUF IS FULL
+	PUSHJ	P,PUTB			; PUT LOW DATA IN
+	  JRST	CHKOKI			; BUFF FULL
+	ADD	ORIGIN,ADRTYP(CPU)	; +0 FOR 8, +1 FOR 11
+CHKOKH:	PUSHJ	P,GETB			; GET HIGH PART
+	  JRST	CHKOKB			; MUST BE END
+	TRZE	T1,A.ORG		; SEE IF ODD BYTE IS A ORIGIN
+	  JRST	CHKOKC			; YES, A FUNNY CONDITION
+	PUSHJ	P,PUTBNE		; PUT IN HIGH BYTE
+	ADDI	ORIGIN,1		; 
+	JRST	CHKOKA			; DO NEXT WORD
+
+CHKOKI:	MOVE	P4,ADRBYT(CPU)		; GET NUMBER OF ADR BYTES
+	MOVE	T2,ORIGIN		; GET ADR FOR THE FULL BUF
+CHKOKJ:	IDIVI	T2,400			; GET 8 BITS
+	MOVE	T1,T3			; PUT IN AC FOR ROUTINE
+	TXNN	F,F.BOOT		; IF BOOTING THEN NO ADDRESS
+	  PUSHJ	P,PUTBNE		; PUT IN BUFFER TO SEND
+	SOJG	P4,CHKOKJ		; SEE IF GOT ALL ADR BYTES
+	MOVEM	ORIGIN,ORGSAV		; REMEMBER THIS ORIGIN
+	MOVE	T1,DATA			; GET DATA WE'RE TO LOAD
+	PUSHJ	P,PUTBNE		; PUT FIRST BYTE OF DATA IN
+	ADD	ORIGIN,ADRTYP(CPU)	; + 0 FOR PDP8, +1 FOR PDP11
+	JRST	CHKOKH			; DO REST OF DATA NOW
+
+;HERE TO CALL THE ROUTINE TO DO A DEPOSIT NODE. UUO
+;
+NODDEP:	HRRZ	T3,P3			; GET COUNT PUT IN BUFFER
+	HRLI	T3,MAXRCV-2		;[131] MAX LENGTH EXPECTED BACK
+	TXNE	F,F.BOOT		; BOOTING?
+	  JRST	NODDBD			; YES
+	HRRZ	T4,ORGSAV		; ADR TO CHECK
+	MOVE	T2,[XWD	N.ACC,N.DEP]	; (LH)=EXPECTED BACK, (RH)=FUNCTION TO PERFORM
+	PJRST	NODUUO			; SEND THE BUFFER AND RETURN TO CALLER
+					;  OF THIS ROUTINE.
+NODDBD:	MOVE	T2,[XWD	N.ACC,N.BOTD]	; (LH)=EXPECTED BACK, (RH)=FUNCTION TO PERFORM
+	MOVE	T1,CNTBOT		; GET COUNT TO GO TO BOOT
+	AOS	CNTBOT			; +1 FOR NEXT TIME
+	DPB	T1,[POINT 8,XMTBUF,23]	; PUT IN BUFFER TO GO TO REMOTE
+	ADDI	T3,1			; COUNT COUNT BYTE
+	PJRST	NODUUO			; SEND BUFFER OF BOOT DATA TO
+					;  REMOTE AND RETURN TO CALLER
+					;  OF THIS ROUTINE
+Subttl	Here to Start the Remote Processor
+
+;HERE TO START THE REMOTE PROCESSOR
+;
+;	P1	POINTER TO BUFFER BEING SENT
+;	P3	COUNTER FOR BUFFER BEING FILLED (LH)=SIZE OF BUF, (RH)=BYTES BUT IN BUF
+;	P4	ADDRESS BYTE COUNT DOWN
+;	P5	SHIFT COUNTER
+;
+GO:	TXNN	CMDWRD,C.STRT		;SEE IF TO START CPU
+	JRST	[TXNE	CMDWRD,C.LOAD	;SEE IF /LOAD
+		TXNN	F,F.SADR	;SEE IF FILE HAD A STARTING ADR
+		  PJRST	DONE			;NO
+		MOVEI	T1,[ASCIZ \Starting address of program is \] 
+		PUSHJ	P,TYPASC	;TYPE STRING
+		HRRZ	T1,A.STRT	;GET THE ADDRESS
+		PUSHJ	P,TYPOCT	; AND TYPE IT
+		JRST	GO8		;TELL THE STARTING ADDRESS
+]
+GO2:	HLLZ	P3,BYTTAB(CPU)		;BUFFER LENGTH
+	MOVE	P1,[POINT 8,XMTBUF,15]	;WHERE TO PUT THE ADDRESS
+	LDB	T1,[POINT 8,A.STRT,35]	;GET LOW ORDER OF START ADDRESS
+	SKIPN	ADRTYP(CPU)		;SKIP IF ODD ADR ILLEGAL
+	  JRST	GO4			;ODD ADR LEGAL
+	TRNE	T1,1B35			;SEE IF ADR ODD
+	 ERROR	<E.Q!E.EC>,<ODD>,<Cannot start at an odd address>,<STARTE>
+GO4:	PUSHJ	P,TYPND			;TYPE NODE AND LINE
+	MOVEI	T1,[ASCIZ \ Starting at address \]
+	PUSHJ	P,TYPASC		;TYPE THE STRING
+	HRRZ	T1,A.STRT		;GET STARTING ADDRESS
+	PUSHJ	P,TYPOCT		;AND TYPE IT
+	PUSHJ	P,CRLF			;GIVE A CRLF
+	TXNN	F,F.CCL			;CCL ENTRY?
+	  JRST	GO7			;NO
+	MOVE	T1,R.LINE		;GET LINE NUMBER REMOTE GAVE
+	CAME	T1,A.LINE		;SAME AS SWITCH?
+	  JRST	GO7			;NO
+	MOVE	T1,R.NNUM		;GET NODE NUMBER OF REMOTE
+	CAMN	T1,A.NNUM		;SAME AS /NODE
+	  OFF	F.MSG			;NO MORE MESSAGES TO REMOTE
+					; CAUSE HE'S NOW STARTED
+GO7:	MOVE	P4,ADRBYT(CPU)		;NUMBER OF BYTES OF ADDRESS
+	MOVE	T2,A.STRT		;STARTING ADDRES
+GO6:	IDIVI	T2,400			;GET 8 BITS WORTH
+	MOVE	T1,T3			;NEED IT IN T1 FOR CALL
+	PUSHJ	P,PUTBNE		;BUT BYTE IN BUFFER TO SEND
+	SOJG	P4,GO6			;ADDRESS DONE?
+	MOVE	T2,[XWD	N.ACC,N.GOTO]	;FUNCTION
+	HRRZ	T3,P3			;GET COUNT PUT IN BUFFER
+	HRLI	T3,MAXRCV		;MAX LENGTH EXPECTED BACK
+	HRRZ	T4,A.STRT		;ADDRESS TO CHECK
+	PUSHJ	P,NODUUO		;START THE CPU
+	PUSHJ	P,TYPND			;TYPE NODE AND LINE
+	MOVEI	T1,[ASCIZ \ Started\]
+	PUSHJ	P,TYPASC		;TYPE STRING
+GO8:	PUSHJ	P,CRLF			;GIVE A CR+LF
+	PJRST	DONE			;DONE
+
+CLEAR:	TXNE	CMDWRD,C.CLR		;SKIP IF /CLEAR
+	  ERROR	<E.%>,<CLR>,</CLEAR is not yet implemented>,<CPOPJ>
+	RETURN
+
+Subttl	Dump Routine
+
+;HERE TO DUMP THE REMOTE PROCESSOR
+;
+; MOST OF THIS DUMP CODE WAS TAKEN FROM
+; BOOT11
+;
+DUMP:	TXNE	CMDWRD,C.TYPE		;/TYPE?
+	  JRST	DUMP0			;YES
+	SKIPGE	T2,A.DMPL		;SEE IF DEFAULT LOW VALUE NEEDED
+	  HRRZ	T2,DEFDMP(CPU)		;YES, GET IT.
+	MOVEM	T2,A.DMPL		;SAVE VALUE
+	SKIPGE	T1,A.DMPH		;SEE IF DEFAULT HIGH VALUE NEEDED
+	  HLRZ	T1,DEFDMP(CPU)		;YES, GET IT.
+	MOVEM	T1,A.DMPH		;SAVE VALUE
+	JRST	DUMP4			;
+DUMP0:	MOVE	T3,A.TYPE		;GET TYPE OF REMOTE
+	SKIPGE	T2,A.DMPL		;SEE IF DEFAULT LOW VALUE NEEDED
+	  HRRZ	T2,DMPTYP(T3)		;YES, GET IT
+	MOVEM	T2,A.DMPL		;SAVE IT
+	SKIPGE	T1,A.DMPH		;SEE IF DEFAULT HIGH VALUE NEEDED
+	  HLRZ	T1,DMPTYP(T3)		;YES, GET IT
+	MOVEM	T1,A.DMPH		;SAVE IT
+DUMP4:	SKIPN	ADRTYP(CPU)		;SKIP IF ODD ADR ILLEGAL
+	  JRST	DUMP1			;DO /PDP8 STUFF
+	TRNN	T1,1B35			;SEE IF HIGH ADR ODD
+	 TRNE	T2,1B35			;SEE IF LOW ADR ODD
+	   ERROR<E.Q!E.EC>,<OAI>,<Odd dump address illegal>,<STARTE>
+;FOR PDP11	#BYTES=(LAST ADR-FIRST ADR + 2)
+;FOR PDP8	#BYTES=(LAST ADR-FIRST ADR + 1)*2
+DUMP1:	SUB	T1,T2			;CALCULATE NUMBER OF BYTES TO DUMP
+	ADD	T1,ADRINC(CPU)		;PUT IN ADDRESS INCREMENT
+	SKIPN	ADRTYP(CPU)		;CPU'S THAT INCMENT BY ONE NEED
+	  LSH	T1,1			; *2 TO COMPUTE NUMBER OF BYTES.
+	SKIPG	P3,T1			;MAKE SURE HIGH ADR .GE. LOW ADR
+	 ERROR	<E.Q!E.NC!E.EC>,<LTS>,<Last address to dump too small>,<HLPMSG>
+	MOVEI	T1,20			;LINE INCREMENT FOR DUMP (ASSUME /PDP11)
+	SKIPN	ADRTYP(CPU)		;IF INCREMENT BY 2 INCREMENT
+					; DUMP ADDRESS BY 20
+	MOVEI	T1,10			;LINE INCREMENT FOR DUMP (/PDP8)
+					; ADDRESSES INCREMENT BY 10
+	MOVEM	T1,MOD			;REMEMBER THE LINE INCREMENT
+	SUBI	T1,1			;LINE INCREMENT-1
+	MOVEM	T1,MODMO		;REMEMBER IT
+	PUSHJ	P,DEFDEV		;GIVE DEFAULT DEV IF NEEDED
+IFN	FTXPN,<				;[110]
+	PUSHJ	P,CHKXPN		;[110] IF FILE-SPEC FROM REMOTE
+					;[110] ONLY ALLOW DUMP TO [10,1].
+>;END IFN FTXPN				;[110]
+	MOVEI	T2,.IOASC		;SET OUTPUT MODE
+	MOVE	T3,DEV			;GET THE DEVICE
+DUMP2:	MOVSI	T4,OUTHDR		;POINT TO BUFFER HEADER
+	OPEN	OUTDEV,T2		;OPEN FILE
+	 ERROR	<E.Q!E.NC!E.EC>,<DOF>,<Can't OPEN output device>,<COIERR>
+	MOVE	T2,NAME			;GET FILE NAME TO CHECK FOR "?"
+DUMP3:	SETZ	T1,			;CHAR FROM T2 GETS SHIFTED INTO HERE
+	LSHC	T1,6			;GET CHAR FROM FILE NAME
+	JUMPE	T1,DUMPNQ		;NO QUESTION MARK CHARS TO FOOL WITH
+	CAIE	T1,'?'			;SEE IF ?
+	  JRST	DUMP3			;NOT ?, SO GO ANOTHER ROUND
+
+;HERE BECAUSE OF A ? IN THE DUMP FILE NAME
+
+	SETZM	DCHROR			;FOR OR'ING IN FILE NAME-?
+	SETOM	DCHRZR			;FOR ZEROING ALL BUT ? FIELD
+	MOVE	T1,[SIXBIT \999999\]	;
+	MOVEM	T1,DCHR9W		;9 FOR EVERY NON ?
+	MOVE	T3,[POINT 6,NAME]	;POINTER AT FILE NAME
+	MOVE	T4,[POINT 6,DCHROR]	;POINTER FOR FILE NAME OR
+	MOVE	T5,[POINT 6,DCHRZR]	;POINTER FOR CLEARING ALL BUT ?
+	PUSH	P,[POINT 6,DCHR9W]	;POINTER FOR PUTING 9 FOR EVERY NON ?
+DMPIN1:	ILDB	T1,T3			;GET CHAR FROM FILE NAME
+	JUMPE	T1,DMPIN2		;NULL, SO END
+	SETZ	T2,			;0 FOR ?
+	CAIE	T1,'?'			;SEE IF IT WAS A ?
+	  MOVEI	T2,77			;NO SET FOR NOT ?
+	IDPB	T2,T5			;77 FOR NON ?, 0 FOR ?.
+	SKIPN	T2			;SEE IF ? OR CHAR
+	SETZ	T1,			;ASSUME ?
+	IDPB	T1,T4			;IF NOT ?, THEN PUT ACTUAL CHAR IN
+	SKIPE	T1			;0 IF WAS ?
+	MOVEI	T1,'9'			;WASN'T SO MAKE IT A 9
+	IDPB	T1,(P)			;PUT 9 FOR NON ?, 0 FOR ?
+	TLNE	T3,770000		;SEE IF WORD DONE?
+	  JRST	DMPIN1			;NOT DONE YET.
+DMPIN2:	POP	P,(P)			;FORGET BYTE POINTER PUT ON STACK
+	SETZ	T2,			;MODE OF FILE TO OPEN
+	MOVEI	T4,INDMPH		;INPUT HEADER ADDR
+	MOVE	T3,DEV			;THE DEVICE
+	OPEN	INDMPF,T2		;OPEN DEVICE FOR INDEX FILE
+	  ERROR	<E.Q!E.NC!E.EC>,<IOF>,<Can't OPEN output device>,<COIERR>
+	MOVE	T1,NAME			;FILE NAME TO LOOKUP FOR INDEX
+	MOVEM	T1,DMPIXF		;REMEMBER THE NAME FOR LATER UPDATE ENTER
+	SKIPN	T2,EXT			;IF NO EXTENSION THEN GIVE
+	HRLZI	T2,'LSD'		; LSD FOR EXTENSION
+	TRZ	T2,-1			;CLEAR NULL FLAG
+	HLLM	T2,EXT			;REMEMBER THE EXTENSION
+	SETZ	T3,			;
+	MOVE	T4,DIRECT		;PPN
+	LOOKUP	INDMPF,T1		;SEE IF FILE EXISTS
+DMPIN3:	  JRST	[MOVE	T3,[SIXBIT \999999\]
+		TDZ	T3,DCHRZR	;KEEP ONLY ? MARK FIELDS
+		IOR	T3,DCHROR	;PUT FILE NAME IN
+		JRST	DMPLKF
+]
+	ON	F.DMPF			;FLAG FOR GETTING CHAR FROM INDEX FILE
+	PUSHJ	P,GETNAM		;GET NAME OF FILE LAST DUMPED TO
+	CAME	T3,[SIXBIT \NETLDR\]	;ID IN FILE TO SEE IF CORRECT FILE
+	  JRST	DMPIN3			;NOT NETLDR INDEX FILE
+	PUSHJ	P,GETNAM		;GET INDEX NAME
+DMPLKF:	OFF	F.DMPF			;DONE GETTING INDEX NAME
+	MOVE	P2,T3			;REMEMBER FOR RETRY INCREMENT
+	MOVEI	P1,ENTTRY		;NUMBER OF TIMES TO TRY AND ENTER
+DMPTRA:	SKIPN	T1,P2			;GET FILE NAME TO TRY
+	  JRST	DMPIN3			;START WITH 0
+	TDZ	T1,DCHRZR		;CLEAR OUT ALL BUT ? MARK FIELDS
+	IOR	T1,DCHR9W		;PUT 9'S IN FOR THEM
+	PUSHJ	P,SIXDEC		;CONVERT TO DECIMAL
+	ADDI	T1,1			;+1 TO IT
+	CAMLE	T1,[^D999999]		;
+	  SETZ	T1,			;
+	PUSHJ	P,DECSIX		;CONVERT BACK TO 6-BIT
+	TDZ	T1,DCHRZR		;KEEP ONLY ? MARK FIELDS
+	IOR	T1,DCHROR		;PUT FILE NAME IN
+	MOVEM	T1,NAME			;PRESTO, A INCRMENTED NAME
+	MOVE	P2,T1			;REMEMBER IF MUST RETRY
+	ON	F.INDX			;FLAG USING INDEX FILE
+	CLOSE	INDMPF,			;CLOSE INDEX FILE
+	RELEAS	INDMPF,			; AND RELEASE IT.
+DUMPNQ:	SKIPN	T3,NAME			;GET FILE NAME
+	  MOVE	T3,A.NNAM		;DEFAULT IS NODE NAME
+	MOVEM	T3,NAME			;REMEMBER FILE NAME
+	SKIPN	T4,EXT			;GET EXTENSION
+	  HRLZI	T4,'LSD'		;DEFAULT
+	TRZ	T4,-1			;CLEAR NULL FLAG
+	HLLM	T4,EXT			;REMEMBER THE EXTENSION WE USED
+	MOVE	T2,DIRECT		;GET DIRECTORY
+	MOVEI	T1,3			;EXTENDED ENTER
+	TXNE	F,F.INDX		;IF USING INDEX THEN NON-SUPERCEDEING
+	TRO	T1,1B18			; ENTER
+	ENTER	OUTDEV,T1		;ENTER FILE
+	  JRST	[HRRZ	T1,T4		;GET THE ERROR CODE
+		TXNE	F,F.INDX	;SEE IF USING INDEX FILE
+		SOJG	P1,DMPTRA	;SEE IF TO QUIT RETRYING
+		ERROR	<E.Q!E.T1!E.NC!E.EC>,<ENF>,<ENTER failed >,<LOOKER>
+]
+	MOVE	T1,NAME			;GET THE NAME
+	MOVEM	T1,DMPFIL+ERFSFN	;SAVE THE OUTPUT FILE NAME
+	MOVE	T1,EXT			;GET THE EXTENSION
+	HLLZM	T1,DMPFIL+ERFSEX	;  AND THE EXTENSION
+	MOVEI	T1,OUTDEV		;GET THE OUTPUT CHANNEL, AND
+	MOVEM	T1,DMPFIL+ERFSDV	;  PUT IT WHERE PATH. CAN FIND IT
+	MOVE	T1,[XWD ERFSLN-ERFSDV,DMPFIL+ERFSDV] ;SET UP AND DO THE
+	PATH.	T1,			;  UUO TO READ THE FILESPEC
+	  ERROR	E.%,PRO,<PATH. UUO to read output filespec failed.>,<STRTD0>
+STRTD0:	OUTBUF	OUTDEV,0		;SET DEFAULT BUFFERS
+;ACCUMULATE HEADING DATA
+
+	MOVE	T2,[POINT 7,HEADER]
+	MOVEM	T2,HEDPNT		;INIT POINTER FOR HEADER MSG
+	PUSHJ	P,HEDTXT		;
+	 ASCIZ	\Dump of \
+	PUSHJ	P,HEDTXT
+	 ASCIZ /Node /
+	MOVE	T2,A.NNAM		;GET NODE NAME
+	PUSHJ	P,HED6			;PUT IN HEADER BLOCK
+	MOVEI	T2,"("			;
+	PUSHJ	P,HEDCHR		;
+	MOVE	T2,A.NNUM		;GET NODE NUMBER
+	PUSHJ	P,HEDOCT		; AND PRINT
+	MOVEI	T2,")"			;
+	PUSHJ	P,HEDCHR		;
+	TXNN	CMDWRD,C.LINE		;IF DUMPING SELF THEN NO LINE NUMBER
+	  JRST	STRTD1			;DON'T PRINT A LINE NUMBER FOR SELF
+	PUSHJ	P,HEDTXT
+	 ASCIZ	\ Line #\
+	MOVE	T2,A.LINE		;GET LINE NUMBER
+	PUSHJ	P,HEDDIG		;AND PRINT
+STRTD1:	PUSHJ	P,HEDTXT
+	 ASCIZ / by NETLDR /
+	LDB	T2,[POINT 9,.JBVER,11]
+	PUSHJ	P,HEDOCT		;PRINT VERSION  NUMBER
+	LDB	T2,[POINT 6,.JBVER,17]	;GET MINOR VERSION #
+	JUMPE	T2,DMHDV1		;JUMP IF NONE
+	SUBI	T2,1			;FAKE OUT DIVIDE
+	IDIVI	T2,^D26			;GET LAST LETTER
+	JUMPE	T2,DMHDV0		;JUMP IF ONLY 1 LETTER
+	ADDI	T2,"A"-1		;CONVERT 1ST LETTER
+	PUSHJ	P,HEDCHR
+DMHDV0:	MOVEI	T2,"A"(T3)
+	PUSHJ	P,HEDCHR		;OUTPUT LAST LETTER
+
+DMHDV1:	HRRZ	T2,.JBVER		;GET EDIT NUMBER
+	JUMPE	T2,DMHDV2		;JUMP IF ZERO
+	MOVEI	T2,"("
+	PUSHJ	P,HEDCHR
+	HRRZ	T2,.JBVER
+	PUSHJ	P,HEDOCT
+	MOVEI	T2,")"
+	PUSHJ	P,HEDCHR		;FINISH "(EDIT NUMBER)"
+
+DMHDV2:	LDB	T2,[POINT 3,.JBVER,2]	;GET "WHO MADE EDIT"
+	JUMPE	T2,DMHDV3		;JUMP IF DIGITAL DID
+	MOVEI	T2,"-"
+	PUSHJ	P,HEDCHR
+	XCT	DMHDV2			;GET "WHO" BACK
+	PUSHJ	P,HEDDIG		; AND PRINT
+
+DMHDV3:	MOVEI	T2,11			;HORIZONTAL TAB
+	PUSHJ	P,HEDCHR
+	MSTIME	T2,			;GET TIME OF DAY (MILLESECONDS)
+	IDIVI	T2,^D60000		;GET MINUTES
+	IDIVI	T2,^D60			;GET HOURS
+	PUSH	P,T3			;SAVE REMAINDER AS MINUTES
+	PUSHJ	P,HEDDEC		;PRINT QUOTIENT AS HOURS
+	MOVEI	T2,":"
+	PUSHJ	P,HEDCHR		;PRINT COLON
+	POP	P,T2			;GET MINUTES BACK
+	PUSHJ	P,HEDDEC		; AND PRINT
+	MOVEI	T2,11
+	PUSHJ	P,HEDCHR		;PRINT TAB
+
+	DATE	T2,
+	IDIVI	T2,^D31*^D12		;YEAR GOES TO T2
+	ADDI	T2,^D64			;ADD IN BASE YEAR
+	IDIVI	T3,^D31			;T3 GETS MONTH, T4 GETS DAY
+	PUSH	P,T2			;SAVE YEAR
+	PUSH	P,[ASCII /JAN/
+		ASCII /FEB/
+		ASCII /MAR/
+		ASCII /APR/
+		ASCII /MAY/
+		ASCII /JUN/
+		ASCII /JUL/
+		ASCII /AUG/
+		ASCII /SEP/
+		ASCII /OCT/
+		ASCII /NOV/
+		ASCII /DEC/](T3)
+	MOVEI	T2,1(T4)		;GET DAY
+	PUSHJ	P,HEDDEC		; AND PRINT
+	MOVEI	T2,"-"
+	PUSHJ	P,HEDCHR
+	POP	P,T2			;GET MONTH
+	PUSHJ P,HED7			; AND PRINT
+	MOVEI	T2,"-"
+	PUSHJ	P,HEDCHR
+	POP	P,T2
+	PUSHJ	P,HEDDEC		;PRINT YEAR
+	MOVE	T2,[%CNSER]		; [20,,11]  GET SYSTEM
+	GETTAB	T2,			; SERIAL NUMBER
+	  MOVEI	T2,0			;UNKNOWN
+	SKIPLE	T2			;SEE IF OK
+	CAILE	T2,^D9999
+	 JRST	DMHDV5			;SYSTEM NUMBER BAD
+	PUSH	P,T2			;SAVE NUMBER
+	PUSHJ	P,HEDTXT
+	 ASCIZ /       System /
+	POP	P,T2
+	PUSHJ	P,HEDDEC		;PRINT SYSTEM NUMBER
+
+DMHDV5:	MOVSI	T2,(ASCII /  /)
+	PUSHJ	P,HED7			;PRINT SPACES
+
+	MOVSI	T5,-5			;SET HEADER COUNT
+DMHDV6:	MOVEI	T2,.GTCNF		;POINT TO TABLE 11
+	HRL	T2,T5			;POINT TO ENTRY
+	GETTAB	T2,			;GET SYSTEM HEADER LINE
+	 MOVEI	T2,0			;UNKNOWN
+	PUSHJ	P,HED7			;PRINT TEXT
+	AOBJN	T5,DMHDV6		;LOOP UNTIL DONE
+
+	MOVEI	T2,0
+	PUSHJ	P,HEDCHR		;STUFF NULL IN AT END OF HEADER
+;DUMP CORE 10-WORDS PER LINE
+;
+	PUSHJ	P,LOKJOB		;LOCK THE JOB
+	PUSHJ	P,TYPND			;TYPE NODE ID
+	MOVEI	T1,[ASCIZ \ Dumping\]
+	PUSHJ	P,TYPASC		;
+	MOVE	T1,DVTYP		;GET TYPE OF DEVICE
+	ANDI	T1,77			;KEEP TYPES OF DEVICES
+	CAIE	T1,.TYTTY		;SEE IF A TTY TYPE
+	  JRST	DMHDV8			;NOT A TTY TYPE
+	MOVSI	T1,(SIXBIT \TTY\)	;SEE IF ITS MINE
+	DEVNAM	T1,			;GET PHY NAME OF MINE
+	  JRST	DMHDV8			;GIVE EVERY THING
+	CAMN	T1,DEV			;SEE IF OUR TTY WE'RE GOING TO
+	  JRST	DMHDV7			;MY TTY
+DMHDV8:	MOVEI	T1,[ASCIZ \ onto \]
+	PUSHJ	P,TYPASC		;
+	PUSHJ	P,TYPDEV		;TYPE THE DEVICE
+	MOVE	T1,DVTYP		;GET TYPE STUFF
+	TXNN	T1,TY.MAN		;SEE IF LOOKUP/ENTER TYPE
+	  JRST	DMHDV7			;NO, SO FORGET FILESPEC
+	PUSHJ	P,TYPFIL		;FILE NAME
+	PUSHJ	P,TYPPPN		; AND PPN
+DMHDV7:	PUSHJ	P,CRLF			;GIVE A CRLF
+	SETZB	P5,PAGEN		;NUMBER OF BYTES IN INTERMEDIATE BUF
+					; AND PAGE NUMBER
+	MOVEI	T1,LINPAG+1		;THIS FORCES A HEADER FIST
+	MOVEM	T1,LINCNT		;FAKE ROUTINE OUT
+	MOVE	P1,A.DMPL		;GET STARTING ADDRESS
+	MOVEM	P1,ADDR			;REMEMBER STARTING ADDRESS
+
+;BACK HERE FOR LOOP BY 10-WORD HUNKS
+DMLOOP:	CAMLE	P1,A.DMPH		;SEE IF DONE YET
+	JRST	DMDONE			;YES--GO BIND OFF OUTPUT
+	PUSHJ	P,CHKHDR		;SEE IF A HEADER NEEDED YET
+	PUSHJ	P,GET20W		;GET 10 WORDS
+	MOVE	T2,P1			;GET STARTING ADDRESS
+	MOVE	T1,ADRDIG(CPU)		;NUMBER OF ADDRESS DIGITS
+	PUSHJ	P,LNOCT			;LIST 6 FOR 11 OR 5 FOR 8
+	MOVEI	T2,":"			;FLAG AS ADDRESS
+	PUSHJ	P,LCHAR			;IN LISTING
+
+	MOVSI	P4,-10			;SET FOR 10-WORDS
+DMLP1:	PUSHJ	P,LTAB			;SPACE OVER
+	SKIPGE	T2,BLODAT(P4)		;GET WORD
+	  JRST	[TLNE	T2,(1B1)	;SEE IF END (-1)
+		JRST	DMGOLP		;YES, THE END IS HERE
+		MOVEI	T2,[ASCIZ\      \] ;NO, ITS BEGINING SPACES
+		PUSHJ	P,LSTRG		;GIVE THEM
+		JRST	DMLP2		;GO SEE IF NEXT IS FIRST WORD
+]
+	MOVE	T1,WRDDIG(CPU)		;NUMBER OF DIGITS FOR DUMP WORD
+	PUSHJ	P,LNOCT			;PRINT WORD
+DMLP2:	MOVEI	T2,-3(P4)		;SEE IF DONE WITH 4 WORDS YET
+	JUMPN	T2,.+2			;NO--PROCEED
+	PUSHJ	P,LTAB			;YES--ONE EXTRA TAB
+	AOBJN	P4,DMLP1		;LOOP FOR THIS LINE
+DMGOLP:	ADD	P1,MOD			;ADVANCE 20 BYTES (10 WORDS)/PDP11
+					;ADVANCE 10 WORDS /PDP8
+	TDZ	P1,MODMO		;CORRECT MODULO
+	JRST	DMLOOP			;LOOP UNTIL DONE
+
+DMDONE:	PUSHJ	P,DMZRLN		;CLEAR OUT FINAL 0'S
+	MOVEI	T2,[ASCIZ\
+\]
+	PUSHJ	P,LSTRG			;NEED THIS FOR PARTIAL LINES
+					; GOING TO TTY.
+	CLOSE	OUTDEV,			;CLOSE THE FILE JUST DUMPED
+	RELEAS	OUTDEV,			;AND RELEASE IT
+	PUSHJ	P,UNLOK			;UNLOCK JOB
+	TXNN	F,F.INDX		;SEE IF WAS USING INDEX FILE
+	  JRST	DMPDNE			;NO.
+	SETZ	T2,			;MODE TO OPEN IT IN
+	MOVE	T3,DEV			;DEVICE
+	MOVSI	T4,OUTHDR		;HEADER ADDRESS FOR OUTPUT
+	OPEN	OUTDEV,T2		;OPEN IT TO PUT NEW NAME IN
+	 HALT
+	MOVE	T1,DMPIXF		;GET NAME FINALLY OUTPUT
+	HLLZ	T2,EXT			;EXTENSION
+	SETZ	T3,			;
+	MOVE	T4,DIRECT		;PPN
+	ENTER	OUTDEV,T1		;ENTER IT
+	  JRST	[HRRZ	T1,T2		;ERROR CODE
+		ERROR	<E.Q!E.T1!E.NC!E.EC>,<EFI>,<ENTER failure for >,<LOOKER>
+]
+	MOVEI	T2,[ASCIZ \NETLDR
+\]
+	PUSHJ	P,LSTRG			;PUT ID IN INDEX FILE
+	MOVE	T1,NAME			;GET NAME
+	PUSHJ	P,L6BIT			;WRITE IT OUT IN THE INDEX
+	CLOSE	OUTDEV,			;DONE
+	OFF	F.INDX			;FLAG DONE WITH INDEX FILE
+	RELEAS	OUTDEV,			;
+DMPDNE:	PUSHJ	P,TYPND			;TYPE NODE ID
+	MOVEI	T1,[ASCIZ \ Dumped from \]
+	PUSHJ	P,TYPASC		;
+	MOVE	T1,A.DMPL		;GET FIRST ADDRESS
+	PUSHJ	P,TYPOCT		;OUTPUT IT
+	MOVEI	T1,[ASCIZ \ through \]
+	PUSHJ	P,TYPASC		;
+	MOVE	T1,A.DMPH		;GET LAST ADDRESS
+	PUSHJ	P,TYPOCT		;OUTPUT IT
+	PUSHJ	P,CRLF			;GIVE A CRLF
+	PUSHJ	P,ERRDMP		;GO LOG THE DUMP VIA DAEMON.
+	PJRST	DONE
+Subttl	Dump Subroutines
+
+;LIST ZERO LINE IF ANY
+
+DMZRLN:	SKIPGE	LZERO			;SEE IF A ZERO LINE TO PRINT
+	  RETURN			;NO--GIVE UP
+;[105]	PUSHJ	P,CHKHDR		;SEE IF HEADER NEEDED
+	PUSHJ	P,LTAB			;YES--SPACE OVER
+	PUSHJ	P,LTAB
+	MOVE	T2,LZERO		;GET END
+	SUB	T2,FZERO		;GET LENGTH-2
+	SKIPE	ADRTYP(CPU)		;+2 MACHINES NEED TO /2
+					; TO CONVERT TO WORDS
+	  LSH	T2,-1			;CONVERT TO WORDS
+	ADDI	T2,1			;
+	PUSHJ	P,L6OCT			;LIST THAT
+	MOVEI	T2,[ASCIZ / words from /]
+	PUSHJ	P,LSTRG			;LIST TITLE
+	MOVE	T2,FZERO		;GET START
+	PUSHJ	P,L6OCT			;LIST
+	MOVEI	T2,[ASCIZ / to /]
+	PUSHJ	P,LSTRG			;LIST TITLE
+	MOVE	T2,LZERO		;GET END POINT
+	PUSHJ	P,L6OCT			;LIST
+	MOVEI	T2,[ASCIZ / are all zero/] ;[105] REMOVE THE CRLF
+	SETOM	LZERO			;FLAG ZERO'S LISTED
+	PUSHJ	P,LSTRG			;LIST [105] CHANGE JRST TO PUSHJ
+	PJRST	CHKHDR			;[105] GIVE A CRLFLF AND A HEADER
+					; IF NEEDED
+;LIST 6 DIGITS IN OCTAL
+;
+; CALL	PUSHJ	P,L6OCT			;OCTAL NUMBER IN T2
+;
+L6OCT:	LSHC	T2,-^D18		;POSITION NUMBER
+	MOVEI	T4,6			;SET DIGIT COUNTER
+L6OCTL:	MOVEI	T2,0			;CLEAR ACCUMULATOR
+	LSHC	T2,3			;GET DIGIT
+	ADDI	T2,"0"			;CONVERT TO ASCII
+	PUSHJ	P,LCHAR			;LIST IT
+	SOJG	T4,L6OCTL		;LOOP UNTIL DONE
+	RETURN
+
+;LIST N DIGITS IN OCTAL AND IF .LT. 6
+;PAD WITH SPACES.
+;
+; CALL:	PUSHJ	P,LNOCT			;# OF DIGITS IN T1
+;					; AND NUMBER IN T2
+;	RETURN
+;
+LNOCT:	MOVEI	T3,6			;MAX DIGITS
+	SUB	T3,T1			;SEE HOW MANY SPACES TO PAD
+	PUSH	P,T2			;REMEMBER NUMBER
+LNOCT2:	SOJL	T3,LNOCT3		;SPACES ALL DONE?
+	MOVEI	T2," "			;SPACE
+	PUSHJ	P,LCHAR			;OUTPUT A SPACE
+	JRST	LNOCT2			;SEE IF ANOTHER
+LNOCT3:	POP	P,T2			;GET NUMBER BACK
+	MOVE	T4,T1			;REMEMBER DIGITS
+	IMULI	T1,-3			;POSITION THE
+	LSHC	T2,(T1)			; NUMBER.
+	JRST	L6OCTL			;LET ANOTHER ROUTINE FINISH
+
+;LIST HEADING
+LHEAD:	LDB	T1,[POINT 6,DVTYP,35]	;GET TYPE OF DEVICE
+	CAIN	T1,.TYTTY		;SEE IF A TTY
+	  RETURN			;YES, FORGET THE HEADER
+	MOVEI	T2,HEADER		;GET HEADER
+	PUSHJ	P,LSTRG			;LIST IT
+					;FALL INTO LCRLF2
+
+;LIST END OF LINE AND A BLANK LINE
+LCRLF2:	MOVEI	T2,[BYTE (7) 15,12,12,0]
+					;FALL INTO LSTRG
+
+;LIST ASCIZ STRING
+;
+; CALL	PUSHJ	P,LSTRG			;T2 POINTS TO ASCIZ STRING
+;
+LSTRG:	MOVE	T3,T2			;GET POINTER
+	HRLI	T3,(POINT 7)		;SET ASCII POINTER
+LSTRGL:	ILDB	T2,T3			;GET CHARACTER
+	JUMPE	T2,CPOPJ		;RETURN IF DONE
+	PUSHJ	P,LCHAR			;ELSE LIST IT
+	JRST	LSTRGL			;LOOP UNTIL DONE
+
+;LIST TAB
+LTAB:	MOVEI	T2,11			;GET TAB
+					;FALL INTO LCHAR
+
+;LIST CHARACTER
+;
+; CALL	PUSHJ	P,LCHAR			;WITH CHARACTER IN T2
+;
+LCHAR:	SOSG	OUTHDR+2		;COUNT CHARACTER IN BUFFER
+	JRST	LCHARB			;NO ROOM--GO MAKE SOME
+LCHARL:	IDPB	T2,OUTHDR+1		;OK--STORE CHARACTER
+	RETURN
+
+LCHARB:	OUT	OUTDEV,			;OUTPUT DATA BUFFER
+	  JRST	LCHARL			;AND NOW GO DO CHARACTER
+	ERROR	<E.Q!E.EC>,<ODE>,<Output device error>,<STARTE>
+
+CHKHDR:	SKIPN	PAGEN			;IF FIRST PAGE ONLY FF
+	  JRST	CHKHD1			;FIRST PAGE
+	MOVEI	T2,[ASCIZ \
+\]
+	PUSHJ	P,LSTRG			;GIVE CR + LF
+	MOVEI	T2,12			;LINE FEED CHAR
+	AOS	T1,LINCNT		;UPDATE THE LINE COUNT
+	CAIGE	T1,LINPAG		;SEE IF A HEADER NEEDED
+	  PJRST	LCHAR			;NO HEADER, GIVE A LINE FEED
+CHKHD1:	MOVEI	T2,14			;FORM FEED
+	PUSHJ	P,LCHAR			;ISSUE IT
+	AOS	PAGEN			;PAGE COUNT
+	PUSHJ	P,LHEAD			;PRINT THE HEADER
+	SETZM	LINCNT			;ZERO THE COUNT
+	AOS	LINCNT			;COUNT HEADER LINE
+	RETURN				;
+
+;LIST SIXBIT WORD IN T1
+;
+L6BIT:	MOVE	T3,[POINT 6,T1]		;POINTER AT 6-BIT WORD
+L6BITA:	ILDB	T2,T3			;GET A CHAR
+	JUMPE	T2,CPOPJ		;NULL SO GET OUT
+	ADDI	T2,40			;CONVER TO 7-BIT
+	PUSHJ	P,LCHAR			;OUTPUT THE CHAR
+	TLNE	T3,770000		;ALL 6 DONE YET
+	  JRST	L6BITA			;NO
+	RETURN				;YES
+
+Subttl	Header Construction Subroutines
+
+HEDTXT:	POP	P,T3			;PRINT STRING, CALLED WITH PUSHJ
+	HRLI	T3,(POINT 7)		;CHANGE PC TO BYTE POINTER
+HEDTX2:	ILDB	T2,T3			;GET NEXT BYTE
+	JUMPE	T2,1(T3)		;RETURN ON 0 CHARACTER
+	PUSHJ	P,HEDCHR		;PRINT CHARACTER
+	JRST	HEDTX2			;LOOP FOR MORE
+
+HEDOCT:	TDZA	T4,T4			;PRINT OCTAL NUMBER, CALLED BY PUSHJ
+HEDDEC:	MOVEI	T4,2			;PRINT DECIMAL NUM, CALLED BY PUSHJ
+	MOVE	T5,T4			;FOR DECIMAL NUMS, FORCE 2 DIGITS
+HEDNUM:	IDIVI	T2,10(T4)
+	HRLM	T2+1,(P)
+	SOSG	T5			;FORCE DIGITS
+	SKIPE	T2
+	PUSHJ	P,HEDNUM
+	HLRZ	T2,(P)
+HEDDIG:	ADDI	T2,"0"			;PRINT DIGIT
+HEDCHR:	IDPB	T2,HEDPNT		;PRINT CHARACTER
+	POPJ	P,
+
+HED7:	MOVEI	T3,5			;PRINT 5 ASCII CHARS, CALLED BY PUSHJ
+HED7A:	ROT	T2,7			;GET NEXT CHARACTER
+	TRNE	T2,177			;SKIP IF NULL
+	  PUSHJ	P,HEDCHR
+	SOJG	T3,HED7A		;LOOP UNTIL 5 PRINTED
+	POPJ	P,
+;LIST SIXBIT WORD IN T2
+;
+HED6:	MOVE	T1,T2			;SAVE 6BIT
+	MOVE	T3,[POINT 6,T1]		;POINTER TO GET AT 6-BIT WORD
+HED6A:	ILDB	T2,T3			;GET A CHAR
+	JUMPE	T2,CPOPJ		;IF 0 WE'RE DONE
+	ADDI	T2,40			;MAKE IT 7BIT
+	PUSHJ	P,HEDCHR		;PUT CHAR IN HEADER BLOCK
+	TLNE	T3,770000		;SEE IF WORD DONE
+	  JRST	HED6A			;NO, GET ANOTHER CHAR
+	RETURN
+
+;HERE TO GET 10 WORDS FROM BUFFER "RCVBUF" WHICH
+;GETS FILLED BY GETFRM.
+;
+GET20W:	SETOM	LZERO			;FLAG NO ZEROS
+	SETZB	P2,ZROFLG		;GETS SET NON 0 ON NON 0 DATA
+					;ZERO INDEX POINTER (P2)
+	MOVEM	P1,FZERO		;SAVE FIRST POSSIBLE ZERO ADDR
+	TDNE	P1,MODMO		;IS ADDRESS MOD 20/PDP11 OR 10/PDP8
+	  JRST	NOTBOU			;NOT MOD20/11 OR MOD10/8
+GETXW1:	MOVE	T1,A.DMPH		;FIGURE NUMBER OF WORDS
+	SUB	T1,P1			; BETWEEN LAST ADR AND CURRENT LINE NUMBER
+	SKIPE	ADRTYP(CPU)		;+2 MACHINES NEED TO /2 TO
+					; CONVERT TO WORDS
+	  LSH	T1,-1			;ADUST FOR PDP11
+	ADDI	T1,1			;MAKE WORDS
+	CAILE	T1,10			;IF .GT. 10
+	MOVEI	T1,10			; SET TO GRAB ONLY 10 WORDS
+	MOVNS	T1			;NEGATIVE NUMBER OF WORDS TO GRAB AND OUTPUT
+GETXW2:	HRL	P2,T1			;(LH)=COUNT,,(RH)=INDEX VALUE INTO "BLODAT"
+GETXW3:	SOJL	P5,GETFRM		;10 WORD BUFFER (BLODAT) EMPTY??
+					; IF YES, FILL IT.
+	ILDB	T1,RCVPNT		;GET LOW DATA BYTE
+	ILDB	T2,RCVPNT		;GET HIGH DATA BYTE
+	LSH	T2,@BITBYT(CPU)		;COMBINE THE BYTES
+	IOR	T1,T2			;NOW A DATA WORD
+	MOVEM	T1,BLODAT(P2)		;SAVE IN BLOCK
+	SKIPE	T1			;SEE IF A ZERO WORD
+	 SETOM	ZROFLG			;REMEMBER WE SAW NON ZERO
+	MOVE	T1,ADRINC(CPU)		;GET ADR INCREMENT
+	ADDM	T1,ADDR			;UPDATE ADDRESS WE'RE AT
+	AOBJN	P2,GETXW3		;BLOCK LOADED WITH 10 WORDS YET
+					; OR AS MANY THAT WAS LEFT
+	CAIG	P2,7			;SEE IF 10 WORDS PUT IN
+	SETOM	BLODAT(P2)		;NOT FULL SO SET -1 TO INDICATE THE END
+	SETZ	P2,			;MAKE SURE INDEX IS 0
+	SKIPE	ZROFLG			;SKIP IF BLOCK IS ZERO
+	  JRST	DMZRLN			;DO THING FOR ZERO LINE
+	ADD	P1,MOD			;INCREMENT STARTING ADDR OF LINE
+	TDZ	P1,MODMO		;THIS CORRECTS FOR NON MOD STARTING ADDRESS
+	MOVE	T1,P1			;GET STARTING ADDR OF NEXT LINE
+	SUB	T1,ADRINC(CPU)		;CALCULATE THE LAST ADR THAT CAN
+					; BE ON THE NEXT DUMP LINE.
+	CAMLE	T1,A.DMPH		;IF ITS .GT. ENDING ADR
+	 MOVE	T1,A.DMPH		; USE THE ENDING ADDRESS
+	MOVEM	T1,LZERO		;REMEMBER IT
+	JRST	GETXW1			;
+
+;HERE ONLY WHEN THE FIRST ADDRESS TO DUMP IS NOT
+;MOD 20/PDP11 OR MOD 10/PDP8. THIS IS ONLY TO
+;OUTPUT THE FIRST LINE IN THAT CASE.
+;
+NOTBOU:	MOVE	T1,MODMO		;SINCE THE FIRST ADR IS NOT
+	SUB	T1,P1			; MOD 20/PDP11 OR 10/PDP8 CALCULATE
+	AND	T1,MODMO		;  THE NUMBER OF BLANK WORDS TO
+	SKIPE	ADRTYP(CPU)		;+2 NEEDS TO BE /2 FOR WORD
+					; CALCULATION.
+	  LSH	T1,-1			;CONVERT TO WORDS
+	ADDI	T1,1			;    BE OUTPUT AND THE NUMBER OF POSSIBLE
+	MOVEM	T1,T4			;     WORDS ON THE REST OF THE LINE
+	SUBI	T1,10			;
+	HRLZ	P2,T1			;
+	MOVSI	T1,(1B0)		;BLANK FLAG FOR UNPACKER
+NOTBO1:	MOVEM	T1,BLODAT(P2)		;PUT BLANK CODE IN
+	AOBJN	P2,NOTBO1		;BLANKS DONE?
+	CAMN	P1,A.DMPH		;IF BEG AND END SAME DON'T CALCULATE
+					; THE NUMBER OF WORDS REMAINING ON LINE HERE
+	 JRST	GETXW1			;GET THE WORD AND PRINT IT
+	MOVE	T2,A.DMPH		;NOT CALCULATE THE NUMBER OF
+	AND	T2,MODMO		; TO BE OUTPUT FOR THE FIRST LINE
+	MOVE	T1,P1			;
+	AND	T1,MODMO		;
+	MOVE	T3,A.DMPH		;
+	SUB	T3,P1			;
+	CAMGE	T3,MOD			;
+	 CAMG	T2,T1			;
+	 SKIPA				;
+	  JRST	GETXW1			;ENDING ADDRESS IS WITHIN THE FIRST LINE
+	MOVN	T1,T4			;
+	JRST	GETXW2			;ENDING ADDRESS IS AFTER FIRST LINE
+
+;HERE WHEN THE 10-WORD BUFFER (BLODAT) IS EMPTY
+;AND NEEDS TO BE FILLED.
+
+GETFRM:	JUMPE	P3,DMDONE		;IF ALL DONE,GET OUT
+	CAIG	P3,MAXEXM		;SEE IF BUFFER (BLODAT) WILL HOLD ALL
+	  JRST	[MOVE	T3,P3		;IT WILL, SO USE COUNT
+		SETZ	P3,		;DONE
+		JRST	GETFR1		;DO THE FINAL EXAMINE
+]
+	SUBI	P3,MAXEXM		;DECREASE COUNT BY EXAMINE AMOUNT
+	MOVEI	T3,MAXEXM		;NUMBER OF BYTES TO EXAMINE THIS TE
+GETFR1:	MOVE	T2,[POINT 8,XMTBUF,15]	;POINTER TO LOAD FOR EXAMINE REQ
+	MOVE	T1,ADRBYT(CPU)		;NUMBER OF ADDRESS BYTES
+	MOVE	T4,ADDR			;ADDRESS TO BREAK UP
+GETFR3:	IDIVI	T4,400			;GET 8 BITS INTO T5
+	IDPB	T5,T2			;PUT A BYTE OF ADDRESS IN
+	SOJG	T1,GETFR3		;ADDRESS ALL STUFFED IN BUFFER?
+GETFR2:	MOVE	T4,T3			;CALCULATE LAST ADDR TO EXM
+	SKIPN	ADRTYP(CPU)		;
+	  LSH	T4,-1			;MAKE WORDS FOR 8
+	ADD	T4,ADDR			;PRESTO, THE LAST ADDR
+	MOVE	T1,T4			;COPY HERE FOR CHECK
+	SUB	T1,ADRINC(CPU)		;
+	CAMLE	T1,A.DMPH		;MAKE SURE NOT REQUESTING MORE
+					; THAN ASK FOR. (CATCH PROGRAM BUG)
+	  PUSHJ	P,CONFUS		;MUST OF, SO CONFUSED.
+	MOVE	T1,ADRBYT(CPU)		;NUMBER OF BYTES OF ADDRESS
+GETFR4:	IDIVI	T4,400			;GET 8 BITS WORTH INTO T5
+	IDPB	T5,T2			;PUT A BYTE OF ADDRESS IN
+	SOJG	T1,GETFR4		;ADDRESS ALL STUFFED IN BUFFER?
+	ADD	T3,ADRBYT(CPU)		;+2 FOR 8, +3 FOR 11.
+	ADDI	T3,2			;INCLUDE LINE+CNT
+	MOVE	T2,[XWD	N.EXD,N.EXR]	;EXAMINE REQUEST
+	HRLZS	T3			;PUT RCV COUNT IN (LH)
+	ADD	T3,ADRBYT(CPU)		;FROM ADR
+	ADD	T3,ADRBYT(CPU)		;TO ADR
+	ADDI	T3,2			;LINE+CNT ARE 2 BYTES
+	HRRZ	T4,ADDR			;GET ADDRESS TO CHECK
+	PUSHJ	P,NODUUO		;DO NODE UUO
+	HLRZ	P5,T3			;GET COUNT BACK FROM RCV
+	SUBI	P5,2			;GET RID OF LINE+FUN BYTES
+	SUB	P5,ADRBYT(CPU)		;SUB ADR BYTES
+	LSH	P5,-1			;MAKE INTO WORDS
+	JRST	GETXW3			;
+
+Subttl	Here to send Secondary Boot to Remote
+
+	IFN	FTBOOT,<
+
+BOOT:	TXNE	F,F.NLOG		;LOGGED IN?
+	  ERROR	<E.Q>,<BSI>,</BOOT is an illegal switch>,<LOGOFF>
+	TXNN	CMDWRD,C.MEM		;/MEMSIZ IS REQUIRED
+	  ERROR	<E.Q!E.NC>,<MSR>,</MEMSIZ is a required switch>,<HLPMSG>
+	TXNN	CMDWRD,C.TYPE		;/TYPE IS REQUIRED
+	  ERROR	<E.Q!E.NC>,<TSR>,</TYPE is a required switch>,<HLPMSG>
+	MOVE	T2,A.TYPE		;GET TYPE OF REMOTE (NUMBER)
+	SKIPN	T3,BOTTAB(T2)		;SKIP IS WE HAVE A BOOTSTRAP
+					; FOR THIS TYPE OF REMOTE
+	  ERROR	<E.Q>,<NBT>,<No bootstrap available for this remote>,<LOGOFF>
+	HLRZ	T2,T3			;GET NUMBER OF MEM SIZES KNOWN
+					; FOR THIS REMOTE
+	SKIPL	T1,A.MEM		;GET MEMSIZE
+	 CAML	T1,T2			;SEE IF WE KNOW OF THIS MEM SIZE
+	  ERROR	<E.Q!E.T1>,<UMS>,<Illegal mem size>,<LOGOFF>
+	ADD	T3,T1			;POINT TO CORRECT PLACE IN TABLE
+	SKIPN	T1,(T3)			;GET LENGTH,ADR OF DATA
+	  ERROR	<E.Q>,<BMN>,<Secondary bootstrap missing from NETLDR>,<LOGOFF>
+	HRRZM	T1,INHDR+1		;PUT IN BUFFER HEADER (LIKE DSK)
+	SOS	INHDR+1			;MAKE 1 LESS (LIKE A DEV)
+	HLRZM	T1,INHDR+2		; PUT LENGTH IN ALSO
+	ON	F.BOOT			;NEED THIS BIT ON
+	PJRST	START7			;GO BOOT THE REMOTE
+
+	>;End IFN FTBOOT
+Subttl	Convert .BIN File to .MAC
+
+	IFN	FTCVRT,<
+
+CONVRT:	TXNE	F,F.CCL			;CCL ENTRY?
+	  ERROR	<E.%!E.EC>,<CVT>,</CONVRT is illegal>,<DONE>
+	MOVE	T1,DEV			;GET DEVICE NAME
+	MOVSI	T2,'DSK'		;DEFAULT DEVICE IF DEVPPN
+					; IS NOT SAME AS MYPPN
+	DEVPPN	T1,			;GET PPN ASSOCIATED WITH DEV
+	  ERROR	<E.Q!E.T1>,<DPN>,<DEVPPN failed >,<STARTE>
+	CAME	T1,MYPPN		;SAME AS ME?
+	  MOVEM	T2,DEV			;NO, MAKE DEVICE "DSK"
+	MOVX	T1,.IOASC		;MODE
+	MOVE	T2,DEV			;DEVICE NAME
+	MOVSI	T3,OUTHDR		;BUFFER HEADER
+	OPEN	OUTDEV,T1		;OPEN THE OUTPUT DEVICE
+	  ERROR	<E.Q!E.NC>,<COF>,<Can't OPEN output device >,<COIERR>
+	MOVE	T1,NAME			;GET FILE NAME
+	MOVSI	T2,'MAC'		;GIVE EXTENSION OF .MAC
+	HLLM	T2,EXT			;INCASE OF ERROR
+	SETZ	T3,			;
+	MOVE	T4,MYPPN		;PUT FILE HERE
+	MOVEM	T4,DIRECT		;INCASE OF ERROR
+	ENTER	OUTDEV,T1		;ENTER THE OUTPUT FILE
+	  JRST	[HRRZ	T1,T2		;GET ERROR CODE
+		ERROR	<E.Q!E.T1!E.NC>,<EFC>,<Enter failure for >,<LOOKER>
+]
+	MOVEI	T2,COPYRI		;POINT TO COPYRIGHT TEXT
+	PUSHJ	P,LSTRG			;OUTPUT COPYRIGHT
+	MOVEI	T2,[ASCIZ\	ENTRY	\]
+	PUSHJ	P,LSTRG			;
+	MOVE	T1,NAME			;GET FILE NAME
+	PUSHJ	P,L6BIT			;
+	MOVEI	T2,[ASCIZ \
+
+	TWOSEG				;TWO SEGMENT PROGRAM
+
+	RELOC	400000			;START IN HISEG
+
+\]
+	PUSHJ	P,LSTRG			;
+	MOVE	T1,NAME			;GET NAME AGAIN
+	PUSHJ	P,L6BIT			;MAKE TAG
+	MOVEI	T2,[ASCIZ \::
+\]
+	PUSHJ	P,LSTRG			;WRITE IT OUT
+CONVR2:	SOSL	INHDR+2			;COUNT DOWN WORDS
+	  JRST	CONVR3			;STILL SOME THERE
+	IN	INDEV,			;GET A BUFFER FULL
+	  JRST	CONVR2			;TRY AGAIN
+	STATZ	INDEV,740000		;SEE IF ERROR
+	  CAIA				;YES, A ERROR
+	JRST	CONVR4			;IT MUST BE EOF
+	RELEAS	INDEV,			;
+	RELEAS	OUTDEV,			;
+	ERROR	<E.Q>,<IFC>,<Input file read error>,<STARTE>
+CONVR3:	MOVEI	T2,[ASCIZ \	EXP	\]
+	PUSHJ	P,LSTRG			;WRITE OUT "<TAB>EXP<TAB>
+	AOS	INHDR+1			;ADVANCE TO NEXT WORD
+	MOVE	T3,@INHDR+1		;GET WORD
+	MOVEI	T4,^D12			;12 DIGITS
+	PUSHJ	P,L6OCTL		;OUTPUT THE 12 DIGITS
+	MOVEI	T2,[BYTE (7) 15,12,0]	;CR + LF
+	PUSHJ	P,LSTRG			;GIVE A CRLF
+	JRST	CONVR2			;DO THE WHOLE FILE
+CONVR4:	PUSHJ	P,LTAB			;GIVE A TAB
+	MOVE	T1,NAME			;GET FILE NAME
+	TLZ	T1,770000		;CLEAR FIRST CHARACTER
+	TLO	T1,(SIXBIT \E\)		;MAKE FIRST CHAR AN "E"
+	PUSHJ	P,L6BIT			;WRITE IT OUT
+	MOVEI	T2,[ASCIZ \==:.-\]
+	PUSHJ	P,LSTRG			;
+	MOVE	T1,NAME			;GET BEGINNING ADDRESS
+	PUSHJ	P,L6BIT			;
+	MOVEI	T2,[ASCIZ\
+
+	END
+\]
+	PUSHJ	P,LSTRG			;GIVE END STATEMENT
+	CLOSE	OUTDEV,			;CLOSE THE OUTPUT FILE
+	CLOSE	INDEV,			;CLOSE THE INPUT FILE
+	RELEAS	OUTDEV			;LET GO OF THE OUTPUT DEVICE
+	RELEAS	INDEV			; AND THE INPUT DEVICE
+	PJRST	DONE			;
+
+	>;End IFN FTCVRT
+Subttl	Here from CCL Entry point for Auto Loading
+
+;HERE ON CCL ENTRY POINT TO PERFORM AUTOMATIC
+;OPERATIONS FOR THE REMOTE.
+;
+AUTOLD:	ON	F.TYRM			;SET THIS SO REMOTE INFO
+					; WON'T COME OUT UNTIL WE WANT IT
+	OFF	F.MSG!F.MSGX		;DISALLOW MESSAGE TO REMOTE NOW
+	PUSHJ	P,TYPOPS		;SETUP FOR OPERATOR MSG
+	PUSHJ	P,TYPMSS		;SETUP FOR MESSAGE TO REMOTE
+	MOVE	T1,[POINT 7,CMDSTR]	;
+	MOVEM	T1,CMDPNT		;FOR RETREVING COMMAND FROM NODE
+	MOVX	T1,%CNOPR		;GET THE OPR DEVICE NAME
+	GETTAB	T1,			;
+	  ERROR	<E.Q>,<GTO>,<GETTAB UUO failed for opr device name>,<LOGOFF>
+	IONDX.	T1,			;GET THE UDX FOR THE OPR
+	  ERROR	<E.Q>,<IXU>,<IONDX UUO failed>,<LOGOFF>
+	MOVEM	T1,OPRUDX		;REMEMBER THE OPR'S UDX
+	MOVE	T1,[XWD	4,NODARG]	;
+AUTOLN:	NODE.	T1,			;GET THE BOOT MESSAGE
+	  JRST	[SKIPN	AUTDEB		;SHALL WE WAIT FOR A REQUEST
+		  ERROR	<E.Q!E.T1!E.NC>,<NBR>,<NODE UUO failure>,<NODERR,CRLF,LOGOFF>
+		MOVEI	T1,BOTWAT	;GET SECONDS TO WAIT BEFORE TRYING AGAIN
+		SLEEP	T1,		;SNOOZE
+		JRST	AUTOLD		;YES
+]
+	MOVE	P1,[POINT 8,BOTMSG]	;POINT TO THE RECEIVED MESSAGE
+	HLRZ	P2,NODARG+3		;GET COUNT RECEIVED
+	MOVE	T3,NODARG+1		;GET THE NAME OF THE NODE
+	PUSHJ	P,NAMNUM		;GET THE NODE NUMBER
+	SKIPL	T3			;IF T3 HAS A NUMBER IN IT
+	EXCH	T3,T1			;  THEN SWAP THE NAME & NUMBER
+	MOVEM	T3,R.NNAM		; AND SAVE IT.
+	MOVEM	T3,A.NNAM		;SAVE INCASE REMOTE SENDS FILE-SPEC
+	MOVEM	T1,R.NNUM		;ALSO SAVE NODES NUMBER
+	MOVEM	T1,A.NNUM		;SAVE INCASE REMOTE SENDS FILE-SPEC
+	SOJL	P2,[ERROR <E.Q!E.NC>,<LNM>,<Line number missing in boot msg>,<AUTOE1>]
+	ILDB	T1,P1			;GET THE LINE NUMBER
+	SUBI	T1,1			;MAKE IT THE REAL ONE (0-17)
+	MOVEM	T1,R.LINE		; AND REMEMBER THE LINE NUMBER.
+	MOVEM	T1,A.LINE		;SAVE INCASE REMOTE SENDS FILE-SPEC
+	SKIPL	T1			;NEG LINE NUMBER NO GOOD
+	 CAILE	T1,MAXLIN		;MUST BE IN RANGE OF 0-17.
+	  ERROR	<E.Q!E.T1!E.NC>,<BLN>,<Illegal line number in boot msg>,<AUTOE1>
+	TXO	CMDWRD,C.LINE!C.NODE	;WE HAVE A GOOD LINE NUMBER
+	SOJL	P2,[ERROR <E.Q!E.NC>,<FUM>,<Function missing boot in msg>,<AUTOE1>]
+	ILDB	T1,P1			;GET FUNCTION TO PERFORM
+	MOVEM	T1,R.FUNU		; AND STASH IT AWAY.
+	IFN	FTBOOT,<
+	CAIG	T1,N.RQLD		;MUST BE BOOT OR LOAD
+	 CAIGE	T1,N.RQBT		;
+	>;End IFN FTBOOT
+	IFE	FTBOOT,<
+	CAIE	T1,N.RQLD		;CHECK IF REQUEST LOAD
+	>;End IFE FTBOOT
+	  ERROR	<E.Q!E.T1!E.NC>,<IFU>,<Illegal function in boot msg>,<AUTOE1>
+	IFN	FTBOOT,<
+	CAIN	T1,N.RQBT		;BOOT?
+	  ON	F.BOOT			;YES, SET BIT FOR EASY TESTING
+	>;End IFN FTBOOT
+	IFN	FTBOOT,<
+	MOVE	T1,[SIXBIT \BOOT\
+		    SIXBIT \LOAD\ ]-N.RQBT(T1)	;FUNCTION NAME
+	>;End IFN FTBOOT
+	IFE	FTBOOT,<
+	MOVE	T1,[SIXBIT \LOAD\]	;FUNCTION NAME
+	>;End IFE FTBOOT
+	MOVEM	T1,R.FUNA		;STASH AWAY FUNCTION NAME
+	PUSHJ	P,GETEXB		;GET THE TYPE OF REMOTE
+	  JRST	NETOP1			;NO TYPE GIVEN, SO DO AUTO.
+	MOVEM	T1,R.TYPE		;REMEMBER THE TYPE OF REMOTE
+	MOVEM	T1,A.TYPE		;MAY NEED IT HERE ALSO
+	SKIPL	T1			;CHECK IF IN RANGE
+	 CAIL	T1,KNDNUM		;TOO LARGE?
+	  ERROR	<E.Q!E.T1!E.NC>,<ITY>,<Illegal TYPE in boot msg>,<AUTOE1>
+	TXO	CMDWRD,C.TYPE		;FLAG WE HAVE TYPE
+	HRRZ	CPU,CPUTYP(T1)		;0 FOR 8, 1 FOR 11
+	HRRZ	T1,KINDTB(T1)		;GET ADDRESS OF TYPE
+	MOVE	T1,(T1)			;GET THE NAME OF THE TYPE
+					; (USE ONLY FIRST IF MORE THAN 1)
+	MOVEM	T1,R.TYNM		;NEED IT FOR TYPEOUT
+	OFF	F.TYRM			;LET MESSAGE COME OUT ABOUT
+					; WHAT WE GOT FROM REMOTE
+	MOVEM	CMDWRD,REMCMD		;SAVE WHAT WE GOT SO FAR
+	PUSHJ	P,GETEXB		;GET THE REMOTE SERIAL NUMBER
+	IFN	FTBOOT,<
+	  JRST	[TXNN	F,F.BOOT	;BOOT REQUEST
+		  JRST	NETOP1		;IF NO SER NUMBER ON LOAD
+					; THEN LOAD FROM NETLDR.INI
+		ERROR	<E.Q!E.NC>,<NSN>,<No serial number in boot msg>,<AUTOE1>
+]
+	>;End IFN FTBOOT
+	IFE	FTBOOT,<
+	  JRST	NETOP1			;NO SERIAL NUMBER ON LOAD
+	>;End IFE FTBOOT
+	MOVEM	T1,R.SER		;REMEMBER THE REMOTE SERIAL NUMBER
+	TXO	CMDWRD,C.SER		;FLAG WE GOT SERIAL NUMBER
+	MOVEM	CMDWRD,REMCMD		;UPDATE WHAT WE GOT
+	IFN	FTBOOT,<
+	TXNE	F,F.BOOT		;BOOT REQUEST?
+	  JRST	AUTOBT			;YES, BOOT
+	>;End IFN FTBOOT
+	SETZ	CMDWRD,			;GET RID OF OLD CMDS
+	MOVE	T1,R.TYPE		;GET TYPE OF REMOTE
+	MOVE	T1,CPUTYP(T1)		;GET FLAGS,,TYPE OF CPU
+	TLNE	T1,CP.MSG		;GIVE MESSAGES TO REMOTE?
+	  ON	F.MSG!F.MSGX		;YES
+	PUSHJ	P,GETEXA		;SEE IF A FILE SPEC FROM REMOTE
+	  JRST	NETOP1			;NO FILE SPEC
+	PUSHJ	P,TYPREM		;TYPE REMOTE INFO
+	JRST	STARTA			;GO LOAD THE NODE
+
+	IFN	FTBOOT,<
+
+;HERE TO FINISH UP BOOT REQUEST
+;
+AUTOBT:	SOJL	P2,[ERROR <E.Q!E.NC>,<NMS>,<No memory size supplied in boot msg>,<AUTOE1>]
+	TXO	CMDWRD,C.MEM		;WE GOT A MEM SIZE
+	MOVEM	CMDWRD,REMCMD		;UPDATE WHAT WE HAVE
+	ILDB	T1,P1			;GET MEM SIZE
+	MOVEM	T1,R.MEM		;SAVE MEM SIZE
+	MOVEM	T1,A.MEM		; AND AGAIN
+	MOVE	CMDWRD,MODTAB(CPU)	;SET /IMAGE OR /PACKED
+	PJRST	BOOT			;GO INTO BOOT CODE
+
+	>;End IFN FTBOOT
+
+;HERE IF REMOTE SENT NO FILESPEC IN THE EXTENSIBLE ASCII FIELD
+;
+;	OPEN SYS:NETLDR.INI AND SET BIT " F.NINI " TO FLAG
+;	FILESPEC NOT SENT BY REMOTE.
+;
+NETOP1:	ON	F.NINI			;REMEMBER NO FILESPEC
+					; AND USING NETLDR.INI
+	OPEN	INDEVF,INHDRB		;OPEN FILE ON SYS
+	  ERROR	<E.Q>,<SOF>,<OPEN failed for device SYS>,<CLEXIT>
+	LOOKUP	INDEVF,LOKNET		;OPEN NETLDR.INI ON SYS
+	  ERROR	<E.Q>,<LFI>,<LOOKUP failed for SYS:NETLDR.INI>,<CLEXIT>
+	INBUF	INDEVF,0		;CREATE DEFAULT # OF BUFFERS
+	MOVE	T1,.JBFF		;REMEMBER CORE SIZE
+	MOVEM	T1,CORSIZ		;
+	JRST	STARTA			;
+
+;HERE ON ERROR IN AUTOLD
+;
+AUTOE1:	MOVEI	T1,[ASCIZ \ in bootstrap msg from Node \]
+	PUSHJ	P,TYPASC		;TYPE
+	MOVE	T1,R.NNAM		;GET NODE NAME
+	PUSHJ	P,TYPSIX		;TYPE IT
+	MOVE	T1,R.NNUM		;GET NODE NUMBER
+	PUSHJ	P,TYPPNP		;TYPE IT (N)
+	TXNN	CMDWRD,C.LINE		;HAVE GOOD LINE NUMBER?
+	  JRST	AUTE1A			;NO, SO DON'T TYPE LINE
+	MOVEI	T1,[ASCIZ \ Line:\]	;
+	PUSHJ	P,TYPASC		;
+	MOVE	T1,R.LINE		;GET GOOD LINE NUMBER
+	PUSHJ	P,TYPOCT		;TYPE LINE NUMBER
+AUTE1A:	PUSHJ	P,CRLF			;
+	JRST	LOGOFF			;BYE-BYE
+;HERE TO EXIT IF LOGGED IN OR LOGOUT IF NOT LOGGED IN
+;
+LOGOFF:	RESET
+	SKIPE	AUTDEB			;SHALL WE WAIT FOR ANOTHER
+					; BOOT REQUEST?
+	  JRST	CCL			;YES
+	TXNN	F,F.NLOG		;LOGGED IN?
+	  EXIT				;YES, SO JUST EXIT
+	PUSHJ	P,TYPOPR		;GIVE OPR REST OF MESSAGE
+	LOGOUT	1,			;NO
+	EXIT				;YES
+
+;HERE AT THE END OF A FUNCTION (LOAD, DUMP, OR START) TO
+;CLEAN UP AND SEE IF ANOTHER COMMAND MAY EXIST.
+;
+DONE:	PUSHJ	P,UNLOK			;UNLOCK THE JOB
+	OFF	F.ERRC			;CLEAR ERROR CONTINE BIT
+	TXNN	F,F.BOOT		;BOOTING?
+	 TXNE	F,F.EOF			;AT THE END OF THE COMMANDS?
+	  PUSHJ	P,LOGOFF		;THEN GO BYE-BYE
+	TXNE	F,F.EOL			;COMMANDS DONE? (NETLDR.INI)
+	  JRST	[PUSHJ	P,GETINC	;CLOSE NETLDR.INI
+		PUSHJ	P,LOGOFF	;GO BYE-BYE
+]
+	TXZE	F,F.DEFD		;USING DEFAULT DEVICES?
+	  SETZM	DEV			;YES, SO CLEAR THE ONE WE USED
+	TXZE	F,F.DPPN		;[112] USING DEFAULT PPN?
+	  SETZM	DIRECT			;[112] YES, SO CLEAR THE ONE WE USED
+	TXZ	CMDWRD,-<C..STK>-1	;KEEP ONLY STICK CMDS
+	MOVEM	CMDWRD,STKWRD		;AND REMEMBER THEM.
+	SETZB	CMDWRD,NAME		;CLEAR COMMAND WORD AND FILE NAME
+	SETZM	EXT			; AND EXTENSION
+	OFF	F.NLDR!F.WRD!F.ORG!F.FLD!F.ADRC!F.377!F.SADR!F.LOCK!F.EXTB!F.DEV
+;[146]	MOVE	T2,CORSIZ		;SHRINK CORE TO ORIGINAL
+;[146]	PUSHJ	P,GETCOR		;DO IT
+	PUSH	P,[STARTA+1]		;WHERE TO GO COMING OUT OF COMMAND DECODER
+	TXNE	F,F.MSG			;GIVE REMOTE MMESSAGES
+	  ON	F.MSGX			;YES
+	JRST	COMLP			;DO NEXT COMMAND
+
+Subttl	Command Scanner
+
+GETCOM:	MOVEI	T1,[ASCIZ /File: /]	;TELL USER WE ARE WAITING
+	TXNN	F,F.CCL			;IF CCL NO USE IN PROMPTING
+	PUSHJ	P,TYPASC		;NOT CCL SO PROMPT
+	SETZ	CMDWRD,			;START WITH 0 CMDWRD
+COMLP:	PUSHJ	P,GETNAM		;GET A SIXBIT NAME
+	JRST	COMFN1
+COMFND:	MOVEI	T3,0			;CLEAR NAME
+COMFN1:	MOVSI	T5,-BRKLEN		;LOOK FOR BREAK
+COMFN2:	HLRZ	T4,BRKTAB(T5)		;TRY NEXT BREAK
+	CAME	T4,BRKCHR		;SEE IF MATCH
+	AOBJN	T5,COMFN2		;LOOP UNTIL MATCH
+	HRRZ	T4,BRKTAB(T5)		;GET DISPATCH ADDRESS
+	JRST	(T4)			;JUMP TO HANDLE BREAK
+
+BRKTAB:	XWD	" ",COMNOP		;SPACE IS A NO-OP
+	XWD	".",COMEXT		;DOT IS EXTENSION
+	XWD	":",COMDEV		;COLON IS DEVICE
+	XWD	"[",COMDIR		;BRAKET IS DIRECTORY
+	XWD	"/",COMSWT		;SLASH IS SWITCH
+	XWD	"=",COMEQL		;EQUAL SAYS LOOK FOR MATCH
+	XWD	",",SAVNAM		;COMMA IS A COMMAND SEPARATOR
+	XWD	"!",COMENT		;REST IS A COMMENT
+	XWD	";",COMENT		;REST IS A COMMENT
+	XWD	12,COMLF		;RETURN AT END OF LINE, AFTER SAVING FILE NAME
+BRKLEN==.-BRKTAB
+	XWD	0,ILLCHR		;ELSE, MUST BE ERROR. CHAR IS IN T2
+
+COMERR:	ERROR	<E.Q!E.NC>,<CME>,<Command error>,<HLPMSG>
+
+;HERE IF ILLEGAL CHARACTER WITH IT IN T2
+;
+ILLCHR:	ERROR	<E.Q!E.NC>,<ILC>,<Illegal character ">,<ILLCH1>
+ILLCH1:	MOVEI	T1,"^"			;MAYBE A CONTROL CHAR
+	CAIGE	T2,40			;SEE IF A CONTROL CHAR
+	  PUSHJ	P,TYPCHR		;TYPE "^"
+	MOVE	T1,T2			;COPY TO CORRECT AC FOR PRINTING
+	CAIGE	T1,40			;SEE IF CONTROL CHAR
+	  IORI	T1,100			;MAKE IT A REAL CHAR
+	PUSHJ	P,TYPCHR		;OUTPUT IT
+	MOVEI	T1,[ASCIZ \" \]
+	PUSHJ	P,TYPASC		;
+	JRST	HLPMSG			;INFORM HIM OF HELP
+
+;HERE IF EQUAL SIGN " = "
+;WHAT EVER IS GIVEN BY THE REMOTE MUST
+;MATCH EXACTLY WITH THE LEFT OF =
+;IN NETLDR.INI ON SYS:
+;
+COMEQL:	TXNN	F,F.NINI		;= ONLY ALLOWED FOR NETLDR.INI
+	  JRST	ILLCHR			;= ONLY ALLOWED FOR NETLDR.INI
+	MOVE	T1,CMDWRD		;SEE IF REMOTE MATCHES FILE
+	IOR	T1,REMCMD		;
+	TXZ	T1,-<C.NODE!C.LINE!C.TYPE!C.SER>-1	;KILL UNDESIRED BITS AND
+					; IF A MATCH THAT ROUTINE WILL
+					;  PRINT THEM OUT.
+	CAME	T1,REMCMD		;MATCH?
+	JRST	COMENM			;NO MATCH
+	MOVE	T1,R.NNUM		;GET NODE NUMBER SUPPLIED BY REMOTE
+	TXNN	CMDWRD,C.NODE		;CHECK FOR NODE MATCH?
+	  JRST	COME1			;NO
+	CAME	T1,A.NNUM		;COMPARE WITH NETLDR.INI
+	  JRST	COMENM			;NO MATCH
+COME1:	MOVEM	T1,A.NNUM		;SAVE NODE NUMBER
+	MOVE	T1,R.NNAM		;GET REMOTE NODE NAME
+	MOVEM	T1,A.NNAM		;REMEMBER THE NODE NAME
+	MOVE	T1,R.LINE		;GET REMOTE LINE
+	TXNN	CMDWRD,C.LINE		;SEE IF LINE MUST MATCH
+	  JRST	COME2			;NO
+	CAME	T1,A.LINE		;SAME AS IN FILE?
+	  JRST	COMENM			;NO LINE MATCH
+COME2:	MOVEM	T1,A.LINE		;SAVE LINE NUMBER
+	MOVE	T1,R.TYPE		;GET REMOTE TYPE
+	TXNN	CMDWRD,C.TYPE		;SEE IT TYPE MUST MATCH
+	  JRST	COME3			;NO
+	CAME	T1,A.TYPE		;SEE IF MATCH WITH FILE
+	  JRST	COMENM			;NO MATCH FOR TYPE
+COME3:	MOVEM	T1,A.TYPE		;REMEMBER THE TYPE
+	MOVE	T1,R.SER		;GET REMOTE SERIAL #
+	TXNN	CMDWRD,C.SER		;SEE IF SERIAL MATCH REQUIRED
+	  JRST	COME4			;NO
+	CAME	T1,A.SER		;SEE IF SERIAL MATCH
+	  JRST	COMENM			;NO
+COME4:	MOVEM	T1,A.SER		;REMEMBER THE SERIAL
+	ON	F.MATC			;REMEMBER WE HAD A COMMAD MATCH
+	MOVE	T1,CMDWRD		;GET LEFT OF = CMDS
+	SETZ	CMDWRD,			;CLEAR MATCH STUFF FOR REAL COMMAND
+	TXZ	T1,C.NODE!C.LINE!C.TYPE!C.SER
+	JUMPE	T1,COMLP		;JUMP IF NO ILLEGAL BITS SET
+	PUSH	P,T1			;SAVE T1
+	PUSHJ	P,TYPREM		;TYPE REMOTE INFO
+	POP	P,T1			;RESTORE T1
+	ERROR	<E.Q!E.NC>,<SIL>,<Illegal switch on left of equal>,<ILSLEQ>
+	JRST	COMLP			;GET WHAT TO DO FROM FILE
+
+;HERE IF NO MATCH IN A LINE IN NETLDR.INI
+;
+COMENM:	SETZB	CMDWRD,A.NNAM		;ZERO CMD WORD, NAME OF NODE AND
+	SETZM	A.NNUM			; ITS NUMBER
+	SETZM	A.LINE			;
+	SETZM	A.SER			;
+	SETZM	A.TYPE			;
+	PUSHJ	P,CLRINP		;GET TO END OF LINE
+	TXNE	F,F.EOF			;END OF FILE?
+COMEN1:	  JRST	[PUSHJ	P,TYPREM	;TYPE BOOTSTRAP MSG
+		ERROR	<E.Q>,<NMI>,<Cannot find match in SYS:NETLDR.INI>,<LOGOFF>
+]
+	JRST	COMLP			;GET ANOTHER LINE
+
+;HERE ON LINE FEED CHARACTER (12)
+;
+COMLF:	PUSHJ	P,SAVNAM		;SAVE NAME
+;[111]	SKIPE	CMDWRD			;SEE IF COMMAND
+;[111]	  RETURN			;YES
+	SKIPN	CMDWRD			;[111] SEE IF ANY SWITCHES
+	 TXNN	F,F.NINI		;ONLY CHECK FOR EOF ON NETLDR.INI
+	  RETURN			;NO SWITCHES OR NOT USING NETLDR.INI
+;[111]	TXNN	F,F.EOF			;SEE IF AT END OF NETLDR.INI
+;[111]	  RETURN			;NO, OR TTY INPUT
+	TXNE	F,F.EOF			;[111] AT EOF IN NETLDR.INI?
+	  JRST	COMLF2			;[111] YES, AT EOF.
+	TXNN	F,F.DEV			;[111] DEVICE SPECIFIED
+	 SKIPE	NAME			;[111]  OR A FILE NAME?
+	  JRST	[TXNE	F,F.MATC	;HAD A MATCH IN NETLDR.INI?
+		  RETURN		;YES, GO PROCESS THE LINE
+		JRST	COMINI		;ILLEGAL LINE IN NETLDR.INI
+]
+	PJRST	COMLP			;[111] NO, MAYBE A NUL LINE
+COMLF2:	TXNN	F,F.MATC		;DID WE EVER HAVE A CMD MATCH?
+	  PJRST	COMEN1			;NO, NEVER FOUND A MATCH
+	PUSHJ	P,LOGOFF		;YES, THEN GO AWAY
+
+;HERE IF A "!" OR ";" WHICH ARE COMMENT CHARS
+;
+COMENT:	PUSHJ	P,SAVNAM		;SAVE NAME IS NECESSARY
+	PUSHJ	P,CLRINP		;GOBBLE UP COMMENT
+	JRST	COMFND			;
+
+;HERE ON ILLEGAL LINE IN NETLDR.INI
+;
+COMINI:	ERROR	<E.%>,<ILL>,<Illegal format in NETLDR.INI>,<COMENM>
+COMNOP:	PUSHJ	P,SAVNAM		;STORE FILE NAME
+	JRST	COMLP			;AND GO AROUND AGAIN
+
+COMEXT:	PUSHJ	P,SAVNAM		;SAVE FILE NAME
+	PUSHJ	P,GETNAM		;GET SIXBIT NAME
+	HLLOM	T3,EXT			;SAVE EXT WITH FLAG FOR DOT
+	JRST	COMFND			;AND GO AROUND AGAIN
+
+COMDEV:	MOVEM	T3,DEV			;SAVE DEVICE
+	ON	F.DEV			;FLAG DEVICE NAME INPUT
+	JRST	COMLP			;GO AROUND AGAIN
+
+COMDIR:	PUSHJ	P,SAVNAM		;SAVE FILE NAME
+	PUSHJ	P,GETOCT		;GET OCTAL NOW
+	JUMPE	T3,COMERR		;BOO ON 0
+	HRLZM	T3,DIRECT		;SAVE FOR LATER
+	CAIE	T2,","			;VERIFY COMMA
+	JRST	ILLCHR			;NO--GIVE UP IN DISGUST
+	PUSHJ	P,GETOCT		;GET PROGRAMMER
+	JUMPE	T3,COMERR		;BOO ON 0
+	HRRM	T3,DIRECT		;STORE FOR LOOKUP
+	CAIE	T2,","			;SEE IF SFD COMING
+	JRST	COMDIX			;NO--GO FINISH UP
+	MOVEI	T3,DIRPTH		;YES--SHIFT TO SFD
+	EXCH	T3,DIRECT		; FORMAT
+	MOVEM	T3,DIRPTH+2		; ..
+	MOVSI	T5,-5			;MAX SFD COUNT
+COMDIL:	PUSHJ	P,GETNAM		;GET SFD NAME
+	JUMPE	T3,COMERR		;ERROR IF BLANK
+	MOVEM	T3,DIRPTH+3(T5)		;STORE
+	CAIN	T2,","			;SEE IF MORE
+	AOBJN	T5,COMDIL		;YES--GO GET UNLESS TOO MANY
+COMDIX:	CAIN	T2,"]"
+	JRST	COMLP
+	CAIN	T2,12
+	JRST	COMFND
+	JRST	ILLCHR
+
+SAVNAM:	SKIPE	T3			;IF NAME,
+	MOVEM	T3,NAME			; SAVE FOR LOOKUP
+	RETURN
+;HERE WHEN SWITCH TO BE PROCESSED
+
+COMSWT:	PUSHJ	P,SAVNAM		;SAVE FILE NAME
+	PUSHJ	P,GETNAM		;GET SIXBIT WORD
+	SETZ	T4,			;PRESET MASK
+	PUSH	P,T4			;PUT 0 ON PDLST SO KNOW WHEN
+					; TO STOP POPING AMBIGUOUS SW'S OFF
+	MOVSI	T5,770000		;PRESET CHARACTER
+COMSW1:	TDNE	T3,T5			;IF CHARACTER,
+	IOR	T4,T5			; INCLUDE IN MASK
+	LSH	T5,-6			;MOVE OVER ONE
+	JUMPN	T5,COMSW1		;LOOP FOR WORD
+	SETO	T5,			;PRESET SUCCESS COUNTER
+	MOVSI	P1,-SWTLEN		;PRESET LOOP
+SWTLOP:	HLRZ	P2,DSPTAB(P1)		;GET BITS FOR SWITCH
+	TXNN	F,F.NINI		;SKIP IF NETLDR.INI
+	 TRNN	P2,NMNINI		;NOT NETLDR.INI SO DOES SWITCH
+					; ONLY APPLY TO NETLDR.INI?
+	  SKIPA				;NETLDR.INI OR SWITCH APPLYS
+					; IN FILE-SPEC SENT OR TYPED BY USER
+	   JRST	SWTLO1			;FORGET ABOUT THIS SWITCH
+	CAMN	T3,SWTTAB(P1)		;SEE IF EXACT MATCH
+	JRST	SWTWI3			;YES--WIN
+	MOVE	P2,SWTTAB(P1)		;NO--GET WORD
+	MOVE	T1,P2			;KEEP A COPY
+	XOR	P2,T3			;COMPARE WITH INPUT
+	TDNE	P2,T4			;LOOK THROUGH MASK
+	JRST	SWTLO1			;NO--KEEP TRYING
+	ADDI	T5,1			;COUNT MATCH
+	PUSH	P,T1			;REMEMBER ON STACK
+	HLRZ	T1,DSPTAB(P1)		;GET BITS ASSOCIATED WITH CURRENT SWITCH
+	TRNE	T1,DUMSWT		;DUMMY SWITCH
+	  POP	P,(P)			;YES, DON'T SAVE FOR PRINTING
+	MOVE	P3,P1			;SAVE POINTER
+SWTLO1:	AOBJN	P1,SWTLOP		;SEE IF DONE YET
+	MOVE	P1,P3			;RESTORE WINNER
+	JUMPE	T5,SWTWIN		;SEE IF JUST ONE MATCH
+	SKIPGE	T5
+	ERROR	<E.Q!E.NC>,<UNS>,<Unknown switch>,<UNKSWI>
+	ERROR	<E.Q!E.NC>,<ABS>,<Ambiguous switch>,<AMBSWI>
+SWTWIN:	POP	P,(P)			;CLEAN SWITCH OFF PDLST
+SWTWI3:	POP	P,(P)			;CLEAN 0 OFF PDLST
+	HLRZ	T1,DSPTAB(P1)		;GET BITS ABOUT SWITCH
+	TXNE	F,F.CCL			;CCL ENTRY?
+	 TRNN	T1,AUTILL		;YES, SWITCH LEGAL ON CCL ENTRY?
+	  SKIPA				;NOT CCL OR CCL AND SWITCH IS LEGAL
+	  ERROR	<E.%!E.NC>,<ISX>,<Illegal switch in NETLDR.INI or from a Remote>,<SNMEAN>
+	HRRZ	P2,DATTAB(P1)		;GET LOW ADDRESS TO PUT VALUES
+	HLRZ	P3,DATTAB(P1)		;GET HIGH ADDRESS TO PUT VALUES
+	SKIPE	P2			;IF NO ADDRESS THAN NO VALUE
+	  SETOM	(P2)			;SET FOR DEFAULT ALWAYS
+	SKIPE	P3			;IF NO ADDRESS THAN NO VALUE
+	  SETOM	(P3)			;FLAG DEFAULT FOR HIGH
+					; THEN IF VALUE IS TYPED IT WILL
+					;  REPLACE THE -1
+	MOVEI	T1,1			;SET A BIT FOR EACH
+	LSH	T1,(P1)			;FOR EACH SWITCH
+	TDNE	CMDWRD,T1		;SEE IF SWITCH ALREADY SET
+	 ERROR	<E.Q!E.NC>,<SSM>,<Switch specified more than once>,<UNKSWI>
+	IORM	T1,CMDWRD		;REMEMBER THE BITS
+	CAIE	T2,":"			;SEE IF VALUE TYPED IN
+	JRST	SWTWI1			;SEE IF AN ARG IS REQUIRED
+	HLLZ	T4,DSPTAB(P1)		;SEE IF AN ARG IS LEGAL FOR THIS SWITCH
+	TLNE	T4,ARGILL		;SKIP IF ARG LEGAL
+	 ERROR	<E.Q!E.NC>,<ISA>,<Argument illegal for switch>,<UNKSWI>
+	PUSHJ	P,DISPAT		;IF DISPATCH ADR, THEN DISP
+	PUSH	P,T3			;REMEMBER SW IN CASE OF ERR
+	TLNE	T4,DECVAL		;SEE IF DECIMAL VALUE
+	  JRST	[PUSHJ P,GETDEC		;GET A DECIMAL VALUE
+		JRST	SWTWI2 ]	;CONTINUE
+	PUSHJ	P,GETOCT		;YES--GET OCTAL NUMBER
+SWTWI2:	MOVEM	T3,(P2)			;STORE THE VALUE
+	POP	P,T3			;RESTORE SW TO T3
+	CAIE	T2,"-"			;SEE IF HIGH VALUE INCLUDED
+	JRST	COMFND			;NO HIGH VALUE
+	HLLZ	T4,DSPTAB(P1)		;SEE IF A DOUBLE VALUE LEGAL
+	TLNE	T4,DCMILL		;SKIP IF DOUBLE LEGAL
+	 ERROR	<E.Q!E.NC>,<IDV>,<Double value illegal for switch>,<UNKSWI>
+	PUSHJ	P,GETOCT		;GET THE HIGH VALUE
+	MOVEM	T3,(P3)			;SAVE HIGH VALUE
+	JRST	COMFND			;GO HANDLE BREAK
+
+SWTWI1:	HLLZ	T4,DSPTAB(P1)		;SEE IF AN ARG REQUIRED
+	TLNE	T4,ARGREQ		;SKIP IF ARG NOT REQUIRED
+	 ERROR	<E.Q!E.NC>,<SMA>,<Argument required for switch>,<UNKSWI>
+	PUSHJ	P,DISPAT		;DISPATCH IF ADR TO GO TO
+	JRST	COMFND			;NO, LOOK AT NEXT SWITCH
+
+DISPAT:	HRRZ	T1,DSPTAB(P1)		;GET DISPATCH ADDRESS
+	JUMPE	T1,CPOPJ		;NO DISPATCH ADDR SO RETURN
+	MOVEM	T1,(P)			;ADR TO GO TO
+	RETURN				;DISPATCH TO SWITCH
+
+;HERE TO HANDLE SOME SWITCH ERROR MESSAGES
+;
+UNKSWI:	PUSHJ	P,CURSWI		;PRINT SWITCH USER TYPED
+	JRST	HLPMSG			; INFORM HIM OF HELP.
+
+AMBSWI:	PUSHJ	P,CURSWI		;PRIN SWITCH USER TYPED
+	MOVEI	T1,[ASCIZ \ could be\]
+	PUSHJ	P,TYPASC		;
+AMBSW1:	POP	P,T3			;GET A POSSIBLE SWITCH
+	JUMPE	T3,HLPMSG		;IF 0, THEN DONE.
+	PUSHJ	P,CURSWI		;PRINT THE POSSIBILITY
+	SKIPN	(P)			;SEE IF LAST SWITCH
+	  JRST	AMBSW1			;YES, DON'T PRINT COMMA
+	MOVEI	T1,","			;COMMA
+	PUSHJ	P,TYPCHR		;GIVE A COMMA
+	JRST	AMBSW1			;SEE IF ANOTHER.
+
+CURSWI:	PUSH	P,T3			;SAVE THE SWITCH
+	MOVSI	T1,(SIXBIT \ /\)
+	PUSHJ	P,TYPSIX		;
+	POP	P,T1			;GET SWITCH
+	JRST	TYPSIX			;AND TYPE IT.
+
+ISCSWI:	MOVE	T1,ILLCOM(T1)		;SWITCHES THAT CONFLICT
+ILSLEQ:	PUSH	P,[0]			;SO WE KNOW WHEN TO STOP POPPING STACK
+	SETOM	T3			;
+ISCSW1:	LSHC	T1,-1			;
+	ADDI	T3,1			;
+	JUMPGE	T2,ISCSW1		;IF NO BIT LOOK AGAIN
+	PUSH	P,SWTTAB(T3)		;PUT ON STACK
+	JUMPE	T1,AMBSW1		;
+	JRST	ISCSW1			;
+
+SNMEAN:	MOVSI	T1,(SIXBIT \ /\)	;
+	PUSHJ	P,TYPSIX		;
+	MOVE	T1,SWTTAB(P1)		;GET FULL SWITCH NAME
+	PUSHJ	P,TYPSIX		;TYPE SWITCH
+	MOVE	T1,BRKCHR		;GET BREAK CHARACTER
+	CAIE	T1,":"			;DID IT HAVE A VALUE?
+	  JRST	SNMEA1			;NO
+	PUSHJ	P,TYPCHR		;TYPE THE " : "
+	PUSHJ	P,GETNAM		;GET THE VALUE
+	SKIPE	T1,T3			;NEED IT HERE TO PRINT IT
+	  PUSHJ	P,TYPSIX		;GIVE THE VALUE TO USER
+SNMEA1:	PUSHJ	P,CONTIN		;TYPE CONTINUE MSG
+	JRST	COMFND			;GET NEXT SWITCH
+
+;HERE IF /NODE
+;
+NODEX:	PUSHJ	P,GETNAM		;GET /NODE'S ARGUMENT
+	SETZ	T4,			;ZERO NUMBER WORD
+	MOVE	T5,[POINT 6,T3]		;BYTE POINTER TO UNPACK HIS NUMBER
+	ILDB	T1,T5			;GET FIRST CHARACTER
+	CAIL	T1,"0"-40		;MUST BE 0-7 FOR NUMBER
+	 CAILE	T1,"7"-40		;
+	  JRST	NODEX4			;MUST BE A NODE NAME
+	JRST	NODEX2			;MUST BE A NODE NUMBER
+NODEX1:	TLNN	T5,770000		;ALL UNPACKED YET?
+	  JRST	NODEX3			;YES
+	ILDB	T1,T5			;GET 2ND AND REMAINING CHAR'S
+NODEX2:	JUMPE	T1,NODEX3		;A 0 SO MUST BE DONE
+	LSH	T4,3			;MUL BY 8
+	ADDI	T4,-"0"+40(T1)		;PUT DIGIT IN
+	JRST	NODEX1			;GET ANOTHER DIGIT
+NODEX3:	MOVE	T1,T4			;COPY HERE INCASE OF ERROR
+	SKIPLE	T3,T4			;NODE NUMBERS MUST BE 1-MAXNOD OCTAL
+	 CAILE	T3,MAXNOD		;
+	  ERROR	<E.Q!E.T1>,<INN>,<Illegal Node number>,<STARTE>
+	TXNE	F,F.NINI		;IF USING NETLDR.INI AND
+	 TXNE	F,F.MATC		; NO MATCH THEN CHECK FOR NODE
+	  JRST	NODEX5			;DON'T CHECK FOR MATCH OF NUMBERS
+					;  NUMBER MATCH BEFORE DOING UUO
+	CAME	T3,R.NNUM		;CHECK IF NUMBERS MATCH
+	  JRST	COMENM			;NO MATCH
+NODEX5:	MOVEM	T4,A.NNUM		;REMEMBER NODE NUMBER
+	MOVE	T5,[MOVEM T1,A.NNAM]	;FOR XCT FROM NODEXN TO SAVE NAME
+	JRST	NODEXN			;DO NODE UUO AND REMEMBER THE NAME
+NODEX4:	MOVEM	T3,A.NNAM		;REMEMBER THE NODE NAME
+	TXNE	F,F.NINI		;IF USING NETLDR.INI AND
+	 TXNE	F,F.MATC		; NO MATCH THEN CHECK FOR NODE
+					;  NAME MATCH BEFORE DOING UUO
+	  JRST	NODEX6			;DON'T CHECK FOR NODE MATCH
+	CAME	T3,R.NNAM		;SEE IF NAME MATCH
+	  JRST	COMENM			;NO MATCH
+NODEX6:	MOVE	T5,[MOVEM T1,A.NNUM]	;FOR AN XCT
+NODEXN:	PUSHJ	P,NAMNUM		;GET NAME OR NUMBER
+	XCT	T5			;STORE NODE NAME OR NUMBER
+	JRST	COMFND			;PROCESS NEXT SWITCH
+
+;HERE TO GET LOCAL HOST NAME
+;
+; CALL	PUSHJ	P,HSTNAM
+;	RETURN				;WITH NAME IN T1
+;
+HSTNAM:	MOVSI	T3,'CTY'		;GET CTY NAME
+	WHERE	T3,			;GET HOST
+	  ERROR	<E.Q!E.T1!E.NC>,<WUF>,<WHERE UUO failure>,<NODERR,TYPSPC,NNERR>
+	ANDI	T3,-1			;ONLY NUMBER
+;	PJRST	NAMNUM
+
+;HERE TO GET NODE NAME OR NUMBER
+;
+; CALL	PUSHJ	P,NAMNUM		;WITH NAME OR NUMBER IN T3
+;	RETURN				;WITH NAME OR NUMBER IN T1
+;
+NAMNUM:	MOVEI	T2,2			;LENGTH
+	MOVE	T1,[XWD 2,T2]		;FUNCTION,,BLK
+	NODE.	T1,			;GET NAME OR NUMBER
+	  ERROR	<E.Q!E.T1!E.NC>,<NUF>,<NODE UUO failure>,<NODERR,TYPSPC,NNERR>
+	RETURN				;EXIT CALL WITH NAME OR NUM IN T1
+
+;HERE IF ERROR IN NAMNUM
+;
+NNERR:	PUSH	P,P1			;SAVE P1
+	MOVE	P1,T3			;GET NAME OR NUM ENTERED WITH
+	MOVEI	T1,[ASCIZ \getting \]
+	PUSHJ	P,TYPASC		;
+	MOVEI	T1,[ASCIZ \Name\]
+	TLNE	P1,-1			;SEE IF SIXBIT OR NUM
+	  MOVEI	T1,[ASCIZ \Number\]
+	PUSHJ	P,TYPASC		;
+	MOVEI	T1,[ASCIZ \ for Node \]
+	PUSHJ	P,TYPASC		;
+	TLNN	P1,-1			;SIXBIT OR NUMBER?
+	  JRST	NNERR1			;NUMBER
+	MOVE	T1,P1			;GET NAME
+	PUSHJ	P,TYPSIX		;TYPE IT
+	JRST	NNERR2			;
+NNERR1:	MOVE	T1,P1			;NUMBER
+	PUSHJ	P,TYPPNP		;TYPE IT
+NNERR2:	PUSHJ	P,CRLF			;
+	POP	P,P1			;RETORE P1
+	PJRST	STARTE			;RESTART
+IFN	FTDDT,<
+
+;HERE IF /DDT
+;
+DDTX:	PUSHJ	P,CLRINP		;EAT REST OF LINE
+	HRRZ	T1,.JBDDT		;GET ADDRESS OF DDT
+	SKIPN	T1			;SKIP IF DDT IS THERE
+	  ERROR	<E.%>,<DDT>,<DDT is not loaded>,<START>
+	MOVEI	T1,[ASCIZ \[Entering DDT]
+\]					;DDT MESSAGE TO USER
+	PUSHJ	P,TYPASC		;TELL HIM HE'S NOW IN DDT
+	HRRZ	T1,.JBDDT		;GET DDT ADR
+	PUSHJ	P,(T1)			;GOTO DDT
+	  JFCL				;INCASE CPOPJ1 RETURN
+GOBACK:	PJRST	START			;BEGIN AGAIN
+
+>;End IFN FTDDT
+
+;HERE IF /EXIT
+;
+EXITP:	PUSHJ	P,CLRINP		;CLEAR REST OF TTY INPUT
+	JRST	LOGOFF			;EXIT
+
+;HERE IF /HELP
+;
+HELP:	PUSHJ	P,CLRINP		;CLEAR REST OF TTY INPUT IF ANY
+	TXNE	F,F.CCL			;IF CCL ENTRY THEN FORGET HELP
+	  JRST	LOGOFF			;LOGOFF
+	PUSHJ	P,CRLF			;
+	MOVE	1,['NETLDR']
+	PUSHJ	P,.HELPR##		;CALL HELPER TO LOOK FOR NETLDR.HLP
+	JRST	STARTE
+
+;HERE IF /HPQ
+;
+HPQX:	PUSHJ	P,GETOCT		;GET HPQ NUMBER
+	MOVE	T1,T3			;COPY IN CASE OF ERROR
+	HPQ	T3,			;PUT IN THE HPQ
+	  ERROR	<E.%!E.NC>,<HPQ>,<Cannot put job in HPQ >,<TYPOCT,CONTIN,COMFND>
+	JRST	COMFND			;SUCCESSFUL
+
+;HERE IF /8
+;
+S8:	MOVEI	CPU,CPU.8		;CODE FOR PDP8 ( 0 )
+	JRST	COMFND			;DO NEXT SWITCH
+
+;HERE IF /11
+;
+S11:	MOVEI	CPU,CPU.11		;CODE FOR PDP11 ( 1 )
+	JRST	COMFND			;DO NEXT SWITCH
+
+;HERE IF /IGNORE
+;
+IGNORE:	TXNE	F,F.NINI		;USING NETLDR.INI?
+	  JRST	LOGOFF			;IF /IGNORE THEN BYE-BYE
+	PUSHJ	P,CONFUS		;CONFUSED, (NEVER RETURN)
+
+;HERE IF /LOCK
+;
+LOCKX:	ON	F.TLCK			;SAY WE NEED TO LOCK
+	JRST	COMFND			;  AN GO DO THE NEXT SWITCH
+
+;HERE IF /NOLOG
+;
+NOLOGX:	ON	F.NLOG			;SAY WE DON'T WANT TO LOG
+	JRST	COMFND			;  ERRORS VIA DAEMON.
+;HERE IF /TYPE
+;
+TYPE:	PUSHJ	P,GETNAM		;GET ARG FOR TYPE
+	SETZ	T4,			;ZERO NUMBER WORD
+	MOVE	T5,[POINT 6,T3]		;POINTER TO ARGUMENT IN T3
+	ILDB	T1,T5			;GET FIRST CHARACTER
+	CAIL	T1,"0"-40		;RANGE OF 0-9 SAYS NUMBER
+	 CAILE	T1,"9"-40		;
+	  JRST	TYPE4			;ITS A NAME
+	CAILE	T1,"7"-40		;MUST BE 0-7
+	  JRST	TYPE7			;8 OR 9 (ERROR)
+	JRST	TYPE2			;ITS A NUMBER (0-7)
+TYPE1:	TLNN	T5,770000		;ALL UNPACKED?
+	  JRST	TYPE3			;YES
+	ILDB	T1,T5			;GET ANOTHER CHAR (NUMBER)
+TYPE2:	JUMPE	T1,TYPE3		;NULL SAYS END
+	IMULI	T4,^D10			;MUL BY 10
+	ADDI	T4,-"0"+40(T1)		;INCLUDE THIS DIGIT
+	JRST	TYPE1			;DO ANOTHER ROUND
+TYPE3:	SKIPL	T1,T4			;MUST BE 0 OR LARGER
+	 CAIL	T4,KNDNUM		;SEE IF TOO LARGE
+TYPE7:	  ERROR	<E.Q>,<ITN>,<Illegal Type number>,<STARTE>
+	JRST	TYPE6			;REMEMBER NUMBER OF TYPE
+TYPE4:	MOVSI	T1,-KNDNUM		;AOBJN POINTER TO TYPE OF NAMES
+TYPE5:	MOVE	T4,KINDTB(T1)		;GET AOBJN POINTER OF TABLE OF NAMES
+TYPE0:	CAMN	T3,(T4)			;SEE IF TYPE MATCH
+	  JRST	TYPE6			;YES
+	AOBJN	T4,TYPE0		;NO, LOOK AT NEXT NAME OF TYPE IN TABLE
+	AOBJN	T1,TYPE5		;NO, LOOK AT NEXT TYPE IN TABLE
+	  ERROR	<E.Q>,<BTN>,<Illegal Type name>,<STARTE>
+TYPE6:	HRRZM	T1,A.TYPE		;REMEMBER TYPE (NUMBER)
+	TXNN	F,F.NINI		;NETLDR.INI?
+	  JRST	TYPE8			;NO
+	TXNN	F,F.MATC		;HAD A MATCH IN NETLDR.INI?
+	  JRST	COMFND			;NO
+TYPE8:	HRRZ	CPU,CPUTYP(T1)		;SET 0 FOR PDP8 OR 1 FOR PDP11
+	TDO	CMDWRD,CPUIDT(T1)	;SET /PDP8 OR /PDP11
+	JRST	COMFND			;DO NEXT SWITCH
+;ROUTINE TO GET A CHARACTER
+;
+; CALL	PUSHJ	P,GETCHR		;RETURNS THE CHARACTER IN T2
+;	RETURN
+;
+;	VALUE RETURNED	T2
+;	AC'S USED	T1,T2,T3
+;	AC'S DESTROYED	T1,T2
+;
+GETCHR:	TXNE	F,F.DMPF		;SEE IF GETTING FROM INDEX FILE
+	  JRST	[PUSHJ	P,GETDMP	;YES, SO GET IT
+		JRST	GETCH3 ]	;GO PROCESS IT
+	TXNN	F,F.CCL			;SEE IF AUTO LOAD
+	  JRST	GETCH1			;NO, USER WILL TYPE IT
+	TXNE	F,F.NINI		;SEE IF TO USE NETLDR.INI FILE
+	  JRST	[PUSHJ	P,GETINI	;GET A CHAR FROM NETLDR.INI
+		JRST	GETCH3 ]	;GO PROCESS IT
+	ILDB	T2,CMDPNT		;GET THE CHARACTER FROM
+					; DATA GIVEN BY NODE
+	JUMPN	T2,GETCH3		;NULL IS THE END
+	  MOVEI	T2,12			;NULL
+	JRST	GETCH2			; SO MAKE A LF AND RETURN
+GETCH1:	INCHWL	T2			;GET FROM TTY
+GETCH3:	CAIN	T2,32			;SEE IF ^Z
+	  ON	F.CTLZ			;IT IS
+	PUSH	P,T3			;REQUIRED FOR OTHER ROUTINES
+	MOVSI	T1,-CHRLNG		;AOBJN POINTER
+GETCH4:	MOVE	T3,CHRTAB(T1)		;GET A CHARACTER
+	CAIN	T2,(T3)			;SEE IF SAME AS TYPED IN
+	  JRST	GETCH5			;IT IS
+	AOBJN	T1,GETCH4		;LOOP THROUGH THE TABLE
+	SKIPA				;CHAR NOT FOUND
+GETCH5:	HLRZ	T2,T3			;MAKE IT WHAT WE WANT IT TO BE
+	POP	P,T3			;RESTORE T3
+	JUMPE	T2,GETCHR		;LOOP IF NULL
+GETCH2:	OFF	F.EOL			;ASSUME NOT LF
+	CAIE	T2,12			;SEE IF END OF LINE CHAR
+	  RETURN			;NO
+	TXNE	F,F.DMPF		;SEE IF GETTING FROM INDEX FILE
+	  RETURN			;YES, SO NO EOL
+	ON	F.EOL			;FLAG END OF LINE
+	TXNN	F,F.NINI		;IF NOT NETLDR.INI THEN EOF ALSO
+	  ON	F.EOF			;FOR TTY AND FILE-SPEC FROM
+					; REMOTE ITS THE END.
+	RETURN
+
+;CHARACTER CONVERSION TABLE
+;
+CHRTAB:	XWD	12,7
+	XWD	40,11
+	XWD	12,13
+	XWD	12,14
+	XWD	0,15
+	XWD	12,32
+	XWD	12,33
+	XWD	12,175
+	XWD	0,177
+CHRLNG==.-CHRTAB
+;ROUTINE TO RETURN A SIXBIT NAME
+;
+; CALL	PUSHJ	P,GETNAM		;RETURNS SIXBIT NAME IN T3
+;					; AND BREAK CHAR IN T2.
+;	RETURN
+;
+;	VALUE RETURNED	T2 - BREAK CHARACTER (7 BIT)
+;			T3 - SIXBIT NAME
+;	AC'S USED	T2,T3,T4
+;	AC'S DESTROYED	T2,T3,T4
+;
+GETNAM:	MOVE	T4,[POINT 6,T3]
+	MOVEI	T3,0			;CLEAR NAME
+GETNM1:	PUSHJ	P,GETCHR		;GET NEXT CHAR
+	CAIL	T2,"A"+40		;SEE IF LC
+	CAILE	T2,"Z"+40
+	  JRST	.+2
+	SUBI	T2,40			;YES--MAKE UC
+	CAIL	T2,"0"			;SEE IF BREAK
+	 CAILE	T2,"Z"			; ..
+	  JRST	SAVBRK			;REMEMBER THE BREAK CHAR
+	CAILE	T2,"9"			;OR OK
+	 CAIL	T2,"?"
+	  JRST	.+2
+	JRST	SAVBRK			;REMEMBER THE BREAK CHAR
+	CAIN	T2,"@"			;@ IS A BREAK CHAR
+	  JRST	SAVBRK			;REMEMBER THE BREAK CHAR
+	SUBI	T2,40			;CONVERT TO SIXBIT
+	TLNE	T4,770000		;SEE IF OVERFLOW
+	  IDPB	T2,T4			;STORE RESULT
+	JRST	GETNM1			;LOOP FOR MORE
+
+;ROUTINE TO RETURN A OCTAL NUMBER
+;
+; CALL	PUSHJ	P,GETOCT		;RETURNS OCTAL NUMBER IN T3
+;					; AND BREAK CHAR IN T2.
+;	RETURN
+;
+;	VALUE RETURNED		T2 - BREAK CHARACTER (7 BIT)
+;				T3 - OCTAL NUMBER
+;	AC'S USED		T2,T3
+;	AC'S DESTROYED		T2,T3
+;
+GETOCT:	MOVEI	T3,0			;CLEAR RESULT
+GETOC1:	PUSHJ	P,GETCHR		;GET NEXT ODGIT
+	CAIL	T2,"0"			;SEE IF
+	 CAILE	T2,"7"			; BREAK
+	  JRST	GETOC2			;SEE IF "*" WHICH WILL RETURN -1 IN T3
+	CAMN	T3,[-1]			;SEE IF FINDING BREAK FROM "*"
+	  JRST	GETOC1			;YES, KEEP GOING UNTIL A BREAK
+	LSH	T3,3			;MULT BY 8
+	ADDI	T3,-"0"(T2)		;INCLUDE ODGIT
+	JRST	GETOC1			;LOOP
+GETOC2:	CAIE	T2,"*"			;SEE IF AN ASTRICK
+	  JRST	SAVBRK			;REMEMBER THE BREAK CHAR
+	CAMN	T3,[-1]			;
+	  JRST	SAVBRK			;REMEMBER THE BREAK CHAR
+	SETOM	T3			;VALUE FOR "*"
+	JRST	GETOC1			;NOW FIND THE BREAK CHARACTER
+
+;ROUTINE TO RETURN A DECIMAL NUMBER
+;
+; CALL	PUSHJ	P,GETDEC		;RETURNS DECIMAL NUMBER IN T3
+;					; AND BREAK CHAR IN T2.
+;	RETURN
+;
+;	VALUE RETURNED		T2 - BREAK CHARACTER (7 BIT)
+;				T3 - DECIMAL NUMBER
+;	AC'S USED		T2,T3
+;	AC'S DESTROYED		T2,T3
+;
+GETDEC:	MOVEI	T3,0			;CLEAR RESULT
+GETDE1:	PUSHJ	P,GETCHR		;GET A DIGIT
+	CAIL	T2,"0"			;SEE IF BREAK
+	 CAILE	T2,"9"			;
+	  JRST	SAVBRK			;REMEMBER THE BREAK CHAR
+	IMULI	T3,^D10			;MUL BY 10
+	ADDI	T3,-"0"(T2)		;INCLUDE THE DIGIT
+	JRST	GETDE1			;GO ANOTHER ROUND
+
+;HERE TO CLEAR REST OF TTY INPUT
+;
+; CALL	PUSHJ	P,CLRINP
+;	RETURN
+;
+;	VALUE	RETURNED	T2 - OCTAL 12  (LINE FEED)
+;	AC'S USED		T2
+;	AC'S DESTROYED		T2 (IF OTHER THAN 12)
+;
+CLRINP:	CAIN	T2,12			;END YET?
+	  JRST	SAVBRK			;REMEMBER THE BREAK CHAR
+	PUSHJ	P,GETCHR		;NO, GET ANOTHER
+	JRST	CLRINP			;CHECK THIS ONE FOR LF
+
+;HERE TO SAVE THE BREAK CHARACTER IN T2
+;
+SAVBRK:	MOVEM	T2,BRKCHR		;REMEMBER THE BREAK CHAR
+	RETURN				;EXIT
+
+Subttl	File handling routines
+
+;ROUTINE TO GET A CHARACTER FROM NETLDR.INI
+;
+GETINI:	SOSGE	INHDRF+2		;
+	JRST	GETIN1			;
+	ILDB	T2,INHDRF+1		;
+	RETURN				;
+GETIN1:	IN	INDEVF,			;
+	  JRST	GETINI			;
+	STATZ	INDEVF,74B23		;
+	  JRST	GETBYE			;REPORT DEVICE ERROR
+GETINC:	CLOSE	INDEVF,			;
+	RELEAS	INDEVF,			;
+	ON	F.EOF			;REMEMBER WE'RE CLOSED
+	JRST	GETDMC			;AT EOF, SO GIVE A LF
+
+;HERE TO GET A BYTE FROM THE INDEX FILE
+;
+GETDMP:	SOSGE	INDMPH+2		;
+	  JRST	GETDM1			;
+	ILDB	T2,INDMPH+1		;
+	 RETURN				;
+GETDM1:	IN	INDMPF,			;
+	  JRST	GETDMP			;
+	STATZ	INDMPF,74B23		;ERROR?
+	  JRST	GETBYE			;YES
+GETDMC:	MOVEI	T2,12			;
+	RETURN
+
+;ROUTINE TO GET ONE 11 BYTE
+;
+GET21B:	PUSHJ	P,GETBYT		;GET A BYTE
+	ADD	P3,T1			;ACCUMULATE THE CHKSUM
+	RETURN				;
+
+;ROUTINE TO GET ONE PDP11 WORD INTO T1
+;
+GETWRD:	PUSHJ	P,GET21B		;GET RH BYTE
+	PUSH	P,T1			;SAVE AWAY
+	PUSHJ	P,GET21B		;GET LH BYTE
+	LSH	T1,8			;POSITION LH BYTE
+	IOR	T1,(P)			;INCLUDE RH BYTE
+	POP	P,(P)			;DISCARD SAVED BYTE
+	RETURN
+
+;ROUTINE TO GET ONE BYTE FROM FILE INTO T1
+;
+GETBYT:	TXNE	CMDWRD,C.IMAG		;SEE IF /IMAGE MODE
+	  JRST	GETBYW			;YES--GET NEXT WORD
+	ADDI	P2,1			;ADVANCE FILE BYTE
+	ANDI	P2,3			; (MOD 4)
+	JUMPN	P2,GETBYC		;IF NOT NEW WORD, JUST FETCH BYTE
+GETBYW:	SOSL	INHDR+2			;COUNT DOWN WORDS
+	JRST	GETBYA			;STILL SOME THERE SO PROCEED
+	TXNE	F,F.BOOT		;BOOTING?
+	  PUSHJ	P,CONFUS		;YES, SHOULD NEVER GET HERE
+	IN	INDEV,			;NO--GET NEXT BUFFER
+	  JRST	GETBYW			;OK--GO TRY AGAIN
+;[106]	STATZ	INDEV,740000		;SEE IF ERROR
+	GETSTS	INDEV,T1		;[106] GET DEVICE STATUS
+	RELEAS	INDEV,			;[106] GET RID OF DEVICE
+	TRNE	T1,740000		;[106] SEE IF A DEVICE ERROR
+GETBYE:	  ERROR	<E.Q>,<IFE>,<Input file read error>,<STARTE>
+	ERROR	<E.Q!E.EC>,<ESB>,<EOF before end of file>,<STARTE>
+
+GETBYA:	AOS	INHDR+1			;ADVANCE TO NEXT WORD
+	MOVE	T1,@INHDR+1		;GET WORD
+	TXNE	CMDWRD,C.IMAG		;SEE IF /IMAGE
+	JRST	GETBYI			;YES--GO GET IMAGE WORD
+	TLNN	T1,(6B2)		;NO--TEST FOR NO JUNK
+	 TRNE	T1,6B20			; IN EITHER HALF
+	  ERROR	<E.Q!E.EC>,<JNK>,<Junk bits in input file>,<STARTE>
+GETBYC:	LDB	T1,PTRTAB(P2)		;GET BYTE
+	JRST	GETBYR			;GO RETURN DATA
+GETBYI:	TDNE	T1,[-1-377]		;SEE IF ANY JUNK
+	  ERROR	<E.Q!E.EC>,<JNI>,<Junk in input file--may not be /IMAGE mode>,<STARTE>
+GETBYR:	RETURN
+
+PTRTAB:	POINT	8,@INHDR+1,17
+	POINT	8,@INHDR+1,9
+	POINT	8,@INHDR+1,35
+	POINT	8,@INHDR+1,27
+
+
+Subttl	Routines to handle the formatted buffer
+
+;ROUTINE TO PUT THE CONTENTS OF T1
+;INTO THE BUFFER FOR THE LATER UNLOADING
+;
+;	CALL:	PUSHJ	P,PUTBF1	;WITH BYTE IN T1
+;		RETURN
+;
+PUTBF1:	HRRZ	T2,BUFPNT		;GET ADDRESS
+	ADDI	T2,1			;MAKE ONE MORE SINCE IDPB MAY OVERFLOW
+	CAMLE	T2,.JBREL		;SKIP IF ENOUGH MEMORY
+	  PUSHJ	P,GETCOR		;GET MORE CORE
+	IDPB	T1,BUFPNT		;PUT IN THE BUFFER
+	AOS	BUFCNT			;COUNT ITEMS PUT IN FOR UNPACKER
+	RETURN
+
+;ROUTINE TO PUT THE NUMBERS IN THE TWO
+;HALVES OF T1 IN TO THE BUFFER
+;
+;	CALL:	PUSHJ	P,PUTBF2	;WITH BYTE 1 IN (LH) AND BYTE 0 IN (RH)
+;		RETURN
+;
+PUTBF2:	PUSHJ	P,PUTBF1		;STORE LOW ORDER
+	MOVSS	T1			;POSITION HIGH ORDER
+	JRST	PUTBF1			;STORE HIGH ORDER
+
+;ROUTINE TO GET A BYTE FROM THE FORMATTED
+;BUFFER AND RETURN IN T1.
+;
+;	CALL:	PUSHJ	P,GETB
+;		RETURN			;BUFFER EMPTY
+;		RETURN			;BYTE IN T1
+;
+GETB:	SOSGE	BUFCNT			;
+	  RETURN			;
+GETB1:	ILDB	T1,P2			;RETURN BYTE IN T1
+	JRST	CPOPJ1			;GIVE SKIP RETURN
+
+;ROUTINE TO GET 1 BYTE FROM THE FORMATTED
+;BUFFER AND RETURN IT IN T1.  IF FOR SOME REASON
+;THE COUNT RUNS OUT, THERES A PROGRAM ERROR SOMEWHERE
+;
+;	CALL:	PUSHJ	P,GETBNE
+;		RETURN			;WITH 1 BYTE IN T1
+;
+GETBNE:	SOSGE	BUFCNT			;SEE IF OUT OF DATA
+	  PUSHJ	P,CONFUS		;NETLDR IS CONFUSED
+	ILDB	T1,P2			;GET A BYTE
+	RETURN				;RETURN IN T1
+
+;ROUTINE TO STORE THE BYTE IN T1 IN THE
+;NODE UUO OUTPUT BLOCK. IF THE BLOCK IS
+;FULL A NODE UUO IS DONE AND THE COUNT AND
+;POINTERS RESET.
+;
+;	CALL:	PUSHJ	P,PUTB		;WITH BYTE IN T1
+;		RETURN
+;
+PUTB:	AOBJP	P3,PUTB1		;COUNT AND SEE IF FULL
+	IDPB	T1,P1			;PUT IN BUFFER TO GO TO THE CPU
+	JRST	CPOPJ1			;GIVE SKIP RETURN
+PUTB1:	HRRZ	T3,BYTTAB(CPU)		;SET TO MAX SINCE AOBJN EXPIRED
+	TXNE	F,F.BOOT		;BOOTING A REMOTE?
+	  HRRZI	T3,MAXRCV-2		;YES, SET COUNT SENDING
+	HRLI	T3,MAXRCV-2		;MAX TO GET BACK BEFORE ERROR
+	MOVE	T2,[XWD	N.ACC,N.DEP]	;DEP FUNCTION
+	HRRZ	T4,ORGSAV		;ADDR TO CHECK
+	PUSHJ	P,NODUUO		;SEND THE BUFFER
+PUTB2:	HLLZ	P3,BYTTAB(CPU)		;RESET
+	MOVE	P1,[POINT 8,XMTBUF,15]	;
+	TXNN	F,F.BOOT		;BOOTING A REMOTE?
+	  RETURN
+	HRLZI	P3,-<MAXSND-3+1>	;MINUS LINE,FUNCTION,CNT
+	MOVE	P1,[POINT 8,XMTBUF,23]	;LEAVE ROOM FOR LINE,FUNCTION,CNT
+	RETURN				;
+
+;ROUTINE TO PUT A BYTE IN THE OUTPUT BLOCK
+;FOR THE NODE UUO AND IF THE BLOCK IS DETECTED
+;FULL THE PROGRAM IS MESSED UP.
+;
+;	CALL:	PUSHJ	P,PUTBNE	;WITH BYTE IN T1
+;		RETURN
+;
+PUTBNE:	AOBJP	P3,PUTBN1		;SEE IF FULL AND COUNT BYTE IN (RH)
+	IDPB	T1,P1			;PUT BYTE IN BUFFER TO CPU
+	RETURN
+PUTBN1:	PUSHJ	P,CONFUS		;CONFUSED (NEVER RETURN)
+Subttl	Core routine
+
+;ROUTINE TO GET MORE CORE
+;
+; CALL	PUSHJ	P,GETCOR		;T2 CONTAINS ADDRESS TO TRY FOR
+;	RETURN
+;
+;	ON ENTRY		T2 CONTAINS ADDRESS TO TRY FOR
+;	VALUE RETURNED		N/A
+;	AC'S USED		T2,T3,T4
+;	AC'S DESTROYED		T2,T3,T4
+;
+GETCOR:	CAMG	T2,.JBREL		;[146] DON'T TRY TO SHRINK
+	RETURN				;[146] IT'S NOT WORTH THE HASSLES
+	MOVE	T3,T2			;SAVE ADDRESS FOR RETRY
+	MOVEI	T4,TRYCOR		;NUMBER OF TIMES TO TRY
+	TXNE	F,F.NLOG		;LOGGED IN?
+	  IMULI	T4,MULCOR		;NO, INCREASE TRYS
+GETCR1:	MOVE	T2,T3			;GET ADDRESS TO TRY FOR
+	CORE	T2,			;REQUEST MORE CORE
+	  JRST	[SOJLE	T4,GETCRE	;SEE IF TIME TO GIVE UP
+		MOVEI	T2,SLPCOR	;TIME TO SNOOZE
+		SLEEP	T2,		;GO BEDDY BYE
+		JRST	GETCR1		;TIME TO TRY FOR CORE AGAIN
+]
+	RETURN
+GETCRE:	 ERROR	<E.Q>,<COR>,<Core uuo failure>,<STARTE>
+
+Subttl	Lock/Unlock Routines
+
+;ROUTINE TO LOCK THE JOBS LOW SEGMENT
+;
+; CALL	PUSHJ	P,LOKJOB
+;	RETURN				;JOB IS LOCKED
+;
+;	VALUE RETURNED		F - F.LOCK WILL BE SET
+;	AC'S USED		T1,T2,T3,F
+;	AC'S DESTROYED		T1
+;
+LOKJOB:	TXNE	F,F.TLCK		;IF WE DON'T NEED TO LOCK,
+	TXNE	F,F.LOCK		;  OR WE'RE ALREADY LOCKED
+	RETURN				;  WE DON'T NEED TO DO ANYTHING.
+	PUSH	P,T2			;SAVE T2
+	PUSH	P,T3			;SAVE T3
+	MOVEI	T2,TRYLOK		;NUMBER OF TIMES TO TRY AND LOCK
+	TXNE	F,F.NLOG		;LOGGED IN?
+	  IMULI	T2,MULLOK		;NO, INCREASE TRYS
+LOKJB1:	MOVX	T1,LK.LNP!LK.LNE!LK.LLS	;LOCK CODE
+	LOCK	T1,			;LOCK THE JOB
+	  JRST	[JUMPE	T1,LOKJB2	;DON'T RETRY ERROR 0
+		SOJLE	T2,LOKJB2	;COUNT EXPIRED?
+		MOVEI	T3,SLPLOK	;SLEEP TIME
+		SLEEP	T3,		;SLEEP
+		JRST	LOKJB1		;TRY AGAIN
+]
+	ON	F.LOCK			;FLAG WE LOCKED
+	POP	P,T3			;RESTORE T3
+	POP	P,T2			;RESTORE T2
+	RETURN
+LOKJB2:	OFF	F.MSGX			;IF LOCK FAILED THEN
+					; WE CAN'T GIVE MSG TO
+					; REMOTE (IT REQUIRES LOCK)
+	 ERROR	<E.Q!E.T1>,<LKF>,<Lock failed>,<STARTE>
+
+;HERE TO UNLOCK THE JOB
+;
+UNLOK:	HRRI	T1,1			;UNLOCK THE LOW SEG
+	UNLOK.	T1,			;DO IT
+	  ERROR	<E.Q!E.T1>,<UNF>,<Unlock uuo failed>,<STARTE>
+	TXZA	F,F.LOCK		;FLAG UNLOCKED
+CPOPJ1:	AOS	(P)			;+1 TO ADDR FOR SKIP RETURN
+CPOPJ:	RETURN				;GIVE SKIP RETURN
+
+Subttl	Sixbit/Decimal conversion routines
+
+;HERE TO CONVERT THE 6-BIT WORD IN T1 TO DECIMAL
+;
+SIXDEC:	SETZ	T4,			;FORM DIGIT HERE
+	MOVE	T3,[POINT 6,T1]		;POINTER TO GET 6-BIT WORD
+SIXDE1:	ILDB	T2,T3			;GET A CHAR
+	JUMPE	T2,SIXDE2		;IF NULL, THEN OUT
+	IMULI	T4,^D10			;
+	ADDI	T4,-"0"+40(T2)		;INCLUDE LAST ONE GOT
+	TLNE	T3,770000		;SIX DONE YET?
+	  JRST	SIXDE1			;NO
+SIXDE2:	MOVE	T1,T4			;RETURN IN T1
+	RETURN
+
+;HERE TO CONVERT THE DECIMAL NUMBER IN T1 TO SIXBIT
+;
+DECSIX:	MOVSI	T4,-6			;6 DIGITS ALWAYS
+	SETZ	T3,			;FORM SIXBIT HERE
+DECSI1:	IDIVI	T1,^D10			;DIV BY 10.
+	ADDI	T2,20			;MAKE SIXBIT
+	HRRZ	T5,T4			;GET CURRENT DIGIT NUMBER
+	IMULI	T5,6			;NUMBER OF PLACES TO SHIFT
+	LSH	T2,(T5)			;PUT IN CORRECT PLACE
+	IOR	T3,T2			;PUT IN WORD
+	AOBJN	T4,DECSI1		;DONE?
+	MOVE	T1,T3			;PUT IN CORRECT PLACE
+	RETURN				;YES
+
+Subttl	Extensible Routines
+
+;ROUTINE TO GET AN EXTENSIBLE BIN NUMBER
+;
+; CALL	PUSHJ	P,GETEXB		;P1 POINTER, P2 COUNT
+;
+GETEXB:	SETZB	T1,T3			;ZERO NUMBER AND SHIFT CNT
+	JUMPLE	P2,CPOPJ		;FIELD IS NOT THERE
+GETEX1:	ILDB	T2,P1			;GET A NUMBER
+	TRZE	T2,EXTENB		;IS IT EXTENSIBLE?
+	  ON	F.EXTB			;YES, FLAG IT
+	LSH	T2,(T3)			;SHIFT IT
+	IORM	T2,T1			;ASSEMBLE NUMBER
+	ADDI	T3,7			;SHIFT UPDATE FOR NEXT BYTE
+	SOJE	P2,CPOPJ1		;COUNT EXHAUSTED?
+	TXZE	F,F.EXTB		;WAS IT EXTENSIBLE?
+	  JRST	GETEX1			;EXTENSIBLE SO GET ANOTHER
+	JRST	CPOPJ1			;NOT EXTENSIBLE
+
+;ROUTINE TO GET EXTENSIBLE ASCII AND PUT IT IN A BUFFER
+;
+GETEXA:	SETZM	CMDSTR			;ZERO FIRST ONE
+	MOVE	T3,[POINT 7,CMDSTR]	;POINTER FOR LOADING
+	JUMPLE	P2,CPOPJ		;
+GETEA1:	ILDB	T2,P1			;GET AN ASCII BYTE
+	TRZE	T2,EXTENB		;IS IT EXTENSIBLE
+	  ON	F.EXTB			;REMEMBER IT IS
+	HRRZ	T4,T3			;GET ADDR WE'RE AT
+	CAIL	T4,CMDEND		;OK TO PUT DATA IN?
+	  ERROR	<E.Q>,<BTS>,<Buffer to small to hold remote file-spec>,<LOGOFF>
+	IDPB	T2,T3			;PUT BYTE IN BUFFER
+	SOJE	P2,GETEA2		;COUNT EXPIRED?
+	TXZE	F,F.EXTB		;WAS IT EXTENSIBLE?
+	  JRST	GETEA1			;EXTENSIBLE SO GET ANOTHER
+	SETZ	P2,			;NOT EXTENSIBLE
+GETEA2:	IDPB	P2,T3			;ZERO TERMINATOR FOR ASCIZ STRING
+	SKIPN	CMDSTR			;SEE IF MAYBE 0
+	  RETURN			;ZERO IS SAME AS NO FILE SPEC
+	JRST	CPOPJ1			;GIVE SKIP RETURN
+Subttl	Routine to figure default device
+
+;HERE TO SET A DEFAULT DEVICE
+;
+; CALL	PUSHJ	P,DEFDEV	;RETURNS A DEV IN T3
+;				;THIS ROUTINE MAY ONLY STORE IN T3
+;
+DEFDEV:	SKIPN	T2,DIRECT		;PPN GIVEN?
+	  JRST	DEFDE1			;NO PPN
+	SKIPE	T3,DEV			;A DEV GIVEN?
+	  JRST	DEFDE3			;PPN+DEV
+	JRST	DEFDE2			;PPN BUT NO DEV, SO GIVE 'DSK'
+DEFDE1:	SKIPE	T3,DEV			;SEE IF DEV GIVEN
+	  JRST	DEFDE3			;DEV+NO PPN
+	MOVSI	T3,'XPN'		;ASSUME DUMP AND CCL
+	TXNN	CMDWRD,C.DUMP		;BUT ARE WE REALLY DUMPING?
+	  MOVSI	T3,'SYS'		;NO, LOADING
+	TXNN	F,F.CCL			;WAS IT REALLY A CCL ENTRY?
+DEFDE2:	  MOVSI	T3,'DSK'		;NO, GIVE DSK
+	MOVEM	T3,DEV			;PUT DEVICE IN DEV
+	ON	F.DEFD			;REMEMBER USING A DEFAULT DEV
+DEFDE3:	DEVNAM	T3,			;GET PHY NAME
+	 SKIPA				;PROCESS THE ERROR
+	  JRST	DEFDE6			;GOOD RETURN
+	CAMN	T3,DEV			;SEE IF SAME AS CALL
+	  PUSHJ	P,CONFUS		;UUO NOT IMPLEMENTED - SHOULD NOT HAPPEN EVER (BUT)
+	ERROR	<E.Q!E.NC!E.EC>,<NSD>,<Device >,<DEFDE5>
+DEFDE5:	PUSHJ	P,TYPDEV		;PRINT NON-EXISTANT DEV
+	MOVEI	T1,[ASCIZ \ does not exist
+\]
+	PUSHJ	P,TYPASC		;
+	JRST	STARTE			;GIVE UP
+
+DEFDE6:	MOVEM	T3,DEV			;REMEMBER THE PHYSICAL NAME
+	MOVE	T1,T3			;COPY DEV HERE
+	DEVTYP	T1,			;FIND OUT SOME THINGS ABOUT IT
+	  SETZ	T1,			;GIVE ZERO FOR THIS CASE
+	MOVEM	T1,DVTYP		;REMEMBER ABOUT IT
+	TXNE	T1,TY.AVL		;SEE IF AVAILABLE
+	  RETURN			;IT IS.
+	LSH	T1,-^D9			;GET JOB THAT HAS IT
+	ANDI	T1,777			;KEEP THE JOB NUMBER
+	PUSH	P,T1			; HERE FOR NOW.
+	ERROR	<E.Q!E.NC!E.EC>,<DIU>,<Device >,<DEFDE4>
+DEFDE4:	PUSHJ	P,TYPDEV		;PRINT DEV NAME
+	MOVEI	T1,[ASCIZ \ is in use by Job \]
+	PUSHJ	P,TYPASC		;
+	POP	P,T1			;GET JOB THAT HAS IT
+	PUSHJ	P,TYPDEC		;PRINT THE DEVICE NUMBER
+	PUSHJ	P,CRLF			;MAKE PRETTY
+	JRST	STARTE			;GIVE UP
+Subttl	Routine to make sure auto dump device is XPN
+
+IFN	FTXPN,<				;[110]
+
+;HERE TO CHECK FOR DUMPS ONTO OTHER THAN [10,1] WHEN
+; THE REMOTE OPERATOR GIVES THE FILE SPEC.
+;
+; CALL:	PUSHJ	P,CHKXPN		;
+;	RETURN				;UNLESS BAD FILE-SPEC
+;
+CHKXPN:	TXNE	F,F.CCL			;WAS IT A AUTO START?
+	 TXNE	F,F.NINI		;YES, BUT WAS A FILE GIVEN?
+	  POPJ	P,			;AUTO START WITH NO FILE-SPEC
+					; (NETLDR.INI)
+	MOVE	T1,DVTYP		;GET TYPE OF DEVICE (FILLED IN BY DEFDEV)
+	ANDI	T1,77			;KEEP ONLY DEVICE CODE
+	CAIE	T1,.TYDSK		;IS IT A DISK?
+	  POPJ	P,			;NO, DON'T CARE THEN
+	MOVSI	T2,(SIXBIT \XPN\)	;GET RIGHT PPN FOR XPN
+	DEVPPN	T2,			;GO GET IT
+	  ERROR	<E.Q!E.EC>,<DP1>,<DEVPPN UUO error on device XPN:>,<STARTE>
+	MOVE	T3,T2			;REMEMBER XPN PPN
+;[112]	SKIPN	T1,DIRECT		;PPN IN THE FILE-SPEC?
+	SKIPE	T1,DIRECT		;[112] PPN IN THE FILE-SPEC?
+	  JRST	CHKXP1			;[112] YES, WE GOT A PPN
+	ON	F.DPPN			;[112] FLAG USING A DEFAULT PPN
+	MOVEM	T2,DIRECT		;NO, GIVE XPN PPN
+CHKXP1:	CAME	T2,DIRECT		;IS PPN = TO XPN PPN?
+	  JRST	CHKXP2			;PPN NOT SAME AS XPN PPN
+	MOVSI	T2,(SIXBIT \XPN\)	;
+	SKIPN	T1,DEV			;DEVICE GIVEN?
+	  MOVEM	T2,DEV			;NO, GIVE XPN THEN
+	MOVE	T1,DEV			;GET THE DEVICE NAME
+	DEVPPN	T1,			;GET PPN FOR THE DEVICE
+	  ERROR	<E.Q!E.EC!E.NC>,<DP2>,<DEVPPN UUO failed for device >,<TYPDEV,STARTE>
+	CAMN	T1,T3			;CHECK PPN AGAINST XPN PPN
+	  POPJ	P,			;OK PPN
+	CAMN	T1,MYPPN		;SEE IF ITS MY PPN
+	  POPJ	P,			;OK PPN
+CHKXP2:	ERROR	<E.Q!E.EC>,<IPN>,<Dumps to other than XPN: are not allowed>,<STARTE>
+
+>;END IFN FTXPN
+Subttl	Routine to issue NODE UUO for Examine, Deposit, Goto, and Message
+
+;HERE TO PERFORM NODE UUO'S FOR EXAMINE, DEPOSITS, AND GOTO'S
+;
+; CALL:	MOVE	T2,[FUNCTION EXPECTED BACK,,FUNCTION TO PERFORM]
+;	MOVE	T3,BYTES TO GO OUT
+;	HRL	T3,BYTES EXPECTED BACK
+;	HRRZ	T4,ADR TO CHECK IN RCV BUFFER
+;
+NODUUO:	PUSHJ	P,SAVE2			;GET SOME AC'S TO WORK WITH
+	MOVEI	P1,TRYNOD		;NUMBER OF CONSECUTIVE ERRORS ALLOWED
+	TXNE	F,F.NLOG		;LOGGED IN?
+	  IMULI	P1,MULNOD		;NO, INCREASE TRYS
+	TXNN	F,F.BOOT		;BOOTING?
+	  JRST NODUU2			;NO
+	MOVEI	P1,TRYBOT		;NUMBER OF CONSECUTIVE ERRORS ALLOWED
+	TXNE	F,F.NLOG		;LOGGED IN?
+	  IMULI	P1,MULBOT		;NO, INCREASE TRYS
+NODUU2:	PUSHJ	P,LOKJOB		;JOB MUST BE LOCKED (THIS MUST
+					; BE IN THE RETRY LOOP)
+	MOVE	T1,A.LINE		;GET THE LINE NUMBER TO SEND TO
+	ADDI	T1,1			;MAKE IT 0-20, (A.LINE = -1 - 17)
+					; ( -1 IS FOR /SELF )
+	DPB	T1,[POINT 8,XMTBUF,7]	;PUT IN XMIT BUFFER
+	DPB	T2,[POINT 8,XMTBUF,15]	;PUT FUNCTION IN XMIT BUFFER
+	MOVE	T1,A.NNUM		;GET NODE NUMBER
+	MOVEM	T1,NODBLK+1		;PUT IN BLOCK FOR UUO
+	HRRZI	T1,2(T3)		;ADD 2 FOR LINE AND FUNCTION
+	HRLM	T1,NODBLK+2		;PUT XMIT COUNT IN BLOCK
+	HLLZ	T1,T3			;GET EXPECTED RCV COUNT
+	ADD	T1,[XWD	2,0]		;ADD 2 FOR LINE AND FUNCTION
+	HLLM	T1,NODBLK+3		;PUT RCV COUNT IN BLOCK
+	MOVEI	T1,NODTIM		;GET TIME TO WAIT BEFORE ERROR
+	HRLM	T1,NODBLK		;PUT TIME IN BLOCK
+	MOVE	T1,[XWD	3,NODBLK]		;FUNCTION,,BLOCK
+NODUU:	NODE.	T1,			;SEND MESSAGE TO REMOTE
+	  JRST	NODER1			;NODE UUO ERROR T1 HAS CODE
+	HRRZ	T1,T2			;GET FUNCTION WE PERFORMED
+	CAIN	T1,N.MSG		;SENT A MESSAGE TO REMOTE?
+	  PUSHJ	P,UNLOK			;YES, UNLOCK THE JOB BECAUSE
+					; WE MAY NEED MORE CORE YET
+	HLRZ	T1,NODBLK+3		;GET RECEIVE COUNT
+	CAILE	T1,MAXRCV		;SEE IF LARGER THAN BUFFER
+	  ERROR	<E.Q>,<CGB>,<Input count greater than buffer>,<STARTE>
+	MOVE	T1,[POINT 8,RCVBUF]	;POINT TO RCV BUFFER
+	MOVEM	T1,RCVPNT		;MAIN PART OF PROGRAM MAY NEED THIS
+	ILDB	T1,RCVPNT		;GET LINE NUMBER RETURNED
+	SUBI	T1,1			;MAKE SAME AS USER INPUT
+	CAME	T1,A.LINE		;SEE IF SAME AS SENT
+	  JRST	[ADDI	T1,1		;MAKE WHAT WE RECEIVED
+		HRLS	T1		;GET RECEIVED IN (LH)
+		MOVE	T5,A.LINE	;GET GOOD ONE IN (RH)
+		ADDI	T5,1		;MAKE IT LIKE A RECEIVED ONE (0-20)
+		HRR	T1,T5		;GET GOOD ONE IN (RH)
+		HRRZ	T5,T2		;GET FUNCTION PERFORMING
+		CAIN	T5,N.GOTO	;ARE WE STARTING?
+		  ERROR	<E.%!E.NC>,<GIL>,<Illegal line number returned from GOTO function>,<EXPRCV,CRLF,NODUU4>
+		SOJG	P1,NODUU2	;SEE IF WE CAN RETRY
+		  ERROR	<E.Q!E.NC>,<ILN>,<Illegal line number returned>,<EXPRCV,CRLF,STARTE>
+]
+NODUU4:	ILDB	T5,RCVPNT		;GET FUNCTION RETURNED
+	HLRZ	T1,T2			;GET EXPECTED FUNCTION
+	CAME	T1,T5			;SAME?
+	  JRST	[HRL	T1,T5		;GET BAD FUNCTION IN (LH)
+		HRRZ	T5,T2		;GET FUNCTION PERFORMED
+		CAIN	T5,N.GOTO	;WAS IT GOTO?
+		  ERROR	<E.%!E.NC>,<IFG>,<Illegal function returned from GOTO function>,<EXPRCF,CRLF,NODUU6>
+		SOJG	P1,NODUU2	;SEE IF WE CAN RETRY
+		ERROR	<E.Q!E.NC>,<IFR>,<Illegal function returned>,<EXPRCF,CRLF,STARTE>
+]
+NODUU6:	HLRZ	T1,NODBLK+2		;GET COUNT SENT
+	CAIE	T1,2(T3)		;SEE IF REMAINED THE SAME
+	  ERROR	<E.Q>,<XCD>,<Xmit count destroyed by the NODE UUO>,<LOGOFF>
+	HLRZ	T5,NODBLK+3		;GET RCV COUNT
+	HRRZ	T1,T2			;GET REQUESTED FUNCTION
+	CAILE	T1,.NMFT2		;CHECK RANGE
+	  PUSHJ	P,CONFUS		;PROGRAM IS CONFUSED
+	JRST	@NODFT2-1(T1)		;PERFORM FUNCTION INDEPENDENT CHECK
+NODFT2:	NODFEX				;EXAMINE
+	NODFDE				;DEPOSIT
+	NODFGO				;GOTO
+	CONFUS				;ILLEGAL
+	CONFUS				;ILLEGAL
+	NODFMS				;MESSAGE
+	NODFBD				;BOOT DATA
+	.NMFT2==.-NODFT2		;LENGTH
+
+;HERE TO CHECK FOR EXAMINE
+;
+NODFEX:	HLRZ	T1,T3			;GET EXPECTED LENGTH
+	CAME	T5,T1			;SEE IF SAME
+	  JRST	[SOJG	P1,NODUU2	;SEE IF RETRY OK
+		HRL	T1,T5		;GET BAD LENGTH IN THE (LH)
+		ERROR	<E.Q!E.NC>,<ILE>,<Incorrect length returned on examine request>,<EXPRCV,CRLF,STARTE>
+]
+
+	PUSHJ	P,NODCKA		;CHECK ADDRESS RETURNED
+	RETURN
+
+;HERE TO CHECK DEPOSIT
+;
+NODFDE:	CAMGE	T5,ADRBYT(CPU)		;MINIMIM LENGTH EXPECTED BACK
+	  JRST	[SOJG	P1,NODUU2	;SEE IF RETRY OK
+		MOVE	T1,ADRBYT(CPU)	;EXPECTED IN (RH)
+		HRL	T1,T5		; AND RETURNED IN (LH)
+		ERROR	<E.Q!E.NC>,<ILD>,<Illegal length returned for deposit function>,<EXPRCV,CRLF,STARTE>
+]
+	PUSHJ	P,NODCKA		;CHECK ADDRESS RETURNED
+	RETURN
+
+;HERE TO CHECK GOTO
+;
+NODFGO:	JUMPGE	T5,CPOPJ		;
+	  JRST	[HRL	T1,T5		;GET RETURNED IN (LH)
+		HLR	T1,T3		;GET EXPECTED IN (RH)
+		ERROR	<E.%!E.NC>,<ILG>,<Illegal length returned for goto function>,<EXPRCV,CRLF,CPOPJ>
+]
+
+NODFMS:	HLRZ	T1,T3			;GET EXPECTED LENGTH
+	CAME	T5,T1			;SEE IF SAME
+	  JRST	[SOJG	P1,NODUU2	;SEE IF RETRY OK
+		HRL	T1,T5		;GET BAD LENGTH IN THE (LH)
+		ERROR	<E.Q!E.NC>,<ILM>,<Incorrect length returned for message function>,<EXPRCV,CRLF,STARTE>
+]
+	RETURN
+
+NODFBD:	HLRZ	T1,T3			;GET EXPECTED LENGTH
+	CAME	T5,T1			;SEE IF SAME
+	  JRST	[SOJG	P1,NODUU2	;SEE IF RETRY OK
+		HRL	T1,T5		;GET BAD LENGTH IN THE (LH)
+		ERROR	<E.Q!E.NC>,<ILB>,<Incorrect length returned for boot data function>,<EXPRCV,CRLF,STARTE>
+]
+	RETURN				;
+
+;HERE ON NODE UUO ERROR
+;
+NODER1:	CAILE	T1,NODERL		;SEE IF ERROR IN TABLE
+	  JRST	NODHER			;HARD ERROR
+	JRST	@NODERT(T1)		;SEE IF HARD ERROR OR RETRY
+NODERT:	NODHER				; (0) HARD ERROR
+	NODHER				; (1) HARD ERROR
+	NODHER				; (2) HARD ERROR
+	NODHER				; (3) HARD ERROR
+	NODRTY				; (4) RETRY
+	NODHER				; (5) HARD ERROR
+	NODRTY				; (6) RETRY
+	NODHER				; (7) HARD ERROR
+NODERL==.-NODERT			;TABLE LENGTH
+
+NODRTY:	SOJG	P1,NODUU2		;SEE IF RETRY OK
+NODHER:	TXNN	F,F.CCL			;CCL ENTRY?
+	  JRST	NODHE2			;NO, SO DON'T WORRY ABOUT REMOTE
+					; MESSAGE
+	MOVE	T2,R.NNUM		;GET NODE NUMBER REMOTE GAVE
+	CAME	T2,A.NNUM		;SEE IF SAME NODE NUMBER
+	  JRST	NODHE2			;NO, SO OK TO DO REMOTE MSG
+	MOVE	T2,R.LINE		;GET LINE NUMBER REMOTE GAVE
+	CAMN	T2,A.LINE		;SEE IF SAME LINE NUMBER
+	  OFF	F.MSGX			;SAME NODE AND LINE SO FORGET
+					; GIVING MSG TO REMOTE
+NODHE2:	ERROR	<E.Q!E.T1!E.NC>,<NUE>,<NODE UUO Failure>,<NODERR,CRLF,STARTE>
+
+;HERE TO CHECK ADDRESS RETURNED
+;
+NODCKA:	PUSH	P,T2			;MUST SAVE
+	PUSH	P,T3			; THIS ONE TOO.
+	MOVE	T2,ADRBYT(CPU)		;NUMBER OF BYTES PER ADR
+	SETZB	T3,T1			;0-->SHIFT, 0-->WHERE ITS FORMED
+NODCK2:	ILDB	T5,RCVPNT		;GET A BYTE OF ADDR
+	LSH	T5,(T3)			;BUMP OVER
+	IORM	T5,T1			;FORM THE ADDRESS
+	ADDI	T3,^D8			;MAKE BUMPER BIGGER
+	SOJG	T2,NODCK2		;ADDRESS ALL PUT TOGETHER?
+	POP	P,T3			;YUP
+	POP	P,T2			;
+NODCK1:	CAMN	T1,T4			;SEE IF SAME
+	  RETURN			;ADR OK
+	POP	P,(P)			;CLEAR PC OFF STACK
+	SOJG	P1,NODUU2		;SEE IF RETRY OK
+	HRLS	T1			;RETURNED ADDRESS IN (LH)
+	HRR	T1,T4			; AND EXPECTED IN (RH)
+	  ERROR	<E.Q!E.NC>,<IAR>,<Incorrect address returned>,<EXPRCV,CRLF,STARTE>
+
+;HERE TO PRINT EXPECTED AND RECEIVED AND GOTO CLEXIT
+;
+; CALL	PUSHJ	P,EXPRCV	;T1 ON CALL  BAD,,GOOD
+;
+EXPRCF:	ON	F.TYF			;TYPE THE FUNCTION NAME
+EXPRCV:	PUSHJ	P,SAVE2			;NEED A UNDESTROYABLE AC
+	MOVE	P1,T1			;BAD,,GOOD
+	MOVEI	T1,[ASCIZ \  Expected - \]
+	PUSHJ	P,TYPASC
+	HRRZ	T1,P1			;GET EXPECTED
+	TXNE	F,F.TYF			;FUNCTION NAME TO TYPE?
+	  PUSHJ	P,TYPFUN		;YUP
+	PUSHJ	P,TYPPNP		;TYPE EXPECT VALUE
+	MOVEI	T1,[ASCIZ \  Received - \]
+	PUSHJ	P,TYPASC		;
+	HLRZ	T1,P1			;GET RECEIVED VALUE
+	TXZE	F,F.TYF			;FUNCTION NAME TO TYPE?
+	  PUSHJ	P,TYPFUN		;YUP
+	JRST	TYPPNP			;TYPE IT AND RETURN
+Subttl	AC Save Routines
+
+;HERE TO SAVE AC'S P1 AND P2
+;
+SAVE2:	EXCH	P1,(P)
+	PUSH	P,P2
+	PUSHJ	P,@P1
+	CAIA
+	AOS	-2(P)
+	POP	P,P2
+	POP	P,P1
+	RETURN
+
+;HERE TO SAVE AC'S T1 - T5
+;
+SAVET:	EXCH	T5,(P)			;SAVE T5 AND GET RETURN ADR
+	PUSH	P,T4			;SAVE T4
+	PUSH	P,T3			; AND T3
+	PUSH	P,T2			; AND T2
+	PUSH	P,T1			; AND T1
+	MOVEM	T5,1(P)			;STORE RETURN ADDRESS
+	MOVE	T5,-4(P)		;RESTORE T5
+	PUSHJ	P,@1(P)			;RETURN TO CALLER OF SAVET
+	  CAIA				;POPJ RETURN
+	AOS	-5(P)			;SET SKIP RETURN
+	POP	P,T1			;RESTORE T1
+	POP	P,T2			; AND T2
+	POP	P,T3			; AND T3
+	POP	P,T4			; AND T4
+	POP	P,T5			; AND T5
+	RETURN				;RETURN
+Subttl	Typeout Routines
+
+;HERE TO TYPE A SIXBIT WORD
+;
+; CALL	PUSHJ	P,TYPSIX		;T1 CONTAINS SIXBIT WORD
+;	RETURN
+;
+;	ON ENTRY		T1 CONTAINS SIXBIT WORD TO BE TYPED
+;	VALUE RETURNED		N/A
+;	AC'S USED		F,T1,T2,T3
+;	AC' DESTROYED		T1,T2,T3
+;	ROUTINES CALLED		TYPASC
+;
+TYPSIX:	MOVE	T2,T1			;NEED IT IN T2 FOR LSHC
+	MOVE	T3,[POINT 7,SIXBLK]	;STORE IN SIXBLK
+TYPSI1:	MOVEI	T1,0			;ZERO T1
+	LSHC	T1,6			;GET A DIGIT FROM T2
+	ADDI	T1,40			;MAKE IT SEVEN BIT
+	IDPB	T1,T3			;STORE IN SIXBLK
+	JUMPN	T2,TYPSI1		;ALL DONE?
+	IDPB	T2,T3			;0 TERMINATOR
+	MOVEI	T1,SIXBLK		;ADR  OF ASCIZ STRING
+	JRST	TYPASC			;TYPE AS A STRING
+
+;HERE TO TYPE AN ASCIZ STRING POINTED TO BY T1
+;
+; CALL	PUSHJ	P,TYPASC		;T1 POINTS TO THE ASCIZ STRING
+;
+;	ON ENTRY		T1 POINTS TO THE ASCIZ STRING
+;	VALUE RETURNED		N/A
+;	AC'S USED		F,T1,T2
+;	AC'S DESTROYED		T1,T2 IF NOT LOGGED IN
+;	ROUTINES CALLED		TYPOPR,TYPCHR IF NOT LOGGED IN
+;
+TYPASC:	TXNN	F,F.CCL			;SEE IF CCL ENTRY
+	  JRST	[OUTSTR	(T1)		;NO, SO USE EFFICIENT OUT MEANS
+		RETURN ]		;OUTPUT DONE
+	HRLI	T2,(POINT 7)		;BYTE POINTER TO
+	HRR	T2,T1			; ADDR OF MESSAGE.
+TYPAS1:	ILDB	T1,T2			;GET A CHARACTER
+	JUMPE	T1,CPOPJ		;ALL DONE
+	PUSHJ	P,TYPCHR		;OUTPUT A CHARACTER (INTO BUFFER)
+	CAIN	T1,12			;WAS IT A LINE FEED?
+	PUSHJ	P,TYPOPR		;LINE FEED SO GIVE WHOLE MSG TO OPR
+	JRST	TYPAS1			;DO NEXT CHAR
+
+;HERE TO TYPE THE CHARACTER IN T1
+;
+; CALL	PUSHJ	P,TYPCHR		;T1 CONTAINS THE CHAR
+;
+;	ON ENTRY		T1 CONTAINS THE CHARACTER
+;	VALUE RETURNED		T1 WILL CONTAIN CHAR THAT WAS TYPED
+;	AC'S USED		F,T1
+;	AC'S DESTROYED		NONE
+;	ROUTINES CALLED		NONE
+;
+TYPCHR:	TXNN	F,F.CCL			;CCL ENTRY?
+	  JRST	TYPCH1			;NO, DO A OUTCHR
+	CAIE	T1,12			;IF LF, NO WARNING SINCE THIS IS END OF MSG
+	SOSL	OPRCNT			;ROOM LEFT IN BUFFER?
+	  JRST	TYPCH2			;YES
+	PUSHJ	P,TYPOPR		;BUFFER IS FILLED, SO EMPTY IT
+	PUSHJ	P,CRLF			;GIVE A CRLF BEFORE WARNING
+	 ERROR	<E.%>,<OBF>,<OPR message buffer filled up>,<TYPCH2>
+TYPCH2:	IDPB	T1,OPRPNT		;PUT IN OPR MESSAGE BUFFER
+	PUSHJ	P,TYPMSG		;GO GIVE MESSAGE TO REMOTE
+	RETURN				;
+TYPCH1:	OUTCHR	T1			;TYPE CHAR
+	RETURN				;EXIT
+
+;HERE TO TYPE (NUMBER)
+;
+; CALL	PUSHJ	P,TYPPNP		;OCTAL NUMBER IN T1
+;
+;	ON ENTRY		OCTAL NUMBER IN T1
+;	VALUE RETURNED		N/A
+;	AC'S USED		F,T1,T2,T3
+;	AC'S DESTROYED		T1,T2,T3
+;	ROUTINES CALLED		TYPCHR, TYPOCT
+;
+TYPPNP:	PUSH	P,T1			;REMEMBER THE NUMBER
+	MOVEI	T1,"("			;LEFT PAREND
+	PUSHJ	P,TYPCHR		;TYPE IT
+	POP	P,T1			;GET NUMBER BACK
+	PUSHJ	P,TYPOCT		;TYPE THE NUMBER
+	MOVEI	T1,")"			;RIGHT PAREND
+	JRST	TYPCHR			;TYPE IT
+
+;HERE TO TYPE A FILE-SPEC
+;
+; CALL	PUSHJ P,TYPFLC			;GIVES CR+LF WHEN DONE
+; CALL	PUSHJ	P,TYPFLS		;
+;	RETURN
+;
+;	ON ENTRY		N/A
+;	VALUE RETURNED		N/A
+;	AC'S USED		F,T1,T2,T3
+;	AC'S DESTROYED		T1,T2,T3
+;	ROUTINES CALLED		TYPDEV, TYPFIL, TYPPPN, TYPCHR, TYPOCT, TYPSIX, CRLF
+;
+TYPFLC:	PUSH	P,[CRLF]		;PUT CRLF ROUTINE ON STACK FOR CRLF
+TYPFLS:	PUSHJ	P,TYPDEV		;TYPE THE DEVICE
+	PUSHJ	P,TYPFIL		; AND THE FILE
+	JRST	TYPPPN			;TYPE PPN AND RETURN
+
+;HERE TO TYPE THE PPN
+;
+TYPPPN:	SKIPN	DIRECT			;SEE IF PPN IS NON 0
+	  RETURN			;NO PPN TO TYPE
+	MOVEI	T1,"["			;LEFT BRACKET OF PPN
+	PUSHJ	P,TYPCHR		;TYPE IT
+	HLRZ	T1,DIRECT		;GET PROJECT
+	JUMPE	T1,TYPPTH		;if 0, use path block [143]
+	PUSHJ	P,TYPOCT		;TYPE THE PROJECT
+	MOVEI	T1,","			;
+	PUSHJ	P,TYPCHR		;SEPERATE PROJECT AND PROGRAMMER
+	HRRZ	T1,DIRECT		;GET PROGRAMMER NUMBER
+	PUSHJ	P,TYPOCT		;TYPE IT
+	MOVEI	T1,[ASCIZ \] \]		;RIGHT BRACKET AND SPACE
+	JRST	TYPASC			;TYP'EM
+
+;HERE TO TYPE PATH
+;
+TYPPTH:	PUSH	P,T4			;save T4
+	MOVE	T4,DIRECT		;get pointer to path block
+	ADDI	T4,2			;point to PPN
+	HLRZ	T1,0(T4)		;get P
+	PUSHJ	P,TYPOCT		;type it
+	MOVEI	T1,","
+	PUSHJ	P,TYPCHR
+	HRRZ	T1,0(T4)		;get PN
+	PUSHJ	P,TYPOCT		;type it
+	AOS	T4			;point to next word
+TYPPTL:	SKIPN	0(T4)			;if next SFD zero
+	JRST	TYPPTE			;exit loop
+	MOVEI	T1,","
+	PUSHJ	P,TYPCHR
+	MOVE	T1,0(T4)
+	PUSHJ	P,TYPSIX
+	AOJA	T4,TYPPTL
+TYPPTE:	MOVEI	T1,"]"
+	POP	P,T4			;restore T4
+	JRST	TYPCHR			;print final
+
+;HERE TO TYPE THE DEVICE
+;
+TYPDEV:	MOVE	T1,DEV			;GET DEVICE NAME
+	PUSHJ	P,TYPSIX		;TYPE THE DEVICE
+	MOVEI	T1,":"			;
+	JRST	TYPCHR			;TYPE A COLON
+
+;HERE TO TYPE THE FILE NAME
+;
+TYPFIL:	SKIPN	T1,NAME			;GET FILE NAME
+	  RETURN			;NONE
+	PUSHJ	P,TYPSIX		;TYPE THE FILE NAME
+	SKIPN	EXT			;SEE IF EXTENSION
+	  RETURN			;NONE
+	MOVEI	T1,"."			;
+	PUSHJ	P,TYPCHR		;
+	HLLZ	T1,EXT			;GET EXTENSION
+	SKIPE	T1			;SEE IF EXT NAME
+	  JRST	TYPSIX			;YES, GO TYPE IT
+	RETURN				;NO EXTENSION
+
+;HERE TO TYPE A SPACE
+;
+TYPSPC:	MOVEI	T1," "			;7 BIT FOR SPACE
+	JRST	TYPCHR			;TYPE THE SPACE
+
+;HERE TO GIVE MESSAGE IN "OPRDAT" TO THE OPERATOR
+;
+TYPOPR:	LDB	T1,[POINT 7,OPRDAT,6]	;GET FIRST BYTE IN BUFFER TO OPR
+	JUMPE	T1,TYPOPS		;IF NULL FORGET TRMOP
+	SETZ	T1,			;NULL AT END
+	IDPB	T1,OPRPNT		;GIVE NULL TERMINATOR (A BYTE RESERVED
+					; FOR THIS)
+	TXNN	F,F.NLOG		;LOGGED IN?
+	  JRST	[	OUTSTR	OPRDAT	;GIVE USER MESSAGE
+			JRST	TYPOPS ];RESET POINTERS AND RETURN
+	MOVE	T1,[XWD 5,WTOBLK]	;GET WRITE TO OPERATOR BLOCK ADDRESS
+	QUEUE.	T1,			;  AND TRY TO WRITE THE MSG
+	  CAIA				;IF WE CANT, TRY AGAIN WITH TRMOP
+	JRST	TYPOPS			;OTHERWISE, RESET THE BUFFER
+	MOVE	T1,[XWD	3,OPRTRM]	;GET LENG,ADDR OF THE TRMOP BLOCK
+	TRMOP.	T1,			;GIVE TO THE OPR
+	  JFCL
+TYPOPS:	MOVE	T1,[POINT 7,OPRDAT]	;POINT TO BEG OF BUFFER
+	MOVEM	T1,OPRPNT		;BYTE POINTER FOR FILLING
+	MOVEI	T1,OPRCHR		;SIZE
+	MOVEM	T1,OPRCNT		;COUNT DOWN COUNTER FOR SIZE
+	SETZM	OPRDAT			;MAKE FIRST BYTE (AND OTHERS) NULL
+	RETURN
+
+;HERE TO GIVE MESSAGE TO THE REMOTE
+;
+TYPMSG:	TXNE	F,F.MSG			;DOES REMOTE GET THE MESSAGE?
+	 TXNN	F,F.MSGX		;
+	  RETURN			;NO
+	TXNE	F,F.MIP			;MESSAGE IN PROGRESS TO REMOTE?
+	  JRST	[	OFF	F.MSGX	;YES, DISALLOW ANY MORE MESSAGES
+			RETURN	]	;RETURN
+	CAIN	T1,15			;IS IT A CR?
+	  RETURN			;YES, JUST CHUCK IT
+	PUSHJ	P,SAVET			;SAVE T'S
+	CAIN	T1,12			;IS IT A LF?
+	  JRST	TYPMS2			;YES
+	IDPB	T1,MSGPNT		;PUT CHARACTER IN XMTBUF
+	AOS	T2,MSGCNT		;COUNT CHARACTERS PUT IN XMTBUF
+	CAIGE	T2,MSGWID-2		;FULL LINE YET?
+	  RETURN			;NOT YET
+TYPMS2:	MOVEI	T1,15			;CR
+	IDPB	T1,MSGPNT		;PUT IN XMTBUF
+	AOS	MSGCNT			;COUNT CHAR
+	MOVEI	T1,12			;LF
+	IDPB	T1,MSGPNT		;PUT IN XMTBUF
+	AOS	MSGCNT			;COUNT CHAR
+	SETZ	T1,			;NULL AT
+	IDPB	T1,MSGPNT		; THE END
+	AOS	MSGCNT			;COUNT CHAR
+	MOVE	T2,[	XWD N.ACC,N.MSG	]	;EXPECTING,,FUNCTION TO PERFORM
+	HRR	T3,MSGCNT		;GET COUNT OF CHARACTERS
+	HRLI	T3,2			;EXPECTED COUNT BACK
+	PUSH	P,A.LINE		;SAVE CURRENT LINE NUMBER
+	PUSH	P,A.NNUM		; AND NODE NUMBER
+	MOVE	T1,R.LINE		;GET LINE NUMBER REMOTE GAVE
+	MOVEM	T1,A.LINE		;PUT WHERE NODUUO WILL FIND IT
+	MOVE	T1,R.NNUM		;GET NODE NUMBER REMOTE GAVE
+	MOVEM	T1,A.NNUM		;PUT WHERE NODUUO WILL FIND IT
+	ON	F.MIP			;FLAG A MESSAGE GOING TO REMOTE
+	PUSHJ	P,NODUUO		;GIVE MESSAGE TO REMOTE
+	OFF	F.MIP			;MESSAGE TO REMOTE IS DONE
+	POP	P,A.NNUM		;RESTORE NODE NUMBER
+	POP	P,A.LINE		; AND LINE NUMBER
+TYPMSS:	SETZM	MSGCNT			;0 CHAR COUNTER
+	MOVE	T2,[POINT 8,XMTBUF,15]	;WHERE CHARS GO
+	MOVEM	T2,MSGPNT		;INIT CHARACTER POINTER
+	RETURN				;RETURN TO CALLER
+
+;HERE TO TYPE AN OCTAL OR DECIMAL NUMBER
+;
+TYPOCT:	SKIPA	T3,[^D8]		;RADIX 8
+TYPDEC:	MOVEI	T3,^D10			;RADIX
+TYPRAD:	LSHC	T1,-^D35		;SHIFT RIGHT 35 BITS INTO T1+1
+	LSH	T1+1,-1			;VACATE THE T1+1 SIGN BIT
+	DIV	T1,T3			;DIVIDE DOUBLE LENGTH INTEGER
+	PUSH	P,T1+1			;SAVE REMAINDER
+	SKIPE	T1			;
+	PUSHJ	P,TYPRAD		;
+	POP	P,T1			;
+	ADDI	T1,"0"			;MAKE 7-BIT NUMBER
+	JRST	TYPCHR			;OUTPUT THE CHARACTER
+	POPJ	P,			;
+
+TYPND:	MOVEI	T1,[ASCIZ \" \]
+	PUSHJ	P,TYPASC		;
+TYPNOD:	MOVEI	T1,[ASCIZ \Node \]
+	PUSHJ	P,TYPASC
+	MOVE	T1,A.NNAM		;GET NODE NAME
+	PUSHJ	P,TYPSIX		;TYPE IT
+TYPNO2:	MOVE	T1,A.NNUM		;GET THE NODE NUMBER
+	PUSHJ	P,TYPPNP		;TYPE (NUMBER)
+	SKIPGE	T1,A.LINE		;GET LINE NUMBER
+	 RETURN				;DON'T PRINT IT IF /SELF
+	MOVEI	T1,[ASCIZ \ Line \]
+	PUSHJ	P,TYPASC
+	MOVE	T1,A.LINE		;GET LINE AGAIN
+	JRST	TYPOCT			;OUTPUT IT
+
+;HERE TO TYPE A FUNCTION NAME
+;
+TYPFUN:	PUSH	P,T1			;THIS ROUTINE RESPECTS T1
+	CAIL	T1,FUNLNG		;DO WE KNOW THIS FUNCTION?
+	  SETZ	T1,			;NO, MAKE IT 0 FOR UNKNOWN
+	MOVEI	T1,@FUNTAB(T1)		;GET ADDRESS OF FUNCTION MSG
+	PUSHJ	P,TYPASC		;TELL THE FUNCTION
+	PUSHJ	P,TYPSPC		; AND GIVE A SPACE.
+	POP	P,T1			;GIVE BACK T1
+	RETURN				; AND GO BACK.
+;ROUTINE TO TYPE REMOTE INFORMATION TO THE OPR
+;
+TYPREM:	TXON	F,F.TYRM		;TYPED REMOTE INFO YET?
+					; SET BIT SO WE WON'T DO THIS AGAIN
+	TXNN	F,F.CCL			;CCL ENTRY?
+	  RETURN			;RETURN IF NOT CCL OR ALREADY TYPED IT
+	PUSHJ	P,SAVE2			;DON'T DESTROY P1-P2
+	MOVE	P1,REMCMD		;GET INFO REMOTE GAVE US
+	MOVEI	T1,[ASCIZ \%%\]		;
+	PUSHJ	P,TYPASC		;
+	MOVE	T1,R.FUNA		;GET FUNCTION NAME
+	PUSHJ	P,TYPSIX		;TYPE IT
+	MOVEI	T1,[ASCIZ \ req received by \]
+	PUSHJ	P,TYPASC
+kr:	SETZ	T3,			;get local name
+	PUSHJ	P,HSTNAM
+	PUSHJ	P,TYPSIX
+	MOVEI	T1,[ASCIZ \ on node \]	;
+	PUSHJ	P,TYPASC		;TYPE IT
+	MOVE	T1,R.NNAM		;GET NODE NAME
+	PUSHJ	P,TYPSIX		;TYPE IT
+	MOVE	T1,R.NNUM		;GET NODE NUMBER
+	PUSHJ	P,TYPPNP		;AND TYPE IT
+	TXNN	P1,C.LINE		;LINE NUMBER OK TO TYPE?
+	  JRST	CRLF			;NO, GIVE CRLF AND RETURN
+	MOVEI	T1,[ASCIZ \ Line:\]	;
+	PUSHJ	P,TYPASC		;TYPE IT
+	MOVE	T1,R.LINE		;GET LINE NUMBER
+	PUSHJ	P,TYPOCT		; AND TYPE IT.
+	TXNN	P1,C.TYPE		;TYPE GIVEN?
+	  JRST	CRLF			;NO, CRLF AND RETURN
+	MOVEI	T1,[ASCIZ \ for \]	;
+	PUSHJ	P,TYPASC		;
+	MOVE	T1,R.TYNM		;GET NAME OF TYPE
+	PUSHJ	P,TYPSIX		;AND TYPE IT.
+	TXNN	P1,C.SER		;SERIAL NUMBER GIVEN?
+	  JRST	CRLF			;NO, GIVE CR+LF AND RETURN
+	MOVEI	T1,[ASCIZ \ Ser:\]	;
+	PUSHJ	P,TYPASC		;
+	MOVE	T1,R.SER		;
+	PUSHJ	P,TYPOCT		;TYPE SERIAL NUMBER
+	IFN	FTBOOT,<
+	TXNN	F,F.BOOT		;BOOTING?
+	  JRST	TYPRE2			;NO, LOADING
+	TXNN	P1,C.MEM		;GOT MEM SIZE?
+	  JRST	CRLF			;NO
+	MOVEI	T1,[ASCIZ \ Memsiz:\]	;
+	PUSHJ	P,TYPASC		;
+	MOVE	T1,R.MEM		;GET MEM SIZE
+	PUSHJ	P,TYPDEC		;TYPE IT
+	JRST	CRLF			;ALL DONE
+TYPRE2:
+	>;End IFN FTBOOT
+	TXNE	F,F.NINI		;NETLDR.INI?
+	  JRST	CRLF			;YES, CR+LF AND RETURN
+	MOVEI	T1,[ASCIZ \ File:\]	;
+	PUSHJ	P,TYPASC		;
+	MOVEI	T1,CMDSTR		;GET FILE SPEC FROM REMOTE
+	PUSHJ	P,TYPASC		;TYPE IT
+	PJRST	CRLF			;GIVE A CR+LF BEFORE RETURN
+CRLF:	MOVEI	T1,[ASCIZ \
+\]
+	PJRST	TYPASC			;TYPE CRLF
+
+CLEXIT:	TXNE	F,F.ERRC		;[106] SEE IF TO TRY ANOTHER COMMAND
+	  PJRST	DONE			;[106] YES, ATTEMPT ANOTHER
+	TXNN	F,F.NLOG		;IF NOT LOGGED, DON'T CLEAR TTY
+	  CLRBFI			;CLEAR TTY INPUT
+;[106]	TXNN	F,F.ERRC		;SEE IF GOING AHEAD ANY WAY
+	PUSHJ	P,LOGOFF		;EXIT
+;[106]	JRST	DONE			;TRY NEXT COMMAND
+
+;HERE IF NETLDR IS CONFUSED ABOUT WHAT TO DO
+;
+CONFUS:	POP	P,T1			;GET WHERE THE CONFUSION EXISTS
+	HRRZI	T1,-1(T1)		;DON'T WANT (LH) AND SUB 1 FROM THE (RH)
+	ERROR	<E.Q!E.NC>,<EGF>,<NETLDR is confused at PC:>,<TYPOCT,CRLF,CLEXIT>
+
+;HERE TO TYPE CONTINUE MSG
+;
+CONTIN:	MOVEI	T1,[ASCIZ \ - continuing
+\]
+	PJRST	TYPASC			;TYPE AND POPJ
+Subttl	Error Routine
+
+;HERE ON ERROR MACRO CALL
+;
+; E.Q	1	0 = "%", 1 = "?"
+; E.T1	2	0 = NO CODE, 1 = CODE IN T1 TO OUTPUT
+; E.NC	4	0 = CRLF, 1 = NO CRLF
+; E.EC	10	0 = DON'T SET F.ERRC, 1 = SET F.ERRC TO CONTINUE TO NEXT COMMAND
+;
+ERR:	PUSHJ	P,SAVET			;SAVE T1-T5
+	MOVEM	T1,ERR.T1		;REMEMBER CODE IN T1
+	HRRZ	T2,-6(P)		;GET ADR WHERE TEXT ADR IS
+	MOVEM	T2,ERR.AD		;
+	PUSHJ	P,TYPREM		;TYPE REMOTE INFO, IF NOT CCL
+					; JUST RETURN.
+	HLRZ	T2,@ERR.AD		;GET ERROR INST CODE
+	TXNE	T2,E.EC			;SEE IF TO SET F.ERRC
+	ON	F.ERRC			;GO TO NEXT COMMAND BIT
+	TXNN	T2,E.Q			;SEE IF TO PRINT A "%" OR "?"
+	  SKIPA	T1,["%"]		; ITS A "%"
+	MOVEI	T1,"?"			;  ITS A "?"
+	TXNE	F,F.CCL			;CCL ENTRY?
+	  JRST	[TXNE	T2,E.EC		;YES, SO GIVE % IF 10
+		MOVEI	T1,"%"		;
+		JRST	ERR1		;
+]
+ERR1:	PUSHJ	P,TYPCHR		;TYPE THE CHARACTER
+	MOVEI	T1,[ASCIZ \NET\]
+	PUSHJ	P,TYPASC		;RING SOME BELLS
+	MOVEI	T1,1			;
+	ADD	T1,ERR.AD		;ADDRESS OF NET???
+	HLLZ	T1,(T1)			;GET REST OF NET???
+	HRRI	T1,' - '		;SPACE -
+	PUSHJ	P,TYPSIX		;
+	PUSHJ	P,TYPSPC		;GIVE A SPACE
+	HRRZ	T1,@ERR.AD		;GET REST OF TEXT
+	PUSHJ	P,TYPASC		;INFORM OF THE REST OF THE ERROR TXT
+	HLRZ	T2,@ERR.AD		;GET ERROR INST CODE
+	TXNN	T2,E.T1			;SEE IF T1 HAD AN ERR CODE
+	  JRST	ERR.01			;NO,
+	MOVEI	T1,[ASCIZ\ (\]
+	PUSHJ	P,TYPASC		;
+	MOVE	T1,ERR.T1		;GET THE ERR CODE
+	PUSHJ	P,TYPOCT		;TYPE THE CODE IN OCTAL
+	MOVEI	T1,[ASCIZ \) \]
+	PUSHJ	P,TYPASC		;
+ERR.01:	HLRZ	T2,@ERR.AD		;GET ERROR INST CODE
+	TXNN	T2,E.NC			;SEE IF TO PRINT CRLF
+	  PUSHJ	P,CRLF			;YES, GIVE A CRLF
+	LDB	T2,[POINT 5,@ERR.AD,4]	;GET NUMBER OF PLACES TO GO
+	SKIPG	T2			;CHECK NUMBER OF PLACES
+	  PUSHJ	P,CONFUS		;PROGRAMMING ERROR
+	MOVE	T3,T2			;COPY HERE
+	ADD	T3,ERR.AD		;POINT TO LAST PLACE TO GO
+	HRRZ	T1,(T3)			;GET LAST PLACE TO GO
+	HRRM	T1,-6(P)		;PUT IN PDLIST
+	MOVE	T1,ERR.T1		;MAKE T1 AVAILABLE NOW
+ERR.02:	SUBI	T3,1			;DECREMENT PLACE POINTER
+	SOJLE	T2,CPOPJ		;ALL PLACES TO GO ON THE STACK?
+	PUSH	P,(T3)			;GET A PLACE TO GO
+	JRST	ERR.02			;LOOP UNTIL ALL PLACES ON THE STACK
+
+;HERE TO TYPE LOOKUP ERROR INFO
+;
+LOOKER:	MOVEI	T1,[ASCIZ \ for \]
+	PUSHJ	P,TYPASC		;
+	PUSHJ	P,TYPFLC		;TYPE COMPLETE FILE SPEC
+	PJRST	STARTE			;TRY AGAIN
+
+;HERE TO TYPE DEVICE AND GOTO STARTE
+;
+COIERR:	PUSHJ	P,TYPSPC		;GIVE A SPACE
+	PUSHJ	P,TYPDEV		;TYPE THE DEVICE
+	PUSHJ	P,CRLF			;
+	PJRST	STARTE			;TRY AGAIN
+
+;HERE TO GIVE A HELP MESSAGE
+;
+HLPMSG:	MOVEI	T1,[ASCIZ \--Type /HELP for Help
+\]
+	TXNE	F,F.CCL			;IF CCL NO HELP MSG NEEDED
+	  JRST	[PUSHJ	P,CRLF		;OPR NEEDS THIS
+		PJRST	LOGOFF		;GO AWAY
+]
+	PUSHJ	P,TYPASC		;TELL HIM TO TYPE /H FOR HELP
+	PJRST	STARTE			;LET HIM TRY AGAIN
+
+;HERE TO TYPE A MESSAGE FOR NODE UUO ERRORS
+;
+NODERR:	MOVE	T1,ERR.T1		;GET ERROR CODE
+	CAIL	T1,NERRTL		;DO WE KNOW THAT ONE
+	  SETZ	T1,			;NO, MAKE IT CODE 0
+	MOVE	T1,NERRTB(T1)		;GET ADDR OF ERR MSG
+	PJRST	TYPASC			;TYPE THE MSG
+
+	SUBTTL	DAEMON -- INTERFACE TO THE DAEMON ERROR-REPORTING ROUTINES
+
+;SYSERR FUNCTIONS 202/203 (DUMP & LOAD)
+;THE FORMAT OF THE SYSERR BLOCK IS:
+; -2	.DMERR			;DAEMON ERROR REPORT FUNCTION CODE
+; -1	"CODE"			;EITHER 202(LOAD) OR 203(DUMP)
+;  0	TARGET			;POINTER TO THE NAME OF THE NODE LOADED/DUMPED
+; +1	SERVER			;NAME OF THE NODE THAT LOADED/DUMPED THE OTHER
+; +2	LINE			;NAME OF THE LINE LOADED/DUMPED
+; +3	FILE			;POINTER TO THE FILE LOADED/DUMPED
+; +4	RTN-CODE		;VALUE IS THE "NSP" RETURN CODE
+; +5	PRG-NAME		;THE NAME OF THE PROGRAM DOING THE LOAD/DUMP
+; +6	VALUE			;36 BITS OF "VALUE" RETURNED BY THE PROGRAM
+
+ERRLOA:	SKIPA	T1,[XWD .ESNDL,LODFIL] ;HERE TO REPORT A DOWN LINE LOAD
+ERRDMP:	MOVE	T1,[XWD .ESNUD,DMPFIL] ;HERE TO REPORT AN UP LINE DUMP
+	TXNE	F.NLOG		;IF /NOLOG WAS REQUESTED
+	RETURN			;  THEN DON'T LOG ANYTHING
+	PUSH	P,T1		;SAVE "XWD DAEMON-CODE,FILE-SPEC-ADDRESS"
+
+;CLEAR THE ERROR BLOCK
+	SETZM	ERRFZR		;CLEAR THE FIRST WORD OF THE ERROR REPORT BLOCK
+	MOVE	T2,[XWD ERRFZR,ERRFZR+1] ;GET A BLT POINTER TO THE BLOCK
+	BLT	T2,ERRLZR	;  AND PROPAGATE THE CLEAR
+
+;SET UP A BYTE POINTER TO THE "FREE SPACE" IN THE BLOCK
+	MOVE	P1,[POINT 7,ERRFRE] ;P1 WILL ALWAYS HAVE A 7 BIT BYTE POINTER
+	HRROI	T1,-ERRBLK(P1)	;T1 STARTS WITH A "SYSERR" POINTER.
+
+;DAEMON FUNCTION CODE
+	MOVEI	T2,.DMERR	;DAEMON ERROR REPORT
+	MOVEM	T2,ERRFCN	;STORE THE FUNCTION CODE
+
+;SYSERR FUNCTION CODE
+	HLRZ	T2,(P)		;GET THE CODE OFF THE STACK
+	MOVEM	T2,ERRCOD	;  AND STORE IT IN THE BLOCK
+
+;TARGET NODE NAME (WE DON'T KNOW WHAT IT IS...)
+	MOVEM	T1,ERRTRG	;SAVE A POINTER TO THE TARGET NAME
+	MOVEI	T1,[ASCIZ /Not Applicable/]
+	PUSHJ	P,ERRASC	;WRITE THE "NAME"
+	PUSHJ	P,ERRNPT	;  AND CLOSE OFF THE FIELD.
+
+;SERVER NODE (TRY SEVERAL WAYS TO GET OUR NAME AND RETURN THAT)
+	MOVEM	T1,ERRSER	;SAVE A POINTER TO WHERE WE WILL PUT THE NAME
+	MOVSI	T1,'CTY'	;ASK WHERE OUR "CTY" IS
+	WHERE	T1,		;  AND THAT SHOULD GIVE US OUR NODE NUMBER
+	  JRST	ERRLD1		;IF NO NETWORKS, GO RETURN "SYSNAM" INSTEAD
+	PUSH	P,T1		;SAVE OUR NODE NUMBER FOR A BIT
+	MOVE	T3,T1		;COPY THE NODE NUMBER FOR THE NEXT CALL
+	MOVE	T1,[XWD .NDRNN,T2] ;SET UP FOR A NODE. UUO
+	MOVEI	T2,2		;  THAT WILL TRANSLATE THE
+	NODE.	T1,		;  NODE NUMBER INTO A SIXBIT NAME
+	  JRST	[POP P,(P)	;??? SHOULDN'T HAPPEN.  MUST BE A DN60 ONLY SYS.
+		 JRST ERRLD1]	;??? FIXUP STACK AND USE "SYSNAM" INSTEAD.
+	PUSHJ	P,ERRSIX	;WRITE OUT THE SIXBIT NAME
+	MOVEI	T1,"("		;GET THE OPEN PARENTHESIS
+	PUSHJ	P,ERRCHR	;  AND WRITE THAT OUT.
+	POP	P,T1		;GET OUR NODE NUMBER BACK
+	PUSHJ	P,ERROCT	;  AND WRITE THAT
+	MOVEI	T1,")"		;GET THE CLOSING PARENTHESIS
+	PUSHJ	P,ERRCHR	;  AND CLOSE OFF THE NODE(NUM) SPEC
+	JRST	ERRLD4		;GO TO COMMON CODE TO CLOSE OFF THE FIELD.
+
+;HERE IF WE CAN'T GET OUR NODE NAME IN THE "NAME(NNM)" FORM.  USE SYSNAM INSTEAD
+ERRLD1:	MOVEI	T1,0		;START WITH THE FIRST WORD OF "SYSNAM"
+ERRLD2:	MOVEI	T2,.GTCNF	;THE NAME IS IN THE "CONFIGURATION TABLE"
+	HRLI	T2,(T1)		;  STARTING AT "%CNFG0"
+	GETTAB	T2,		;GET THE NEXT WORD OF THE NAME
+	  JRST	[MOVEI T1,[ASCIZ /Couldn't read system's name./]
+		 JRST ERRLD3]	;WE TRIED. WRITE THIS ERROR MSG INSTEAD.
+	MOVEM	T2,SYSNAM(T1)	;STORE THE NEXT CHAR OF THE NAME
+	CAIE	T1,4		;IF WE HAVEN'T READ ALL OF THE NAMES YET,
+	AOJA	T1,ERRLD2	;  THEN GO BACK AND GET THE NEXT ONE
+	MOVEI	T1,SYSNAM	;GET THE ADDRESS OF THE SYSTEM NAME
+ERRLD3:	PUSHJ	P,ERRASC	;WRITE THE SYSTEM NAME INTO THE DAEMON MSG
+ERRLD4:	PUSHJ	P,ERRNPT	;GET A "NEW POINTER" FOR THE NEXT FIELD.
+
+;LINE DESIGNATOR (NODE: NAME(NM),  LINE: N)
+	MOVEM	T1,ERRSLD	;SAVE THE POINTER TO THE LINE SPEC
+	MOVEI	T1,[ASCIZ /Node: /] ;GET THE FIRST PART OF THE MSG
+	PUSHJ	P,ERRASC	;  AND WRITE THAT OUT.
+	MOVE	T1,A.NNAM	;GET THE NODE NAME, AND
+	PUSHJ	P,ERRSIX	;  WRITE THAT OUT IN SIXBIT
+	MOVEI	T1,"("		;GET THE OPEN PAREN
+	PUSHJ	P,ERRCHR	;  AND WRITE THAT
+	MOVE	T1,A.NNUM	;GET THE NODE NUMBER, AND
+	PUSHJ	P,ERROCT	;  WRITE THAT OUT IN OCTAL.
+	MOVEI	T1,[ASCIZ /),  Line: /] ;GET THE NEXT BIT OF FILLER
+	PUSHJ	P,ERRASC	;  AND WRITE THAT OUT.
+	MOVE	T1,A.LINE	;GET THE LINE NUMBER
+	PUSHJ	P,ERROCT	;  AND WRITE THAT OUT IN OCTAL
+	PUSHJ	P,ERRNPT	;GET A "NEW POINTER" TO THE NEXT FIELD
+
+;FILE SPEC LOADED FROM OR DUMPED TO.
+	MOVEM	T1,ERRFIL	;SAVE THE POINTER TO THE ASCII FILE SPEC
+	POP	P,T3		;GET THE ADDRESS OF THE FILE SPEC BLOCK
+	HRRZ	T1,T3		;COPY IT FOR ERRFSP
+	PUSHJ	P,ERRFSP	;WRITE THE FILE SPEC INTO THE BLOCK
+	PUSHJ	P,ERRNPT	;  AND CLOSE OFF THIS FIELD.
+
+;NSP "RETURN CODE"
+	MOVEI	T2,1		;"SUCCESS"
+	MOVEM	T2,ERRRTN	;STORE THE CODE
+
+;PROGRAM NAME (AND WHO RAN IT)
+	MOVEM	T1,ERRPRG	;STORE A POINTER TO THE NAME STRING
+	PUSHJ	P,ERRPGM	;GO WRITE OUT THE PROGRAM NAME
+	MOVEI	T1,[ASCIZ /  By:/] ;GET A "DELIMETER"
+	PUSHJ	P,ERRASC	;  AND WRITE THAT
+	PUSHJ	P,ERRUNM	;NOW WRITE OUT THE USER'S NAME & PPN
+	PUSHJ	P,ERRNPT	;  AND CLOSE OFF THIS FIELD
+
+;NOW THE 36 BITS OF "VALUE" FOR SYSERR TO TYPE OUT
+	MOVEI	T2,0		;JUST USE A
+	MOVEM	T2,ERRVAL	;  ZERO.
+
+;NOW DO THE DAEMON UUO (RH(T1) HAS THE LENGTH OF THE BLOCK)
+	MOVSI	T1,2(T1)	;GET THE LENGTH (PLUS 2) IN THE LH
+	HRRI	T1,ERRFCN	;GET THE ADDRESS OF THE FUNCTION BLOCK
+	DAEMON	T1,		;DO THE DAEMON UUO
+	  JRST	ERRDUF		;THE DAEMON UUO FAILED. GO PRINT AN ERROR
+	RETURN			;ALL DONE WITH THE REPORT.
+;SUBROUTINES TO WRITE VARIOUS ITEMS INTO THE DAEMON ERROR-REPORT BLOCK
+
+;ROUTINE TO FORCE THE BYTE POINTER IN P1 TO START ON THE NEXT WORD
+ERRNPT:	SETZ	T1,		;GET A ZERO,
+	PUSHJ	P,ERRCHR	;  AND CLOSE OFF THIS FIELD
+	MOVEI	P1,1(P1)	;GET THE ADDRESS OF THE NEXT WORD
+	HRLI	P1,(POINT 7,0)	;  AND COMPLETE THE BYTE POINTER
+	HRROI	T1,-ERRBLK(P1)	;MAKE T1 BE A "SYSERR" POINTER TO THE STRING
+	SETZ	P2,		;CLEAR THE COUNT
+	RETURN			;  AND WE'RE DONE
+
+;ROUTINE TO COPY AN ASCIZ STRING INTO THE BLOCK
+ERRASC:	PUSH	P,T2		;PRESERVE T2
+	HRLI	T1,(POINT 7,0)	;MAKE THE ADDRESS A BYTE POINTER
+	ILDB	T2,T1		;GET THE FIRST BYTE
+	JUMPN	T2,[IDPB T2,P1	;STORE THE BYTE IN THE BLOCK
+		    ILDB T2,T1	;GET THE NEXT BYTE
+		    AOJA P2,.]	;COUNT THE BYTE AND LOOP.
+	POP	P,T2		;RESTORE THE TEMP
+	RETURN			;  AND WE'RE DONE
+
+;ROUTINE TO OUTPUT THE SIXBIT STRING IN T1
+ERRSIX:	PUSH	P,T2		;SAVE A TEMP
+	PUSH	P,T3		; ..
+	MOVE	T3,T1		;COPY THE NAME INTO T3
+	MOVE	T2,[POINT 6,T3]	;GET A BYTE POINTER TO THE SIXBIT STRING
+ERRSI1:	ILDB	T1,T2		;GET THE NEXT BYTE
+	JUMPE	T1,RTN32	;IF WE'RE DONE, FIXUP THE STACK AND RETURN
+	ADDI	T1,"0"-'0'	;MAKE THE CHAR ASCII
+	PUSHJ	P,ERRCHR	;WRITE THE CHAR
+	TLNE	T2,770000	;SEE IF WE'VE GOT ALL 6 BYTES
+	JRST	ERRSI1		;LOOP OVER ALL 6 BYTES
+	JRST	RTN32		;FIXUP THE STACK AND RETURN
+
+;ROUTINE TO PUT THE CHAR IN "T1" INTO THE OUTPUT STRING
+ERRCHR:	IDPB	T1,P1		;STORE THE CHAR
+	AOS	P2		;COUNT THE CHAR
+	RETURN
+;ROUTINES TO WRITE NUMBERS INTO THE FILE
+
+;ROUTINE TO WRITE AN OCTAL NUMBER INTO THE OUTPUT BLOCK
+ERROCT:	PUSH	P,T2		;GET A TEMP
+	PUSH	P,T3		; ..
+	MOVEI	T3,^D8		;GET THE "BASE"
+	PUSHJ	P,ERRPNT	;GO PRINT THE NUMBER
+	JRST	RTN32		;CLEAN UP AND RETURN
+
+;ROUTINE TO WRITE A DECIMAL NUMBER INTO THE OUTPUT BLOCK
+ERRDEC:	PUSH	P,T2		;GET A TEMP
+	PUSH	P,T2		; ..
+	MOVEI	T3,^D10		;GET THE "BASE"
+	PUSHJ	P,ERRPNT	;GO PRINT THE NUMBER
+RTN32:	POP	P,T3		;RESTORE T3
+	POP	P,T2		;  AND T2
+	RETURN			;ALL DONE
+
+;ROUTINE TO WRITE AN ARBITRARY NUMBER TO THE OUTPUT BLOCK
+;T1 := NUMBER, T3 := THE BASE, T2 := SCRATCH
+ERRPNT:	IDIV	T1,T3		;GET THE NEXT DIGIT
+	HRLM	T2,(P)		;SAVE THE REMAINDER
+	SKIPE	T1		;IF THERE IS MORE TO DO,
+	PUSHJ	P,ERRPNT	;  THEN GO DO IT
+	HLRZ	T1,(P)		;GET THE DIGIT
+	ADDI	T1,"0"		;MAKE IT ASCII
+	PUSHJ	P,ERRCHR	;WRITE THE CHARACTER
+	RETURN			;  AND WE'RE DONE.
+;ROUTINE TO OUTPUT A PPN IN THE FORM "[P,PN]"
+ERRPPN:	PUSH	P,T1		;SAVE THE PPN
+	MOVEI	T1,"["		;GET THE OPEN SQUARE
+	PUSHJ	P,ERRCHR	;  AND PUT THAT IN THE MESSAGE
+	HLRZ	T1,(P)		;GET THE "P"
+	PUSHJ	P,ERROCT	;  AND PRINT THAT IN OCTAL
+	MOVEI	T1,","		;GET THE SEPARATOR
+	PUSHJ	P,ERRCHR	;  OUT IT GOES
+	POP	P,T1		;GET THE PPN BACK
+	HRRZ	T1,T1		;GET JUST THE "PN"
+	PUSHJ	P,ERROCT	;  AND PRINT THAT
+	MOVEI	T1,"]"		;GET THE CLOSING SQUARE
+	JRST	ERRCHR		;  PRINT THAT AND RETURN
+;ROUTINE TO PRINT THE USER'S NAME AND PPN.
+ERRUNM:	PUSH	P,T2		;SAVE T2
+	PUSH	P,T3		;  T3
+	PUSH	P,T1		;  AND T1
+	PJOB	T1,		;GET OUR JOB NUMBER
+	MOVSI	T2,(T1)		;PUT IT IN THE "LH"
+	HRRI	T2,.GTNM1	;TABLE TO GET FIRST HALF OF THE USER'S NAME
+	GETTAB	T2,		;GET THE FIRST HALF OF THE USERS NAME
+	  SETZ	T2,		;ZERO IF NOT AVAILABLE
+	MOVSI	T3,(T1)		;GET THE JOB NUMBER AGAIN
+	HRRI	T3,.GTNM2	;TABLE WITH THE SECOND HALF OF THE USER'S NAME
+	GETTAB	T3,		;GET THE SECOND HALF
+	  SETZ	T3,		;ZERO IF STILL NOT AVAILABLE
+	SKIPN	T2		;IF BOTH THE FIRST
+	JUMPE	T3,ERRNU2	;  AND LAST ARE ZERO, DON'T HACK THE NAME
+
+	TLNN	T2,770000	;STRIP LEADING SPACES OFF OF THE NAME
+	JRST	[LSHC T2,6	;IF FIRST CHAR IS A SPACE, THROW IT AWAY
+		 JRST .-1]	;  AND GO CHECK THE NEXT ONE.
+
+ERRNU1:	LDB	T1,[POINT 6,T2,5] ;GET THE FIRST CHARACTER
+	ADDI	T1,"0"-'0'	;ASCII-IZE THE CHARACTER
+	PUSHJ	P,ERRCHR	;OUTPUT THE CHARACTER
+	LSHC	T2,6		;SHIFT TO THE NEXT CHARACTER
+	JUMPN	T2,ERRNU1	;  AND IF THERE ARE ANY MORE
+	JUMPN	T3,ERRNU1	;  THEN OUTPUT THEM TOO.
+
+ERRNU2:	PJOB	T1,		;GET OUR JOB NUMBER BACK
+	MOVSI	T1,(T1)		;  AND PUT IT IN THE LH
+	HRRI	T1,.GTPPN	;WE WANT OUR PPN
+	GETTAB	T1,		;GET OUR PPN
+	  SETZ	T1,		;???
+	PUSHJ	P,ERRPPN	;OUTPUT THE PPN
+	POP	P,T1		;RESTORE T1
+	JRST	RTN32		;RESTORE T3 & T2 AND RETURN
+;ROUTINE TO OUTPUT THE NAME OF THE PROGRAM.
+ERRPGM:	PUSH	P,T2		;SAVE T2
+	PUSH	P,T3		;  AND T3
+	PJOB	T3,		;GET OUR JOB NUMBER IN "T3"
+	MOVEI	T1,.GTPRG	;GET THE PROGRAM
+	HRLI	T1,(T3)		;  FIRST
+	GETTAB	T1,		;GETTAB THE PROGRAM NAME
+	  JRST	ERRPGX		;JUST RETURN 'NETLDR' IF WE FAIL
+	PUSHJ	P,ERRSIX	;OUTPUT THE NAME IN SIXBIT
+	MOVEI	T1,[ASCIZ /  From:  /]
+	PUSHJ	P,ERRASC	;OUTPUT A "DELIMITER"
+	MOVEI	T1,.GTRDV	;FIRST GET THE DEVICE THE JOB WAS
+	HRLI	T1,(T3)		;  RUN FROM.
+	GETTAB	T1,		;GETTAB THE DEVICE.
+	  JRST	ERRPGX		;IF NO LUCK RETURN 'NETLDR'
+	PUSHJ	P,ERRSIX	;OUTPUT THE NAME AS SIXBIT
+	MOVEI	T1,":"		;GET THE COLON
+	PUSHJ	P,ERRCHR	;  AND OUTPUT THE DEVICE SEPARATOR
+	MOVEI	T1,.GTRFN	;GET THE FILE NAME
+	HRLI	T1,(T3)		;  INDEXED BY OUR JOB NUMBER
+	GETTAB	T1,		;GETTAB THE FILE NAME WE WERE RUN FROM
+	  JRST	ERRPGX		;.. RETURN 'NETLDR'
+	PUSHJ	P,ERRSIX	;OUTPUT THE NAME AS SIXBIT
+;? OUTPUT .EXT
+	MOVEI	T1,"["		;GET THE OPEN SQUARE
+	PUSHJ	P,ERRCHR	;  AND OUTPUT IT
+	MOVEI	T1,.GTRDI	;GET THE DIRECTORY WE WERE RUN FROM
+	HRLI	T1,(T3)		;  INDEXED BY OUR
+	GETTAB	T1,		;  JOB NUMBER
+	  JRST	ERRPGX		;IF FAIL... RETURN 'NETLDR'
+	HRRZ	T2,T1		;SAVE THE "PN"
+	HLRZ	T1,T1		;GET THE "P"
+	PUSHJ	P,ERROCT	;WRITE THE PROJECT
+	MOVEI	T1,","		;GET THE DELIMITER
+	PUSHJ	P,ERRCHR	;  AND WRITE IT
+	MOVE	T1,T2		;GET THE "PN"
+	PUSHJ	P,ERROCT	;WRITE THE PROGRAMMER NUMBER.
+
+;NOW READ THE SFD CHAIN
+	SETZ	T2,		;START WITH A ZERO
+ERRPG1:	MOVEI	T1,.GTRS0(T2)	;GET THE NEXT SFD TO LOOK FOR
+	HRLI	T1,(T3)		;  AND INDEX IT BY OUR JOB NUMBER
+	GETTAB	T1,		;FETCH THE SFD
+	  JRST	ERRPG2		;IF WE FAIL, SAY WE'RE "DONE" WITH THE SFD;S
+	JUMPE	T1,ERRPG2	;  A ZERO ALSO TERMINATES THE LIST
+	PUSH	P,T1		;SAVE THE NAME FOR A BIT
+	MOVEI	T1,","		;GET THE COMMA
+	PUSHJ	P,ERRCHR	;  OUTPUT THE DELIMITER
+	POP	P,T1		;GET THE NAME BACK
+	PUSHJ	P,ERRSIX	;  AND OUTPUT IT IN SIXBIT
+	CAIG	T2,4		;QUIT IF WE'VE READ ALL 5
+	AOJA	T2,ERRPG1	;LOOP OVER ALL SFD'S
+ERRPG2:	MOVEI	T1,"]"		;GET THE CLOSE SQUARE
+	PUSHJ	P,ERRCHR	;  AND WRITE IT OUT
+	JRST	RTN32		;CLEAN UP THE STACK AND EXIT
+
+ERRPGX:	MOVE	T1,[SIXBIT /NETLDR/] ;IF ALL ELSE FAILS,
+	PUSHJ	P,ERRSIX	;  THEN OUTPUT 'NETLDR'
+	JRST	RTN32		;CLEAN UP THE STACK AND RETURN
+;ROUTINE TO OUTPUT A FILE SPEC TO THE ERROR BLOCK
+;CALL	T1 := POINTER TO A FILE SPEC OF THE FORM
+; +0	FILE NAME
+; +1	EXT
+; +2	DEVICE
+; +3	RANDOM BITS (PATH.)
+; +4	PPN
+; +5	SFD #1
+; +6	SFD #2
+;   ...
+;	0
+ERRFSP:	PUSH	P,T2		;SAVE T2
+	PUSH	P,T3		;  AND T3
+	MOVEI	T3,(T1)		;GET THE POINTER INTO T3 (FOR SEMI PERMANENCE)
+	MOVE	T1,ERFSDV(T3)	;GET THE DEVICE
+	PUSHJ	P,ERRSIX	;  AND WRITE THAT OUT IN SIXBUT
+	MOVEI	T1,":"		;GET A COLON
+	PUSHJ	P,ERRCHR	;  AND WRITE THE SEPARATOR
+	MOVE	T1,ERFSFN(T3)	;GET THE FILE NAME
+	PUSHJ	P,ERRSIX	;  AND WRITE IT IN SIXBIT
+	MOVEI	T1,"."		;GET A DOT
+	PUSHJ	P,ERRCHR	;WRITE THE SEPARATOR
+	MOVE	T1,ERFSEX(T3)	;GET THE EXTENSION
+	PUSHJ	P,ERRSIX	;  AND WRITE THAT.
+	MOVEI	T1,"["		;GET THE OPEN SQUARE
+	PUSHJ	P,ERRCHR	;  WRITE THE START OF THE PATH SPEC
+	HLRZ	T1,ERFSPN(T3)	;GET THE "P"
+	PUSHJ	P,ERROCT	;  WRITE THE PROJECT NUMBER IN OCTAL
+	MOVEI	T1,","		;GET A COMMA
+	PUSHJ	P,ERRCHR	;  AND USE IT TO SEPARATE THE P,PN
+	HRRZ	T1,ERFSPN(T3)	;GET THE "PN"
+	PUSHJ	P,ERROCT	;  WRITE THE PROGRAMMER NUMBER IN OCTAL
+	MOVEI	T2,ERFSSF(T3)	;GET THE ADDRESS OF THE SFD SPEC
+	SKIPE	(T2)		;  IF WE'RE NOT PAST THE END OF THE SPEC
+	JRST	[MOVEI T1,","	;GET AND OUTPUT
+		 PUSHJ P,ERRCHR	;  A SEPARATOR
+		 MOVE T1,(T2)	;GET THE SFD NAME
+		 PUSHJ P,ERRSIX	;  AND OUTPUT IT IN SIXBIT
+		 AOJA T2,.-1]	;LOOP OVER ALL SFD NAMES.
+
+	MOVEI	T1,"]"		;GET THE CLOSING SQUARE
+	PUSHJ	P,ERRCHR	;  AND WRITE THAT
+	JRST	RTN32		;RESTORE THE AC'S AND RETURN
+;ROUTINE TO TYPE OUT INFORMATION REGARDING A DAEMON UUO ERROR
+ERRDUF:	ERROR	E.%,DUF,<DAEMON. UUO failed>,<ERRDU1>
+ERRDU1:	CAILE	T1,0		;NOW RANGE CHECK THE ERROR CODE
+	CAILE	T1,DAEMLN-1	;  AND IF IT IS ONE WE DON'T KNOW ABOUT
+	JRST	[MOVEI T1,[ASCIZ /  Unknown error =  /]
+		 PUSHJ P,TYPASC	;TYPE THE REST OF THE MESSAGE
+		 PUSHJ P,TYPOCT	;TYPE THE ERROR CODE
+		 JRST CRLF]	;END THE LINE AND RETURN
+	PUSH	P,T1		;SAVE THE ERROR CODE FOR A BIT
+	MOVEI	T1,[ASCIZ / Reason: /]	;GET THE REST OF THE MESSAGE
+	PUSHJ	P,TYPASC	;  AND TYPE THAT
+	POP	P,T1		;GET THE ERROR CODE BACK
+	MOVEI	T1,@DAEERM(T1)	;PRINT THE ERROR
+	PUSHJ	P,CRLF		;MAKE THINGS NEAT WITH A CLOSING CRLF
+	RETURN			;  AND RETURN
+
+
+DAEERM:	[ASCIZ	/Unknown DAEMON UUO error code = /]
+	[ASCIZ	/Illegal function code was specified./]
+	[ASCIZ	/Adderss check occured during UUO process./]
+	[ASCIZ	/Incorrect number of arguments for UUO./]
+	[ASCIZ	/Impossible error number 4./]
+	[ASCIZ	/File cannot be written./]
+	[ASCIZ	/Program does not have privileges required./]
+	[ASCIZ	/Invalid FACT entry format./]
+	[ASCIZ	/Invalid PATH specification for UUO./]
+DAEMLN=	.-DAEERM
+REPEAT	0,<				;May implement this later
+
+Subttl	LUUO Handler
+
+;UUO0 -- LUUO HANDLER IS CALLED VIA PUSHJ IN .JB41, AND
+;	RETURNS WITH POPJ.  UUO ROUTINES MAY USE ACS P1 AND
+;	P2 FREELY.  UUO HANDLER IS RECURSIVE, BUT ANY UUO ROUTINE
+;	WHICH EXECUTES LUUOS MUST SAVE P1 AND P2 FIRST.  THESE
+;	ARE SAVED BY CALLER INSTEAD OF CALLEE SINCE STAMP IS THE
+;	ONLY UUO WHICH USES IT.
+
+UUO0:	PUSH	P,T1		;WE NEED THREE MORE ACS
+	PUSH	P,T2
+	PUSH	P,T3
+	PUSH	P,T4
+	PUSH	P,P1
+	PUSH	P,P2
+
+UUO1:	LDB	P1,[POINT 4,.JBUUO,12]	;GET OP-CODE
+	LDB	P2,[POINT 9,.JBUUO,8]	;GET AC FIELD (DESTINATION)
+	CAILE	P1,.NMUUO	;ONE THAT WE KNOW ABOUT?
+	  JRST	UUOERR		;ILLEGAL UUO
+	MOVE	T1,.JBUUO	;GET LUUO
+	TLZE	T1,(1B13)	;SEE IF @
+	  HRRZ	T1,(T1)		;GET THAT ADDRESS THEN
+	ANDI	T1,-1		;KEEP ONLY ADDRESS
+	CAIN	T1,T1		;IS THE EFFEC ADR T1?
+	  MOVEI	T1,-5(P)	;YES, POINT TO PSEUDO-T1
+	CAIN	T1,T2		;OR, IS IT T2?
+	  MOVEI	T1,-4(P)	;YES, POINT TO PSEUDO-T2
+	PUSHJ	P,@UUODIS-1(P1)	;DISPATCH UUO
+	POP	P,T4		;RETURN TO HERE AND RESTORE T4
+	POP	P,T3		;
+	POP	P,T2		;
+	POP	P,T1		;
+	POP	P,P2		;
+	POP	P,P1		;
+	POPJ	P,		;RETURN TO USER
+
+
+UUOERR:	TELLA	OPR,ILU%	;FATAL ERROR
+	PJRST	LOGOFF		;AND GO BYE-BYE
+
+;UUO DISPATCH TABLE
+UUODIS:	EXP	MSGOUT		;TELL UUO
+	EXP	SIXOUT		;TELL6 UUO
+	EXP	CHROUT		;CHR UUO
+	EXP	DECOUT		;RAD10 UUO
+	EXP	OCTOUT		;RAD08 UUO
+
+	.NMUUO==.-UUODIS
+MSGOUT:	HRLI	T1,440700	;POINTER TO ASCIZ STRING
+MSGOP1:	ILDB	P1,T1		;GET A CHARACTER
+	TXNE	P2,UU.NAC	;INHIBIT ACTION CHARACTERS?
+	  JRST	MSGOP2		;YES
+	CAIN	P1,"^"		;ACTION CHARACTER?
+	  PUSHJ	P,ACTCHR	;YES GO PROCESS
+				;RETURNS HERE WITH NEXT PRINT CHAR
+MSGOP2:	JUMPE	P1,CPOPJ	;NULL MEANS END-OF-STRING
+	PUSHJ	P,CHROP1	;PRINT THE CHARACTER
+	JRST	MSGOP1		;AND LOOP FOR NEXT CHARACTER
+
+
+SIXOUT:	HRLI	T1,440600	;MAKE 6BIT BYTE POINTER
+SIXOP1:	ILDB	P1,T1		;GET A CHARACTER
+	ADDI	P1,40		;MAKE IT ASCII
+	CAIE	P1,40		;IS IT A SPACE?
+	  PUSHJ	P,CHROP1	;NO, PRINT IT
+	TLNE	T1,770000	;FINISHED?
+	  JRST	SIXOP1		;NO, LOOP AROUND FOR ANOTHER
+	POPJ	P,		;FINISHED
+
+OCTOUT:	SKIPA	P1,CPOPJ	;LOAD AN 8
+DECOUT:	  MOVEI	P1,12		;LOAD A 10
+	MOVE	T1,(T1)		;GET NUMBER INTO T1
+NUMOUT:	IDIVI	T1,(P1)		;DIVIDE BY RADIX
+	HRLM	T2,(P)		;SAVE REMAINDER
+	SKIPE	T1		;ARE WE DONE?
+	  PUSHJ	P,NUMOUT	;NO, RECURSE
+	HLRZ	P1,(P)		;GET LAST CHARACTER
+	ADDI	P1,"0"		;MAKE IT ASCII
+	PUSHJ	P,CHROP1	;PRINT IT
+	POPJ	P,		;UNWIND
+
+
+
+CHROUT:	MOVE	P1,T1		;GET THE CHARACTER
+CHROP1:	TXNN	P2,UU.OPR	;TO OPERATOR?
+	  POPJ	P,		;NO, RETURN
+	OUTCHR	P1		;NO, PRINT THE CHARACTER
+	POPJ	P,		;RETURN
+;^;+ACTCHR -- Routine to handle Action Characters.
+;	Action Characters are any characters which follow an "^"
+;	in an ASCIZ string printed by a TELL UUO.  They
+;	cause certain extra information to be printed out, or flip a bit
+;	to determine message length for the operator.
+;-;#1
+;CALL:
+;	PUSHJ P,ACTCHR
+;	  RETURN HERE WITH NEXT PRINTABLE CHARACTER IN P1
+;
+;:Action Characters are:
+;:	^0	PRINT "T3" IN OCTAL
+;:	^1	PRINT "T3" IN DECIMAL
+;:	^2	PRINT "T4" IN OCTAL
+;:	^3	PRINT "T4" IN DECIMAL
+
+
+ACTCHR:	ILDB	P1,T1		;GET ACTION CHARACTER
+	CAIL	P1,"A"		;IS IT A LETTER?
+	  SUBI	P1,"A"-"9"-1	;YES, MAKE LETTERS FOLLOW NUMBERS
+	SUBI	P1,"0"		;MAKE A BINARY NUMBER
+	SKIPL	P1		;LESS THAN 0 IS ILLEGAL
+	 CAILE	P1,.NMACT	;GREATER THAN ACTNUM IS ILLEGAL
+	  JRST	UUOERR		;TELL HIM
+
+	PUSH	P,P2		;SAVE P2
+	LSH	P2,^D23		;PUT DESTINATION IN AC FIELD
+	MOVE	P1,ACTTBL(P1)	;GET THE SPECIAL ACTION
+	TLNE	P1,700000	;IT IS A UUO?
+	SKIPA	P2,P1		;NO, GOT OPERATION INTO P2
+	  IOR	P2,P1		;YES, OR IN DESTINATION
+	XCT	P2		;DO THE ACTION
+	POP	P,P2		;RESTORE P2
+	ILDB	P1,T1		;GET THE NEXT CHARACTER
+	CAIN	P1,"^"		;ANOTHER ACTION CHARACTER
+	  JRST	ACTCHR		;YES, LOOP AROUND
+	POPJ	P,		;NO - RETURN
+
+ACTTBL:	RAD08	T3			;^0
+	RAD10	T3			;^1
+	RAD08	T4			;^2
+	RAD10	T4			;^3
+
+	.NMACT==.-ACTTBL
+
+	>;END REPEAT 0
+Subttl	Tables
+
+NERRTB:	XWD	0,[ASCIZ \Undefined error to NETLDR\]
+	XWD	0,[ASCIZ \Illegal arg list\]
+	XWD	0,[ASCIZ \Illegal node number or name\]
+	XWD	0,[ASCIZ \User not privileged\]
+	XWD	0,[ASCIZ \Remote node control is not available\]
+	XWD	0,[ASCIZ \Job is not locked\]
+	XWD	0,[ASCIZ \Time out error\]
+	XWD	0,[ASCIZ \Word 2 is not 0\]
+NERRTL==.-NERRTB
+
+;FUNCTIONS
+;
+FUNTAB:	XWD	0,[ASCIZ \Unknown function\]	;0
+	XWD	0,[ASCIZ \Examine req\]		;1
+	XWD	0,[ASCIZ \Deposit\]		;2
+	XWD	0,[ASCIZ \Goto\]		;3
+	XWD	0,[ASCIZ \Clear\]		;4
+	XWD	0,[ASCIZ \Debug\]		;5
+	XWD	0,[ASCIZ \Message\]		;6
+	XWD	0,[ASCIZ \Boot data\]		;7
+		@FUNTAB				;10
+	XWD	0,[ASCIZ \Accept\]		;11
+	XWD	0,[ASCIZ \Examine data\]	;12
+	XWD	0,[ASCIZ \Reject\]		;13
+	XWD	0,[ASCIZ \Request boot\]	;14
+	XWD	0,[ASCIZ \Request load\]	;15
+FUNLNG==.-FUNTAB
+Subttl	Table of Types
+
+;TYPES Macro Call
+;
+;	1st arg	NAM	Type Name (DC71,DC72,DN82,DN92,DN200)
+;
+;	2nd arg	CPU	Type of CPU (PDP8 or PDP11)
+;
+;	3rd arg	MSG	Y or N depending whether this type supports
+;			 the message message.
+;
+;	4th arg	BOOT	address of the bootstrap table
+;
+;	5th arg	CLR	highest address to clear (not implemented yet)
+;
+;	6th arg	DMP	highest address to dump when using /TYPE and
+;			 the dump range is not specified.
+;
+	DEFINE	TYPES,<
+
+	TYP	*0*0*0,,N,0,0,0			;(0) NOTHING
+	TYP	DC71,PDP8,N,0,17777,17777	;(1) DC71
+	TYP	DC72,PDP8,N,0,17777,17777	;(2) DC72
+	TYP	*3*3*3,PDP11,N,0,77776,77776	;(3) ???? PDP11/40 WITH A DU11
+	TYP	<DN82,DAS82>,PDP11,N,0,77776,77776	;(4) DN82 PDP11/40 WITH A DQ11
+	TYP	<DN92,DAS92>,PDP8,N,0,27777,27777	;(5) DN92 PDP8A
+	TYP	DN200,PDP11,Y,B20,157776,157776	;(6) DN200 PDP11/34
+
+	>;END DEFINE TYPES
+
+;TABLE OF TYPE NAMES
+;
+	DEFINE	TYP(NAM,CPU,MSG,BOOT,CLR,DMP,%CNT),<
+	XWD	-%CNT,[
+	%CNT==0
+	IRP	NAM,<	SIXBIT	\NAM\
+	%CNT==%CNT+1			;COUNT NUMBER OF TYPES
+	>;END IRP NAM
+				]	;TERMINATE LITERAL
+	>;END DEFINE TYPE
+;
+KINDTB:	TYPES				;TABLE OF SIXBIT TYPE NAMES
+	KNDNUM==.-KINDTB
+	IFN	<T.MAX-KNDNUM+1>,<PRINTX	?TYPES TABLE INCORRECT>
+
+;TABLE WHICH CONTAINS THE BIT TO BE SET IN
+; "CMDWRD" FOR EACH TYPE OF CPU
+;
+	DEFINE	TYP(NAM,CPU,MSG,BOOT,CLR,DMP),<
+	IFIDN	<CPU><PDP8>,<	EXP	C.P8	;'NAM>
+	IFIDN	<CPU><PDP11>,<	EXP	C.P11	;'NAM>
+	IFB	<CPU>,<	EXP	0	;'NAM>
+	>;END DEFINE TYPE
+;
+CPUIDT:	TYPES				;TABLE OF BITS FOR "CMDWRD"
+
+
+;TABLE WHICH CONTAINS A BIT IN THE (LH) IF MESSAGES
+; ARE ALLOWED, AND IN THE (RH) IS 0 FOR PDP8 OR
+; 1 FOR PDP11
+;
+	CP.MSG==(1B17)			;GIVE OPR MESSAGES TO REMOTE ALSO
+					; ON AUTO LOAD REQUESTS
+;
+	DEFINE	TYP(NAM,CPU,MSG,BOOT,CLR,DMP),<
+	XX==0
+	IFIDN	<MSG><Y>,<	XX==CP.MSG>
+	IFIDN	<CPU><PDP8>,<	XWD	XX,CPU.8	;'NAM>
+	IFIDN	<CPU><PDP11>,<	XWD	XX,CPU.11	;'NAM>
+	IFB	<CPU>,<	Z		;'NAM>
+	>;END DEFINE TYPE
+;
+CPUTYP:	TYPES				;TABLE OF MSG,,CPU INDEX
+	IFN	FTBOOT,<
+
+;TABLE OF ADDRESSES WHICH POINT TO A TABLE
+; OF ADDRESSES WHERE THE BOOTSTRAP IS
+;
+	DEFINE	TYP(NAM,CPU,MSG,BOOT,CLR,DMP),<
+	IF1	<	BLOCK	1>
+	IF2	<
+	IFN	BOOT,<	XWD	.L'BOOT,BOOT	;'NAM>
+	IFE	BOOT,<	EXP	0	;'NAM>
+	>;END IF2
+	>;END DEFINE TYPE
+;
+BOTTAB:	TYPES				;ADDRESS TO BOOTSTRAP TABLE
+
+	>;End IFN FTBOOT
+
+;TABLE OF DEFAULT UPPER ADDRESSES FOR /CLEAR
+;
+	DEFINE	TYP(NAM,CPU,MSG,BOOT,CLR,DMP),<
+	XWD	CLR,0			;'NAM
+	>;END DEFINE TYPE
+;
+CLRTYP:	TYPES				;DEFAULT UPPER ADDRESS FOR /CLEAR
+
+;TABLE OF DEFAULT UPPER ADDRESSES FOR /DUMP
+;
+	DEFINE	TYP(NAM,CPU,MSG,BOOT,CLR,DMP),<
+	XWD	DMP,0			;'NAM
+	>;END DEFINE TYPE
+;
+DMPTYP:	TYPES				;DEFAULT UPPER ADDRESS FOR /DUMP
+
+
+	IFN	FTBOOT,<
+
+;TABLE OF BOOTSTRAP ADDRESSES FOR THE DN98
+;
+B20:	XWD	E20001##,D20001##	;DN200 <MEM:0>
+	.LB20==.-B20
+
+	>;End IFN FTBOOT
+
+Subttl	Tables of sticky and illegal commands
+
+;STICKY COMMANDS
+;
+STKTAB:	C..CPU				;CPU KIND IS STICKY
+	C.SELF!C.LINE			;LINE AND SELF IS STICKY
+	C.NODE				;NODE IS STICKY
+	C.TYPE				;TYPE IS STICKY
+	STKLNG==.-STKTAB
+
+;ILLEGAL SWITCH COMBINATIONS
+;
+ILLCOM:	C.CLR!C.DUMP
+	C.LOAD!C.DUMP
+	C.LOAD!C.STRT
+	C.DUMP!C.STRT
+	C.P8!C.P11
+	C.PACK!C.IMAG
+	C.PACK!C.DUMP
+	C.IMAG!C.DUMP
+	C.SELF!C.LINE
+	C.P8!C.PACK
+	C.DUMP!C.PACK
+	C.DUMP!C.IMAG
+	C.8!C.P8
+	C.11!C.P11
+	C.8!C.11
+	C.8!C.P11
+	C.11!C.P8
+	IFN	FTCVRT,<
+	C.CVRT!C.8
+	C.CVRT!C.11
+	C.CVRT!C.CLR
+	C.CVRT!C.DUMP
+	C.CVRT!C.IGN
+	C.CVRT!C.IMAG
+	C.CVRT!C.LINE
+	C.CVRT!C.LOAD
+	C.CVRT!C.NODE
+	C.CVRT!C.PACK
+	C.CVRT!C.P8
+	C.CVRT!C.P11
+	C.CVRT!C.SELF
+	C.CVRT!C.SER
+	C.CVRT!C.STRT
+	C.CVRT!C.TYPE
+	>;End IFN FTCVRT
+	IFN	FTBOOT,<
+	C.BOOT!C.DUMP
+	C.BOOT!C.CLR
+	C.BOOT!C.STRT
+	C.BOOT!C.LOAD
+	C.BOOT!C.PACKED
+	C.BOOT!C.IMAG
+	C.BOOT!C.SELF
+	C.BOOT!C.SER
+	C.STRT!C.MEM
+	C.LOAD!C.MEM
+	C.DUMP!C.MEM
+	>;End IFN FTBOOT
+	IFN	<FTBOOT&FTCVRT>,<
+	C.CVRT!C.BOOT
+	>;End IFN <FTBOOT&FTCVRT>
+	ILLCLE==.-ILLCOM		;LENGTH OF TABLE
+
+
+Subttl	Tables for CPU
+
+;THESE TABLES GET INDEXED INTO BY AC (CPU)
+;
+;THIS PROGRAM MAY WORK WITH CPU'S OTHER THAN
+;PDP8'S AND PDP11'S BY ADDING TO THESE TABLES
+;
+;	CPU IS SET TO:
+;
+;	0	PDP8
+;	1	PDP11
+;			
+;DEFAULT MODE TABLE
+;
+MODTAB:	C.IMAG				;IMAGE MODE FOR PDP8
+	C.PACKED			;PACKED MODE FOR PDP11
+
+;ADDRESS TABLE OF WHERE TO DISPATCH TO READ THE FILE
+;
+LDTAB:	LD8				;PDP8 LOADING ROUTINE
+	LD11				;PDP11 LOADING ROUTINE
+
+;TABLE OF NUMBER OF ADDRESS BYTES PER ADDRESS
+;
+ADRBYT:	2				;2 BYTES FOR A PDP8 ADDRESS
+	3				;3 BYTES FOR A PDP11 ADDRESS
+
+;TABLE OF ADDRESS INCREMENTS
+;
+ADRINC:	1				;PDP8 GOES +1
+	2				;PDP11 GOES +2
+
+;TABLE OF ADDRESS TYPES
+;
+ADRTYP:	0				;PDP8 ODD ADR OK, ADR ALSO GO BY +1
+	1				;PDP11 ODD ADR BAD, ADR ALSO GO BY +2
+
+;TABLE OF USED BITS PER BYTE
+;
+BITBYT:	6				;PDP8
+	^D8				;PDP11
+
+;TABLE OF DIGITS PER WORD FOR DUMPING
+;
+WRDDIG:	4				;PDP8 HAS 4 DIGITS PER DATA WORD
+	6				;PDP11 HAS 6 DIGITS PER DATA WORD
+
+;TABLE OF DIGITS PER ADDRESS WORD FOR DUMPING
+;
+ADRDIG:	5				;PDP8 HAS 5 DIGITS PER ADR WORD
+	6				;PDP11 HAS 6 DIGITS PER ADR WORD
+
+;TABLE OF MAXIMIM BYTES TO SEND DOWN THE WIRE
+; MINUS 2 BYTES FOR LINE AND FUNCTION AND
+; MINUS AN ADDITIONAL BYTE IF THERE ARE
+; 3 BYTES OF ADDRESS (PDP11)
+;
+BYTTAB:	XWD	-<MAXSND-2+1>,MAXSND-2		;PDP8
+	XWD	-<MAXSND-3+1>,MAXSND-3		;PDP11
+
+;DEFAULT ADDRESS FOR /CLEAR
+;
+DEFCLR:	XWD	17777,0			;DEFAULT VALUES FOR CLEAR FOR 8
+	XWD	100000-2,0		;DEFAULT VALUES FOR CLEAR FOR 11
+
+;DEFAULT ADDRESS FOR /DUMP
+;
+DEFDMP:	XWD	17777,0			;DEFAULT VALUES FOR DUMP FOR 8
+	XWD	100000-2,0		;DEFAULT VALUES FOR DUMP FOR 11
+Subttl	Text
+
+	IFN	FTCVRT,<
+
+COPYRI:	ASCIZ	\
+
+
+;Copyright (C) 1976, 1977, 1978 by
+;Digital Equipment Corporation, Maynard, Mass.
+;
+;
+;This software is furnished under a license and may be used and copied
+;only  in  accordance  with  the  terms  of  such license and with the
+;inclusion of the above copyright notice.  This software or any  other
+;copies thereof may not be provided or otherwise made available to any
+;other person.  No title to and ownership of the  software  is  hereby
+;transferred.
+;
+;the information in this software is subject to change without  notice
+;and  should  not  be  construed  as a commitment by Digital Equipment
+;Corporation.
+;
+;Digital assumes no responsibility for the use or reliability  of  its
+;software on equipment which is not supplied by Digital.
+
+
+\
+
+	>;End IFN FTCVRT
+Subttl	Storage
+	XLIST
+	LIT
+	LIST
+
+IFN	FT2SEG,<
+
+	$LOW
+LOW:
+	$HIGH
+LOWBLK:
+
+	PHASE	LOW
+>;END IFN FT2SEG
+
+;NODE UUO BLOCK
+;
+NODBLK:	4				;LENGTH
+	Z				;NODE NUMBER HERE
+	XWD	Z,XMTBUF		;CNT,,OUT BUFFER
+	XWD	Z,RCVBUF		;CNT,,IN BUFFER
+
+;TRMOP UUO BLOCK
+;
+OPRTRM:	.TOOUS
+OPRUDX:	Z
+	OPRDAT
+
+;QUEUE. BLOCK FOR WRITING TO OPERATOR
+WTOBLK:	EXP	.QUWTO			;FUNCTION - WRITE TO OPERATOR
+	EXP	-1			;NODE NUMBER (CENTRAL)
+	EXP	0			;NO RESPONSE
+	XWD	<OPRCHR/5>+1,.QBMSG	;LENGTH OF MESSAGE,MESSAGE BLOCK
+	EXP	OPRDAT			;ADDRESS OF ASCIZ STRING
+
+;NODE UUO BLOCK FOR RECEIVING BOOTSTRAP FROM REMOTE
+;
+NODARG:	XWD	0,4
+	Z
+	Z
+	XWD	BOTSIZ,BOTMSG
+
+;OPEN BLOCK FOR NETLDR.INI
+;
+INHDRB:	.IOASC				;MODE 0
+INIDEV:	SIXBIT	\SYS\			;DEVICE WHERE NETLDR.INI IS
+	XWD	0,INHDRF		;RING HEADER
+
+;LOOKUP BLOCK FOR NETLDR.INI
+;
+LOKNET:	SIXBIT	\NETLDR\
+	SIXBIT	\INI\
+	Z
+	Z
+
+	IFN	FT2SEG,<	AUTDEB=<.-NODBLK>+LOWBLK>
+	IFE	FT2SEG,<	AUTDEB:>
+	Z				;SET THIS NON 0 IF AFTER
+					; CCL ENTRY AND WANT TO
+					; WAIT FOR A LOAD/BOOT REQUEST
+
+IFN	FT2SEG,<
+
+	LOWLEN==.-NODBLK
+	DEPHASE
+	$LOW
+LOW:	BLOCK	LOWLEN
+>;END IFN FT2SEG
+
+IFN	PATSIZ,<
+PATCH:	BLOCK	PATSIZ
+>;END IFN PATSIZ
+
+FIRZRO:					;FIRST LOCATION TO ZERO
+
+ND	PDSIZ,<^D50+SWTLEN>		;SIZE OF PUSH DOWN LIST
+					; ALLOW ROOM FOR ALL SWITCHES
+PDLST:	BLOCK	PDSIZ+1			;PUSH DOWN LIST AREA
+DEV:	BLOCK	1			;DEVICE
+NAME:	BLOCK	1			;FILE NAME
+EXT:	BLOCK	1			;FILE EXTENSION,,-1 IF . SEEN
+DIRECT:	BLOCK	1			;DIRECTORY
+DIRPTH:	BLOCK	9			;SFD PATH
+
+;THE FOLLOWING A.???? TAGS GET FILLED FROM SWITCH VALUES
+;
+A.CLRL:	BLOCK	1			;/CLEAR:N
+A.CLRH:	BLOCK	1			;
+A.DMPL:	BLOCK	1			;/DUMP:N
+A.DMPH:	BLOCK	1			;
+A.LINE:	BLOCK	1			;/LINE:#
+A.NNAM:	BLOCK	1			;NODE NAME IN 6-BIT
+A.NNUM:	BLOCK	1			;NODE NUMBER
+A.SER:	BLOCK	1			;/SERIAL:#
+A.STRT:	BLOCK	1			;/START:N
+A.TYPE:	BLOCK	1			;/TYPE:N
+	IFN	FTBOOT,<
+A.MEM:	BLOCK	1			;/MEMSIZ:N
+	>;End IFN FTBOOT
+
+;THE FOLLOWING R.???? TAGS GET FILLED ON A BOOTSTRAP MSG FROM A REMOTE
+;
+R.NNUM:	BLOCK	1			;NODE NUMBERR
+R.NNAM:	BLOCK	1			;SIXBIT NODE NAME
+R.LINE:	BLOCK	1			;LINE NUMBER
+R.SER:	BLOCK	1			;SERIAL NUMBER
+R.TYPE:	BLOCK	1			;TYPE NUMBER
+R.TYNM:	BLOCK	1			;TYPE NAME
+R.FUNU:	BLOCK	1			;BOOTSTRAP FUNCTION NUMBER
+R.FUNA:	BLOCK	1			;BOOTSTRAP FUNCTION NAME
+	IFN	FTBOOT,<
+R.MEM:	BLOCK	1			;MEMORY SIZE FROM REMOTE
+					; ON A BOOT REQ
+	>;End IFN FTBOOT
+
+
+BEGBUF:	BLOCK	1			;ADDRESS OF BEGINNING OF BUFFER
+BUFCNT:	BLOCK	1			;COUNT OF ITEMS IN THE BUFFER
+BRKCHR:	BLOCK	1			;BREAK CHARACTER
+CORSIZ:	BLOCK	1			;REMEMBER CORE SIZE FOR SHRINKING
+CNTBOT:	BLOCK	1			;BOOTSTRAP MESSAGE COUNTER
+DATA:	BLOCK	1			;WORD FORMED HERE
+BUFPNT:	BLOCK	1			;POINTER TO LOAD THE BUFFER
+CMDPNT:	BLOCK	1			;
+CMDSTR:	BLOCK	<BOTSIZ/5>+1		;FILE-SPEC IN A BOOT MSG GETS STORED HERE
+CMDEND==.-1				;LAST WORD OF CMDSTR BUFFER
+DCHROR:	BLOCK	1			;
+DCHRZR:	BLOCK	1			;
+DCHR9W:	BLOCK	1			;
+DMPIXF:	BLOCK	1			;
+DVTYP:	BLOCK	1			;FROM DEVTYP UUO
+ERR.AD:	BLOCK	1			;ADR FOLLOWING PUSHJ P, ERR
+ERR.T1:	BLOCK	1			;T1 ON ERROR
+MSGCNT:	BLOCK	1			;COUNT OF CHARACTERS PUT
+					; INTO XMTBUF FOR MSG MSG
+MSGPNT:	BLOCK	1			;BYTE POINTER FOR MSG MSG, POINTS
+					; TO XMTBUF
+NUMDAT:	BLOCK	1			;NUMBER OF WORDS
+REMCMD:	BLOCK	1			;
+STKWRD:	BLOCK	1			;STICKY COMMANDS PLACED HERE
+FZERO:	BLOCK	1			;FIRST ADDR FOR LINE OF 0'S
+LZERO:	BLOCK	1			;LAST ADDR FOR LINE OF 0'S,IF NEG, NO LINE
+ADDR:	BLOCK	1			;USED BY DUMP ROUTINE
+RCVPNT:	BLOCK	1			;POINTER TO INPUT EXAMINE DATA
+ZROFLG:	BLOCK	1			;SET TO NON 0 IF NON 0 WORD DETECTED WHEN FILLING
+					; 10 WORD BLOCK FOR DUMP
+MYPPN:	BLOCK	1			;MY PPN
+MYJOBN:	BLOCK	1			;MY JOB NUMBER
+OPRDAT:	BLOCK	<OPRCHR/5>+1		;MESSAGES TO OPR GET STORED HERE
+OPRCNT:	BLOCK	1			;COUNT OF 7-BIT BYTES IN OPRDAT
+OPRPNT:	BLOCK	1			;POINTER TO OPRDAT
+SIXBLK:	BLOCK	2			;TYPSIX PUTS 7BIT CHAR HERE TO BE TYPED
+MOD:	BLOCK	1			;10 FOR /PDP8, 20 FOR /PDP11
+MODMO:	BLOCK	1			;WILL EQUAL C(MOD)-1
+LINCNT:	BLOCK	1			;LINES PER PAGE
+PAGEN:	BLOCK	1			;PAGE NUMBER FOR DUMP
+ORGNXT:	BLOCK	1			;
+ORGSAV:	BLOCK	1			;
+XMTBUF:	BLOCK	<<MAXSND+3>&777774>/4	;BUFFER FOR DEPOSIT FUNCTION
+RCVBUF:	BLOCK	<<MAXRCV+3>&777774>/4	;BUFFER FOR EXAMINE FUNCTION
+BLODAT:	BLOCK	10			;BLOCK OF 10 FOR /DUMP
+HEDPNT:	BLOCK	1			;POINTER FOR CONSTRUCTING HEADER
+HEADER:	BLOCK	^D25			;BLOCK FOR HEADER
+HDRLNG==<.-HEADER>*5			;
+HDRCNT:	BLOCK	1			;
+INHDR:	BLOCK	3			;INPUT
+INHDRF:	BLOCK	3			;INPUT FOR NETLDR.INI
+OUTHDR:	BLOCK	3			;OUTPUT
+INDMPH:	BLOCK	3			;INPUT FOR INDEX FILE
+
+BOTMSG:	BLOCK	<BOTSIZ/4>+1		;WHERE BOOT REQ MSGS GO
+
+;IMPURE AREA FOR DAEMON ERROR REPORTING
+ERRWRD:	BLOCK	1		;LIST OF BITS DESCRIBING VARIOUS ERRORS
+ERRFZR:				;FIRST WORD TO CLEAR WHEN STARTING TO
+				;  LOG A LOAD/DUMP
+ERRFCN:	BLOCK	1		;DAEMON FUNCTION CODE
+ERRCOD:	BLOCK	1		;SYSERR ERROR TYPE CODE
+ERRBLK:				;BLOCK OF DATA FOR SYSERR
+ERRTRG:	BLOCK	1		;TARGET NODE
+ERRSER:	BLOCK	1		;SERVER NODE
+ERRSLD:	BLOCK	1		;SERVER LINE DESIGNATOR
+ERRFIL:	BLOCK	1		;POINTER TO THE FILE SPEC
+ERRRTN:	BLOCK	1		;NSP STYLE RETURN CODE
+ERRPRG:	BLOCK	1		;POINTER TO THE PROG NAME AND USER
+ERRVAL:	BLOCK	1		;36 BIT VALUE TO BE PRINTED BY SYSERR
+ERRFRE:	BLOCK	100		;LOTS MORE ROOM FOR THE DATA.
+SYSNAM:	BLOCK	10		;AREA TO STORE THE SYSTEM'S NAME INTO
+ERRLZR==.-1			;LAST WORD TO ZERO IN THE ERROR BLOCK
+LODFIL:	BLOCK	ERFSLN		;FILESPEC FOR FILE THAT WAS LOADED
+DMPFIL:	BLOCK	ERFSLN		;FILESPEC FOR FILE THAT WAS DUMPED
+LSTZRO==.-1				;LAST LOC TO ZERO
+	PURGE	S.ZZZZ,FUNCTX
+
+	END	START

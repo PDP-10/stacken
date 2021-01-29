@@ -1,0 +1,215 @@
+
+MODULE CATB (					!ASCII to binary conversion routines
+		IDENT = '001010',
+		LANGUAGE (BLISS16, BLISS36) %BLISS36 (, ENTRY ($CDTB, $COTB))
+		) =
+BEGIN
+!
+!
+!
+! COPYRIGHT (C) 1978 BY
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+! COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: SYSTEM LIBRARY
+!
+! ABSTRACT:
+!
+!
+! THIS MODULE CONTAINS ROUTINES TO CONVERT DECIMAL OR OCTAL ASCII
+! TO BINARY.
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 28-AUG-78
+!
+! MODIFIED BY:
+!
+!	, : VERSION
+! 01	-
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    $CDTB,					!Convert decimal ASCII to binary.
+    $COTB,					!Convert octal ASCII to binary.
+    COTB;					!ASCII to binary common routine
+
+!
+! INCLUDE FILES
+!
+!	NONE
+!
+! MACROS:
+!
+!	NONE
+!
+! EQUATED SYMBOLS:
+!
+!	NONE
+!
+! OWN STORAGE:
+!
+!	NONE
+!
+! EXTERNAL REFERENCES:
+!
+!	NONE
+!
+
+GLOBAL ROUTINE $CDTB (BUF_PTR_ADR) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to extract
+!						!number from.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the characters used in the conversion.
+!
+! ROUTINE VALUE:
+!
+!	The binary equivalent of the decimal number.
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LITERAL
+	RADIX = 10;				!Use a radix of 10.
+
+    COTB (.BUF_PTR_ADR, RADIX)			!Convert the number.
+    END;					!OF $CDTB
+
+GLOBAL ROUTINE $COTB (BUF_PTR_ADR) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to extract
+!						!number from.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the characters used in the conversion.
+!
+! ROUTINE VALUE:
+!
+!	The binary equivalent of the octal number.
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LITERAL
+	RADIX = 10;				!Use a radix of 10.
+
+    COTB (.BUF_PTR_ADR, RADIX)			!Convert the number.
+    END;					!OF $COTB
+
+ROUTINE COTB (BUF_PTR_ADR, RADIX) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to extract
+!						!number from.
+!	RADIX					!Radix for conversion
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the characters used in the conversion.
+!
+! ROUTINE VALUE:
+!
+!	The binary equivalent of the number in the specified radix.
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	BUF_PTR,
+	DIGIT,					!NEXT digit FROM STRING
+	VALUE;					!RESULTING VALUE EXTRACTED
+
+    BUF_PTR = ..BUF_PTR_ADR;
+    VALUE = 0;
+
+    WHILE (DIGIT = CH$RCHAR_A (BUF_PTR) - %C'0') GEQ 0 AND .DIGIT LSS .RADIX DO
+	VALUE = (.VALUE*.RADIX) + .DIGIT;
+
+    .BUF_PTR_ADR = CH$PLUS (.BUF_PTR, -1);
+    .VALUE
+    END;					!OF COTB
+END
+
+ELUDOM

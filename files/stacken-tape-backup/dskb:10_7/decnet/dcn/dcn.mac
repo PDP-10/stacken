@@ -1,0 +1,912 @@
+	UNIVERS	DCN
+	SUBTTL	Macros for DECnet CUSPS
+	SEARCH	JOBDAT,UUOSYM,MACTEN,SWIL
+
+F=:0				;Flag register
+T4=:1+<T3=:1+<T2=:1+<T1=:1+F>>>	;Temporary ACs
+P4=:1+<P3=:1+<P2=:1+<P1=:1+T4>>>;Permanent ACs
+S4=:1+<S3=:1+<S2=:1+<S1=:1+P4>>>;Saved ACs
+E=:S4+1				;Opcode of LUUO. Used by dispatch routine.
+U=:E+1				;LUUO itself.
+P=:17				;Push down list pointer
+
+C==1+<N==P3>			;SCAN acs
+
+OPDEF	CALL	[PUSHJ	P,]	;instruction used to call all routines in here
+OPDEF	RET	[POPJ	P,]	;Bad return
+OPDEF	RETSKP	[JRST	.POPJ1##] ;good return from most routines
+OPDEF	SKP	[TRNA]		;skip over an instruction
+OPDEF	NOOP	[TRN]		;do nothing. Ignore skip returns
+OPDEF	XMOVEI	[SETMI]		;get full 30 bit immediate address
+OPDEF	XHLLI	[HLLI]		;get section number in left half
+OPDEF	IFIW	[1B0]		;Instruction formatted indirect word
+
+DEFINE	$HISEG,<IFL $$.SEG,<$$.LOW==.
+		RELOC	$$.HGH
+		$$.SEG==1>>
+
+DEFINE	$LOSEG,<IFG $$.SEG,<$$.HGH==.
+		RELOC	$$.LOW
+		$$.SEG==-1>>
+
+	SUBTTL	Storage allocation macros
+
+DEFINE	$BLOCK(LABEL,SIZE),<
+$LOSEG
+LABEL:	BLOCK	SIZE
+$HISEG
+>
+
+DEFINE	$LVAR(LABEL),<
+$LOSEG
+LABEL:	BLOCK	1
+$HISEG
+>
+
+DEFINE	$GVAR(LABEL),<
+$LOSEG
+LABEL::	BLOCK	1
+$HISEG
+>
+
+DEFINE	$ABS(LOCATION,VALUE,LABEL),<
+$$.ABS==$$.SEG
+IFG $$.ABS,<$LOSEG>
+IFL $$.ABS,<$HISEG>
+LOC	<LOCATION>
+IFNB <LABEL>,<LABEL:>
+	VALUE
+IFG $$.ABS,<$HISEG>
+IFL $$.ABS,<$LOWSG>
+>
+
+DEFINE	$STACK,<
+IFNDEF PDLSIZ,<PDLSIZ==100>
+$BLOCK	STACK,PDLSIZ
+PDL:	IOWD	PDLSIZ,STACK	;For move p,pdl
+>
+	SUBTTL	Error definition macros
+
+DEFINE	$DIE(PFX,ARG),<
+DIE.	(SIXBIT /PFX/)
+>
+
+DEFINE	$ERROR(PFX,TXT,RTN,INSTR,DIE),<
+$ERRMC ERROR,PFX,<TXT>,<RTN>,<INSTR>,<DIE>
+> ;;END $ERROR MACRO
+
+DEFINE	$WARN(PFX,TXT,RTN,INSTR,DIE),<
+$ERRMC WARN,PFX,<TXT>,<RTN>,<INSTR>,<DIE>
+> ;END $WARN MACRO
+
+DEFINE	$INFOR(PFX,TXT,RTN,INSTR,DIE),<
+$ERRMC INFOR,PFX,<TXT>,<RTN>,<INSTR>,<DIE>
+>
+
+DEFINE	$ERDFA(INSTR),<
+ZZZINS==0
+IFNB <INSTR>,<ZZZINS==-1
+ .IF <INSTR>,ABSOLUTE,<
+  IFN <777000000000&<INSTR>>,<ZZZINS==1>
+  IFE <LH.ALF&INSTR>,<
+   IFGE <INSTR-E>,<
+    IFLE <INSTR-P>,<
+     ZZZINS==0
+    >
+   >
+  >
+ >
+>
+IFL <ZZZINS>,<MOVE T1,INSTR>
+IFE <ZZZINS>,<MOVE T1,INSTR-E-7(P)>
+IFG <ZZZINS>,<INSTR>
+>
+
+DEFINE	$ERDFC(RTN),<
+ZZZRTN==CALL
+IFNB <RTN>,<
+ .IFN <RTN>,EXTERNAL,<
+  IFN <<RTN>&777000000000>,<
+   ZZZRTN==0
+  >
+ >
+>
+ZZZRTN+RTN
+PURGE ZZZRTN
+>
+	SUBTTL	Low-level error macro definition
+
+DEFINE	$ERRMC(OPC,PFX,TXT,RTN,INSTR,DIE),<
+E..'PFX:!
+IFNB \RTN\,<IFNB \DIE\,<OPC'% 3+[XWD 0,DIE>
+	IFB \DIE\,<OPC'$ 2+[>
+	$ERDFA <INSTR>
+	$ERDFC <RTN>>
+IFB \RTN\,<IFNB \DIE\,<OPC'. 1+[XWD 0,DIE>
+	IFB \DIE\,<OPC [>>
+E$$'PFX:EPFX$$!(SIXBIT \PFX\)
+	ASCIZ\TXT\]
+> ;End of $ERRMC macro
+
+DEFINE $PROMPT(AC,SYMBOL,TEXT,KEYWORDS),<
+IFG <SYMBOL-PRSMAX>,<PRINTX ?Bad symbol for PROMPT macro SYMBOL
+		PASS2>
+IFNB <KEYWORDS>,<IFN <SYMBOL-%KEYWR>,<IFG <SYMBOL-%CHARA>,<
+		PRINTX ?Cannot give 4th argument "KEYWORDS" here.
+		PASS2>>>
+	PRMPT.	AC,1+[XWD SYMBOL,KEYWORDS
+		ASCIZ \TEXT\]
+>
+
+	SUBTTL	$EXTERN - Set up the correct external references
+
+
+XP I.LUO,1B0
+XP I.FLE,1B2
+XP I.PRM,1B3
+XP I.CHG,1B6
+XP I.GTT,1B7
+XP I.SAV,1B12
+XP E.SYM,1B35	;Note, inverse significance of bit
+
+DEFINE	$EXTERN,<
+IFNDEF $ONLY,<$ONLY=<XWD -1,0>>
+IFN <$ONLY&I.LUO>,<
+	EXTERN DN.E0
+	EXTERN LUUO$
+	EXTERN EREXIT
+	>
+IFE <$ONLY&I.LUO>,<
+	PFHINI==:.POPJ##
+	USRTRP==:0
+	$HISEG
+LUUOX::	ADJSP P,-1
+	POPJ P,
+EREXIT:	HALT .
+	>
+IFN <$ONLY&I.FLE>,<EXTERN DN.E2>
+IFE <$ONLY&I.FLE>,<
+	FLERR$==:EREXIT
+	LERR$==:EREXIT
+	>
+IFN <$ONLY&I.PRM>,<EXTERN WHERAC,DN.E3>
+IFE <$ONLY&I.PRM>,<
+	PRMPT$==:EREXIT
+	ISCAN$==:EREXIT
+	QSCAN$==:EREXIT
+	PSCAN$==:EREXIT
+	VSCAN$==:EREXIT
+	REEAT$==:EREXIT
+	$HISEG
+.PPMFD::XWD 1,1		;;Keep RDH's SCAN happy
+	>
+IFN <$ONLY&I.CHG>,<EXTERN ORGPPN,DN.E6>
+IFE <$ONLY&I.CHG>,<
+	CHPPN$==:EREXIT
+	GOD$==:EREXIT
+	UNGOD$==:EREXIT
+	>
+IFN <$ONLY&I.GTT>,<EXTERN DN.E7>
+IFE <$ONLY&I.GTT>,<
+	GTTAB$==:EREXIT
+	>
+IFE <$ONLY&E.SYM>,<
+	.TEXT	"/SYMSEG:HIGH/LOCALS "
+>
+>
+
+	SUBTTL	Prompting and parsing definitions
+	DEFINE	INPUTS,<
+PARSE	%CHARR,<CALL .TIALT##>,<CALL .CHARH>,<MOVE T1,C>
+PARSE	%CHARA,<CALL .TIALT##>,<CALL .CHARH>,<MOVE T1,C>
+PARSE	%SIXBI,<CALL .SIXSW##>,<OUTSTR [ASCIZ\Sixbit word\]>,<MOVE T1,N>
+PARSE	%OCTAL,<CALL .OCTNW##>,<OUTSTR [ASCIZ\Octal number\]>,<MOVE T1,N>
+PARSE	%DECIM,<CALL .DECNW##>,<OUTSTR [ASCIZ\Decimal number\]>,<MOVE T1,N>
+PARSE	%ASCII,<CALL .ASCQW##>,<OUTSTR [ASCIZ\Ascii string\]>,<MOVE T1,N>
+PARSE	%SIXST,<CALL .SIXQW##>,<OUTSTR [ASCIZ\Sixbit string\]>,<MOVE T1,N>
+PARSE	%DATIM,<CALL .DATIM##>,<OUTSTR [ASCIZ\Date/time specification\]>,<MOVE T1,N>
+PARSE	%DATIP,<CALL .DATIP##>,<OUTSTR [ASCIZ\Date/time in the past\]>,<MOVE T1,N>
+PARSE	%DATIF,<CALL .DATIF##>,<OUTSTR [ASCIZ\Date/time in the future\]>,<MOVE T1,N>
+PARSE	%VERSI,<CALL .VERSW##>,<OUTSTR [ASCIZ\Version number\]>,<MOVE T1,N>
+PARSE	%CORES,<CALL .COREW##>,<OUTSTR [ASCIZ\Core size\]>,<MOVE T1,N>
+PARSE	%BLOCK,<CALL .BLOKW##>,<OUTSTR [ASCIZ\File size in words of blocks\]>,<MOVE T1,N>
+PARSE	%FILES,<CALL .FILIN##>,<OUTSTR [ASCIZ\File specification\]>,<MOVE T1,T1>
+PARSE	%KEYWR,<JRST .KEYWR  >,<CALL .KEYWH>,<MOVE T1,N>
+>
+
+XP PRMOFF,<777777,,0>		;Mask for input routine offset
+XP PRMADD,<0,,777777>		;Mask for optional additional data
+
+INUM==0
+DEFINE	PARSE(SYMBOL,ROUTINE,HELPER,RETINS),<
+XP SYMBOL,INUM
+INUM==INUM+1
+>
+
+	INPUTS
+
+XP PRSMAX,INUM
+	SUBTTL	Initialization macros
+
+DEFINE	$INIT(PFX<INI>),<
+	.REQUE	REL:DCN,REL:SWIL
+	$SRC	PFX
+	$EXTERN
+	$STACK
+>
+
+DEFINE	$SRC(PFX),<
+	SALL
+	SEARCH	JOBDAT,UUOSYM,MACTEN,SWIL
+	IFNDEF HI$SEG,<HI$SEG==640000>
+	TWOSEG	HI$SEG
+	RELOC	HI$SEG
+	RELOC	0
+	$$.HGH==HI$SEG
+	$$.SEG==-1		;Default to loseg
+	$$.LOW==0
+	EPFX$$==<LH.ALF&<SIXBIT \PFX\>>
+	.XCREF	F,T1,T2,T3,T4,P1,P2,P3,P4,S1,S2,S3,S4,E,U,P,C,N
+	DEFINE VRSN.(WHO,VER,MIN,EDT),<
+	%%%'PFX==:BYTE (3)WHO(9)VER(6)MIN(18)EDT
+	$ABS 137,%%%'PFX>
+>
+
+DEFINE	$SETUP(SCNBLK,USRLUO),<
+XLIST
+IFN <$ONLY&I.PRM>,<
+	TDZA	F,F		;Note a zero offset start
+	 MOVX	F,1		;Note a CCL start
+	MOVEM	F,OFFSET	;Save for scan
+>
+	RESET			;Stop all I/O, go back to scratch.
+	MOVE	P,PDL		;Set up stack.
+IFN <$ONLY&I.LUO>,<
+	$ABS	<.JB41==:41>,<CALL	LUUO$>	;Setup call to LUUO handler
+	PUSH	P,[CALL LUUO$]	;get new instruction, in case wiped out by
+	POP	P,.JB41		;  an error somewhere.
+>
+IFNB \USRLUO\,<
+	PUSH	P,[JRST USRLUO]	;Get to user UUO dispatch
+	POP	P,USRTRP##	; by telling LUUO what to do
+>
+IFN <$ONLY&I.CHG>,<
+	SETZM	ORGPPN		;zero original PPN.
+>
+IFN <$ONLY&I.PRM>,<
+$LVAR OFFSET			;Place to save starting offset
+$LVAR COMNUM			;Command number returned by ISCAN
+	IFNB \SCNBLK\,<		;If he supplied us with a scan block, use it
+		MOVE T1,SCNBLK	;from the user
+	>
+	IFB \SCNBLK\,<
+		MOVE T1,[XWD 1,[XWD 12,%%FXVE]] ;Use defualt if no block given
+	>
+	SETOM	WHERAC		;initialize which ac set in use
+	ISCAN.	T1,		;Initialize SCAN
+	MOVEM	T1,COMNUM	;Save command number for later use
+> ;END IFN I.PRM
+LIST
+> ;END $SETUP MACRO
+
+	SUBTTL	LUUO defintions
+
+DEFINE	LUUOS,<
+	LUUO	$LUUOI,LUUOI$	;call one of DCN's routines.
+	LUUO	GTTAB.,GTTAB$## ;Do a gettab, always doing non-skip return.
+	LUUO	PRMPT.,PRMPT$## ;Prompt if necessary, and get typein
+	LUUO	$ERMES,ERMES$,1	;error messages.
+	 SUUO	DIE.
+	 SUUO	TCHRI.
+	 SUUO	TSTRG.
+	 SUUO	TLINE.
+	 SUUO	ERROR
+	 SUUO	ERROR.
+	 SUUO	ERROR$
+	 SUUO	ERROR%
+	 SUUO	WARN
+	 SUUO	WARN.
+	 SUUO	WARN$
+	 SUUO	WARN%
+	 SUUO	INFOR
+	 SUUO	INFOR.
+	 SUUO	INFOR$
+	 SUUO	INFOR%
+>
+	SUBTTL	LUUOI definitions.
+
+INUM==0
+
+DEFINE	LUUO(OPNAM,ROUT,FLAG),<
+INUM==INUM+1
+ACNUM==0
+OPDEF	OPNAM	[<INUM>B8]
+>
+
+DEFINE	SUUO(OPNAM),<
+OPDEF	OPNAM	[<INUM>B8 ACNUM,]
+ACNUM==ACNUM+1
+>
+INUM==0
+	LUUOS
+
+DEFINE	LUUOIS,<
+	UUOI	CHPPN.,CHPPN$	;Change PPN
+	UUOI	FLERR.,FLERR$	;Type out a file spec and error code.
+	UUOI	LERR.,LERR$	;Type out a lookup error code.
+	UUOI	GOD.,GOD$,1	;Pivot to [1,2], saving current PPN
+	UUOI	UNGOD.,UNGOD$,1	;Pivot back. Clear pivoted flag.
+	UUOI	TSIXN.,.TSIXN,1 ;Type out a sixbit value
+	UUOI	TDTTM.,.TDTTM,1 ;Type out a given date and time
+	UUOI	TDATE.,.TDATE,1 ;Type given date out.
+	UUOI	TTIME.,.TTIME,1 ;Type given time
+	UUOI	TDECW.,.TDECW,1 ;Type out decimal number
+	UUOI	TOCTW.,.TOCTW,1 ;Type number in octal
+	UUOI	TXWDW.,.TXWDW,1 ;Type number in octal halfword format
+	UUOI	TVERW.,.TVERW,1 ;Type version number
+	UUOI	TPPNW.,.TPPNW,1 ;Type a PPN.
+	UUOI	TDATN.,.TDATN,1 ;Type the current date.
+	UUOI	TTIMN.,.TTIMN,1 ;Type the current time
+	UUOI	TCRLF.,.TCRLF,1 ;Type out a carriage return
+	UUOI	ISCAN.,ISCAN$	;Initialize scanning routines
+	UUOI	QSCAN.,QSCAN$,1	;initialize a new line for partial scan
+	UUOI	PSCAN.,PSCAN$,1	;	ditto
+	UUOI	VSCAN.,VSCAN$,1	;Verb scanner. Think about this for a while.
+	UUOI	REEAT.,REEAT$,1	;Re-eat a character in SCAN context
+	UUOI	GTNOW.,.GTNOW	;Get current date/time
+>
+
+	DEFINE	UUOI(OPNAM,ROUT,FLAG),<
+	INUM==INUM+1
+	OPDEF	OPNAM	[$LUUOI INUM]
+>
+INUM==0
+
+	LUUOIS
+
+
+	PRGEND
+	TITLE	LUUOX		Luuo handler.
+	ENTRY	DN.E0		;entry point to ask for to get this loaded.
+	SEARCH	DCN
+	$SRC	LUO
+	SUBTTL	LUUO handler. Dispatch to correct routine
+	XP DN.E0,0
+
+;; LUUOX - LUUO handler. Will dispatch to internal LUUOs, or call user
+;routine if user has supplied a dispatching instruction at USRTRP
+;At dispatch time, stack looks like
+;-10(P)	PC at time of LUUO
+; -7(P)	E
+; -6(P)	U
+; -5(P)	P (Reconstructed)
+; -4(P)	T1
+; -3(P)	T2
+; -2(P)	T3
+; -1(P)	T4
+; 0(P)	Return address, UUORET.
+;Acs contain - 
+; T1/ contents of AC specified in LUUO
+; E/  Dispatch address - Either the opcode, or the EA (If LUUOI)
+; U/  The LUUO as retrieved from .JBUUO - EA has been resolved.
+;On return, T1 will be stored into the AC used in the LUUO call,
+; the rest will be restored to original values.
+
+	EXTERN	.TYOCH
+
+$GVAR	USRTRP			;User LUUO trap - execute if not ours.
+$LVAR	SAVEPC			;Location to save recovery PC when we halt.
+$LVAR	SAVELU			;Location to save LUUO dipatch instruction
+XP	ER$EXT,<Z 2,>		;Bit indicating extended error message.
+XP	ER$DIE,<Z 1,>		;Bit indicating message has a die routine.
+
+$HISEG
+	SUBTTL	Definitions for LUUO handler
+
+DEFINE	LUUO(OPNAM,ROUT,FLAG<0>),<<FLAG>B0!ROUT>
+DEFINE	SUUO(OPNAM),<>
+
+DISP:	LUUOS
+XLIST
+	REPEAT	<<37+DISP>-.>,<USRUUO> ;Define unused opcodes to be illegal.
+LIST
+
+DEFINE	UUOI(OPNAM,ROUT,BIT),<<BIT>B0!ROUT'##>
+DISP2:	LUUOIS
+
+ERRTYP:	POINT	2,U,10		;Error code. error,warn,inform
+UUOAC::	POINT	4,U,12		;Ac field within LUUO
+UUOOPC::POINT	9,U,8		;Get the opcode
+	SUBTTL	Dispatch on LUUO
+
+LUUO$::	PUSH	P,.JBUUO
+;;	JRST	LUUOX
+LUUOX::	PUSH	P,U		;Save old LUUO
+	MOVE	U,-1(P)		;Get new opcode.
+	MOVEM	E,-1(P)		;Save old dispatch on stack
+	MOVE	E,P		;Get current copy of stack pointer
+	SUB	E,[3,,3]	;Make it look like P at time of LUUO
+	PUSH	P,E		;Save it on stack
+	CALL	.PSH4T##	;Save 4 ACs for scratch use.
+	LDB	E,UUOAC		;Get the AC field
+	CAIL	E,E		;Is AC one of the zapped ones?
+	 ADDI	E,-E-6(P)	;Adujst pointer to stack instead of ACs
+	MOVE	T1,(E)		;Get the AC contents into T1.
+	LDB	E,UUOOPC	;Get the opcode.
+	CALL	@DISP-1(E)	;Dispatch to user routine.
+
+UUORET:	SKP			;Normal return.
+	 AOS	-7(P)		;Skip return, bump the uuo return PC
+	SKIPG	DISP-1(E)	;Does this have the 'no ac' bit?
+	 JRST	[CALL .POP4	;Yep - don't screw him over.
+		JRST UUORE0]	;And join common code below.
+	LDB	E,UUOAC		;AC field
+	MOVE	U,T1		;Save value returned by routine
+	CALL	.POP4
+	CAIL	E,E		;Is AC one of the zapped ones?
+	 ADDI	E,-E-2(P)	;Adujst pointer to stack instead of ACs
+	MOVEM	U,(E)		;Store value returned in AC
+UUORE0:	POP	P,(P)		;Skip over junk P (Add code to compare?)
+	POP	P,U
+	POP	P,E
+	RET
+
+LUUOI$:	HRRZ	E,U		;Get UUOI number
+	CAIG	E,INUM		;Range check
+	 CAIG	E,0
+	  JRST	[MOVE U,[$ERROR(ILU,<Illegal UUOI : >,.TOCTW##,<MOVE T1,E>)]
+		JRST ERMES$]	;Make this an error message.
+	ADDI	E,DISP2-DISP	;Add in the offset between the two tables.
+	JRST	@DISP-1(E)	;Dispatch
+
+USRUUO:	SKIPN	USRTRP		;Did the user set up for trapping LUUOs?
+	 JRST	[MOVE E,U	;Save the UUO itself.
+		MOVE U,[$ERROR(ILL,<Illegal LUUO : >,.TXWDW##,<MOVE T1,E>)]
+		JRST ERMES$]	;Make this an error message
+	XCT	USRTRP		;Execute the user trap instruction.
+	JRST	UUORET		;Return from user LUUO
+	JRST	UUORET+1	;Skip return from user LUUO
+
+EREXIT::HALT	.		;Error exit for undefined things.
+
+.SAVUE::
+	EXCH	U,(P)		;save U, get calling PC
+	PUSH	P,E		;save E
+	PUSH	P,U		;Save calling PC
+	MOVE	U,-2(P)		;get u back
+	PUSHJ	P,SAVJMP	;call calling routine
+	 SKP
+	 AOS	-2(P)
+	POP	P,E		;restore e
+	POP	P,U
+	POPJ	P,		;Return
+
+.SAVET::
+	EXCH	T1,(P)		;save current value of T1, get calling PC
+	PUSH	P,T2
+	PUSH	P,T3
+	PUSH	P,T4
+	PUSH	P,T1		;push calling PC
+	MOVE	T1,-4(P)	;restore original value of T1
+	PUSHJ	P,SAVJMP	;return to caller, with stack fixed up
+	 SKP			;non skip return
+	 AOS	-4(P)		;skip return, bump higher level return pc
+	POP	P,T4
+	POP	P,T3
+	POP	P,T2
+	POP	P,T1
+	RET
+
+.POP4::	POP	P,T1		;Pop return PC
+	POP	P,T4		;pop ac
+	POP	P,T3
+	POP	P,T2
+	EXCH	T1,(P)		;pop last ac, leave return PC
+	POPJ	P,		;return
+
+SAVJMP:	EXCH	F,-1(P)		;Swap things around a bit
+	EXCH	F,(P)		;muddy the water a bit
+	EXCH	F,-1(P)		;make things confusing
+	POPJ	P,		;return to caller with stack set up
+	SUBTTL	Error message typeout
+
+;; ERMES$ - Type out a message, usually an error message.
+; Form: <OPCODE AC,ADDR>, Where AC = CODE,ER$EXT,ER$DIE:
+;	ER$EXT	Means extended error - has extra routine dispatch.
+;	ER$DIE	Means block has a return address.
+;	CODE=0	Means no error - Type out routine.
+;	CODE=1	Means ERROR (Prefix ?)
+;	CODE=2	Means WARN  (Prefix %)
+;	CODE=3	Means INFORM(Prefix [)
+; ADDR points to block: (Negative offsets only if ER$EXT or ER$DIE)
+; -3 or -1) Return address (Known as DIE address)
+; -2)	Instruction to execute before calling below
+; -1)	Routine to call after printing text, before returning.
+;  0)	Sixbit text (3 chars prog, 3 chars error)
+;  1)	Start of ASCIZ text
+;
+; At the time the instruction to execute is executed, E,U, and P have
+;	changed, so don't use them as indexes.
+;Returns with all acs unchanged.
+
+
+ERMES$:	LDB	T2,ERRTYP	;Get error type, to get start character
+	JUMPE	T2,ERMSPC	;No error type, special cases
+	MOVE	T2,[EXP <"?",,0>,<"%",,0>,<"[",,0>]-1(T2)
+	HRRI	T2,1(U)		;Char and text
+	MOVE	T3,-8(P)	;And the error pc
+	MOVE	T1,0(U)		;Prefix
+	CALL	.ERMSA##	;Type error stuff
+	TXNE	U,ER$EXT	;Did user request a routine?
+	TXNN	T1,JWW.FL	;And is first set?
+	JRST	ERMES4		;No, don't even bother
+	DMOVE	T1,-4(P)	;Get back original values for T registers.
+	DMOVE	T3,-2(P)	; so we can print out correct values.
+	SKIPN	-2(U)		;Did user give an address?
+	 JRST	ERMES3		;No, skip over pre-routine instruction
+	XCT	-2(U)		;Execute pre-routine instruction. (Load t1?)
+	NOOP			;In case of skip return from instruction
+ERMES3:	XCT	-1(U)		;Execute user routine. (PUSHJ P,X?)
+ERMES4:	LDB	T1,ERRTYP	;Get error type.
+	CAIN	T1,3		;Was it an informational message? ([)
+	CALL	.TRBRK##	;Yes, cap it off
+	CALL	.TCRLF##	;End the line of text
+	TXNE	U,ER$DIE	;Did the user specify a die address?
+	 JRST	ERMRTA		;Yes - go get the address.
+	LDB	T1,ERRTYP	;No return address - default per error type.
+	CAIL	T1,2		;Is this a severe error type?
+	 JRST	ERMRET		;Nope - just return normally
+ERMES5:	MOVE	T1,[HALT ERMCON] ;HALT continuing at ERMCON
+	EXCH	T1,.JB41	;Make it the effect of an LUUO.
+	MOVEM	T1,SAVELU	;Save luuo dispatch instruction
+	POP	P,(P)		;Don't need normal return address.
+	POP	P,T4		;Restore T acs
+	POP	P,T3
+	POP	P,T2
+	POP	P,T1
+	POP	P,(P)		;Don't need reconstructed P
+	POP	P,U		;...     U
+	SOS	E,-1(P)		;Point return back at LUUO itself.
+	MOVEM	E,SAVEPC	;Save PC of LUUO.
+	POP	P,E		;Restore real value to E
+	POPJ	P,		;This will re-execute the LUUO, halting.
+
+ERMCON:	PUSH	P,SAVEPC	;Get address of LUUO ..
+	PUSH	P,SAVELU	;Instruction to execute an LUUO
+	POP	P,.JB41		; Turn back on LUUO handler.
+	SETZM	SAVEPC		;Wipe out old saved address
+	RETSKP			;Return skipping over LUUO.
+
+ERMRTA:	TXNN	U,ER$EXT	;Did he have routine and addr as well?
+	 SKIPA	T1,-1(U)	;Nope, alternate position
+	 MOVE	T1,-3(U)	;Yes, maximum position
+	MOVEM	T1,-8(P)	;Make UUO return go there.
+ERMRET:	RET			;And "resume" processing
+;Special cases of $ERMES - Absolute DIE., and ordinary
+;non-error type-out routines
+
+ERMSPC:	MOVEI	T1,(U)		;Get effective address into T1
+	TXNN	U,ER$DIE!ER$EXT	;Both bits off?
+	 JRST	ERMDIE		;Absolute die.
+	TXNN	U,ER$EXT	;Is the extended bit on?
+	 JRST	.TCHAR##	;Nope, merely a character type-out
+	CALL	.TSTRG##	;And call scan's string typeout routine.
+	TXNE	U,ER$DIE	;Die bit here means give CRLF. at end
+	 CALL	.TCRLF##	;Set - this means give a free CRLF
+	RET			;Return.
+
+ERMDIE:	OUTSTR	[<BYTE (7)7,"?",15,12,"?">
+		ASCIZ \Stopcd\]	;Wake up the OPR
+	CALL	.TSIXN		;Type out the stopcode name (EA) in sixbit
+	OUTSTR	[ASCIZ \. Aborting job!\]
+	JRST	ERMES5		;Pop stuff off stack, and halt.
+	PRGEND
+	TITLE	FLERR	Filop error code routines
+	ENTRY	DN.E2
+	SEARCH	DCN
+	$SRC	FLE
+	SUBTTL	Type out filop error codes
+	XP DN.E2,0
+
+;;FLERR$ - Type out a FILOP. error code in english
+;Call with:
+; T1/	Pointer to FILOP block
+;
+;LERR$ - Type out an error code without typing a file spec
+;Call with
+; T1/	Error code.
+
+$HISEG
+
+FLERR$::PUSH	P,T1		;Save for later use, also
+	HRRZ	T2,.FOLEB(T1)	;Get address of lookup enter block.
+	MOVEI	T1,1(T1)	;Point to open block within filop block
+	CALL	.TOLEB##	;Type out filename
+	CALL	.TSPAC##	;Separator character
+	POP	P,T1		;Get back pointer to filop block
+	MOVE	T1,.FOLEB(T1)	;Get pointer to lookup block
+	MOVE	T2,(T1)		;Get first word of lookup block
+	TLNN	T2,-1		;Extended block?
+	ADDI	T1,.RBEXT-1	;Increment pointer to compensate.
+	HRRZ	T1,1(T1)	;Get right half of extension word - error code.
+LERR$::	CAIG	T1,FILLEN	;Is it an error we know of ?
+	 JUMPGE	T1,KERR		;Yup - known error.
+	PUSH	P,T1		;Save error
+	MOVEI	T1,[ASCIZ /ERUNK%(/]
+	CALL	.TSTRG##	;Unknown error - tell him
+	POP	P,T1		;Get error code back
+	CALL	.TOCTW##	;Type error code
+	MOVX	T1,-1		;Error -1 = unknown
+KERR:	MOVE	T1,FILERR(T1)	;Get address of string
+	CALL	.TSTRG##	;Type out the error code name
+	CALL	.TCRLF##	;End the line
+	RET			;Go back
+	SUBTTL	Filop error codes
+
+	[ASCIZ	/) Unknown error for filop/]
+FILERR:	[ASCIZ	/ERFNF%(0) File not found/]
+	[ASCIZ	/ERIPP%(1) Incorrect PPN/]
+	[ASCIZ	/ERPRT%(2) Protection failure/]
+	[ASCIZ	/ERFBM%(3) File being modified/]
+	[ASCIZ	/ERAEF%(4) Already existing file name/]
+	[ASCIZ	/ERISU%(5) Illegal sequence of UUOS/]
+	[ASCIZ	/ERTRN%(6) Transmission error/]
+	[ASCIZ	/ERNSF%(7) Not a save file/]
+	[ASCIZ	/ERNEC%(10) Not enough core/]
+	[ASCIZ	/ERDNA%(11) Device not available/]
+	[ASCIZ	/ERNSD%(12) No such device/]
+	[ASCIZ	/ERILU%(13) Illegal monitor call for GETSEG a filop/]
+	[ASCIZ	/ERNRM%(14) No room or quota exceeded/]
+	[ASCIZ	/ERWLK%(15) Write-locked/]
+	[ASCIZ	/ERNET%(16) Not enough table space/]
+	[ASCIZ	/ERPOA%(17) Partial allocation/]
+	[ASCIZ	/ERBNF%(20) Block not free/]
+	[ASCIZ	/ERCSD%(21) Can't supersede a directory/]
+	[ASCIZ	/ERDNE%(22) Can't delete non-empty directory/]
+	[ASCIZ	/ERSNF%(23) SFD not found/]
+	[ASCIZ	/ERSLE%(24) Search list empty/]
+	[ASCIZ	/ERLVL%(25) SFD nest level too deep/]
+	[ASCIZ	/ERNCE%(26) No-create for all search list/]
+	[ASCIZ	/ERSNS%(27) Segment not on swap space/]
+	[ASCIZ	/ERFCU%(30) Can't update file/]
+	[ASCIZ	/ERLOH%(31) Low seg overlaps hi seg (getseg)/]
+	[ASCIZ	/ERNLI%(32) Not logged in (run)/]
+	[ASCIZ	/ERENQ%(33) File still has outstanding locks set/]
+	[ASCIZ	/ERBED%(34) Bad .exe file directory (getseg,run)/]
+	[ASCIZ	/ERBEE%(35) Bad extension for .exe file(getseg,run)/]
+	[ASCIZ	/ERDTB%(36) .Exe directory too big(getseg,run)/]
+	[ASCIZ	/ERENC%(37) TSK - Exceeded network capacity/]
+	[ASCIZ	/ERTNA%(40) TSK - Task not available/]
+	[ASCIZ	/ERUNN%(41) TSK - Undefined network node/]
+	[ASCIZ	/ERSIU%(42) Rename - SFD is in use/]
+	[ASCIZ	/ERNDR%(43) Delete - file has an ndr lock/]
+	[ASCIZ	/ERJCH%(44) Job count high (a.t. read count overflow)/]
+	[ASCIZ	/ERSSL%(45) Cannot rename SFD to a lower level/]
+FILLEN==.-FILERR
+	PRGEND
+	TITLE	PROMPT	Input and prompting routines
+	ENTRY	DN.E3
+	SEARCH	DCN
+	$SRC	PRM
+	SUBTTL	PRMPT$ - SCAN typein interface.
+	XP DN.E3,0
+	EXTERN	.ISCAN
+;PRMPT$ - Read typing, prompting if necessary. Type out definition
+;	of allowable input on an altmode.
+;Call
+;	(U)-1/	offset in PRMROU to call,,optional extra arg (for keywords)
+;	(U)/	start of prompt string
+;Return
+;	T1/ Value of N after calling routine.
+
+$LOSEG
+SCNACS::BLOCK	4		;Swap the 4 P acs, since SCAN trashes them.
+WHERAC::BLOCK	1		;which ac set is in use?
+$HISEG
+
+DEFINE	PARSE(SYMBOL,ROUTINE,HELPER,RETINS),<ROUTINE>
+PRMINP:	INPUTS			;Define input instructions
+DEFINE	PARSE(SYMBOL,ROUTINE,HELPER,RETINS),<HELPER>
+PRMHLP:	INPUTS			;Define helper instructions
+DEFINE	PARSE(SYMBOL,ROUTINE,HELPER,RETINS),<RETINS>
+PRMRET:	INPUTS
+
+ISCAN$::CALL	SCANAC		;Get us scans acs for this routine
+	SETO	C,		;Pretend EOL character
+	CALL	.ISCAN##	;call ISCAN (t1 is loaded with user's AC)
+	RET			;return to user
+
+QSCAN$::CALL	SCANAC		;Set up scan's ACs
+	JRST	.QSCAN##	;call qscan
+
+PSCAN$::CALL	SCANAC		;set up scan's ACs
+	JRST	.PSCAN##	;call pscan
+
+VSCAN$::CALL	SCANAC		;Set up scan's ACs
+	CALL	.VSCAN##	;call VSCAN (never to return)
+	 NOOP
+	$ERROR	IDN,<I don't know what to do with this yet>
+
+REEAT$::CALL	SCANAC		;Get us in SCAN context
+	MOVE	P3,T1		;character to re-eat
+	JRST	.REEAT##	;Re-eat it
+
+PRMPT$::CALL	.SAVUE##	;save for luuo handler
+	CALL	SCANAC		;Get us the scan acs for this routine
+	JUMPG	P4,PRMPT4	;If still stuff in buffer, don't prompt
+PRMPT0:	JUMPL	P4,PRMPT2	;If non-altmode end of line, skip help
+	LDB	T1,[POINTR -1(U),PRMOFF] ;get offset of help instruction
+	XCT	PRMHLP(T1)	;type out options for user.
+	CALL	.TCRLF##	;put prompt on new line
+PRMPT2:	CAXN	P4,.CHEOF	;If eof,
+	 EXIT			; crap out here and now
+	XMOVEI	T1,(U)		;get address of prompt string
+	CALL	.TSTRG##	;type it out.
+	CALL	.CLRTI##	;re-initialize for another line
+PRMPT4:	CALL	.TIALT##	;get a character from input
+	JUMPLE	P4,PRMPT0	;an altmode? he wants list of options, then.
+	CALL	.REEAT##	;give scan the character back.
+	LDB	E,[POINTR -1(U),PRMOFF] ;Get offset of input instruction
+	XCT	PRMINP(E)	;go do the input required
+	 NOOP			;ignore possible skip return
+	SKIPN	E		;do a re-eat?
+	 CALL	.REEAT##	;Yes.
+	XCT	PRMRET(E)	;get return value from where it is
+	RET			;return to user, with value in ac
+
+PREXIT:	EXIT	1,		;Return to monitor mode, now.
+	SETZ	P4,		;forget the EOF
+	RET			;and return
+
+SCANAC::AOSE	WHERAC		;increment which AC set we are using
+	 JRST	[SOS WHERAC	;already using SCAN acs, don't worry
+		RET]
+	CALL	SWPACS		;swap in the scan acs
+	POP	P,P1		;P1 is only trash, anyway.
+	CALL	(P1)		;call main routine, returning here.
+	 SKP			;Non skip return
+	 AOS	(P)		;bump higher level routine PC
+	CALL	SWPACS		;Swap the ACs back to the user ACs
+	SOSL	WHERAC		;decrement which ac set in use
+	 $ERROR	WAU,<Wrong AC set in use!>
+	RET			;and return to higher level routine
+
+SWPACS::EXCH	P1,SCNACS+0	;start swapping the P acs
+	EXCH	P2,SCNACS+1
+	EXCH	P3,SCNACS+2
+	EXCH	P4,SCNACS+3
+	RET			;finished swapping.
+
+.CHARH:	LDB	T1,[POINTR -1(U),PRMADD] ;Get pointer to additional info
+	SKIPN	T1		;if we got something
+	 MOVEI	T1,[ASCIZ \Processor type (Undefined format)\]
+	JRST	.TSTRG##	;type it out
+
+.KEYWR:	CALL	.SIXSW##	;Get a sixbit word.
+	LDB	P1,[POINTR -1(U),PRMADD] ;get pointer to additional info
+	MOVE	T1,(P1)		;This should be a pointer to the keyword table
+	MOVE	T2,P3		;look in table to find word.
+	CALL	.LKNAM##	;ask scan if he can find the word.
+	 JRST KEYWRE		;No such word. Ooops.
+	HRRZ	T2,(P1)		;Get addr of first word in table
+	SUB	T1,T2		;make T1 be the offset of the keyword
+	HRRZI	T1,-1(T1)	;return only right half, and make it 0-n.
+	RET			;return, finished
+
+KEYWRE:	SKIPL	T1		;differentiate between ambiguous and unknown
+	 $WARN	AMB,<Ambiguous keyword >,.TSIXN##,P3,PRMPT2
+	$WARN	UNK,<Unknown keyword >,.TSIXN##,P3,PRMPT2
+
+.KEYWH:	OUTSTR	[ASCIZ\Keywords are:\]
+	LDB	P1,[POINTR -1(U),PRMADD] ;pointer to table pointer
+	MOVE	P1,(P1)		;get the table aobjn pointer
+KEYWH2:	CALL	.TCRLF##	;get us a new line
+	MOVEI	P2,^D8		;allow 8 keywords per line
+	SKP			;Don't start off the line with a tab
+KEYWH4:	 CALL	.TTABC##	;separate keywords with a tab
+	MOVE	T1,1(P1)	;get the keyword.
+	CALL	.TSIXN##	;type the keyword out
+	AOBJP	P1,.POPJ##	;if no more keywords, exit
+	SOJLE	P2,KEYWH2	;keep track of number of keywords per line
+	JRST	KEYWH4		;type another keyword on this line
+
+	PRGEND
+
+	TITLE	CHPPN	PPN changing
+	ENTRY	DN.E6
+	SEARCH	DCN
+	$SRC	CHP
+	SUBTTL	Change PPN and get privs uuos
+	XP DN.E6,0
+
+;;CHPPN$ - Change PPN.
+; This routine expects to be called with U loaded with an LUUO calling
+; this routine, the AC having the destination PPN loaded.
+; Returns skip if successful, non-skip if neither CHGPPN nor POKE. succeeds
+
+$BLOCK	POKEBK,3
+
+$HISEG
+
+CHPPN$::CALLI	T1,74		;Calli for chgppn - We have opdefed it.
+	 SKP			;didn't work - now we have to work
+	RETSKP			;Worked. Return success.
+	MOVEM	T1,POKEBK+2	;save for poke.
+	GETPPN	T1,		;get our real ppn
+	 NOOP
+	MOVEM	T1,POKEBK+1	;what we used to be
+	MOVE	T1,[.GTPPN,,.GTSLF];Address of PPN table
+	GETTAB	T1,		;find out address
+	 $DIE	CFP,<?Couldn't even find out where the ppns are>
+	HRRZM	T1,POKEBK	;address we want to change
+	PJOB	T1,
+	ADDM	T1,POKEBK	;we want to do this job's ppn
+	MOVE	T1,[3,,POKEBK]	;argument block
+	POKE.	T1,		;poke it!
+	 RET			;Both failed. Return failure
+	RETSKP			;Hah! the poke. succeded.
+
+;GOD. UUO - PIVOT to [1,2], and save current PPN away so we can change
+;	back. Takes no arguments.
+
+$GVAR ORGPPN			;Original PPN.
+
+$HISEG
+
+GOD$::
+	HRROI	T1,.GTSTS	;Get jbtsts for us.
+	GETTAB	T1,
+	 $DIE	CGJ,<Couldn't get JBTSTS>
+	TLNE	T1,1		;Do we have JACCT?
+	 RET			;Don't do anything else, we are PRVJ
+	GETPPN	T2,		;Get out current PPN
+	 NOOP
+	CAMN	T2,[XWD 1,2]	;Are we god already?
+	 RET			;Yes, Don't bother setting
+	SKIPN	ORGPPN		;Did we store a PPN away before?
+	 MOVEM	T2,ORGPPN	;Nope - save this one.
+	MOVE	T2,[XWD 1,2]	;GOD ppn. Full privs.
+	CHGPPN	T2,		;Try to change our PPN
+	 SKP			;No chgppn on this monitor, try poking
+	RET			;Set, return
+	MOVEM	T1,POKEBK+1	;store as what we used to be
+	TLO	T1,1		;Turn on JACCT
+	MOVEM	T1,POKEBK+2	;Store as what we want to be
+	MOVE	T1,[XWD .GTSTS,.GTSLF] ;Get address of JBTSTS table
+	GETTAB	T1,		;     by getting numtab entry for it
+	 $DIE	GCA,<Couldn't get address of JBTSTS>
+	PJOB	T2,		;Get our job number
+	ADDI	T2,(T1)		;use our job number as index within JBTSTS
+	HRRZM	T2,POKEBK+0	;Address we are going to poke
+	MOVE	T1,[XWD 3,POKEBK] ;Arg block for POKE
+	POKE.	T1,		;Poke it away!
+	 $ERROR	CSP,<Couldn't set JACCT>
+	RET
+
+UNGOD$::
+MORTAL:
+	SKIPN	T1,ORGPPN	;Did we GOD ourselves first?
+	 RET			;Nope - just return quietly
+	SETZM	ORGPPN		;Yep, zero it out, since we are now peasants
+	CALL	CHPPN$		;Go do the change
+	 NOOP			;Ignore.
+	RET			;Return to user.
+	PRGEND
+
+	TITLE	GTTAB	Gettab luuos
+	ENTRY	DN.E7
+	SEARCH	DCN
+	$SRC	GTT
+	SUBTTL	GTTAB. - Do a gettab, and do not give an error return
+	XP DN.E7,0
+	$HISEG
+
+;GTTAB. - Do a gettab, and always return non-skip. Blow up with error
+;message if the gettab fails.
+
+GTTAB$::MOVE	T1,(U)		;Get numbers for gettab.
+GTTAB%::GETTAB	T1,		;Try to get the information.
+	 $ERROR	GTF,<Gettab failed. Tried for: >,.TXWDW##,T1
+	RET
+
+	END

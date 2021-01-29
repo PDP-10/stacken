@@ -1,0 +1,484 @@
+
+MODULE CBTA (					!Binary to ASCII conversion
+		IDENT = '001010',
+		LANGUAGE (BLISS16, BLISS36) %BLISS36 (, ENTRY ($CBDAT, $CBDMG, $CBDSG, $CBOMG, $CBOSG, $CBTA,
+		    $CBTMG))
+		) =
+BEGIN
+!
+!
+!
+! COPYRIGHT (C) 1978 BY
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+! COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: SYSTEM LIBRARY
+!
+! ABSTRACT:
+!
+!
+! THIS MODULE CONTAINS ROUTINES FOR CONVERION OF BINARY TO VARIOUS
+! NUMERIC ASCII REPRESENTATIONS.
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 28-AUG-78
+!
+! MODIFIED BY:
+!
+!	, : VERSION
+! 01	-
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    $CBDAT,					!Convert 2-digit date
+    $CBDMG,					!Convert 5-digit unsigned decimal
+    $CBDSG,					!Convert 5-digit signed decimal
+    $CBOMG,					!Convert 6-digit unsigned octal
+    $CBOSG,					!Convert 6-digit signed octal
+    $CBTA,					!General convert binary to ASCII.
+    $CBTMG;					!Convert 3-digit byte to unsigned octal
+
+!
+! INCLUDE FILES
+!
+!	NONE
+!
+! MACROS:
+!
+!	NONE
+!
+! EQUATED SYMBOLS:
+!
+!	NONE
+!
+! OWN STORAGE:
+!
+!	NONE
+!
+! EXTERNAL REFERENCES:
+!
+!	NONE
+!
+
+GLOBAL ROUTINE $CBDAT (BUF_PTR_ADR, VALUE, FLAGS) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to insert
+!						!the number at.
+!	.VALUE					!The value to convert.
+!	.FLAGS					!Suppress leading zeros
+!						!if zero.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the characters inserted.
+!
+! ROUTINE VALUE:
+!
+!	The number of characters inserted into the output buffer.
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LITERAL
+	RADIX = 10,
+	WIDTH = 2,
+	SUPPRESS = RADIX + WIDTH^11,
+	NO_SUPPRESS = RADIX + WIDTH^11 + 1^9;
+
+    $CBTA (.BUF_PTR_ADR, .VALUE, (IF .FLAGS EQL 0 THEN SUPPRESS ELSE NO_SUPPRESS))
+    END;					!OF $CBDAT
+
+GLOBAL ROUTINE $CBDMG (BUF_PTR_ADR, VALUE, FLAGS) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to insert
+!						!the number at.
+!	.VALUE					!The value to convert.
+!	.FLAGS					!Suppress leading zeros
+!						!if zero.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the characters inserted.
+!
+! ROUTINE VALUE:
+!
+!	The number of characters inserted into the output buffer.
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LITERAL
+	RADIX = 10,
+	WIDTH = 5,
+	SUPPRESS = RADIX + WIDTH^11,
+	NO_SUPPRESS = RADIX + WIDTH^11 + 1^9;
+
+    $CBTA (.BUF_PTR_ADR, .VALUE, (IF .FLAGS EQL 0 THEN SUPPRESS ELSE NO_SUPPRESS))
+    END;					!OF $CBDMG
+
+GLOBAL ROUTINE $CBDSG (BUF_PTR_ADR, VALUE, FLAGS) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to insert
+!						!the number at.
+!	.VALUE					!The value to convert.
+!	.FLAGS					!Suppress leading zeros
+!						!if zero.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the characters inserted.
+!
+! ROUTINE VALUE:
+!
+!	The number of characters inserted into the output buffer.
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LITERAL
+	RADIX = 10,
+	WIDTH = 5,
+	SUPPRESS = RADIX + WIDTH^11 + 1^8,
+	NO_SUPPRESS = RADIX + WIDTH^11 + 1^8 + 1^9;
+
+    $CBTA (.BUF_PTR_ADR, .VALUE, (IF .FLAGS EQL 0 THEN SUPPRESS ELSE NO_SUPPRESS))
+    END;					!OF $CBDSG
+
+GLOBAL ROUTINE $CBOMG (BUF_PTR_ADR, VALUE, FLAGS) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to insert
+!						!the number at.
+!	.VALUE					!The value to convert.
+!	.FLAGS					!Suppress leading zeros
+!						!if zero.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the characters inserted.
+!
+! ROUTINE VALUE:
+!
+!	The number of characters inserted into the output buffer.
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LITERAL
+	RADIX = 8,
+	WIDTH = 6,
+	SUPPRESS = RADIX + WIDTH^11,
+	NO_SUPPRESS = RADIX + WIDTH^11 + 1^9;
+
+    $CBTA (.BUF_PTR_ADR, .VALUE, (IF .FLAGS EQL 0 THEN SUPPRESS ELSE NO_SUPPRESS))
+    END;					!OF $CBOMG
+
+GLOBAL ROUTINE $CBOSG (BUF_PTR_ADR, VALUE, FLAGS) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to insert
+!						!the number at.
+!	.VALUE					!The value to convert.
+!	.FLAGS					!Suppress leading zeros
+!						!if zero.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the characters inserted.
+!
+! ROUTINE VALUE:
+!
+!	The number of characters inserted into the output buffer.
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LITERAL
+	RADIX = 8,
+	WIDTH = 6,
+	SUPPRESS = RADIX + WIDTH^11 + 1^8,
+	NO_SUPPRESS = RADIX + WIDTH^11 + 1^8 + 1^9;
+
+    $CBTA (.BUF_PTR_ADR, .VALUE, (IF .FLAGS EQL 0 THEN SUPPRESS ELSE NO_SUPPRESS))
+    END;					!OF $CBOSG
+
+GLOBAL ROUTINE $CBTA (BUF_PTR_ADR, VALUE, FLAGS) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to insert
+!						!the number at.
+!	.VALUE					!The value to convert.
+!	.FLAGS<0,8>				!The conversion radix.
+!	.FLAGS<8,1>				!VALUE is signed in TRUE.
+!	.FLAGS<9,1>				!Don't compress leading zeros
+!	.FLAGS<10,1>				!Replace leading zeros with blanks
+!	.FLAGS<11,5>				!The maximum field length.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the characters inserted.
+!
+! ROUTINE VALUE:
+!
+!	The number of characters inserted into the output buffer.
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	BUF_PTR,
+	BUF_PTR_INI,				!Initial pointer into buffer
+	CHAR : VECTOR [32],			!Holding area for remainders
+	CHAR_ADR,				!Character position index
+	FIELD_LENGTH,				!Length of receiving field
+	FILL_CHAR,				!Fill character.
+	WORKING_VALUE;				!This is our copy of his number.
+
+    BIND
+	RADIX = .FLAGS<0, 8>,			!Radix for conversion
+	SIGN_FLAG = .FLAGS<8, 1>,		!On if number should be signed
+	COMPRESS_FLAG = .FLAGS<9, 1>,		!Zero compress if off
+	SUPPRESS_FLAG = .FLAGS<10, 1>;		!On to change leading zeros to blanks
+
+    BUF_PTR_INI = (BUF_PTR = ..BUF_PTR_ADR);	!Save the initial buffer position
+    FIELD_LENGTH = .FLAGS<11, 5>;		!and get length of receiving field.
+    FILL_CHAR = %C'0';
+    WORKING_VALUE = (IF SIGN_FLAG AND .VALUE LSS 0 THEN
+	BEGIN
+	CH$WCHAR_A (%C'-', BUF_PTR);		!Insert a minus sign
+	-.VALUE					!and make positive.
+	END
+    ELSE .VALUE);				!Copy the number.
+
+    !+
+    ! Divide the value to death to get the individual digits.
+    !-
+
+    INCRA CHAR_ADR FROM CHAR [0] TO CHAR [.FIELD_LENGTH - 1] BY %UPVAL DO
+	BEGIN
+	.CHAR_ADR = .WORKING_VALUE MOD RADIX;	!Save the remainder
+	WORKING_VALUE = .WORKING_VALUE/RADIX;	!and do the division.
+
+	!+
+	! Now turn the number into a digit. If the radix allows digits beyond 9,
+	! map them up to 'A' through 'Z'.
+	!-
+
+	.CHAR_ADR = ..CHAR_ADR + (IF ..CHAR_ADR GTR 9 THEN %C'A' - 10 ELSE .FILL_CHAR);
+
+	IF .WORKING_VALUE EQL 0
+	THEN
+	    BEGIN
+
+	    !+
+	    ! If we haven't run out of room in the output field, then check
+	    ! for significant digit runout. If finished, shorten the field.
+	    !-
+
+	    IF NOT COMPRESS_FLAG THEN EXITLOOP (FIELD_LENGTH = (.CHAR_ADR - CHAR [0])/%UPVAL + 1);
+
+	    !+
+	    ! If supressing leading zeros, do this now.
+	    !-
+
+	    IF SUPPRESS_FLAG THEN FILL_CHAR = %C' ';
+
+	    END;
+
+	END;
+
+    !+
+    ! The digits are extracted, place them into the output buffer.
+    !-
+
+    WHILE (FIELD_LENGTH = .FIELD_LENGTH - 1) GEQ 0 DO
+	CH$WCHAR_A (.CHAR [.FIELD_LENGTH], BUF_PTR);	!Insert the digit.
+
+    .BUF_PTR_ADR = .BUF_PTR;			!Return updated buffer pointer
+    CH$DIFF (.BUF_PTR, .BUF_PTR_INI)		!and the number of characters inserted.
+    END;					!OF $CBTA
+
+GLOBAL ROUTINE $CBTMG (BUF_PTR_ADR, VALUE, FLAGS) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to insert
+!						!the number at.
+!	.VALUE					!The value to convert.
+!	.FLAGS					!Suppress leading zeros
+!						!if zero.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the characters inserted.
+!
+! ROUTINE VALUE:
+!
+!	The number of characters inserted into the output buffer.
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LITERAL
+	RADIX = 8,
+	WIDTH = 3,
+	SUPPRESS = RADIX + WIDTH^11,
+	NO_SUPPRESS = RADIX + WIDTH^11 + 1^9;
+
+    $CBTA (.BUF_PTR_ADR, .VALUE, (IF .FLAGS EQL 0 THEN SUPPRESS ELSE NO_SUPPRESS))
+    END;					!OF $CBTMG
+
+END
+
+ELUDOM

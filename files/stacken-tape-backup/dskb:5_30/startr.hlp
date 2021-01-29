@@ -1,0 +1,66 @@
+Space, the final frontier.
+This is a voyage of the starship Farragut,
+its five year mission, to explore strange new worlds,
+to seek out new life and new civilizations,
+to boldly go where no man has gone before.
+
+To start the program use "R GAM:STARTR"
+
+                    S T A R   T R E K
+                    -----------------
+
+SPOCK:  You are in command of the Farragut, captain.
+
+
+The possible commands are designated by
+   the following numbers or code words:
+
+ # code                  command
+
+ 1 RANGE       Repeat last range and bearing
+ 2 PHASEF      Fire forward phasers
+ 3 PHASER      Fire rear phasers
+ 4 TORPF       Fire forward photon torpedoes
+ 5 TORPR       Fire rear photon torpedoes
+ 6 PROBE       Launch antimatter probe (maximum 10)
+ 7 CLOSE       Close on enemy vessel
+ 8 AWAY        Move away from enemy vessel
+ 9 PURSUE      Close on enemy vessel at warp speed
+10 ESCAPE      Escape at warp speed
+11 SHIELDS     Set optimum shield position
+12 ROTATE      Rotate weapons 180 degrees front to back
+13 CHANCES     Firing probability report
+14 COMMANDS    Type this list again
+15 DAMAGE      Damage report
+16 BLUFF       Attempt combomite bluffing maneuver
+17 WAIT        Let enemy move next
+18 SUICIDE     Activate self-destruction (end game)
+19 SURRENDER   Surrender to enemy
+
+NOTE:  Weapon ranges are:
+       Phasers     0-400 MGM (optimum 200)
+       Torpedoes   300-700 MGM (optimum 500)
+       Probes      all ranges
+
+Phasers are more deadly than torpedoes.
+Probes cause total destruction but are effective
+only 7 percent of the time (approximately).
+Torpedoes and phasers are more deadly when the
+bearing of the enemy is close to 0,180, and -180
+degrees.
+
+: Captain's log, star date  714.865 .
+   We are presently on course for Kappa Sirius 8
+   with a cargo of vital serum to combat an epidemic
+   of Rigellian fever there.
+SULU:  Sir, I'm picking up a vessel on an attack vector
+   with the Farragut.
+SPOCK:  Ship's computers indicate that it is the Romulan vessel 
+  Krulix under the command of captain Varnor.
+: Sound red alert, lieutenant Uhura.
+UHURA: Aye, sir.
+SPOCK:  Krulix is at range: 937.577  MGM., bearing:-89.3354  degrees.
+CHEKOV:  What are your orders, sir ?
+CHEKOV:  I'm sorry captain , but i don't understand your orders.
+SPOCK:  Krulix is at range: 937.577  MGM., bearing:-89.3354  degrees.
+CHEKOV:  What are your orders, sir? .....

@@ -1,0 +1,24 @@
+You are a famous hunter decending down into the caves of darkness, lair
+of the famous man-eating WUMPUS.  You are equiped with five bent
+arrows, and all your senses.  There are twenty caves connected by
+tunnels, and there are two other kinds of hazards (three each):
+   A) Super-bats which if you stumble into their room will pick
+      you up and drop you in some random room in the network.
+   B) Pits, which are bottomless, and fatal to fall into.
+Both are immovable.
+     If you end up in the same room as the WUMPUS, you lose.  Normally
+the WUMPUS does not move (having gorged himself upon a previous hunter).
+Two things wake him up:
+   1) Walking into his room,
+   2) Shooting an arrow anywhere in the network.
+If he wakes there is a 50-50 chance he will move into an adjoining cave.
+He is too big to be picked up by bats, and has sucker feet,
+so he doesn't fall into the pits.  You can smell the WUMPUS from one or
+two rooms away.  You can hear bats one room away, and feel drafts (from
+bottomless pits) from one room away (and taste the fear...).
+     To shoot type S (with no CR) instead of a move, and then specify
+a legal path of length five for the arrow to follow.  If you guess and
+lose the arrow takes a random path.  Paths can be truncated by typing CR
+instead of a room number.
+
+	<End of GAM:WUMPUS.HLP 780923/SO>

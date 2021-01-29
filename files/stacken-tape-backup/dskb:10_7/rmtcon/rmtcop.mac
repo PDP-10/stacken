@@ -1,0 +1,1284 @@
+
+	SUBTTL	RMTCOP	Parsing and Dispatch Module
+
+	SEARCH	RMTCOT			;Get RMTCON symbols
+	TTITLE	(RMTCOP,\DECVER,\VEDIT,Parsing and Dispatch)
+
+;COPYRIGHT 1985
+;LARGE SYSTEMS DIAGNOSTICS GROUP
+;DIGITAL EQUIPMENT CORPORATION
+;MARLBORO, MASS. 01752
+;
+;	Author:	Gary Papazian
+;Update Author:	Gregory A. Scott
+
+	SEARCH	MONSYM,MACSYM,UUOSYM,GLXMAC ;Load universals
+
+	PROLOG	(RMTCOP)		;Set GLXLIB symbols and macros
+
+	NOSYM				;No symbol table dump
+	SALL				;Suppress macro exps
+	.DIREC	FLBLST			;First line binary listing only plesae
+
+.FDSTG==1			;For TOPS-20
+	SUBTTL	Externs/Interns
+
+;Routines local to this module
+
+	INTERN	SOUT%%,BOUT%%,PCRLF,TAKCHR,TOPLVL
+
+;Data local to this module
+
+	INTERN	MONTYP,TAKIFN
+
+;Routines found in RMTCOM
+
+	EXTERN	RRID,$REMOT,RRCT,CTSAVE,SALLAD
+	EXTERN	CTRSTR,RCADR
+
+;Data found in RMTCOM
+
+	EXTERN	TRCFLG,SPRFLG,DBGFLG,RRIFLG,TTEXIT,PRTNBR,LEVTAB,CHNTAB
+	EXTERN	TARADH,TARADL,NODADH,NODADL,PWORDH,PWORDL
+	SUBTTL	Storage
+
+;General storage
+
+PDL:	BLOCK	<PLEN==200>		;Stack
+DPDL:	BLOCK	<DPLEN==200>		;Data stack
+MONTYP:	BLOCK	1			;-1 if TOPS-20, 0 if TOPS-10
+OPSNUM:	BLOCK	1			;10 if TOPS-10, 20 if TOPS-20
+CPUSER:	BLOCK	1			;CPU serial number
+CPUTYP:	BLOCK	1			;CPU type in sixbit
+
+;Log/take file strorage
+
+LOGIFN:	BLOCK	1			;IFN/JFN for log file
+TAKIFN:	BLOCK	1			;IFN/JFN for take file
+
+;Parser storage
+
+CSB:	BLOCK	.CMGJB+1		;The real CSB is here
+BUFFER:	BLOCK	<BUFSIZ==500>		;Command buffer
+ATMBUF:	BLOCK	<ATMSZ==100>		;Atom buffer
+GJFBLK:	BLOCK	<GJFSIZ==.GJRTY+2>	;GTJFN block
+
+;Help file reader storage
+
+HLPBUF:	BLOCK	ATMSZ			;Atom buffer for help request
+HLPLIN:	BLOCK	^D135/5			;Line of help text copied here
+HLPEOF:	BLOCK	1			;-1=EOF on help file
+HLPIFN:	BLOCK	1			;IFN of help file
+	SUBTTL	GLXLIB Interface Blocks
+
+;* IB - the GLXLIB Interface Block
+
+IB:	$BUILD	IB.SZ			;Here to build the init block
+	$SET	(IB.PRG,,%%.MOD)	;Program name
+	$SET	(IB.OUT,,BOUT%%)	;Default output routine
+	$SET	(IB.FLG,IT.OCT,1)	;Set open command terminal flag
+	$EOB				;End of block
+
+;CSB template, BLTed into place at top level parsing
+
+CSBTMP:	$BUILD	.CMGJB+1
+	$SET	.CMFLG,RHMASK,REPARS	;Reparse address
+	$SET	.CMBFP,,<POINT 7,BUFFER> ;Pointer to input buffer
+	$SET	.CMPTR,,<POINT 7,BUFFER> ;Start the parse at the beginning
+	$SET	.CMCNT,,BUFSIZ*5-1	;Size of buffer
+	$SET	.CMABP,,<POINT 7,ATMBUF> ;Pointer to start of atom buffer
+	$SET	.CMABC,,ATMSZ*5-1	;Size of atom buffer
+	$SET	.CMRTY,,<Point 7,PROMPT> ;Prompt (retry) pointer
+	$SET	.CMGJB,,GJFBLK		;GTJFN block
+	$EOB
+
+;Program prompt
+
+PROMPT:	BYTE(7)"R","M","T","C","O","N",76,0	;RMTCONalglebracket
+
+;Fobs and FBs for opening the take file
+
+TAKFOB:	$BUILD	(FOB.SZ)		;File open block
+	$SET	(FOB.FD,,TAKFD)		;File descriptor area
+	$SET	(FOB.CW,FB.BSZ,7)	;Seven bit bytes
+	$EOB
+
+TAKFD:	$BUILD	(FDXSIZ)		;FD
+	$SET	(.FDLEN,FD.LEN,FDXSIZ)	;Set size of block
+	$EOB
+
+;FOBs and FDs for opening the LOG file.
+
+LOGFOB:	$BUILD	(FOB.SZ)		;File open block
+	$SET	(FOB.FD,,LOGFD)		;File descriptor area
+	$SET	(FOB.CW,FB.BSZ,7)	;Seven bit bytes
+	$EOB
+
+LOGFD:	$BUILD	(FDXSIZ)		;FD size
+	$SET	(.FDLEN,FD.LEN,FDXSIZ)	;Set size of block
+	$EOB
+
+;FOBs and FBs for opening the help file
+
+HFOB20:	$BUILD	(FOB.SZ)		;File open block
+	$SET	(FOB.FD,,HLPFD2)	;File descriptor area
+	$SET	(FOB.CW,FB.BSZ,7)	;Seven bit bytes
+	$EOB
+
+HLPFD2:	$BUILD	(.FDSTG+3)		;FD for TOPS-20
+	$SET	(.FDLEN,FD.LEN,.FDSTG+3) ;Set size of block
+	$SET	(.FDSTG,,<ascii/dsk:d/>) ;First 5 characters of filename
+	$SET	(.FDSTG+1,,<ascii/fnis./>) ;Second 5
+	$SET	(.FDSTG+2,,<asciz/hlp/>) ;Last 3
+	$EOB
+
+HFOB10:	$BUILD	(FOB.SZ)		;File open block
+	$SET	(FOB.FD,,HLPFD1)	;File descriptor area
+	$SET	(FOB.CW,FB.BSZ,7)	;Seven bit bytes
+	$EOB
+
+HLPFD1:	$BUILD	(.FDPPN+1)		;FD for TOPS-10
+	$SET	(.FDLEN,FD.LEN,.FDPPN+1) ;Set size of block
+	$SET	(.FDSTR,,<sixbit/DSK/>)	;Structure
+	$SET	(.FDNAM,,<sixbit/RMTCON/>) ;Filename
+	$SET	(.FDEXT,,<sixbit/HLP/>)	;Extension
+	$EOB
+	SUBTTL	Command Parsing Tables
+
+;#***********************************************************************
+;addr:	$STAB				;Start of table
+;	KEYTAB	value,keyword,flags	;value=dispatch addr or table value
+;					;keyword=word to parse
+;					;flags=keyword flags (CM%INV, etc.)
+;	$ETAB				;end of table
+;#***********************************************************************
+
+;This is the top level command table.
+
+MAINCM:	$STAB				;Start command table, top level
+	KEYTAB	CONECT,CONNECT		;Connect (to node/port) command
+	KEYTAB	DISABL,DISABLE		;Disable spear, logging, trace, debug
+	KEYTAB	ENABLE,ENABLE		;Enable spear, logging, trace, debug
+	KEYTAB	.QUIT,EXIT		;Command to exit i.E. Quit
+	KEYTAB	HELP,HELP		;Help command
+	KEYTAB	REQU,IDENTIFY		;Request id command
+	KEYTAB	.QUIT,QUIT		;Quit, exit to kcmon
+	KEYTAB	RDCTRS,READ-COUNTERS	;Read counters
+	KEYTAB	REDEFI,REDEFINE		;Redefine remote tty switch char
+	KEYTAB	SETPW,SET-PASSWORD	;Set password
+	KEYTAB	SHOW,SHOW		;Show local/remote/all node addresses
+	KEYTAB	TAKE,TAKE		;Take commands from file
+	$ETAB				;End command table, top level
+
+;This table is used with the ENABLE command.
+
+ENATAB:	$STAB				;Start of enable command table
+	KEYTAB	EN.DEB,DEBUG		;Enable debug
+	KEYTAB	EN.LOG,LOGGING		;Enable logging command
+	KEYTAB	EN.SPE,SPEAR-REPORTING	;Enable spear command
+	KEYTAB	EN.TRA,TRACE		;Enable program trace
+	$ETAB				;End of enable command table
+
+;This table is used with the DISABLE command.
+
+DIATAB:	$STAB				;Start of enable command table
+	KEYTAB	DA.DEB,DEBUG		;Enable debug
+	KEYTAB	DA.LOG,LOGGING		;Enable logging command
+	KEYTAB	DA.SPE,SPEAR-REPORTING	;Enable spear command
+	KEYTAB	DA.TRA,TRACE		;Enable program trace
+	$ETAB				;End of enable command table
+
+;These tables are used with the 'CONNECT' command.
+
+CONTAB:	$STAB				;Node or port table
+	KEYTAB	.CONN,NODE		;12 digit hex
+	KEYTAB	.CONP,PORT		;0,1,2,3
+	$ETAB				;End of CONTAB
+
+PRTTAB:	$STAB				;Port 0,1,2,3
+	KEYTAB	0,0			;Port 0
+	KEYTAB	1,1			;Port 1
+	KEYTAB	2,2			;Port 2
+	KEYTAB	3,3			;Port 3
+	$ETAB				;End of PRTTAB
+
+;This table is used with the SHOW command.
+
+SHOTAB:	$STAB				;Start of display-address table
+	KEYTAB	SHOALL,ALL		;Display state of all
+	KEYTAB	SHODEB,DEBUG		;Display state of debug
+	KEYTAB	SHOLOG,LOGGING		;Display state of logging
+	KEYTAB	SHONOD,NODES		;Display nodes on network
+	KEYTAB	SHOSPE,SPEAR-REPORTING	;Display state of spear
+	KEYTAB	SHOTRA,TRACE		;Display state of trace
+	$ETAB				;End of display address command table
+
+;This table is used with the REDIRECT command.
+
+.TSWC:	$STAB				;Table of exit characters possible
+	KEYTAB	"A"-100,CONTROL-A
+	KEYTAB	"D"-100,CONTROL-D
+	KEYTAB	"E"-100,CONTROL-E
+	KEYTAB	"F"-100,CONTROL-F
+	KEYTAB	"N"-100,CONTROL-N
+	KEYTAB	"P"-100,CONTROL-P
+	KEYTAB	"V"-100,CONTROL-V
+	KEYTAB	"W"-100,CONTROL-W
+	KEYTAB	"X"-100,CONTROL-X
+	KEYTAB	"Z"-100,CONTROL-Z
+	$ETAB				;End of .TSWC table
+
+;PDB used for Help command.
+
+HLPPRS:	FLDDB.	(.CMKEY,,MAINCM,<Help about a command,>,,HLPALL)
+HLPALL:	FLDDB.	(.CMTOK,,<Point 7,[ASCIZ/*/]>,<for all of the help file,>,,CFM)
+CFM:	FLDDB.	(.CMCFM)
+
+
+; **************************************************************************
+; *     Top level command parser  (see COMND JSYS for field/format defs)   *
+; **************************************************************************
+
+;The macro used to build the command descriptor block is (cmddb.) And has the
+;Following format (type,flags,data,help,default,additional command data block),
+;The type field will contain the command function code, the function codes are:
+;
+;  .Cmkey= 0    ;keyword		.Cmusr= 12   ;user name
+;  .Cmnum= 1    ;number			.Cmcma= 13   ;comma
+;  .Cmnoi= 2    ;guide (noise) word	.Cmini= 14   ;init line
+;  .Cmswi= 3    ;switch			.Cmdev= 16   ;device name
+;  .Cmifi= 4    ;input file		.Cmtxt= 17   ;text to action char
+;  .Cmofi= 5    ;output file		.Cmqst= 21   ;quoted string
+;  .Cmfil= 6    ;general filespec	.Cmuqs= 22   ;unquoted string
+;  .Cmfld= 7    ;arbitrary field	.Cmtok= 23   ;token
+;  .Cmcfm= 10   ;confirm		.Cmnux= 24   ;number delimited
+;  .Cmdir= 11   ;directory name                      ; by non-digit
+;
+;The flag field will contain one of the following flags or will be represented
+;By two commas (,,), this indicates to the macro that this field is blank.
+;The flags are:
+;		Cm%hpp		;help pointer is present
+;		Cm%dpp		;default pointer is present
+;		Cm%sdh		;suppress default help message
+;
+;The data field is dependent on the command function, see tops20 monitor call
+;Manual commd jsys v544.  This field may be omitted by using two commas (,,).
+;
+;The help field points to a message to be printed if the question mark (?)
+;Is typed.  This field may be omitted by using two commas (,,).
+;
+;The default field is pointer to a string to be used if the escape is the first
+;Character to be typed.  This field may be omitted by using two commas (,,).
+;
+;The alternate command block is a pointer to a command block to be parsed if
+;The parse failed in the first command block.  This field may be omited.
+;
+;The function field is always used but not all other fields are necessarily
+;Used.  If a field to the right is to be used, the unused fields separating
+;The fields must be represented by two commas (,,).
+	SUBTTL	Program Initialization
+
+;;*****************************************************************************
+;* Determine if TOPS-10 or TOPS-20, and get GLXLIB going
+;;*****************************************************************************
+
+SETUP:	MOVE	P,[IOWD PLEN,PDL]	;Load stack pointer
+	MOVE	S1,[112,,11]		;Load %CNMNT monitor type word
+	GETTAB	S1,			;This will not call PA1050 on the -20
+	 SETZ	S1,			;Oops
+	TXNE	S1,4B23			;Skip if TOPS-10
+	SKIPA	S1,[XWD .PRIIN,.PRIOU]	;TOPS-20, set up input/output JFNs
+	SKIPA	S1,[XWD 377776,377777]	;TOPS-10, set up fake i/o JFNs
+	SKIPA	S2,[DEC 20]		;TOPS-20, load a twenty
+	SKIPA	S2,[DEC 10]		;TOPS-10, load a ten
+	SETOM	MONTYP			;TOPS-20, set the flag indicating that
+	MOVEM	S1,CSBTMP+.CMIOJ	;Set I/O JFNs properly for -10 or -20
+	MOVEM	S2,OPSNUM		;Set ten or twenty
+	SKIPE	MONTYP			;Skip if TOPS-10
+	RESET%				;Reset the orange world
+	SKIPN	MONTYP			;Skip if TOPS-20
+	CALLI	0			;Reset the blue world
+
+;Get GLXLIB up.
+
+	MOVEI	S1,IB.SZ		;Load size of the init block
+	MOVEI	S2,IB			; and point to it
+	$CALL	I%INIT			;Init the GLXLIB stuff
+
+	SETZM	TAKIFN			;Clear any take file's IFN
+	SETZM	LOGIFN			;Clear any log file IFN
+	$CALL	CTSAVE			;Save terminal stuff
+
+;Announce ourselves, set up data areas
+
+	$CALL	CPUNUM			;Get CPU number, etc.
+	$TEXT	(,<
+^I/ANNOUN/^H/[-1]/
+
+For help, type HELP at the program prompt>) ;Announce ourselves
+
+;Enable capabilities if TOPS-20
+	
+	SKIPN	MONTYP			;TOPS-20?
+	JRST	TOPLVL			;Nope, start parsing
+					
+	MOVEI	S1,.FHSLF		;Set up for current process
+	RPCAP%				;Get my capabilites
+	TRNN	S2,SC%WHL!SC%OPR!SC%MNT ;Any good capabilites present?
+	$PMSGC	(<% Not enough capabilities to run diagnostic - proceeding
+>)
+	MOVEI	S1,.FHSLF		;Incase PMSGC called above
+	MOVE	T1,S2			;Enable all capabilites
+	EPCAP%				;Enable TOPS-20 capabilities
+	JRST	TOPLVL			;Enter top level parser
+
+;Here to get the CPU number and so on from the monitor.
+
+CPUNUM:	SKIPE	CPUSER			;Been here before?
+	$RET				;Yep, avoid GLXLIB bug
+	$CALL	.CPUTY			;Ask GLXLIB for CPU type
+	CAIL	S1,2			;Is it
+	CAILE	S1,5			; in known range?
+	TDZA	S2,S2			;Nope, say nothing
+	MOVE	S2,[EXP 'KI10  ','KL10  ','KS10  ']-2(S1)
+	MOVEM	S2,CPUTYP		;Save sixbit CPU type
+
+	SKIPE	MONTYP			;Skip if TOPS-10
+	JRST	CPUN20			;Tops-20
+
+	MOVE	S1,[20,,11]		;Load %CNSER CPU0 serial number
+	GETTAB	S1,			;Get it
+	 SETZ	S1,			;Error- punt it off
+	MOVEM	S1,CPUSER		;Save it there
+	$RET				;Return to caller
+
+CPUN20:	MOVEI	S1,.APRID		;Load table for APRID number
+	GETAB%				;Get it
+	 SETZ	S1,			;Error? punt
+	MOVEM	S1,CPUSER		;Save it
+	$RET				;Return
+
+;Here is the text string output to terminal and log file when we are started.
+
+ANNOUN:	ITEXT	(<RMTCON  Network Interconnect Services
+Version ^V/.JBVER##/, ^W/CPUTYP/, TOPS-^D/OPSNUM/, CPU#=^D/CPUSER/
+>)
+	SUBTTL	Top Level Parser
+
+;Here on a reparse.
+
+REPARS:	MOVE	P,[IOWD PLEN,PDL]	;Here on reparse - reset stack
+	JRST	PRSCM3			; and restart parsing
+
+;Here for top level commands, reloads the stack and parses a new command.
+
+TOPLVL:	MOVE	P,[IOWD PLEN,PDL]	;Point to the stack (again)
+	MOVE	S1,[XWD CSBTMP,CSB]	;Initialize the CSB by BLTing
+	BLT	S1,CSB+.CMGJB		; the CSB template over it
+
+;Normal commands loop.
+
+PRSCM1:	MOVE	DP,[IOWD DPLEN,DPDL]	;Reset data stack
+	SKIPN	S1,TAKIFN		;TAKE command in progress?
+	JRST	PRSCM2			;Not in a take command
+	HRLM	S1,CSB+.CMIOJ		;Take command, set the input JFN
+	MOVE	S1,[Point 7,[0]]	;Point to a zero
+	MOVEM	S1,CSB+.CMRTY		;Reset the prompt to be nothing
+
+PRSCM2:	MOVEI	S2,[FLDDB. (.CMINI)]	;Load address of init block
+	$CALL	CMDPRS			;Init parser
+
+;Enter here on reparse (after the CMINI call).  Parse a keyword and dispatch.
+
+PRSCM3:	MOVEI	S2,[FLDDB. (.CMKEY,,MAINCM)] ;Point to top level parsing block
+	$CALL	CMDPRS			;parse top level command
+	HRRZ	S1,@CR.RES(S2)		;Get the keyword address
+	$CALL	(S1)			;Dispatch 
+	JRST	PRSCM1			;Get another command
+	SUBTTL	CONNECT Command
+
+; ***********************************************************************
+; 1. CONNECT PORT inputs a port number (0-3) & stores it in PRTNBR which
+;    is used as the CHANNEL-ID in LLMOP argument blocks.
+;
+; 2. CONNECT NODE inputs a 12 digit hex number (no spaces allowed) & stores
+;    it in TARADH & TARADL which is used as the destination address in the
+;    RESERVE CONSOLE argument block & other LLMOP's.
+; ***********************************************************************
+
+CONECT:	MOVEI	S2,[FLDDB. (.CMKEY,,CONTAB)] ;Point to connect table
+	$CALL	CMDPRS			;Parse command
+	HRRZ	S1,@CR.RES(S2)		;Get the keyword address
+	PJRST	(S1)			;Dispatch 
+
+;Here for CONNECT PORT n
+
+.CONP:	MOVEI	S2,[FLDDB. (.CMNOI,,<Point 7,[ASCIZ/number/]>)]	;Noise word
+	$CALL	CMDPRS			;Output the noise
+	MOVEI	S2,[FLDDB. (.CMKEY,,PRTTAB)] ;Point to port block
+	$CALL	CMDPRS			;Parse the port number
+	HRRZ	S1,@CR.RES(S2)		;Get port number
+	$CALL	CMDCFM			;Confirm command first
+	MOVEM	S1,PRTNBR		;Save
+	$RET
+
+;Here for CONNECT ADDRESS nnnnnnnnnnnnnnnn
+
+.CONN:	MOVEI	S2,[FLDDB. (.CMNOI,,<Point 7,[ASCIZ/address/]>)] ;Noise word
+	$CALL	CMDPRS			;Output the noise
+	MOVEI	S2,[FLDDB. (.CMFLD,,,<12 digit HEX address>)]
+	$CALL	CMDPRS			;Parse that
+	$CALL	HEX			;Input hex digits
+	CAIE	T2,^D12			;12 Digits ?
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR	<? Illegal format of HEX address>] ;Report error/return
+
+	$CALL	CMDCFM			;Confirm that command
+
+	MOVEM	P2,TARADH		;Put node number and entry bit in table
+	MOVEM	P3,TARADL
+
+	PJRST	$REMOT			;Do RCSEND & RCPOLL's (in RMTCOM)
+	SUBTTL	ENABLE Command
+
+;#***********************************************************************
+; Enable debug, logging, spear or trace
+;#***********************************************************************
+
+ENABLE:	MOVEI	S2,[FLDDB. (.CMKEY,,ENATAB)] ;Enable commands
+	$CALL	CMDPRS			;Parse keyword
+	HRRZ	S1,@CR.RES(S2)		;Get the keyword address
+	PJRST	(S1)			;Dispatch 
+
+;Here for ENABLE DEBUG
+
+EN.DEB:	SKIPE	DBGFLG			;Skip if debugging now
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR	(<? Debug mode is already enabled>)] ;Give message 
+	$CALL	CMDCFM			;Confirm that command
+	SETOM	DBGFLG			;Enable debug
+	$RET				;Return
+
+;Here to ENABLE SPEAR-REPORTING
+
+EN.SPE:	SKIPE	SPRFLG			;Skip if spearing now
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR	(<? SPEAR Reporting is already enabled>)]
+	SKIPN	MONTYP			;Must be a TOPS-20 system
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR	(<? Cannot enable SPEAR reporting on TOPS-10>)]
+	$CALL	CMDCFM			;Confirm that command
+	SETOM	SPRFLG			;Enable spear
+	$RET
+
+;Here to ENABLE TRACE
+
+EN.TRA:	SKIPE	TRCFLG			;Skip if spearing now
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR	(<? Trace mode is already enabled>)]
+	$CALL	CMDCFM			;Confirm that command
+	SETOM	TRCFLG			;Enable trace
+	$RET
+
+;Here for ENABLE LOGGING
+
+EN.LOG:	SKIPE	LOGIFN			;Logging enabled now?
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR	(<? Logging is already enabled, type DISABLE LOGGING first>)]
+	MOVEI	S2,[FLDDB. (.CMNOI,,<Point 7,[ASCIZ/to file/]>)]
+	$CALL	CMDPRS			;Do it
+	SETZM	GJFBLK			;Clear first word
+	MOVE	S1,[GJFBLK,,GJFBLK+1]	;Set up to clear block
+	BLT	S1,GJFBLK+GJFSIZ-1	;Clear the block
+	SKIPN	MONTYP			;Skip if TOPS-20
+	JRST	EN.LO5			;TOPS-10
+
+;TOPS-20 ENABLE LOGGING command
+
+	MOVX	S1,GJ%FOU		;File is for output
+	MOVEM	S1,GJFBLK+.GJGEN	; into flags word
+	MOVE	S1,CSB+.CMIOJ		;Load I/O JFNs
+	MOVEM	S1,GJFBLK+.GJSRC	; into block
+	HRROI	S1,[ASCIZ/RMTCON/]	;Point at default file name
+	MOVEM	S1,GJFBLK+.GJNAM	;Save for GTJFN
+	HRROI	S1,[ASCIZ/LOG/]		;Default extension
+	MOVEM	S1,GJFBLK+.GJEXT	;Save in GTJFN block
+	HRROI	S1,[ASCIZ/DSK/]		;Get the default structure
+	MOVEM	S1,GJFBLK+.GJDEV	;Save the device
+	MOVEI	S2,[FLDDB. (.CMFIL,,,,<RMTCON.LOG>)] ;Output file type
+	$CALL	CMDPRS			;Hello GLXLIB
+	MOVE	S2,CR.RES(S2)		;Load the resulting JFN
+	$CALL	CMDCFM			;Confirm that
+	HRROI	S1,LOGFD+.FDSTG		;Point to the FD
+	MOVX	T1,FLD(.JSAOF,JS%DEV)!FLD(.JSAOF,JS%DIR)!FLD(.JSAOF,JS%NAM)!FLD(.JSAOF,JS%TYP)!FLD(.JSAOF,JS%GEN)!JS%PAF
+	JFNS%				;JFN to string
+	 ERJMP	.+1			;Error, ignore it
+	MOVE	S1,S2			;Reload the JFN
+	RLJFN%				;Release it please
+	ERJMP	.+1			;Error?  Punt it
+	JRST	LOGOPN			;Open the logging file and return
+
+;Here for TOPS-10 ENABLE LOGGING command
+
+EN.LO5:	MOVE	S1,[SIXBIT/RMTCON/]	;Get file name
+	STORE	S1,GJFBLK+.FDNAM	;Save in default block
+	MOVSI	S1,'CMD'		;Get default extension
+	STORE	S1,GJFBLK+.FDEXT	;Save in block
+	MOVSI	S1,'DSK'		;Get structure name
+	STORE	S1,GJFBLK+.FDSTR	;Save the structure
+	MOVEI	S2,[FLDDB. (.CMOFI,,,,<RMTCON.LOG>)] ;Input file
+	$CALL	CMDPRS			;Hello GLXLIB
+	MOVE	S1,[GJFBLK,,LOGFD]	;Set up to copy into FD
+	BLT	S1,LOGFD+GJFSIZ-1	;Clear the block
+	$CALL	CMDCFM			;Confirm the command
+	JRST	LOGOPN			;Open the log file and return
+	SUBTTL	DISABLE Command
+
+;#***********************************************************************
+; Disable debug, logging, spear or trace
+;#***********************************************************************
+
+DISABL:	MOVEI	S2,[FLDDB. (.CMKEY,,DIATAB)] ;Point to disable table
+	$CALL	CMDPRS			;Parse keyword
+	HRRZ	S1,@CR.RES(S2)		;Get the keyword address
+	PJRST	(S1)			;Dispatch 
+
+;Here for DISABLE DEBUG
+
+DA.DEB:	SKIPN	DBGFLG			;Skip if debugging now
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR	(<? Debug mode is already disabled>)] ;Give msg and ret
+	$CALL	CMDCFM			;Confirm the command
+	SETZM	DBGFLG			;Disable debug
+	$RET
+
+;Here for DISABLE SPEAR
+
+DA.SPE:	SKIPN	SPRFLG			;Skip if spearing now
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR	(<? SPEAR is already disabled>)] ;Give message and ret
+	$CALL	CMDCFM			;Confirm the command
+	SETZM	SPRFLG			;Disable spear
+	$RET
+
+;Here for DISABLE TRACE
+
+DA.TRA:	SKIPN	TRCFLG			;Skip if trace now
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR	(<? Tracing is already disabled>)] ;Give msg and ret
+	$CALL	CMDCFM			;Confirm the command
+	SETZM	TRCFLG			;Disable trace
+	$RET
+
+;Here for DISABLE LOGGING
+
+DA.LOG:	SKIPN	LOGIFN			;Skip if a log file there
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR (<? Logging was not enabled>)] ;Owie
+	$CALL	CMDCFM			;Confirm the command
+	PJRST	LOGCLS			;Close the log file
+	SUBTTL	REDEFINE Command
+
+;#***************************************************************************
+;Redefine the "EXIT CHAR" to be any of those listed below.
+;note, the entire word "CONTROL" must be entered.
+;#***************************************************************************
+
+REDEFI:	MOVEI	S2,[FLDDB. (.CMNOI,,<Point 7,[ASCIZ/exit character/]>)]
+	$CALL	CMDPRS			;Do it
+	MOVEI	S2,[FLDDB. (.CMKEY,,.TSWC,,,CFM)]
+	$CALL	CMDPRS			;Parse that command please
+	HRRZ	T1,CR.PDB(S2)		;Load PDB used
+	CAIN	T1,CFM			;Was it a conform?
+	JRST	REDEF1			;Yes
+	HRRZ	S1,@CR.RES(S2)		;Load the resulting character
+	$CALL	CMDCFM			;Confirm command
+	MOVEM	S1,TTEXIT		;Set it up
+
+REDEF1:	MOVE	S1,TTEXIT		;Load TTY exit character
+	ADDI	S1,"A"-1		;Convert to ASCII
+	$TEXT	(,<TTY Exit character = control-^7/S1/>)
+	$RET				;Return
+	SUBTTL	HELP Command
+
+;Here on a HELP command
+
+HELP:	MOVE	T4,[POINT 7,HLPBUF]	;Get pointer to help buffer
+	SETZB	T3,HLPBUF		;Make easy check for nothing typed
+	MOVEI	S2,HLPPRS		;Parse to help
+	$CALL	CMDPRS			;Parse it
+	$CALL	HLPATM			;Copy that atom please
+
+;Command has been parsed and thing to get help on is in HLPBUF, set up flags
+
+HELP1:	SETZM	HLPEOF			;Not EOF on help file
+	SETZM	T4			;Initially not outputting anything
+	MOVE	S1,HLPBUF		;Load help buffer contents
+	CAME	S1,[ASCIZ/*/]		;Was it star?
+	SKIPN	HLPBUF			;Skip if something typed
+	SETOB	T3,T4			;Yes, output first text you see
+
+;Open up the help file for reading.
+
+	DMOVE	S1,[EXP <SIXBIT/DSK/>,<ASCII/dsk:d/>] ;Load first place to look
+	$CALL	HFIND			;Try and find it there
+	JUMPT	HELP2			;Jump if we got it
+	DMOVE	S1,[EXP <SIXBIT/HLP/>,<ASCII/hlp:d/>] ;Load second place
+	$CALL	HFIND			;Try and find it there
+	JUMPT	HELP2			;Jump if we got it
+	DMOVE	S1,[EXP <SIXBIT/SYS/>,<ASCII/sys:d/>] ;Load third place to look
+	$CALL	HFIND			;Try and find it there
+	JUMPF	HLPERR			;Jump if we didn't get it
+
+;Ready to read help file, line at a time.  First check EOF flag.
+
+HELP2:	SKIPE	HLPEOF			;Eof?
+	JRST	HELP7			;Release it and return to top level
+	$CALL	HREAD			;Read in a line from the file
+
+;Check the first character on the line, if its a "*" then we must check more
+
+HELP3:	CAIE	T1,"*"			;Is it a keyword start?
+	JRST	HELP6			;Nope
+	SETZM	T4			;Not outputting text any more
+	SKIPN	HLPBUF			;Skip if some specific help request
+	SETOM	HLPEOF			;Yes, simulate EOF at first "*"
+	HRROI	S2,HLPLIN		;Point to help line
+	HRROI	S1,HLPBUF		;Point to buffer
+	$CALL	S%SCMP			;Call string comparison routine
+	MOVE	S2,HLPBUF		;Load help buffer contents
+	CAME	S2,[ASCIZ/*/]		;Was it star?
+	SKIPN	S1			;Exact match?
+	SETOB	T3,T4			;Yes, we should output text now
+	JRST	HELP2			;Get another line
+
+;Here if line didn't begin with "*", output the line if output flag is set.
+
+HELP6:	HRROI	S1,HLPLIN		;Point to line of text
+	SKIPE	T4			;Outputting now?
+	$CALL	SOUT%%			;Output to terminal
+	JRST	HELP2			;Loop for more
+
+;Here at end of file, determine if something has been printed.
+
+HELP7:	SKIPN	T3			;Skip if something was found
+	$TEXT	(,<% Sorry, no information on "^T/HLPBUF/">)
+	MOVE	S1,HLPIFN		;Load the help IFN
+	PJRST	F%REL			;Release it and return
+
+;Here to read a line from the help file into HLPLIN, returns S1/first character
+
+HREAD:	MOVE	S1,HLPIFN		;Load the IFN
+	MOVE	T2,[Point 7,HLPLIN]	;Load pointer to line of text
+	$CALL	F%IBYT			;Get the first character of the line
+	JUMPF	HREAD2			;Punt - EOF
+	CAIE	S2,"!"			;Eat this line?
+	SKIPA	T1,S2			;No, copy the character to T1
+	SETO	T1,			;Indicate it was a comment line
+	CAIE	S2,"*"			;Asterisk?
+	IDPB	S2,T2			;No, store the 1st character of line
+	
+HREAD1:	$CALL	F%IBYT			;Get a byte
+	JUMPT	HREAD3			;Jump if not EOF
+
+HREAD2:	SETOM	HLPEOF			;Now it was an EOF
+	JRST	HREAD5			;Deposit a null and return
+
+HREAD3:	CAIN	S2,.CHCRT		;Was it a return?
+	JRST	HREAD1			;Yes, eat it
+	CAIN	S2,.CHLFD		;Was it a linefeed?
+	JRST	HREAD4			;Yes, end of line
+	IDPB	S2,T2			;Store the character
+	JRST	HREAD1			;Loop
+
+HREAD4:	JUMPL	T1,HREAD		;If it was a comment start another line
+	CAIN	T1,"*"			;Line start with a star?
+	JRST	HREAD5			;Yes
+	MOVEI	S2,.CHCRT		;Load a return
+	IDPB	S2,T2			; and store it
+	MOVEI	S2,.CHLFD		;Load a line feed
+	IDPB	S2,T2			; and store that
+
+HREAD5:	SETZ	S2,			;Clear S2
+	IDPB	S2,T2			;Store it here
+	$RET				;Return
+
+;Copy atom buffer to help text buffer, returns T1/PDB used
+
+HLPATM:	HRRZ	T1,CR.PDB(S2)		;Load PDB used
+	CAIN	T1,CFM			;Was it a confirm?
+	$RET				;Return, all set
+	CAIN	T1,HLPALL		;Was it help all?
+	JRST	HLPAT4			;yes
+	HLRZ	S1,@CR.RES(S2)		;Get address of ASCIZ text
+	HRLI	S1,(Point 7,)		;Make byte pointer
+
+HLPAT1:	ILDB	T1,S1			;Get first character
+	IDPB	T1,T4			;Not zero, put it in help buffer
+	JUMPN	T1,HLPAT1		;Not null, loop for more
+	$RET				;Return
+
+HLPAT4:	MOVSI	S1,(<ASCIZ/*/>)		;Load a star
+	MOVEM	S1,HLPBUF		;Save it as the request type
+	JRST	CMDCFM			;Confirm it and return
+
+;Here to try and find the help file, called with S1/TOPS-10 dev, S2/TOPS-20 dev
+;Returns false if not found, returns true with file open and HLPIFN set.
+
+HFIND:	MOVEM	S1,HLPFD1+.FDSTR	;Save TOPS-10 structure name
+	MOVEM	S2,HLPFD2+.FDSTG	;Save TOPS-20 first 5 characters
+	SKIPE	MONTYP			;Skip if TOPS-10
+	SKIPA	S2,[HFOB20]		;TOPS-20
+	MOVEI	S2,HFOB10		;TOPS-10
+	MOVEI	S1,FOB.SZ		;Load size of the FOB
+	$CALL	F%IOPN			;Open up input file
+	$RETIF				;Return if false
+	MOVEM	S1,HLPIFN		;Save IFN of help file
+	$RETT				;Return OK
+
+;Here if help file open problem
+
+HLPERR:	$TEXT	(,<? Help not available - ^E/S1/>)
+	$RET				;Return
+	SUBTTL	IDENTIFY Command
+
+;#***********************************************************************
+;Enter via "IDENTIFY" (addr) Command.
+;Node does not have to be selected (reserved).
+;The req id will return info (status) on desired node.
+;#***********************************************************************
+
+REQU:	MOVEI	S2,[FLDDB. (.CMNOI,,<Point 7,[ASCIZ/node/]>)]
+	$CALL	CMDPRS			;Do it
+	MOVEI	S2,[FLDDB. (.CMFLD,,,<12 digit HEX address>)]
+	$CALL	CMDPRS			;Parse that
+	$CALL	HEX			;Input hex digits
+	CAIE	T2,^D12			;12 Digits ?
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR	<? Illegal format of HEX address>] ;Report error/return
+	$CALL	CMDCFM			;Confirm that command
+
+;Save trace flag, do the request id
+
+	$SAVE	<TRCFLG>		;Save trace flag
+	SETZM	TRCFLG			;No trace right now
+	SETOM	RRIFLG			;Do request ID printout flag
+	$CALL	RRID			;Do Req-ID for this node
+	SETZM	RRIFLG			;Clear req-id flag
+	$RET				;Return to parser
+	SUBTTL	SET-PASSWORD Command
+
+;#************************************************************************
+;Enter via "SET-PASSWORD"  command.
+;Take up to 16 hex digits & store in PWORDH/L.
+;The Password is used in RCRBT & RCRSV
+;#************************************************************************
+
+SETPW:	MOVEI	S2,[FLDDB. (.CMFLD,,,<12 digit HEX password>)]
+	$CALL	CMDPRS			;Parse that
+	$CALL	HEXPW			;Input hex password digits
+	$CALL	CMDCFM			;Confirm that command please
+	MOVEM	P2,PWORDH		;Hi = bytes 7,6,5,4,z
+	MOVEM	P3,PWORDL		;Lo = bytes 3,2,1,0,z
+	$RET				;Return
+	SUBTTL	READ-COUNTERS Command
+
+;#*************************************************************************
+;Enter via "READ-COUNTERS" (addr) Command.
+;Node does not have to be selected (reserved).
+;The counter information will be returned on the desired node.
+;#*************************************************************************
+
+RDCTRS:	MOVEI	S2,[FLDDB. (.CMNOI,,<Point 7,[ASCIZ/node/]>)]
+	$CALL	CMDPRS			;Do it
+	MOVEI	S2,[FLDDB. (.CMFLD,,,<12 digit HEX address>)]
+	$CALL	CMDPRS			;Parse that
+	$CALL	HEX			;Input hex digits
+	CAIE	T2,^D12			;12 Digits ?
+	JRST	[$CALL	CMDLOG		;Log the command
+		$PMSGR	<? Illegal format of HEX address>] ;Report error/return
+	$CALL	CMDCFM			;Confirm that command
+	PJRST	RRCT			;Do read counters for this node
+	SUBTTL	SHOW Command
+
+;Here for the SHOW command to show things on the terminal.
+
+SHOW:	MOVEI	S2,[FLDDB. (.CMNOI,,<Point 7,[ASCIZ/current state of/]>)]
+	$CALL	CMDPRS			;Output the noise
+	MOVEI	S2,[FLDDB. (.CMKEY,,SHOTAB)] ;Point to parse table
+	$CALL	CMDPRS			;Parse command
+	HRRZ	S1,@CR.RES(S2)		;Get the keyword address
+	$CALL	CMDCFM			;Confirm that please
+	PJRST	(S1)			;Dispatch 
+
+;SHOW LOGGING
+
+SHOLOG:	SKIPN	LOGIFN			;Is logging enabled?
+	$PMSGC	(<Logging is disabled>) ;Nope
+	SKIPE	LOGIFN			;is logging enabled?
+	$TEXT	(,<Logging is enabled to file ^F/LOGFD/>)
+	$RET
+
+;SHOW DEBUG
+
+SHODEB:	SKIPN	DBGFLG			;Is debug enabled?
+	SKIPA	S1,[ASCIZ/dis/]		;Disabled
+	MOVEI	S1,(ASCIZ/en/)		;Enabled
+	$TEXT	(,<Program DEBUG is ^T/S1/abled>)
+	$RET
+
+;SHOW SPEAR
+
+SHOSPE:	SKIPN	SPRFLG			;Is spear enabled ?
+	SKIPA	S1,[ASCIZ/dis/]		;Disabled
+	MOVEI	S1,(ASCIZ/en/)		;Enabled
+	$TEXT	(,<Reports to SPEAR are ^T/S1/abled>)
+	$RET
+
+;SHOW ALL
+
+SHOALL:	$CALL	SHODEB			;Show debug
+	$CALL	SHOLOG			;Show logging
+	$CALL	SHOSPE			;Show spear
+					;Fall through to show trace
+
+;SHOW TRACE
+
+SHOTRA:	SKIPN	TRCFLG			;Is trace enabled ?
+	SKIPA	S1,[ASCIZ/dis/]		;Disabled
+	MOVEI	S1,(ASCIZ/en/)		;Enabled
+	$TEXT	(,<Program TRACE is ^T/S1/abled>)
+	$RET
+
+;SHOW NODES
+
+SHONOD:	PUSHD	<TRCFLG>		;Save TRACE flag
+	SETOM	TRCFLG			;Force TRACE
+	$CALL	RCADR			;Do the LLMOP to read local node addr
+	 NOP				; error return
+	POPD	<TRCFLG>		;Restore TRACE
+	PJRST	SALLAD			;All REMOTE NODE addresses on network
+	SUBTTL	TAKE Command
+
+;Here to process TAKE command
+
+TAKE:	SKIPE	TAKIFN			;In a TAKE already?
+	JRST	TAKE7			;Yep
+	SETZM	GJFBLK			;Clear first word
+	MOVE	S1,[GJFBLK,,GJFBLK+1]	;Set up to clear block
+	BLT	S1,GJFBLK+GJFSIZ-1	;Clear the block
+	MOVEI	S2,[FLDDB. (.CMNOI,,<Point 7,[ASCIZ/commands from/]>)]
+	$CALL	CMDPRS			;Do the noise
+	SKIPN	MONTYP			;Skip if TOPS-20
+	JRST	TAKE1			;TOPS-10
+
+;TOPS-20 take command
+
+	MOVX	S1,GJ%OLD		;File must exist
+	MOVEM	S1,GJFBLK+.GJGEN	; into flags word
+	MOVE	S1,CSB+.CMIOJ		;Load I/O JFNs
+	MOVEM	S1,GJFBLK+.GJSRC	; into block
+	HRROI	S1,[ASCIZ/RMTCON/]	;Point at default file name
+	MOVEM	S1,GJFBLK+.GJNAM	;Save for GTJFN
+	HRROI	S1,[ASCIZ/CMD/]		;Default extension
+	MOVEM	S1,GJFBLK+.GJEXT	;Save in GTJFN block
+	HRROI	S1,[ASCIZ/DSK/]		;Get the default structure
+	MOVEM	S1,GJFBLK+.GJDEV	;Save the device
+	MOVEI	S2,[FLDDB. (.CMFIL,,,,<RMTCON.CMD>)] ;Input file type
+	$CALL	CMDPRS			;Hello GLXLIB
+	MOVE	S2,CR.RES(S2)		;Load the resulting JFN
+	$CALL	CMDCFM			;Confirm that
+	HRROI	S1,TAKFD+.FDSTG		;Point to the FD
+	MOVEM	S2,TAKIFN		;Save the take JFN
+	SETZ	T1,			;Default format
+	JFNS%				;JFN to string
+	 ERJMP	.+1			;Error, ignore it
+	MOVE	S1,TAKIFN		;Get the JFN again
+	MOVX	S2,OF%RD!FLD(7,OF%BSZ)	;Read 7 bit bytes
+	OPENF%				;Pry it open
+	ERJMP	TAKE6			;Error, punt
+	JRST	TAKE3			;Give startip message
+
+;Here for TOPS-10 TAKE command
+
+TAKE1:	MOVE	S1,[SIXBIT/RMTCON/]	;Get file name
+	STORE	S1,GJFBLK+.FDNAM	;Save in default block
+	MOVSI	S1,'CMD'		;Get default extension
+	STORE	S1,GJFBLK+.FDEXT	;Save in block
+	MOVSI	S1,'DSK'		;Get structure name
+	STORE	S1,GJFBLK+.FDSTR	;Save the structure
+	MOVEI	S2,[FLDDB. (.CMIFI,,,,<RMTCON.CMD>)] ;Input file
+	$CALL	CMDPRS			;Hello GLXLIB
+	MOVE	S1,[GJFBLK,,TAKFD]	;Set up to copy into FD
+	BLT	S1,TAKFD+GJFSIZ-1	;Clear the block
+	$CALL	CMDCFM			;Confirm the command
+	MOVEI	S1,FOB.SZ		;Load size of FOB
+	MOVEI	S2,TAKFOB		;Point to the FOB
+	$CALL	F%IOPN			;Open up the thing
+	JUMPF	TAKE6			;Punt if an error
+	MOVEM	S1,TAKIFN		;Save the IFN
+
+;Here to give startup message and then return for commands.
+
+TAKE3:	$TEXT	(,<[Processing ^F/TAKFD/]>)
+	$RET				;Return to get commands from file
+
+;Here if an error opening the file, etc.
+
+TAKE6:	$TEXT	(,<? ^E/S1/>)		;Give error message
+	JRST	TAKABT			;Abort the take
+
+;Here if in a take already.
+
+TAKE7:	$CALL	CMDLOG			;Log the command
+	$PMSGC	(<? Nested TAKE files are illegal>)
+
+;Here to get a character from the take file.  Returns FALSE if no char return.
+
+TAKCHR:	SKIPN	S1,TAKIFN		;Skip if a JFN there
+	$RETF				;Nope
+	SKIPN	MONTYP			;Skip if orange
+	JRST	TAKCH1			;Blue, just call GLXFIL
+	BIN%				;Get a byte please
+	ERJMP	TAKCH2			;Owie if error
+	CAIN	S2,.CHLFD		;Linefeed?
+	JRST	TAKCHR			;Yep, loop for more charaters
+	MOVE	S1,S2			;Copy character to S1
+	$RETT				;Return with byte in S1
+
+TAKCH1:	$CALL	F%IBYT			;Input a character
+	JUMPF	TAKCH2			;Jump if an error
+	CAIN	S2,.CHLFD		;Linefeed?
+	JRST	TAKCHR			;Yep, loop for more charaters
+	MOVE	S1,S2			;Copy to S1
+	$RETT				;Return if OK, fall thru if not
+
+TAKCH2:	$CALL	TAKEOF			;Check for EOF
+	$RETF				;Return with no character
+
+;Here to check if we had an EOF on the take file, gives message if end,
+; returns TRUE if it was EOF, false if not take file or not EOF
+
+TAKEOF:	SKIPN	MONTYP			;Skip if TOPS-20
+	JRST	TAKEO1			;TOPS-10
+	SKIPN	S1,TAKIFN		;Get input file JFN for take file
+	$RETF				;No take file so not EOF
+	GTSTS%				;Get the file's status
+	TXNN	S2,GS%EOF		;At end of file?
+	$RETF				;Nope, not EOF
+	JRST	TAKEO2			;Yep
+
+TAKEO1:	SKIPE	TAKIFN			;Skip if no take file
+	CAIE	S1,EREOF$		;End of file?
+	$RETF				;Nope, no take file or not EOF
+
+TAKEO2:	$TEXT	(,<
+[End of ^F/TAKFD/]>)			;End of take file
+	$CALL	TAKABT			;Abort take file and return
+	$RETT				;Return true, it was EOF
+
+;Here to abort/close a TAKE file
+
+TAKABT:	SKIPN	S1,TAKIFN		;Skip if an IFN there
+	$RET				;None there, return now
+	SKIPE	MONTYP			;Skip if TOPS-10
+	CLOSF%				;TOPS-20, close the file
+	ERJMP	.+1			;Ignore errors
+	SKIPN	MONTYP			;Skip if TOPS-20
+	$CALL	F%REL			;TOPS-10, release the file
+	SETZM	TAKIFN			;No longer an IFN/JFN
+	$RET				;Return
+	SUBTTL	QUIT/EXIT Command
+
+;#**************************************************************************
+;* QUIT command - Exit this program (NI SERVER) & return to system monitor.
+;#**************************************************************************
+
+.QUIT:	MOVEI	S2,[FLDDB. (.CMNOI,,<Point 7,[ASCIZ/to monitor level/]>)]
+	$CALL	CMDPRS			;Output the noise
+	$CALL	CMDCFM			;Confirm that
+
+	$CALL	CTRSTR			;Restore controlling terminal
+	$CALL	LOGCLS			;Disable logging
+	$CALL	I%EXIT			;Exit program
+	SUBTTL	Logging Subroutines
+
+;* LOGOPN - Subroutine to open the log file, LOGFB already set up.
+
+LOGOPN:	MOVEI	S1,FOB.SZ		;Load size of FOB
+	MOVEI	S2,LOGFOB		;Point to the FOB
+	$CALL	F%AOPN			;Open up the thing append mode
+	JUMPF	LOGOP2			;Error.. punt it
+	MOVEM	S1,LOGIFN		;Save the IFN
+	$TEXT	(LOUT%%,<^I/ANNOUN/^F/LOGFD/ opened at ^H/[-1]/
+>)					;Start the log file
+	$TEXT	(T%TTY,<[^F/LOGFD/ opened]>) ;Output logging filename
+	$RET				;Return
+
+LOGOP2:	$TEXT	(,<? ^E/S1/, logging not enabled>)
+	$RET				;Give message and return
+
+;* PCRLF - output CRLF to terminal
+
+PCRLF:	$SAVE	<S1>			;Save an AC
+	HRROI	S1,[ASCIZ/
+/]					;Fall through to SOUT%%
+
+;* SOUT%% - Routine that is called for string output to terminal.
+; S1/ address of ASCIZ string
+
+SOUT%%:	$SAVE	<P1,P2>			;Save an AC
+	TLO	S1,-1			;Make default byte pointer for PSOUT
+	MOVEI	P1,(S1)			;Load the address of the string
+	HRLI	P1,(Point 7)		;Make a byte pointer out of it
+	SKIPE	MONTYP			;Skip if not TOPS-20
+	PSOUT%				;Output string to terminal
+	SKIPN	MONTYP			;Skip if not TOPS-10
+	OUTSTR	(S1)			;Output string to terminal
+	SKIPN	LOGIFN			;Skip if a log file opened
+	$RET				;Nope, return now
+
+SOUT%1:	ILDB	S1,P1			;Load a byte
+	JUMPE	S1,.POPJ		;Jump if done
+	$CALL	LOUT%%			;Output the byte to the file
+	JRST	SOUT%1			;Loop for all bytes in the string
+
+;* BOUT%% - Routine that is called for printing a character in S1.
+;	    Sends character to terminal and log file if opened.
+
+BOUT%%:	SKIPE	LOGIFN			;Skip if no logging IFN
+	$CALL	LOUT%%			;Output to log file
+	SKIPE	MONTYP			;Skip if not orange
+	PBOUT%				;Output byte to terminal
+	SKIPN	MONTYP			;Skip if not blue
+	IONEOU	S1			;Output character to terminal
+	$RETT				;Return true for GLXTXT
+
+;* LOUT%% - Routine to output character to LOG file, S1/ character
+
+LOUT%%:	$SAVE	<S1,S2>			;Save the ACs in question
+	MOVE	S2,S1			;Copy byte to S2
+	SKIPN	S1,LOGIFN		;Load the IFN
+	$STOP	(LOC,Output to Log file when not opened)
+	$CALL	F%OBYT			;Output the byte
+	$RETIT				;Return if OK
+	$TEXT	(T%TTY,<? Output error to LOG file: ^E/S1/>)
+					;Fall thru to close LOG file
+
+;* LOGCLS - Suboroutine to close the log file, checks if it was open first
+
+LOGCLS:	SKIPN	S1,LOGIFN		;Skip and load existing IFN
+	$RET				;Return now
+	$TEXT	(LOUT%%,<
+^F/LOGFD/ closed at ^H/[-1]/>)
+	$CALL	F%REL			;Release the IFN
+	SETZM	LOGIFN			;Clear that IFN
+	SKIPT				;Skip if it went well
+	$TEXT	(,<? ^F/LOGFD/ close error: ^E/S1/>)
+	SKIPF				;Skip if it didn't go so well
+	$TEXT	(,<[^F/LOGFD/ closed]>)	;Close message
+	$RET				;Return OK
+	SUBTTL	Parsing Subroutines
+
+;#**********************************************************************
+;* HEX subroutine
+;
+;  This subroutine is called to read in a 12 digit hex node address.
+;  When inputting the 12 digit address the digits will be in the form:
+;  
+;  P2 = Hi addr = z,z,z,z,z,z,1,2,3       rejust to: 1,2,3,4,5,6,7,8,z 
+;  P3 = Lo addr = 4,5,6,7,8,9,10,11,12    rejust to: 9,10,11,12,z,z,z,z,z
+;
+;  The bytes will then be in the form:	Hi = 0,1,2,3,z
+;					Lo = 4,5,z,z,z
+;
+;  This subroutine is also called to read in a 16 digit PASSWORD from RMTCOP
+;  When inputting the 16 digit password, the digits will be in the form:
+;
+;  P2 = Hi = z,z,1,2,3,4,5,6,7		rejust to: 1,2,3,4,5,6,7,8,z
+;  P3 = Lo = 8,9,10,11,12,13,14,15,16	rejust to: 9,10,11,12,13,14,15,16,z
+;
+;  PWSWAP will then re-arrange the digits to be:
+;
+;  P2 = Hi = 15,16,13,14,11,12,9,10,z	 =  bytes 7,6,5,4,z
+;  P3 = Lo = 7,8,5,6,3,4,1,2,z         =  bytes 3,2,1,0,z
+;
+;  Hyphens will be ignored.
+;  Any other non hex digit will cause this subroutine to exit.
+;#**********************************************************************
+
+HEXPW:	TDZA	P4,P4			;Clear P4 (password mode) and skip
+HEX:	SETO	P4,			;Set P4/-1 (address)
+	SETZB	P2,P3			;Clear p2 and p3 
+	SETZM	T2			;Set digit count to 0
+	MOVE	T3,[POINT 7,ATMBUF]	;Set up byte pointer atom buffer
+
+HEXA:	ILDB	S1,T3			;Read in a char
+	JUMPE	S1,HEXC			; 0 = end of field, rejustify it
+	CAIL	S1,60			;Less than a 0 ?
+	CAILE	S1,71			;Greater than a 9 ?
+	 JRST	HEXD			; Yes check for a-f
+
+	SUBI	S1,60			;No, so convert char to hex
+
+HEXB:	ROTC	P2,4			;Left 4 places (combined p2/11)
+	ADD	P3,S1			;Add new number to p3
+	AOJA	T2,HEXA			;Bump digit counter and go get next
+
+HEXD:	CAIL	S1,"A"			;Less than an "A"
+	CAILE	S1,"F"			;Greater than an "F"
+	 JRST	HEXE			; Yes, see if lower case characters
+	SUBI	S1,67			;Convert char into hex number
+	JRST	HEXB			;Pack it into the hex node number
+
+HEXE:	CAIL	S1,"A"+40		;Less than an a
+	CAILE	S1,"F"+40		;Greater than an f
+	 JRST	HEXG			; Yes, see if hyphen
+	SUBI	S1,40+67		;Make lower case into hex
+	JRST	HEXB			;Pack it into the hex node number
+
+HEXG:	CAIE	S1,"-"			;hyphen?
+	 JRST	HEXX			; no, error...exit
+	JRST	HEXA			;yes, ignore & input next char
+
+HEXC:	JUMPN	P4,REJUS		;Jump if address mode selected
+	PJRST	PWSWAP			;Swap password bytes around
+
+HEXX:	$RET
+
+;#**********************************************************************
+;* REJUS  subroutine
+;
+;  Rejustifies a node address to the standard format used by 
+;  LLMOP jsys/uuo's argument block.
+;
+;  Upon return, P2 & P3 will be in the following format:
+;
+;  P2 = Hi addr = x,x,x,x,x,x,1,2,3     rejust to: 1,2,3,4,5,6,7,8,z 
+;  P3 = Lo addr = 4,5,6,7,8,9,10,11,12  rejust to: 9,10,11,12,z,z,z,z,z
+;#**********************************************************************
+
+REJUS:	$SAVE	<T1,S2,S1>		;Save some ac's 
+	SETZM	S1			;Clear s1
+	LDB	S2,[POINT 8,P3,^D27]	;Get hex digits 9 and 10
+	DPB	S2,[POINT 8,S1,7]	;Put it in s1  
+
+	LDB	S2,[POINT 8,P3,^D35]	;Get hex digits 11 and 12
+	DPB	S2,[POINT 8,S1,^D15]	;Put it in s1  
+	MOVEM	S1,T1			;Store rejustified lo address
+
+	SETZM	S1			;Clear s1
+	LDB	S2,[POINT 8,P2,^D31]	;Get hex digits 1 and 2
+	DPB	S2,[POINT 8,S1,7]	;Put them in s1
+
+	LDB	S2,[POINT 4,P2,^D35]	;Get hex digit 3
+	DPB	S2,[POINT 4,S1,^D11]	;Put it in s1  
+
+	LDB	S2,[POINT 4,P3,^D3]	;Get hex digit 4
+	DPB	S2,[POINT 4,S1,^D15]	;Put it in s1  
+
+	LDB	S2,[POINT 8,P3,^D11]	;Get hex digits 5 and 6
+	DPB	S2,[POINT 8,S1,^D23]	;Put it in s1  
+
+	LDB	S2,[POINT 8,P3,^D19]	;Get hex digits 7 and 8
+	DPB	S2,[POINT 8,S1,^D31]	;Put it in s1  
+
+	MOVEM	S1,P2			;Put rejustified Hi addr back in P2
+	MOVEM	T1,P3			;Put rejustified Lo addr back in P3
+	$RET
+
+;#**********************************************************************
+;* PWSWAP  subroutine
+;
+;  Upon return, P2 & P3 will be in the following format:
+;
+;  P2 = Hi bytes = 0,1,2,3,z  rejust to: 7,6,5,4,z
+;  P3 = Lo bytes = 4,5,6,7,z  rejust to: 3,2,1,0,z
+;#**********************************************************************
+
+PWSWAP:	$SAVE	<T1,T2,T3,T4>		;Save some ACs
+
+	ROTC	P2,4			;Yes, left 4 places combined
+	ROT	P2,4
+	SETZB	T1,T2
+	MOVE	T4,[POINT 8,P2]		;Set byte pointer
+
+	ILDB	T3,T4			;Get byte 0
+	DPB	T3,[POINT 8,T2,31]	; & put in T2
+	ILDB	T3,T4			;Get byte 1
+	DPB	T3,[POINT 8,T2,23]	; & put in T2
+	ILDB	T3,T4			;Get byte 2
+	DPB	T3,[POINT 8,T2,15]	; & put in T2
+	ILDB	T3,T4			;Get byte 3
+	DPB	T3,[POINT 8,T2,7]	; & put in T2
+	ILDB	T3,T4			;Get byte 4
+	DPB	T3,[POINT 8,T1,31]	; & put in T1
+	ILDB	T3,T4			;Get byte 5
+	DPB	T3,[POINT 8,T1,23]	; & put in T1
+	ILDB	T3,T4			;Get byte 6
+	DPB	T3,[POINT 8,T1,15]	; & put in T1
+	ILDB	T3,T4			;Get byte 7
+	DPB	T3,[POINT 8,T1,7]	; & put in T1
+
+	DMOVE	P2,T1			;T1,T2 to P2,P3
+	$RET
+
+;* CMDCFM - subroutine to parse a confirm.
+
+CMDCFM:	$SAVE	<S1,S2>			;Save 2 ACs
+	MOVEI	S2,CFM			;Just a confirm please
+					;Fall thru to parse it
+
+;* CMDPRS - Come here to parse a command with function block in S2.
+
+CMDPRS:	MOVEI	S1,CSB			;Point to the CSB
+	$CALL	S%CMND			;Hello GLXLIB
+	JUMPF	PARERR			;Pass along a false return
+	MOVE	S1,CR.FLG(S2)		;Get flag word of reply block
+	TXNE	S1,CM%NOP		;Was no-parse set?
+	JRST	PARERR			;Yep
+	HRRZ	S1,CR.PDB(S2)		;Load the PDB used
+	CAIE	S1,CFM			;Was it the confirm one
+	$RET				;No, return to caller
+
+;* CMDLOG - log a the contents of the command parse buffer
+
+CMDLOG:	$SAVE	<P1,P2>			;Save a couple
+	MOVE	P1,CSB+.CMPTR		;Copy buffer pointer so won't 
+	SETZ	P2,			; distrub it when we 
+	IDPB	P2,P1			;  insure a null at end of it
+	SKIPE	LOGIFN			;Skip if not logging
+	$TEXT	(LOUT%%,<^T/PROMPT/^T/BUFFER/^A>)
+	SKIPE	TAKIFN			;Skip if not taking
+	$TEXT	(T%TTY,<^T/PROMPT/^T/BUFFER/^A>)
+	$RET				;Return
+
+;* PARERR - Come here on parse error to print standard message and return.
+
+PARERR:	$CALL	TAKEOF			;Check for take command file EOF
+	JUMPT	TOPLVL			;Return now if OK, end of take file
+
+PARER1:	$CALL	S%ERR			;Load error text pointer to S1
+	SKIPT				;Skip if it was OK
+	MOVEI	S1,[ASCIZ/Command error/] ;No? Load a default message
+	$CALL	CMDLOG			;Log the command
+	$TEXT	(,<? ^T/(S1)/, type HELP for help>) ;Publish message
+	SKIPN	TAKIFN			;Skip if in a take
+	JRST	TOPLVL			;No, restart everything
+	$TEXT	(,<? Aborting TAKE file ^F/TAKFD/>) ;Give me a sign, o Leader
+	$CALL	TAKABT			;Abort it
+	JRST	TOPLVL			; and return to top level parser
+	SUBTTL	Literals
+
+;Here is the literal pool
+
+LIT..P:	XLIST				;LIT
+	LIT
+	LIST
+
+	END	SETUP
+
+;;;Local Modes:
+;;;Mode: Macro
+;;;Comment Column: 40
+;;;End:

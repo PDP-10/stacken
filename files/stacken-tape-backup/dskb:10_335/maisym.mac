@@ -1,0 +1,73 @@
+UNIVERSAL MAISYM -- Common symbols for MAIRTR & Channel programs
+SUBTTL BCQ/1987-09-24 16:14:54
+
+	.DIRECTIVE .NOBIN
+	
+	SEARCH GLXMAC,UUOSYM
+
+	SUBTTL Table of Contents
+	SUBTTL Commonly used Macros.
+
+;.PTR Build a real bytepointer from a -1,,addr pointer.
+DEFINE .PTR(AC) <
+	TLCE AC,777777
+	 TLCN AC,777777
+	  HRLI AC,(POINT 7,)
+>;.PTR
+
+;FALL into a routine.
+DEFINE FALL(ADDRESS) <
+	IF2,<IFN .-ADDRESS,<PRINTX ?Cannot fall into routine 'ADDRESS>>
+>;FALL
+
+;Macros for building tables.
+DEFINE T(TEXT,ADDR,BITS) <
+	IFB  <ADDR>,<$FOO==.'TEXT>
+	IFNB <ADDR>,<$FOO==ADDR>
+	XWD [<BITS+0>!CM%FW
+	     ASCIZ \TEXT\],$FOO
+>;T
+
+DEFINE TABLE <
+	Z
+	..T==.
+>;TABLE
+
+DEFINE TEND <
+	..U==.
+	RELOC ..T-1
+	..U-..T,,..U-..T
+	RELOC ..U
+>;TEND
+
+	SUBTTL Random constants/symbols
+
+;Common ACs:
+PTH==.A16			;Points to current sender/receiver block.
+
+;Random symbols/sizes
+STRLEN==^D256			;String length for nodes/domains/mailboxes.
+STRWSZ==<STRLEN/5>+1		;Size in words.
+MAXRCV==^D128			;Max number of receivers for one message.
+MAXRLY==^D20			;max number of relay nodes.
+
+;Flags for RFCLIB - RFCPRS
+RF%821==1B0			;Parse RFC821 address part.
+RF%733==1B1			;Parse RFC733 address part.
+RF%976==1B2			;Parse RFC976 (UUCP) address part.
+
+	SUBTTL The Sender/Receiver Block
+
+	PHASE 0
+.PTORI:! BLOCK STRWSZ		;Original path (as given by remote node).
+.PTMBX:! BLOCK STRWSZ		;User/Mailbox name.
+.PTNAM:! BLOCK STRWSZ		;Full personal name (when given, as in MAIL11).
+.PTNRL:! BLOCK 1		;Number of relay nodes.
+.PTRLY:! BLOCK MAXRLY		;Relay nodes.
+.PTSTR:! BLOCK MAXRLY*STRWSZ	;String space for relay nodes.
+.PTNXT:! BLOCK 1		;Pointer to next receiver block (list of recs).
+.PTSIZ:!			;Size of a sender/receiver block.
+	DEPHASE
+
+END
+

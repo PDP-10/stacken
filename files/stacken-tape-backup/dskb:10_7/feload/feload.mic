@@ -1,0 +1,3 @@
+; build an feload.bin and a .lst file too for symbols
+.r MACDLX
+*feload,feload/crf/nl:ttm=feload

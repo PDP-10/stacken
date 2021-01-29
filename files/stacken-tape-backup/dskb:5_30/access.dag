@@ -1,0 +1,13 @@
+;DSKC:ACCESS.DAG[5,30] 1986-10-28 01:27:59, Edit by P.SVANBERG
+;Temorarily all for <253 & 254,*>
+;DSKC:ACCESS.DAG[5,30] 1985-10-24 21:42:27, Edit by P.SVANBERG
+;All for <224,*>
+;DSKC:ACCESS.DAG[5,30] 1985-03-14 04:47:49, Edit by P.SVANBERG
+;All for <401,*>
+;DSKC:ACCESS.DAG[5,30] 1985-03-08 13:33:24, Edit by B.CARLSSON
+;Cookie is not a game.
+;DSK:ACCESS.DAG[5,30] 1985-03-05 20:04:52, Edit by J.RYNNING
+;No games during daytime.
+COOKIE.EXE/EXECUTE=<*,*>
+*.*/READ=<401,*>,<224,100>,<253,*>,<254,*>
+*.*/EXECUTE=<401,*>,<224,100>,<253,*>,<254,*>

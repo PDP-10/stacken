@@ -1,0 +1,731 @@
+TITLE	BIT
+
+;	Written by Sven Erik Enblom, 830825			;
+;								;
+;	The author accepts no responsibility for things that	;
+;	may happen if this program is used without care...	;
+
+SEARCH	GLXMAC,ORNMAC
+PROLOG	BIT
+PARSET					; Get externals for parsing
+EXT	<PARSER,P$HELP>			; Get parser and help file routines
+.TEXT	"/SEGMENT:LOW REL:OPRPAR"	; Force parser module into lowseg
+
+DEFINE	$JGET(AC,TABLE)<
+	HRLZ	AC,JOBNR
+	IFN	.GT'TABLE,<
+		HRRI	AC,.GT'TABLE>
+	GETTAB	AC,
+	 TRN>
+
+DEFINE	X(NAMES)<
+	IRP	NAMES,<
+		P$'NAMES==(JP.'NAMES)>>
+
+JACCT==1B17
+
+JP.SPY==JP.SPA!JP.SPM
+
+JP.ALL==JP.IPC!JP.DPR!JP.MET!JP.POK!JP.CCC!JP.HPQ!JP.NSP!JP.ENQ!JP.RTT!JP.LCK!JP.TRP!JP.SPY
+
+X	<ALL,SPY,IPC,DPR,MET,POK,CCC,HPQ,NSP,ENQ,RTT,LCK,TRP,SPA,SPM>
+
+JP==13	; AC holding this job's privileges and number
+
+	XP	JP$FFA,1B0		; FFA or JACCT
+	XP	JP$POK,1B1		; POKE
+	XP	JP$SPY,1B2		; SPM or SPA
+
+	XP	W$PRIV,1B18		; Set privileges
+	XP	W$CAP, 1B19		; Set capabilities
+	XP	W$BOTH,W$PRIV!W$CAP	; Set both of the above
+
+	XP	HQ$CON,0		; HPQ set by console command
+	XP	HQ$PRG,1		; Current HPQ
+
+	XP	CH$MSK,17B5
+	XP	PH$MSK,17B9
+
+	XP	H$BRUT,0		; HALT brutally
+	XP	H$SOFT,1		; HALT softly
+
+	XP	PDLLEN,200		; Minimum stack length!
+	$DATA	PDLLOC,PDLLEN		; Stack
+	$DATA	PRSPAG			; Page number that parser leaves around
+	$DATA	HLPPTR			; Pointer to help topic
+
+	$DATA	IPCSDQ			; IPCF send default quota
+	$DATA	IPCRDQ			; IPCF receive default quota
+
+	$DATA	MAXHPQ			; Max HPQ in running monitor
+	$DATA	JOBNR			; Current job number
+
+	$DATA	JBSARG,4		; JBSET. argument block
+
+	$DATA	OLDPRV
+	$DATA	OLDCAP
+	$DATA	NEWPRV
+	$DATA	NEWCAP
+
+	$DATA	CCTCNT
+
+POKARG:!				; Argument block for POKE. UUO
+POKADR:	BLOCK	1
+POKOLD:	BLOCK	1
+POKNEW:	BLOCK	1
+
+PSIVEC:!
+PSISTP:	.PCSTP				; Interrupt on ^C
+	REPEAT	3,<Z>
+
+HELPFD:	$BUILD	FDMSIZ			; FD for .HLP file (MON:BIT.HLP)
+	 $SET	.FDLEN,FD.LEN,FDMSIZ
+	 $SET	.FDLEN,FD.TYP,.FDNAT
+	 $SET	.FDSTR,,<SIXBIT/MON/>
+	 $SET	.FDNAM,,<SIXBIT/BIT/>
+	 $SET	.FDEXT,,<SIXBIT/HLP/>
+	$EOB
+
+BITIB:	$BUILD	IB.SZ			; Build initialization block
+	 $SET	IB.PRG,,%%.MOD		;  Set program name
+	 $SET	IB.OUT,,T%TTY		;  Use default output routine
+	 $SET	IB.FLG,IT.OCT,1		;  Open command TTY
+	 $SET	IB.FLG,IB.NPF,1		;  No GLXPFH...
+	$EOB
+
+BITPB:	$BUILD	PAR.SZ			; Build parser initialization block
+	 $SET	PAR.PM,,PROMPT		;  Address of prompt string
+	 $SET	PAR.TB,,BITPDB		;  Address of top PDB in parser tree
+	$EOB
+
+PROMPT:	ASCIZ "BIT>"			; Prompt string
+
+BITPDB:	$INIT	BITPD1
+BITPD1:	$KEYDSP	BITPD2
+BITPD2:	$STAB
+	 DSPTAB	,.QUIT,<>,CM%INV
+	 DSPTAB	PRVPDB,.DISA,<DISABLE>
+	 DSPTAB	PRVPDB,.ENAB,<ENABLE>
+	 DSPTAB	HLTPDB,.HALT,<HALT>
+	 DSPTAB	HLPPDB,.HELP,<HELP>
+	 DSPTAB	JOBPDB,.JOB, <JOB>
+	 DSPTAB	CFMPDB,.QUIT,<QUIT>
+	 DSPTAB	SETPDB,.SET, <SET>
+	 DSPTAB	STSPDB,.WHAT,<WHAT>
+	$ETAB
+
+CFMPDB:	$CRLF				; Confirmation PDB
+
+PRVPDB:	$KEY	PRVPD2,PRVPD1
+PRVPD1:	$STAB
+	 KEYTAB	W$BOTH,<BOTH>
+	 KEYTAB	W$CAP, <CAPABILITIES>
+	 KEYTAB	W$PRIV,<PRIVILEGES>
+	$ETAB
+PRVPD2:	$KEYDSP	PRVPD3,<$ALTERNATE PRVPD6>
+PRVPD3:	$STAB
+	 DSPTAB	PRVPD4,P$CCC,<CHANGE-CPU>
+	 DSPTAB	DPRPDB,P$DPR,<DISK-PRIORITY>
+	 DSPTAB	PRVPD4,P$ENQ,<ENQ-DEQ>
+	 DSPTAB	HPQPDB,P$HPQ,<HPQ>
+	 DSPTAB	PRVPD4,P$IPC,<IPCF>
+	 DSPTAB	PRVPD4,P$LCK,<LOCK>
+	 DSPTAB	PRVPD4,P$MET,<METER>
+	 DSPTAB	PRVPD4,P$POK,<POKE>
+	 DSPTAB	PRVPD4,P$RTT,<RT-TRAP>
+	 DSPTAB	SPYPDB,P$SPY,<SPY>
+	 DSPTAB	PRVPD4,P$TRP,<TRPSET>
+	 DSPTAB	PRVPD4,P$NSP,<UNSPOOL>
+	$ETAB
+PRVPD4:	$CRLF	<$ALTERNATE PRVPD5>
+PRVPD5:	$KEYDSP	PRVPD3
+
+PRVPD6:	$KEY	ALLPDB,PRVPD7
+PRVPD7:	$STAB
+	 KEYTAB	P$ALL,<ALL>
+	$ETAB
+
+ALLPDB:	$CRLF	<$ALTERNATE ALLPD1>
+ALLPD1:	$KEY	PRVPD5,ALLPD2
+ALLPD2:	$STAB
+	 KEYTAB	0,<EXCEPT>
+	$ETAB
+
+DPRPDB:	$NUMBER	PRVPD4,^D10,<number in range [0:3]>
+
+HPQPDB:	$NUMBER	PRVPD4,^D10,<number in range [0:15]>
+
+SPYPDB:	$KEY	PRVPD4,SPYPD1
+SPYPD1:	$STAB
+	 KEYTAB	P$SPA,<ALL-CORE>
+	 KEYTAB	P$SPM,<MONITOR>
+	$ETAB
+
+HLTPDB:	$NOISE	HLTPD1,<CURRENT JOB>
+HLTPD1:	$KEY	CFMPDB,HLTPD2,<$DEFAULT <SOFTLY>>
+HLTPD2:	$STAB
+	 KEYTAB	H$BRUT,<BRUTALLY>
+	 KEYTAB	H$SOFT,<SOFTLY>
+	$ETAB
+
+HLPPDB:	$NOISE	HLPPD1,<ON COMMAND>
+HLPPD1:	$KEY	CFMPDB,BITPD2,<$ACTION HLPACT>
+
+JOBPDB:	$NOISE	JOBPD1,<IS>
+JOBPD1:	$NUMBER	CFMPDB,^D10,<job number>
+
+SETPDB:	$KEYDSP	SETPD1
+SETPD1:	$STAB
+	 DSPTAB	SDPPDB,.STDPR,<DISK-PRIORITY>
+	 DSPTAB	SHQPDB,.STHPQ,<HPQ>
+	 DSPTAB	IPQPDB,.STIPQ,<IPCF-QUOTAS>
+	 DSPTAB	PPNPDB,.STPPN,<PPN>
+	 DSPTAB	PTRPDB,.STPTR,<PROGRAM-TO-RUN>
+	 DSPTAB	UNMPDB,.STUNM,<USER-NAME>
+	$ETAB
+
+SDPPDB:	$NUMBER	CFMPDB,^D10,<number in range [-3:3]>
+
+SHQPDB:	$NUMBER	SHQPD1,^D10,<number in range [0:15]>
+SHQPD1:	$SWITCH	SHQPD1,SHQPD2,<$ALTERNATE CFMPDB>
+SHQPD2:	$STAB
+	 KEYTAB	HQ$CON,<CONSOLE>
+	 KEYTAB	HQ$PRG,<PROGRAM>
+	$ETAB
+
+IPQPDB:	$NOISE	IPQPD1,<FOR SEND>
+IPQPD1:	$NUMBER	IPQPD2,^D10,,<$PDEFAULT IPCSDQ>
+IPQPD2:	$NOISE	IPQPD3,<FOR RECEIVE>
+IPQPD3:	$NUMBER	CFMPDB,^D10,,<$PDEFAULT IPCRDQ>
+
+PPNPDB:	$DIR	CFMPDB
+
+PTRPDB:	$FIELD	PTRPD1,<program name>
+PTRPD1:	$SWITCH	CFMPDB,PTRPD2,<$ALTERNATE CFMPDB>
+PTRPD2:	$STAB
+	 KEYTAB	0,<NOMONITOR>
+	$ETAB
+
+UNMPDB:	$QUOTE	CFMPDB
+
+STSPDB:	$NOISE	CFMPDB,<IS THE JOB STATUS>
+
+BIT:	RESET				; Reset the world
+	MOVE	P,[IOWD PDLLEN,PDLLOC]	; Set up stack
+	MOVEI	S1,IB.SZ		; Get length...
+	MOVEI	S2,BITIB		; ...and address
+	$CALL	I%INIT			; Initialize program
+	SETZB	S1,S2			; No Twenex PSI
+	$CALL	P$INIT			; Initialize parser
+	SETZM	PRSPAG			; No left-over page yet
+;
+; Check monitor version
+;
+	MOVX	T1,%CNVER
+	GETTAB	T1,			; Get version of running monitor
+	 TRN
+	CAIE	T1,70100		; Is this 7.01?
+	 $WARN	<I may not work under this monitor version>
+;
+; Get number of HPQs defined in monitor
+;
+	MOVX	T1,%CNHPQ
+	GETTAB	T1,			; Get number of HPQs defined
+	 MOVEI	T1,1			;  Well, one queue at least...
+	SUBI	T1,1			; Make it max. HPQ
+	MOVEM	T1,MAXHPQ		; Remember it
+;
+; Set up help text for HPQ commands
+;
+	SKIPE	S1,HPQPDB+.CMHLP+1
+	 $CALL	HPQHLP
+	MOVE	S1,SHQPDB+.CMHLP+1
+	CAME	S1,HPQPDB+.CMHLP+1
+	 $CALL	HPQHLP
+;
+; Set up default strings for IPCF send/receive quotas
+;
+	MOVX	T1,%IPCDQ
+	GETTAB	T1,
+	 MOVEI	T1,2005
+	$TEXT	<-1,,IPCSDQ>,<^D/T1,IP.CQS/^0>
+	$TEXT	<-1,,IPCRDQ>,<^D/T1,IP.CQR/^0>
+;
+; Turn on interrupt system
+;
+	SETZM	CCTCNT			; Reset ^C-trap count
+	MOVEI	T1,PSIVEC
+	PIINI.	T1,
+	 $FATAL	<Couldn't initialize PSI system>
+	MOVE	T1,[PS.FAC!PS.FON+[EXP .PCSTP,0,0]]
+	PISYS.	T1,
+	 $FATAL	<Couldn't turn on PSI system>
+;
+; Set up default (own) job number and check poke privileges
+;
+	PJOB	JP,			; Get our job number
+	MOVEM	JP,JOBNR		; Well, some kind of safe default...
+	MOVX	T2,%LDFFA
+	GETTAB	T2,			; Get FFA PPN [1,2]
+	 MOVE	T2,[1,,2]
+	$JGET	T1,PPN			; Get our own PPN
+	TXO	JP,JP$FFA		; Assume FFA or JACCT
+	CAMN	T1,T2			; FFA?
+	 JRST	REPARS			;  Yes, that's enough
+	$JGET	T1,STS			; Get job status word
+	TXNE	T1,JACCT		; Are we JACCTed? (Improbable...)
+	 JRST	REPARS			;  Yes! No trouble...
+	TXZ	JP,JP$FFA		; Well, not FFA at least
+	$JGET	T1,PRV			; Get our privileges
+	TXNE	T1,JP.SPM!JP.SPA	; Spy anything?
+	 TXO	JP,JP$SPY!JP$POK	;  Yes, remember it and assume POKE
+	TXNE	T1,JP.POK		; POKE privilege?
+	 JRST	REPARS			;  Yes, and enabled. Go on
+	TXZ	JP,JP$POK		; No POKE privilege
+	$TEXT	,<No POKE privilege^A>	; Not enabled. Do we have capability?
+	$JGET	T1,CAP
+	TXNE	T1,JP.POK
+	 $TEXT	,<, please ENABLE^A>
+	$TEXT	,<>
+;
+; Loop here to read a command and dispatch on it
+;
+REPARS:	MOVE	P,[IOWD PDLLEN,PDLLOC]	; Just to be sure...
+	SKIPE	S1,PRSPAG		; Any left-over page?
+	 $CALL	M%RPAG			;  Yes, return it to free space
+	MOVEI	S1,PAR.SZ		; Get length...
+	MOVEI	S2,BITPB		; ...and address
+	$CALL	PARSER			; Get a command line
+	JUMPT	PARSOK			; Succeeded?
+	$TEXT	,<^M^J?^T/@PRT.EM(S2)/>	; No, write error string from parser
+	SETZM	PRSPAG			; No left-over page this time
+	JRST	REPARS			; Get a new command
+;
+; Come here if command parsed OK
+;
+PARSOK:	MOVE	T1,PRT.CM(S2)		; ...mumble...
+	MOVEM	T1,PRSPAG		; Remember page number
+	MOVE	S1,COM.PB(T1)		; ...frotz...
+	ADDI	S1,(T1)			; ...sigh...
+	$CALL	P$SETU			; Set up for argument fetching
+	$CALL	P$KEYW			; Get a keyword
+	$JGET	T1,PRV
+	MOVEM	T1,OLDPRV
+	$JGET	T1,CAP
+	MOVEM	T1,OLDCAP
+	$CALL	(S1)			; Dispatch on command
+	JRST	REPARS			; Get a new command
+
+;
+; General error handler
+;
+ERROR:	$TEXT	,<^M^J?^E/[-1]/>	; Write last GLXLIB error
+	JRST	REPARS			; Get a new command
+
+;
+; Routine to update help text for HPQ commands
+;
+HPQHLP:	JUMPE	S1,.POPJ
+	HRLI	S1,(POINT 7)
+HPQHL1:	ILDB	T1,S1
+	CAIE	T1,":"
+	 JRST	HPQHL1
+	MOVE	T1,MAXHPQ
+	IDIVI	T1,^D10
+	JUMPE	T1,HPQHL2
+	ADDI	T1,"0"
+	IDPB	T1,S1
+HPQHL2:	ADDI	T2,"0"
+	IDPB	T2,S1
+	MOVEI	T1,"]"
+	IDPB	T1,S1
+	SETZ	T1,
+	IDPB	T1,S1
+	$RET
+
+;
+; Routine to turn on JACCT if needed
+;
+FFAON:	TXNE	JP,JP$FFA		; Do we already have JACCT?
+	 $RET				;  Yes, ignore this call
+	PUSH	P,JOBNR			; Save "current" job number
+	HRRM	JP,JOBNR		; Use our own for a while
+	MOVEI	S1,.GTSTS		; Get GETTAB table
+	$JGET	S2,STS			; Get old value
+	TXO	S2,JACCT		; Insert JACCT
+	$CALL	SETTAB			; Set new value in monitor
+	POP	P,JOBNR			; Restore "current" job number
+	$RET
+
+;
+; Routine to turn off JACCT
+;
+FFAOFF:	TXNE	JP,JP$FFA
+	 $RET
+	PUSH	P,JOBNR
+	HRRM	JP,JOBNR
+	MOVEI	S1,.GTSTS
+	$JGET	S2,STS
+	TXZ	S2,JACCT
+	$CALL	SETTAB
+	POP	P,JOBNR
+	$RET
+
+;
+; Routine to activate ^C-trap
+;
+CCTON:	AOS	CCTCNT
+	$RET
+
+;
+; Routine to release one ^C-trap-level and bomb out if ^C seen
+;
+CCTOFF:	MONRT.
+
+;
+; Action routine for HELP (ON COMMAND) command
+;
+HLPACT:	$CALL	.SAVE1
+	HLRO	P1,@CR.RES(S2)
+	MOVEM	P1,HLPPTR
+	LDB	P1,[POINT 7,(P1),6]
+	JUMPN	P1,.RETT
+	MOVEI	S2,[ASCIZ/Unrecognized switch or keyword/]
+	$RETF
+
+.DISA:	$CALL	PRSPRV
+	$CALL	WRTPRV
+	MOVE	T1,OLDPRV
+	ANDCM	T1,P2
+	MOVEM	T1,NEWPRV
+	MOVE	T1,OLDCAP
+	ANDCM	T1,P2
+	MOVEM	T1,NEWCAP
+	PJRST	SETBIT
+
+.ENAB:	$CALL	PRSPRV
+	$CALL	WRTPRV
+	MOVE	T1,OLDPRV
+	IOR	T1,P2
+	MOVEM	T1,NEWPRV
+	MOVE	T1,OLDCAP
+	IOR	T1,P2
+	MOVEM	T1,NEWCAP
+;;;	PJRST	SETBIT
+
+SETBIT:	TXNN	P1,W$PRIV
+	 JRST	SETBT1
+	MOVEI	S1,.GTPRV
+	MOVE	S2,NEWPRV
+	$CALL	SETTAB
+SETBT1:	TXNN	P1,W$CAP
+	 $RET
+	MOVEI	S1,.GTCAP
+	MOVE	S2,NEWCAP
+;;;	PJRST	SETTAB
+
+;
+; This routine is the inverse of GETTAB
+;
+;   Accepts in	S1/ Table to update
+;		S2/ New value
+;
+SETTAB:	HRL	T1,S1
+	HRRI	T1,.GTSLF
+	GETTAB	T1,
+	 JRST[	$TEXT	,<?GETTAB (^O/S1/,,.GTSLF) failed>
+		$RETF]
+	LOAD	T2,T1,SL.ADR		; Get address or offset in PDB
+	LOAD	T1,T1,SL.TYP		; Get table type
+	CAIE	T1,.SLIXJ		; Index by job?
+	 CAIN	T1,.SLIXS		;  Index by job or segment?
+	  JRST	SETTB1			;   Yes, very easy then
+	CAIN	T1,.SLIXP		; Data in PDB?
+	 JRST	SETTB2			;  Yes, a bit more tricky
+	$TEXT	,<?Bad table type ^O/T1/> ; Something completely different...
+	$RETF
+SETTB1:	ADD	T2,JOBNR
+	JRST	SETTB3
+SETTB2:	HRL	T1,JOBNR
+	HRRI	T1,.GTPDB
+	GETTAB	T1,			; Get PDB address
+	 JRST[	$TEXT	,<?GETTAB (^D/JOBNR/.,,.GTPDB) failed>
+		$RETF]
+	ADDI	T2,(T1)			; Add offset in PDB
+SETTB3:	MOVEM	T2,POKADR
+	MOVEM	S2,POKNEW
+	HRL	S1,JOBNR
+	GETTAB	S1,			; Get old value
+	 JRST[	$TEXT	,<?GETTAB failed>
+		$RETF]
+	MOVEM	S1,POKOLD
+	MOVE	S1,[3,,POKARG]
+	POKE.	S1,			; Update monitor...
+	 JRST[	$TEXT	,<?POKE. failed, error ^O/S1/>
+		$RETF]
+	$RETT
+
+.HALT:	$CALL	P$KEYW			; Softly or Brutally?
+	MOVE	S1,[
+		SIXBIT/HALT/
+		SIXBIT/.HALT/](S1)
+	MOVE	S2,JOBNR
+	MOVE	T1,[2,,S1]
+	FRCUUO	T1,
+	 $WARN	<FRCUUO HALT failed>
+	$RET
+
+.HELP:	MOVEI	S1,HELPFD
+	MOVE	S2,HLPPTR
+	PJRST	P$HELP
+
+.JOB:	$CALL	P$NUM
+	CAMN	S1,[-1]
+	 PJOB	S1,
+	MOVN	T1,S1
+	JOBSTS	T1,
+	 JRST[	$WARN	<Illegal job number>
+		$RET]
+;	TXNN	T1,JB.UJA
+;	 JRST[	$WARN	<Not a job>
+;		$RET]
+;	TXNN	T1,JB.ULI
+;	 JRST[	$WARN	<Not logged in>
+;		$RET]
+	MOVEM	S1,JOBNR
+;;;	PJRST	WRTJOB
+
+WRTJOB:	$JGET	T1,NM1
+	$JGET	T2,NM2
+	$JGET	T3,PPN
+	MOVE	T4,JOBNR
+	TRMNO.	T4,
+	 SETZ	T4,
+	SKIPE	T4
+	 DEVNAM	T4,
+	  MOVSI	T4,'DET'
+	$TEXT	,<Job ^D/JOBNR/ User ^W6/T1/^W/T2/ ^U/T3/ ^W/T4/>
+	$RET
+
+.QUIT:	$HALT
+	$RET
+
+.WHAT:	$CALL	WRTJOB
+	$JGET	T1,RTD
+	TXNE	T1,CH$MSK!PH$MSK
+	 $TEXT	,<Console set HPQ ^D/T1,CH$MSK/  Program set HPQ ^D/T1,PH$MSK/>
+	$JGET	T1,SPL
+	TXNN	T1,JS.PRI
+	 JRST	.WHAT2
+	LOAD	T1,T1,JS.PRI
+	CAIG	T1,3
+	 JRST	.WHAT1
+	MOVNS	T1
+	ADDI	T1,4
+.WHAT1:	$TEXT	,<Disk priority ^D/T1/>
+.WHAT2:	$JGET	T1,IPQ
+	TXNE	T1,IP.CQQ
+	 $TEXT	,<IPCF send quota ^D/T1,IP.CQS/ receive quota ^D/T1,IP.CQR/>
+	MOVE	S1,OLDPRV
+	CAME	S1,OLDCAP
+	 JRST	.WHAT3
+	$TEXT	,<Privileges and capabilities:^A>
+	PJRST	WRTPRV
+.WHAT3:	$TEXT	,<Privileges:  ^A>
+	$CALL	WRTPRV
+	MOVE	S1,OLDCAP
+	$TEXT	,<Capabilities:^A>
+;;;	PJRST	WRTPRV
+
+WRTPRV:	JUMPE	S1,[
+		$TEXT	,< Zero>
+		$RET]
+	TXNN	S1,JP.ALL
+	 JRST[	$TEXT	,< None^A>
+		JRST	WRTPR1]
+	CAMN	S1,[-1]
+	 JRST[	$TEXT	,< -1>
+		$RET]
+	CAXN	S1,JP.ALL
+	 JRST[	$TEXT	,< All>
+		$RET]
+	TXC	S1,JP.ALL
+	TXCN	S1,JP.ALL
+	 JRST[	$TEXT	,< All^A>
+		TXZ	S1,JP.ALL
+		JRST	WRTPR1]
+	MOVE	T1,S1
+
+DEFINE	X(BIT,STRING)<
+	TXZE	S1,JP.'BIT
+	 $TEXT	,< STRING^A>>
+
+	X	IPC,<IPCF>
+	X	DPR,<Disk priority ^D/T1,JP.DPR/>
+	X	MET,<Meter>
+	X	POK,<Poke>
+	X	CCC,<Change CPU>
+	X	HPQ,<HPQ ^D/T1,JP.HPQ/>
+	X	NSP,<Unspool>
+	X	ENQ,<ENQ./DEQ.>
+	X	RTT,<RT-trap>
+	X	LCK,<Lock>
+	X	TRP,<TRPSET>
+	X	SPA,<Spy all>
+	X	SPM,<Spy monitor>
+	SKIPE	S1
+WRTPR1:	 $TEXT	,<+^O/S1/^A>
+	$TEXT	,<>
+	$RET
+
+PRSPRV:	$CALL	P$KEYW			; Get cap/priv switch
+	MOVE	P1,S1			; Save it
+	SETZ	P2,			; No privs. read yet
+PRSPR1:	$CALL	P$KEYW			; Get a priv. field
+	JUMPF	PRSPR2			; No more keywords, perhaps
+	CAIN	S1,P$ALL		; ALL?
+	 JRST	PRSALL			;  Yes, special parsing
+	CAIN	S1,P$DPR		; DISK-PRIORITY?
+	 JRST	PRSDPR			;  Yes, special parsing
+	CAIN	S1,P$HPQ		; HPQ?
+	 JRST	PRSHPQ			;  Yes, special parsing
+	CAIN	S1,P$SPY		; SPY?
+	 JRST	PRSSPY			;  Yes, special parsing
+	IOR	P2,S1			; Nothing special, just add the bit
+	JRST	PRSPR1			; Loop for next keyword
+PRSPR2:	MOVSS	S1,P2			; Swap parsed bits...
+	$RET				; Done
+
+PRSALL:	IORI	P2,P$ALL		; Set all bits
+	$CALL	P$KEYW			; Get possible "EXCEPT" keyword
+	JUMPF	PRSPR2			; None found, just return
+	MOVSS	P2			; Put the bits in the left half
+	PUSH	P,P2			; Save parsed bits
+	SETZ	P2,			; Erase them...
+	$CALL	PRSPR1			; ...and recur
+	POP	P,P2			; Restore old bits
+	ANDCMB	P2,S1			; Switch "EXCEPT" bits off
+	$RET				; Done
+
+PRSDPR:	$CALL	P$NUM
+	STORE	S1,P2,P$DPR
+	JRST	PRSPR1
+
+PRSHPQ:	$CALL	P$NUM
+	STORE	S1,P2,P$HPQ
+	JRST	PRSPR1
+
+PRSSPY:	$CALL	P$KEYW
+	IOR	P2,S1
+	JRST	PRSPR1
+
+.SET:	$CALL	P$KEYW
+	PJRST	(S1)
+
+.STDPR:	$CALL	P$NUM
+	CAML	S1,[-3]
+	 CAILE	S1,3
+	  JRST[	$WARN	<Disk priority ^D/S1/ illegal, must be in range [-3:3]>
+		$RET]
+	JUMPGE	S1,.STDP1
+	MOVNS	S1
+	ADDI	S1,4
+.STDP1:	$JGET	S2,SPL
+	STORE	S1,S2,JS.PRI
+	MOVEI	S1,.GTSPL
+	PJRST	SETTAB
+
+.STHPQ:	$CALL	P$NUM
+	SKIPL	S1
+	 CAMLE	S1,MAXHPQ
+	  JRST[	$WARN	<HPQ ^D/S1/ illegal, must be in range [0:^D/MAXHPQ/]>
+		$RET]
+	$CALL	.SAVE2
+	HRRZ	P1,S1
+	$JGET	P2,RTD
+.STHP1:	$CALL	P$SWIT
+	JUMPF	.STHP2
+	DPB	P1,[
+		POINT	4,P2,5		; HPQ set by console command
+		POINT	4,P2,9](S1)	; Current HPQ
+	TLO	P1,-1			; Remember that we have seen a switch
+	JRST	.STHP1
+.STHP2:	TLNN	P1,-1			; Any switch seen?
+	 DPB	P1,[			; No, set "console" HPQ then
+		POINT 4,P2,5]
+	MOVEI	S1,.GTRTD		; Get table...
+	MOVE	S2,P2			; ...and new contents
+	PJRST	SETTAB			; Put it in monitor
+
+.STIPQ:	$CALL	P$NUM			; Get send quota
+	PUSH	P,S1			; Save it
+	$CALL	P$NUM			; Get receive quota
+	ANDI	S1,IP.CQR		; Mask out quota
+	POP	P,T1			; Restore send quota
+	STORE	T1,S1,IP.CQS		; Put it in the quota word
+	$JGET	S2,IPQ			; Get current flags and quotas
+	HRR	S2,S1			; Replace with new quotas
+	TXO	S2,IP.CQQ		; Indicate that quota is set...
+	MOVEI	S1,.GTIPQ		; Get target table
+	PJRST	SETTAB			; Update monitor
+
+.STPPN:	$CALL	P$DIR			; Get PPN
+	MOVE	S2,S1
+	MOVEI	S1,.GTPPN		; Get target table
+	PJRST	SETTAB			; Update monitor
+
+.STPTR:	$CALL	FFAON			; Turn on FFA if we need it
+	$CALL	P$SIXF			; Get program name
+	MOVEM	S1,JBSARG+3		; Store it in argument block
+	$CALL	P$SWIT			; Get /NOMONITOR if any
+	SKIPT				; Switch given?
+	 TDZA	T1,T1			;  No
+	  SETO	T1,			;   Yes
+	MOVEM	T1,JBSARG+2		; Set [no]monitor return flag
+	MOVE	T1,JOBNR		; Get target job
+	MOVE	T2,[.STPGM,,JBSARG+2]	; Set up SETUUO arg. pointer
+	DMOVEM	T1,JBSARG		; Store it in argument block
+	MOVE	T1,[2,,JBSARG]		; Pointer to JBSET. argument block
+	JBSET.	T1,
+	 $WARN	<JBSET. failed, error ^O/T1/>
+	PJRST	FFAOFF			; Turn off FFA
+
+.STUNM:	$CALL	P$QSTR			; Get new user name
+	ADD	S1,[POINT 7,1]		; Make byte pointer to parsed string
+	MOVE	T1,S1			; Get a copy
+.STUN1:	ILDB	T2,T1			; Get a character
+	JUMPE	T2,.STUN2		; End of string?
+	CAIL	T2,"a"
+	 CAILE	T2,"}"
+	  TRNA
+	   SUBI	T2,"a"-"A"		; ...upcase...
+	CAIL	T2," "
+	 CAILE	T2,"_"
+	  JRST[	$WARN	<Non-sixbit character in string>
+		$RET]
+	DPB	T2,T1			; Store upcased character
+	JRST	.STUN1			; Check rest of string
+.STUN2:	$CALL	GETSIX			; Get first six characters
+	PUSH	P,S1			; Save byte pointer
+	MOVEI	S1,.GTNM1		; Get table
+	$CALL	SETTAB			; Update monitor
+	POP	P,S1			; Restore byte pointer
+	$CALL	GETSIX			; Get second half of name
+	MOVEI	S1,.GTNM2		; Get table
+	PJRST	SETTAB			; Update monitor
+
+GETSIX:	SETZ	S2,			; Reset sixbit word
+	MOVEI	T1,6			; Number of sixbit characters/word
+GETSX1:	MOVE	T2,S1			; Save byte pointer
+	ILDB	T3,S1			; Get a character
+	JUMPE	T3,GETSX2		; End of string?
+	LSH	S2,6			; Make room for another character
+	IORI	S2,'A'-"A"(T3)		; Make sixbit and insert...
+	SOJG	T1,GETSX1		; Loop if more room
+	$RET				; Done for now
+GETSX2:	MOVE	S1,T2			; Back byte pointer
+GETSX3:	LSH	S2,6			; Adjust sixbit word...
+	SOJG	T1,GETSX3		; ...until six characters inserted
+	$RET
+
+END	BIT

@@ -1,0 +1,36 @@
+;DSKC:ACCESS.NAT[5,30] 1984-02-17 15:44:27, Edit by B.CARLSSON
+;	Inserted MUD on GAM:, and removed old lockout for [104,311]
+PACMAN.EXE/EXECUTE=[*,*]
+PACMAN.SCR/ALL=[*,*]/PROGRAM:PACMAN[5,30]/XONLY
+MUD.EXE=[*,*]/Execute
+MUD.*=[*,*]/Program:Mud[5,30]/Xonly/All
+*.DBA=[*,*]/Program:Mud[5,30]/Xonly/All
+VALLEY.EXE=[*,*]/Execute
+VALLEY.*=[*,*]/Program:VALLEY[5,30]/Xonly/Read
+MUD.?PM=[*,*]/Program:Valley[5,30]/Xonly/All
+*.DBA=[*,*]/Program:Valley[5,30]/Xonly/All
+LETTER.BOX=[*,*]/Program:Mud[5,30]/Xonly/All
+MUD.*=[*,*]/Program:Valley[5,30]/Xonly/Read
+LETTER.BOX=[*,*]/Program:Valley[5,30]/Xonly/All
+POWER.EXE=[10,*]/Execute
+POWER.EXE=[*,*]/NONE
+MUD.*=[*,*]/Program:POWER[5,30]/Xonly/All
+dtext.dat/read=<*,*>/program:zork<5,30>
+ACCESS.*/NONE=<*,*>
+STUGA.EXE=<101,305>/ALL,<401,300>/ALL,<*,*>/EXECUTE
+EDITH.EXE=<*,*>/EXECUTE
+orm.scr/all/prot:455=<*,*>/prog:gam:orm
+MASKEN.SCR/ALL/CREATE/PROT:455=<*,*>/PROG:GAM:MASKEN
+*.*/NONE=<*,*>/PROG:SYS:DIRECT/READ
+EDITH.DAT=<*,*>/PROGRAM:EDITH<5,30>/READ
+PEBBEL.DAT=<*,*>/PROGRAM:PEBBEL<5,30>/READ,<*,*>/NONE
+dtext.dat=<*,*>/program:zork<5,30>/read,<*,*>/none
+QZORD.DAB=<*,*>/PROGRAM:QZORD<5,30>/READ,-
+	  <*,*>/PROGRAM:QZDRO<5,30>/READ,<*,*>/NONE
+*.DAT/LOG:NONE/READ=<*,*>/PROGRAM:QUEUE<1,4>/READ
+ADVENT.EXE/EXECUTE=<*,*>/EXECUTE
+LIFE.HLP=<*,*>/PROG:GAM:LIFE/READ
+*.*=<66,66>/NONE,<*,*>/execute
+;;;*.*=<66,66>/NONE,<*,100>/none,<*,*>/execute
+*.*/EXECUTE/LOG:NONE=<*,*>/EXECUTE
+;;;<ndrat ordningen p} raderna./PSv 1982-04-27 00:16:43

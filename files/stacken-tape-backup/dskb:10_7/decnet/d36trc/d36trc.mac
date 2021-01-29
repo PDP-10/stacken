@@ -1,0 +1,276 @@
+
+	TITLE	D36TRC		DECnet-10 Trace program
+	SEARCH	DCN,SNUP
+	XP $ONLY,I.LUO!I.PRM!I.GTT
+	XP FTDEBUG,0
+	$INIT	TRC
+	.REQUI	REL:SNUP
+
+XP BUFLEN,50000
+XP BUFMAX,BUFLEN-5
+XP TAKBYT,0
+XP LSTBYT,2
+
+$BLOCK	BUFFER,<BUFLEN/5>+3	;The buffer to be used by trace code
+$BLOCK	FOPBLK,.FOMAX
+$BLOCK	BUFF,3			;Buffer header ring
+$BLOCK	SCBLK,.FXLEN		;Scan block storage
+$BLOCK	LKBLK,.RBMAX
+$BLOCK	PTBLK,.PTMAX
+$BLOCK	NAME,5			;system's configuration name
+$LVAR	S.TRAC
+$LVAR	S.ETRA
+$LVAR	LOKADR
+$LVAR	CURBPT
+$LVAR	CURBYT
+$LVAR	DWNCNT
+$LVAR	TIMFLG
+$LVAR	LINBLK
+$LVAR	MYJOB
+
+DEFINE POINTS,<
+ZZ=.
+	AT DCNTRA,[MOVEI %T2,BUFFER]	;Snooped in. Add relocation
+	AT ZERBPT,[POINT 7,BUFFER+3]	;Poked in - add relocation
+	AT CURBPT,[POINT 7,BUFFER+3]	;Poked in - add relocation
+ADDERR=.-ZZ
+	AT LASBYT,[BUFLEN]		;Poked in - absolute quantity
+	AT MAXBYT,[BUFMAX]		;poked in - absolute quantity
+	AT CURBYT,[0]			;poked in - absolute quantity
+	AT TRAJOB,MYJOB			;Poked in - absolute quantity
+	AT S.TRAC,S.TRAC		;Poked in - mask
+	AT S.ETRA,S.ETRA		;Poked in - mask
+TOTPNT=.-ZZ
+>
+
+DEFINE	AT(NAME,STUFF),<
+	RADIX50 0,NAME
+>
+
+$LOSEG
+
+OUTARG:	XWD 1,OUTFIL
+OUTFIL:	.FOOUT
+
+	ADVANC	9,9		;Max 8 breakpoints, 8 symbols
+
+LOCS:	POINTS
+
+$BLOCK	SNPARG,2+2		;Argument block for snoop uuo
+
+DEFINE	AT(NAME,STUFF),<
+	EXP	STUFF
+>
+
+VALS:	POINTS
+
+DEFINE SWTCHS,<
+SL ETRACE,S.ETRA,TRNM,,FS.OBV
+SL TRACE,S.TRAC,TRNM,,FS.OBV
+SS ALLTRA,S.TRAC,-1,fs.obv
+SS ALLETR,S.ETRA,-1,fs.obv
+SS LINEBL,LINBLK,,
+>
+
+DOSCAN(MX.)
+
+KEYS TRNM,<TST,XPT,NSP,SCT,USR,NMX>
+
+D36TRC:	$SETUP			;Initialize the world
+GETFIL:	
+	SETOM	LINBLK		;Set only real scan switch to null
+	MOVE	T1,[XWD 4,[
+		XWD 12,%%FXVE
+		IOWD MX.L,MX.N
+		XWD MX.D,MX.M
+		XWD 0,MX.P]]
+	CALL	.PSCAN##	;intialize for FILIN
+	 TSTRG.	[ASCIZ \D36TRC>\]
+	CALL	.FILIN##	;Get a filespec.
+	SKIPL	T1		;make sure we got a filespec
+	 $WARN	FSR,<File spec required>,,,GETFIL
+	MOVEI	T1,SCBLK	;address of my scan block
+	MOVEI	T2,.FXLEN	;length of my scan block
+	CALL	.GTSPC##	;get the specification
+	MOVE	T1,[.FXLEN,,SCBLK] ;args for .STOPB
+	MOVEI	T2,FOPBLK+1	;open block is hidden in the filop block
+	MOVE	T3,[.RBMAX,,LKBLK] ;lookup block
+	MOVEI	T4,PTBLK	;path block
+	CALL	.STOPB##	;create the lookup and open block stuff
+	 $ERROR	BFS,<Bad file spec>
+	MOVE	T1,SCBLK+.FXFLD	;Get the fields field
+	TXNN	T1,FX.UNM	;did he specify a filename?
+	 JRST	[MOVSI T1,'TTY'	;No, default to tty
+		MOVEM T1,FOPBLK+.FODEV
+		SETZM LINBLK	;Flag line blocking mode
+		$INFORM DFL,<Defaulting to TTY:/LINEBL>,,,FOSET]
+FOSET:	MOVX	T1,.FOWRT	;function, write it out
+	MOVX	T2,<UU.LBF!.IOASC> ;mode
+	DMOVEM	T1,FOPBLK+.FOFNC ;save as function for filop
+	MOVSI	T1,BUFF		;Output buffer only
+	MOVSI	T2,^D6		;16 of 'em
+	DMOVEM	T1,FOPBLK+.FOBRH ;Point to the ring headers
+	MOVEI	T1,LKBLK	;Pointer to the lookup block
+	MOVEM	T1,FOPBLK+.FOLEB
+;Get our monitor symbols.
+	MOVE	T1,[TOTPNT,,LOCS] ;Pointer to our symbol names
+	CALL	GETADR##	;ask snup what the symbol values are
+;Now open our file
+	MOVE	T1,[.FOMAX,,FOPBLK]
+	FILOP.	T1,		;do the enter on the file
+	 $ERROR	FEF,<Filop enter failure, >,<flerr. t1,>,t1
+	MOVE	T1,OUTARG	;Output argument
+	FILOP.	T1,		;do the output, to set up the buffer rings.
+	 $ERROR	OUF,<Out UUO failed, >,<lerr. t1,>,t1
+;Initialize all the various byte pointers and byte counts
+	SETZM	BUFFER+TAKBYT	;Current bytes taken == 0
+	SETZM	BUFFER+LSTBYT	;Current lost bytes == 0
+	MOVE	T1,[POINT 7,BUFFER+3] ;get byte pointer to start of buffer
+	MOVEM	T1,CURBPT	;save as current byte pointer
+	SETZM	CURBYT		;Current byte is byte 0
+	SETOM	DWNCNT		;set downcounter to countedown
+	PJOB	T1,		;Find out what job I am
+	MOVEM	T1,MYJOB	;save it for later pokes.
+	MOVEI	T1,1		;An HPQ to put us into
+	HPQ	T1,		;WHAM!
+	 $WARN	HPQ,<HPQ set failed>
+;Following code must be nailed down.
+	MOVX	T1,1		;Loseg only, and nail us down to the max
+	LOCK	T1,		;Lock!
+	 $ERROR	CNL,<Could not lock, code >,.TOCTW##,T1,ABORT
+	LSH	T1,^D9		;make it an address, rather than a page
+	HRRZM	T1,LOKADR	;save as displacement into the monitor
+	MOVEI	T4,TOTPNT	;number of addresses to transfer
+	MOVEI	T1,2+1		;Size of argument block we are feeding it
+	MOVE	T2,CHKSUM	;Get the checksum that GETADR left us
+	DMOVEM	T1,SNPARG	;Save double word in argument list
+	MOVE	T1,LOCS		;get the single breakpoint location
+	MOVEM	T1,SNPARG+2	;save as address to put first thingy
+	MOVE	T1,@VALS	;get the single breakpoint value
+	ADD	T1,LOKADR	;relocate it.
+	MOVEM	T1,SNPARG+3	;Save as instruction to execute
+	MOVE	T1,[.SODBP,,SNPARG] ;Argument to define breakpoints
+	SNOOP.	T1,		;define them!
+	 $ERROR	BDF,<Breakpoint define failed! Code >,.TOCTW##,T1,ABORT
+VALPOK:	SUBI	T4,1		;decrement diplacement of word
+	MOVE	T1,LOCS(T4)	;get address of breakpoint
+	MOVE	T3,@VALS(T4)	;get value to put in it
+	CAIGE	T4,ADDERR	;are we processing an addr, or a value?
+	 ADD	T3,LOKADR	;address, adjust correspondingly
+	CAIGE	T4,1		;Is this the last one?
+	 JRST	INSBRK		;Yes, go do the snoop this time
+	MOVE	T2,T1		;Get copy of address
+	PEEK	T2,		;Find out what the monitor has there.
+	MOVE	[3,,T1]		;Arg for poke
+	POKE.			;poke the location to our value
+	 $ERROR	PUF,<Poke UUO failed, Code >,.TOCTW##,T1,ABORT
+	JRST	VALPOK
+
+INSBRK:	MOVSI	T1,.SOIBP	;Insert the breakpoints!
+	SNOOP.	T1,
+	 $ERROR	BIF,<Breakpoint insert failed! Code >,.TOCTW##,T1,ABORT
+
+;Set up for output to our file.
+	XMOVEI	T1,PUTBYT	;address to call on a scan typout
+	CALL	.TYOCH##	;tell scan about it
+	TLINE.	[ASCIZ \DECnet-36 monitor mode trace facility, initialized at\]
+	SETZM	TIMFLG
+	TCRLF.
+	SETZM	TIMFLG
+	GTTAB.	T1,[%CNFG0]	;get configuration name
+	MOVEM	T1,NAME		;save
+	GTTAB.	T1,[%CNFG1]	;..
+	MOVEM	T1,NAME+1
+	GTTAB.	T1,[%CNFG2]
+	MOVEM	T1,NAME+2
+	GTTAB.	T1,[%CNFG3]
+	MOVEM	T1,NAME+3
+	GTTAB.	T1,[%CNFG4]
+	MOVEM	T1,NAME+4
+	TSTRG.	NAME		;type out system name
+	TCHRI.	11		;Indent
+	TDATN.			;type out today's date
+	TCHRI.	":"
+	TTIMN.			;And current time
+	TCRLF.
+	SETZM	TIMFLG
+	TCRLF.
+
+;This is where we will spend most of our time
+G:
+LOOP:	SOSL	BUFFER+TAKBYT	;get meself a byte
+	 JRST [	CALL GETBYT	;Go move a byte from the buffer to disk
+		JRST LOOP]	;And do another
+	AOSLE	T1,BUFFER+TAKBYT ;no byte, put it back the way it was
+	 JRST	LOOP		;Ah! a byte appeared! try again!
+	JUMPL	T1,[$ERROR BFU,<Buffer fukked up! aborting!>,,,ABORT]
+	INCHRS	T1		;Get a character if there is one
+	JRST	SNOOZE		;nope, sleep for a while
+	caie	t1,"q"		;quit command?
+	 CAIN	T1,"Q"		;Is this a quit command?
+	  JRST	ABORT		;yes, exit!!!
+	SKIPE	.JBBPT		;Do we have DDT loaded?
+	 JRST	[CAIN T1,"D"	;do we want to do DDT?
+		JSR @.JBBPT	;Yes, go do it.
+		JRST LOOP]	;Be forgiving of bad commands if DDT loaded.
+	OUTSTR	[ASCIZ \Unknown command
+\]
+	JRST	LOOP
+
+
+;Note - I want to fix this to have the monitor wake us up.
+SNOOZE:	MOVX	T1,<HB.RTL!HB.RTC!HB.RWJ!HB.RWP!HB.RWT> ;Wake on anything
+	HIBER	T1,		;Go to sleep for a minute
+	 $ERROR	HUF,<Hiber UUO failed, aborting>,,,ABORT
+	JRST	LOOP		;Got woken up for something
+
+GETBYT:	SKIPN	BUFFER+LSTBYT	;did we lose any bytes?
+	 JRST	GETBY1		;nope, proceed
+	SETZM	BUFFER+LSTBYT	;Clean it out.
+	SKIPL	DWNCNT		;Are we already downcounting?
+	 JRST	GETBY1		;yes, we are in sad shape. Ignore this one
+	MOVX	T1,BUFMAX	;Get buffer size
+	MOVEM	T1,DWNCNT	;nastygram that many characters down the road.
+GETBY1:	SOSN	DWNCNT		;number of charracters until nastygrgram
+	 CALL	NASTYG		;output a nastygram first
+	AOS	T1,CURBYT	;increment current byte position
+	CAIGE	T1,BUFLEN	 ;make sure we haven't hit end of buffer
+	 JRST	GETBY0		;get the actual byte
+	MOVE	T1,[POINT 7,BUFFER+3] ;get byte pointer to bottom of buffer
+	MOVEM	T1,CURBPT	;save as current bpt
+	SETZM	T1,CURBYT	;zero current byte position
+GETBY0:	ILDB	T1,CURBPT	;get current byte
+PUTBYT:	AOSN	TIMFLG		;Flag to put out a time-stamp?
+	JRST [	MOVE P1,T1	;save the character for a sec
+		CALL .TTIMN##	;time stamp this line
+		CALL .TSPAC##	;Separate the message from the timestamp
+		MOVE T1,P1	;get character back
+		JRST .+1]	;fall through
+	SOSG	BUFF+2		;Decrement count of words avail in buffer
+	 JRST	PUTBUF		;put the buffer to ....
+DRPBYT:	IDPB	T1,BUFF+1	;put the actual byte in the buffer
+	CAIE	T1,^D10		;Was this a line feed?
+	 POPJ	P,		;ordinary character, return now
+	SETOM	TIMFLG		;Yes, flag to do a time-stamp next character
+	SKIPE	LINBLK		;are we in line blocking mode?
+	 POPJ	P,		;no.
+	MOVE	T1,OUTARG	;do the output, to get typeout in real time
+	FILOP.	T1,		;OUT!
+	 OUTSTR [ASCIZ \An OUT uuo failed!\]
+	POPJ	P,		;go get another byte
+
+PUTBUF:	MOVE	T1,OUTARG
+	FILOP.	T1,		;do the output, to set up the buffer rings.
+	 OUTSTR	[ASCIZ \An OUT uuo failed!!\]
+	JRST	PUTBYT		;Go put the byte
+
+NASTYG:	MOVEI T1,[ASCIZ \
+Monitor characters lost.
+
+\]
+	JRST	.TSTRG##
+
+ABORT:	CLOSE
+	EXIT
+LIT
+	END	D36TRC

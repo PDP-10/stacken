@@ -1,0 +1,105 @@
+
+SUBTTL	RMTCON Title File
+
+DECVER==3
+VEDIT==15
+
+DEFINE	TTITLE	(DECVER,VEDIT),<
+UNIVER	RMTCOT	NI Services Program, Version 'DECVER'('VEDIT')>
+
+	TTITLE	\DECVER,\VEDIT
+
+;COPYRIGHT 1984, 1985
+;LARGE SYSTEMS DIAGNOSTICS GROUP
+;DIGITAL EQUIPMENT CORPORATION
+;MARLBORO, MASS. 01752
+
+;AUTHOR:	Gary Papazian
+;UPDATE AUTHOR:	Gregory A. Scott
+
+	LOC	137
+	<DECVER>B11+VEDIT
+	RELOC
+
+	SEARCH	MONSYM,MACSYM,UUOSYM,GLXMAC
+	NOSYM			;No symbol table at end of listing
+	SALL			;Suppress macro exp
+
+;Loading instructions:
+;
+;	To load and save RMTCON, use the following two commands:
+;	@LOAD RMTCOT,RMTCOM,RMTCOP
+;	@SAVE
+;
+;Note: GLXLIB.REL must reside on REL: but is not used.
+
+	.TEXT	",/RUNAME:RMTCON "	;Set program run name to RMTCON
+	SUBTTL	Data Stack
+
+;The data stack is used to put arguments on and return arguments from.
+
+	DP=.A15				;Define DP as data list pointer
+
+DEFINE	PUSHD	(ARG),<			;Put data on data push list
+	IRP	ARG
+<	PUSH	DP,ARG>>
+
+DEFINE	POPD	(ARG),<			;Get data on data push list
+	IRP	ARG
+<	POP	DP,ARG>>
+	SUBTTL	Macros
+
+;Program title macro
+
+	DEFINE	TTITLE(NAME,DECVER,EDIT,TEXT),<
+	TITLE	NAME	TEXT  Version 'DECVER'('EDIT')>
+
+;Macro to print a message on the terminal, on -10 or -20.
+
+	DEFINE	$PMSG(Text),<
+	$CALL	[JSP	S1,SOUT%%
+		ASCIZ	\Text\]
+>;end of Define $PMSG
+
+	DEFINE	$PMSGC(Text),<
+	$CALL	[JSP	S1,SOUT%%
+		ASCIZ	\Text
+\]
+>;end of Define $PMSGC
+
+	DEFINE	$PMSGR(Text),<
+	JSP	S1,SOUT%%
+	ASCIZ	\Text
+\
+>;end of Define $PMSGR
+	SUBTTL	Static Symbols
+
+;Define symbols not usually changed.
+
+	BUFSIZ==^D2000			;Max Command/Response buffer size
+	RESTIM==^D500			;MS between polls to reserve console
+;(11)	TTY==0				;Channel for opening TTY on the 10
+
+;Define symbols not in UUOSYM yet.
+
+IFNDEF	.PCLLM,.PCLLM==:-37		;PSI for LLMOPs
+
+;Define GLXLIB-10 symbols that aren't in the GLXMAC on the -20
+
+IFNDEF .FDSTR,<
+
+;FD block for TOPS-10
+
+.FDSTR==.FDFIL			;Structure containing the file
+.FDNAM==.FDFIL+1		;The file name
+.FDEXT==.FDFIL+2		;The extension
+.FDPPN==.FDFIL+3		;The PPN
+.FDPAT==.FDFIL+4		;Start of the path
+>;end of IFNDEF .FDSTR
+
+	END
+
+;;;Local Modes:
+;;;Mode: Macro
+;;;Comment Column: 40
+;;;End:

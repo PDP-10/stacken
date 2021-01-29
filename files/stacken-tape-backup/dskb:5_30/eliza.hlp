@@ -1,0 +1,66 @@
+ELIZA - L]TSAS F\RST] NATURLIGT SPR]K
+
+I b|rjan p} 1960-talet skrev den amerikanske datorforskaren
+Weizenbaum detta ber|mda program. Programmet simulerar en
+psykoanalytiker. Genom att k{nna igen vissa nycklar i
+m{nniskans svar kan programmet ge ett f|rv}nande starkt
+intryck av att f|rst} och kunna konversera i naturlig
+engelska. I verkligheten {r programmet mycket enkelt och
+begr{nsat.
+
+F|r att starta programmet skriv:
+
+.DO ELIZA
+
+Exempel p} dialog:
+
+IS THIS ELIZA?
+
+I AM NOT SURE I UNDERSTAND YOU FULLY
+ARE YOU ELIZA?
+
+WHY ARE YOU INTERESTED IN WHETHER I AM ELIZA OR NOT
+I WANT TO TEST ELIZA.
+
+WHAT WOULD IT MEAN TO YOU IF YOU GOT TO TEST ELIZA
+I WOULD LEARN ABOUT THIS WELLKNOWN PROGRAM.
+
+YOU SAY YOU WOULD LEARN ABOUT THIS WELLKNOWN PROGRAM
+YES, YOU ARE FAMOUS.
+
+YOURE BEING SOMEWHAT SHORT WITH ME
+YOU REMIND ME OF MY GRAND-FATHER.
+
+TELL ME MORE ABOUT YOUR FAMILY
+MY MOTHER LIKES TEA IN THE AFTERNOON.
+
+WHO ELSE IN YOUR FAMILY LIKES TEA IN THE AFTERNOON
+I LIKE TEA IN THE AFTERNOON.
+
+CAN YOU ELABORATE ON THAT
+I GET TIRED IN THE EVENING, BUT A CUP OF TEA MAKES ME FIT AGAIN.
+
+DO YOU SAY YOU GET TIRED IN THE EVENING FOR SOME SPECIAL REASON
+NO, JUST TO ANSWER YOUR QUESTION.
+
+YOU DONT SEEM VERY TALKITIVE TODAY
+WHY ARE YOU SO SHORT WITH ME?
+
+WHY DO YOU ASK
+BECAUSE YOU MAKE ME FEEL SAD AND ANGRY AND FRUSTRATED.
+
+IS THAT THE REAL REASON
+YES
+
+YOU SEEM QUITE POSITIVE
+
+Och s} vidare ...
+
+G} ur programmet genom att trycka p} CONTROL-C!
+
+K{llkoden till ELIZA (som {r skriven i LISP) finns sparad p}
+DEC-bandet DEQZ35. Filen DOCTOR.TXT inneh}ller information om
+beh|vliga filer och kompileringsanvisningar f|r att skapa ett
+nytt ELIZA-program.
+
+	<Slut p} ELIZA.HLP>

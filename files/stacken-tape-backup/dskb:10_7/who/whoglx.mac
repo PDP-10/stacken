@@ -1,0 +1,132 @@
+	TITLE	WHOGLX - GLXLIB interface for WHO
+
+	SEARCH	WHOMAC
+
+	$SETUP	(WHOMAC)
+
+Comment |
+
+This module contains all the interface to GLXLIB, with its different
+AC conventions and subroutine returns. Some small routines to do
+memory management and linked lists are provided here as well.
+
+|
+;               TABLE OF CONTENTS FOR WHOGLX
+;
+;
+;                        SECTION                                   PAGE
+;    1. W$INIT - Init GLXLIB......................................   3
+;    2. SCAN support
+;         2.1   Position 'I' to first SCAN spec...................   4
+;         2.2   Position 'I' to next SCAN spec....................   4
+;         2.3   Position list to 'I'..............................   4
+;         2.4   Allocate core for SCAN spec.......................   4
+;         2.5   Deallocate all SCAN specs.........................   4
+;    3. ALLOC.....................................................   6
+;    4. DEALLOC...................................................   6
+;    5. END.......................................................   7
+	SUBTTL	W$INIT - Init GLXLIB
+
+W$INIT::PUSHJ	P,M$INIT##		;GET GLXMEM
+	PUSHJ	P,L$INIT##		;GET GLXLNK
+	SETZM	HEAD$S
+	SETZM	HEAD$C
+	SETZM	HEAD$I
+	SETZM	HEAD$M
+
+DEFINE XX(MOD,ABR,MAP,TXT,ERR),<SETZM ABR'COR##>
+
+	MODES
+
+	POPJ	P,			;AND RETURN
+	SUBTTL	SCAN support -- Position 'I' to first SCAN spec
+
+S$FIRST::MOVE	T1,HEAD$S		;GET SCAN BLOCK LIST HEADER
+	PUSHJ	P,L$FIRST##		;POSITION TO FIRST
+	MOVEI	I,(T2)			;POINT 'I' TO ADDRESS
+	POPJ	P,			;AND RETURN
+
+
+	SUBTTL	SCAN support -- Position 'I' to next SCAN spec
+
+S$NEXT::MOVE	T1,HEAD$S		;GET SCAN BLOCK LIST HEADER
+	PUSHJ	P,L$NEXT##		;POSITION TO NEXT ENTRY
+	 POPJ	P,			;END OF LIST
+	MOVEI	I,(T2)			;POINT 'I' TO ADDRESS
+	JRST	.POPJ1##		;AND SKIP RETURN
+
+
+	SUBTTL	SCAN support -- Position list to 'I'
+
+S$POSITION::MOVE T1,HEAD$S		;GET LIST HEADER
+	MOVEI	T2,(I)			;GET ENTRY
+	PJRST	L$APOS##		;POSITION AND RETURN
+
+
+	SUBTTL	SCAN support -- Allocate core for SCAN spec
+
+S$ALLOC::MOVEI	T1,.FZLEN##		;GET LENGTH
+	MOVEI	T2,HEAD$S		;GET SCAN BLOCK LIST HEADER
+	PUSHJ	P,ALLOC			;ALLOCATE CORE
+	MOVEI	I,(T1)			;POINT TO IT
+	POPJ	P,			;AND RETURN
+
+
+	SUBTTL	SCAN support -- Deallocate all SCAN specs
+
+S$DEALLOC::MOVEI	T2,HEAD$S		;GET SCAN BLOCK LIST HEADER
+	PJRST	DEALLOC			;AND DEALLOCATE CORE
+M$ALLOC::MOVEI	T2,HEAD$M
+	PJRST	ALLOC
+C$ALLOC::SKIPA	T2,[HEAD$C]
+I$ALLOC:: MOVEI	T2,HEAD$I
+	PJRST	ALLOC
+
+
+M$DEALLOC::MOVEI T2,HEAD$M
+	PJRST	DEALLOC
+C$DEALLOC::SKIPA	T2,[HEAD$C]
+I$DEALLOC:: MOVEI T2,HEAD$I
+	PJRST	DEALLOC
+	SUBTTL	ALLOC
+
+;Call:
+;	T1/ number of words to get
+;	T2/ address of list header
+;	PUSHJ	P,ALLOC
+;returns
+;	T1/ address of core
+
+ALLOC:	PUSHJ	P,.SAVE2##		;SAVE P1,P2
+	DMOVE	P1,T1			;COPY ARGS
+	SKIPN	T1,(P2)			;SEE IF LIST
+	 PUSHJ	P,L$CLST##		;NO--CREATE ONE
+	MOVEM	T1,(P2)			;AND SAVE LIST NAME
+	MOVE	T2,P1			;GET SIZE
+	PUSHJ	P,L$CENT##		;CREATE ENTRY
+	MOVEI	T1,(T2)			;GET ALLOCATED ADDRESS
+	POPJ	P,			;AND RETURN
+
+
+	SUBTTL	DEALLOC
+
+;Call:
+;	T2/ address of list header
+;	PUSHJ	P,DEALLOC
+
+DEALLOC:PUSH	P,T2			;SAVE ADDRESS OF LIST HEADER
+	SKIPE	T1,(T2)			;GET LIST NAME
+	 PUSHJ	P,L$DLST##		;DELETE LIST
+	POP	P,T1			;RESTORE LIST ADDRESS
+	SETZM	(T1)			;LIST IS GONE
+	POPJ	P,			;AND RETURN
+	SUBTTL	END
+
+	$LOW
+
+HEAD$S::BLOCK	1
+HEAD$C:	BLOCK	1
+HEAD$I:	BLOCK	1
+HEAD$M:	BLOCK	1
+
+	END

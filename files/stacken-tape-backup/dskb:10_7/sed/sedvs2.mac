@@ -1,0 +1,122 @@
+TITLE   SEDVS2 - Visual 200 in VT52+ mode TERMINAL DEFINITIONS FOR SED
+SUBTTL  A CHRISTOPHER HALL FECIT/stan peters
+
+;LOAD THE EDITOR BY: .LOAD SEDVS2,SED
+
+        SEARCH  SEDSYM,itbsym
+IFE TOPS10,<SEARCH MONSYM>
+IFN TOPS10,<
+        TWOSEG
+        RELOC   400000
+>
+	EXTERN  CPOPJ,PUTSQ1,PUTTYP,PUTNUM,TRMNAM
+        INTERN  TERMNL
+
+TERMNL: OVS200  ;ADDRESS OF THE TERMINAL TABLE TO USE
+
+OVS200:	BYTE (7) 33,"A" 	;CURSOR UP
+	BYTE (7) 33,"B" 	; DOWN
+	BYTE (7) 33,"C" 	; RIGHT
+	BYTE (7) 10		; LEFT
+	BYTE (7) 33,"H" 	; HOME
+	BYTE (7) 33,"J" 	;CLEAR PAGE
+	BYTE (7) 33,"K" 	;CLEAR LINE
+	BYTE (7) 12		;ROLL UP AND CLEAR LINE
+	BYTE (7) 33,"I" 	;ROLL DOWN AND CLEAR LINE
+	CPOPJ            	;PROTECT ON (NONE FOR A VT52)
+	CPOPJ            	;PROTECT OFF
+	BYTE (7) 33,"L"		;INSERT LINE (NONE)
+0;	BYTE (7) 33,"i",40,33,"j" ;INSERT SPACE (NONE)
+	BYTE (7) 33,"M"		;DELETE LINE (NONE)
+0;	BYTE (7) 33,"O"		;DELETE SPACE (NONE)
+	BYTE (7) 33,"Y","7"," " ;MOVE TO BOTTOM
+	BYTE (7) 33,"H",33,"J"	;HOME AND CLEAR PAGE
+	VT5PSC			;ROUTINE TO POSITION TO CHARACTER
+	VT5PSL			;ROUTINE TO POSITION TO START OF LINE
+	^D24			;LINES PER PAGE
+	^D80			;CHARACTERS PER LINE
+	MRK!TBS!SLW		;FLAGS (NO PROTECT, HARD TABS)
+        CPOPJ  			;ROUTINE TO CALL ON ENTRY
+	CPOPJ			;ROUTINE TO CALL ON EXIT
+	0                       ;NO NULLS NEEDED
+	IVS200			;ADDRESS OF INPUT CHARACTER TABLE
+ 	"~"			;MARK TO DISPLAY ON ENTER
+
+
+;TERMINAL INPUT TABLE - TELLS WHAT CONTROL CHARACTERS OR SEQUENCES
+;INVOKE WHICH COMMANDS
+
+        $reset          ; 177   RUBOUT
+IVS200: $recal          ;   0   ^@ (control-space, if terminal can send it)
+        $inspa          ;   1   ^A
+        $setfi          ;   2   ^B
+        $abort          ;   3   ^C
+        $inlin          ;   4   ^D
+        $srbck          ;   5   ^E
+        $dllin          ;   6   ^F
+        $put            ;   7   ^G
+        $curlf          ;  10   ^H
+        $tab            ;  11   ^I
+        $clrln          ;  12   ^J
+        $sldlf          ;  13   ^K
+        $sldrt          ;  14   ^L
+        $crrtn          ;  15   ^M
+        $swtch          ;  16   ^N
+        $entcc          ;  17   ^O
+        $pgoto          ;  20   ^P
+        $rbkpg          ;  21   ^Q
+        $srfwd          ;  22   ^R
+        $delsp          ;  23   ^S
+        $rfwdl          ;  24   ^T
+        $bktab          ;  25   ^U
+        $pick           ;  26   ^V
+        $rbckl          ;  27   ^W
+        $exec           ;  30   ^X
+        $rfwdp          ;  31   ^Y
+        $exit           ;  32   ^Z
+        -esctbl,,esctab ;  33   ESCAPE  ;needs a table
+        $curdn          ;  34   ^\
+        $currt          ;  35   ^]
+        $curup          ;  36   ^^
+        $curhm          ;  37   ^_
+
+;SUBTABLE. PUT THE MOST FREQUENTLY-USED SEQUENCES FIRST
+;ENTER IS PROBABLY THE MOST COMMON OF ALL
+
+esctab:	$enter,,"P"	;ESCAPE P == ENTER         (F0 key)
+	$curhm,,"H"	;ESCAPE H == HOME
+	$curup,,"A"	;ESCAPE A == UP
+	$curdn,,"B" 	;ESCAPE B == DOWN
+	$currt,,"C" 	;ESCAPE C == RIGHT
+	$curlf,,"D" 	;ESCAPE D == LEFT
+	$recal,,"Q" 	;ESCAPE Q == RECALL        (F1 key) same as ^@
+	$inmod,,"R"     ;ESCAPE M == INSERT/MODE   (F2 key)
+        $enter,,33      ;ESCAPE ESCAPE == ENTER    (same as ESCAPE P)
+;       $inspa,,"i"     ;ESCAPE i == INSERT SPACES (IC key)
+;       $inspa,,"j"     ;ESCAPE j == also INSERT SPACES (IC key)
+        $inlin,,"L"     ;ESCAPE L == INSERT LINE   (IL key)
+        $delsp,,"O"     ;ESCAPE O == DELETE SPACES (DC key)
+        $dllin,,"M"     ;ESCAPE M == DELETE LINE   (DL key)
+        $dlprv,,40      ;ESCAPE space == DELETE PREV CHAR (F3 key)
+        $rltab,,"!"     ;ESCAPE ! == REAL TAB (E-C-C I)   (F4 key)
+esctbl==.-esctab
+
+;POSITIONING ALGORITHMS
+
+VT5PSC:	MOVE	T1,[BYTE (7) 33,"Y"]
+	PUSHJ	P,PUTSQ1	;START IT OFF
+	MOVEI	T1,40(RW)	;GET ROW POSITION
+	IDPB	T1,TY
+	MOVEI	T1,40(CM)	;GET COLUMN POSITION
+	IDPB	T1,TY
+	POPJ	P,		;DONE
+
+VT5PSL:	MOVE	T1,[BYTE (7) 33,"Y"]
+	PUSHJ	P,PUTSQ1	;START IT OFF
+	MOVEI	T1,40(T4)	;GET ROW POSITION
+	IDPB	T1,TY
+	MOVEI	T1,40		;MOVE TO COLUMN ZERO
+	IDPB	T1,TY
+	POPJ	P,
+
+        END

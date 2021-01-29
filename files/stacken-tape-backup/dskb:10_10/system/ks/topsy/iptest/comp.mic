@@ -1,0 +1,7 @@
+.compile common.rel=syscnf.mac+common.mac
+.compile comdev.rel=syscnf.mac+comdev.mac
+.compile commod.rel=syscnf.mac+commod.mac
+.compile scnser, sysini, uuocon, clock1, psiser
+.compile ipser, iprout, ip4sub
+.compile arpser, unaser, slip
+.compile udpser, tcpser

@@ -1,0 +1,35 @@
+title   time -- compute time to perform 10^7 instructions.
+
+search jobdat, uuosym, macten
+
+.text   "/symseg:low/locals"
+
+pdl:    block   <pdllen==^D100>
+
+time:   jfcl
+        reset
+        move    17,[iowd pdllen, pdl]
+        mstime  1,
+        move    2,[^D10000000]
+        sojg    2,.
+        mstime  2,
+        camg    2,1
+        add    2,[^D24*^D60*^D60*^D1000]
+        sub     2,1
+        outstr[ asciz "Time used: "]
+        pushj   17,prdec
+        outstr[ asciz   " ms.
+"]
+        monrt.
+        jrst    time
+
+prdec:  idivi   2,^D10
+        push    17,3
+        skipe   2
+         pushj  17,prdec
+        pop     17,3
+        addi    3,"0"
+        outchr  3
+        popj    17,
+
+end     time

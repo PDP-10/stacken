@@ -1,0 +1,4 @@
+.route add 192.168.111.60 self arp
+.route add 192.168.111.0/24 una0
+.route add 0.0.0.0/0 una0 192.168.111.64
+.route add 224.0.0.0/4 null

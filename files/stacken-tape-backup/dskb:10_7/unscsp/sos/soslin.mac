@@ -1,0 +1,624 @@
+	TITLE	SOSLIN - The I, M, R, D, K And N Commands
+;		---------------------------------------
+; 
+;  This file contains the code for the following commands:
+;	1. Insert (I)
+;	2. Insert page mark (M)
+;	3. Replace (R)
+;	4. Delete (D)
+;	5. Delete a page mark (K)
+;	6. Renumber (N)
+; 
+ 
+	SEARCH	SOSTCS
+	$INIT
+ 
+; Flag definitions for this module
+ 
+DELFPG==PDFL1			; We must delete the last page
+RPLFLG==PDFL2			; We are doing a replace
+YESFLG==PDFL3			; He used the Y switch
+PGDLF==PDFL4
+ 
+ 
+	SUBTTL	THE INSERT COMMAND
+ 
+; Insert a line
+
+CRTINS::OCRLF
+	MOVEI	T1,1		; Start inserting at line 100 page 1
+	MOVEM	T1,HIPG
+	MOVEM	T1,CPGL 	; And set up current page number
+	MOVE	T1,INCR 	; No, start insertion at INCR
+	MOVEM	T1,HILN
+	SETZM	ERSW##		; In case just came in from an ER
+	JRST	INSGO		; And away we go
+
+INSERT::PUSHJ	P,GET2SD##	; Get line number, accept null for .
+	TRNN	FL,LINSN	;Was a line number seen
+	  JRST	INSMK		;YES--INSERT ON NEW PAGE
+	DMOVE	T1,HILN		; Get high limit
+	CAMN	T1,LOLN		; Low and high must be the same
+	CAME	T2,LOPG		;  both pages and lines
+	NERROR	ILC
+	TRNE	FL,CNTF		; Did he type !
+	JRST	NOINC		; No increment can be specified
+	CAIN	C,";"		; Check for temp incr
+	JRST	[MOVE T1,INCR	; Yes: save old
+		MOVEM T1,TEMINC
+		JRST GETINC]
+	CAIE	C,","		; If a comma, set increment
+	JRST	NOINC		; No, go look for a terminator
+GETINC: PUSHJ	P,SCAN##	; Get the number
+	TRNE	FL,NUMF 	; Was it a number?
+	CAMN	T1,LNZERO##	; Do not permit 0 incr
+	NERROR	ILC		; He was confused
+	MOVEM	T1,INCR 	; No, set increment
+	PUSHJ	P,SCAN##	; Scan past it
+NOINC:	PUSHJ	P,CKTRMF##	; Make sure that command terminates
+	SETZM	ALTSN		; Clear altmode flag
+INSGO::	PUSHJ	P,FINDHI##	; Go get um
+	MOVE	T2,CPG		; Demand correct page match
+	CAME	T2,HIPG
+	NERROR	NSP
+	TRNN	FL,CNTF		; ! type increment specification?
+	JRST	INSTRY		; No, go start the insert
+	MOVE	T2,INCR		; Save increment
+	MOVEM	T2,TEMINC	; For later restoration
+	MOVE	T2,HILN		; Get limit
+	MOVE	T3,SVCNT	; And number of lines to insert
+	PUSHJ	P,GETDIF##	; Compute increment
+	  NERROR ILR		; None exists
+	MOVEM	T1,HILN		; Save next line
+	MOVEM	T2,INCR		;  and computed increment
+	JRST	SINSLP		; Start the insert
+
+INSTRY:	MOVE	T2,LNZERO##	; Set to compare
+	CAME	T2,HILN 	; Are they matching?
+	JRST	INSTR1		; If not zero
+	MOVE	T1,LNZERO	; Fetch a zero as target line
+	JRST	INSTR2		; And join processing
+
+INSTR1:	CAME	T1,HILN		; Specified line was zero?
+	JRST	SINSLP		; No, go start the insert
+INSTR2:	MOVE	T2,INCR		; Specified increment
+	PUSHJ	P,FIXLIN##	; Get a usable one
+	  EXP	HILN		; Points to high limit
+	  NERROR ILR		; No increment will do
+	MOVEM	T2,HILN		; Save first number in HILN
+SINSLP: MOVE	T1,HILN
+	MOVEM	T1,CLN
+INSLP:	SETZM	OCNT
+	TLO	FL2,INSF	; Post that we are doing an insert
+IFN	%UAHPQ,<
+	PUSHJ	P,HPQON##	; Use HPQ for fast response
+>
+	SKIPE	ALTSN		; Altmode seen?
+	JRST	LVINS		; Yes: done
+	MOVE	T1,HILN 	; Tell him the line he is inserting
+	MOVEM	T1,LIBUF	; And put it in the buffer
+	SKIPN	COMFLF		; Ignore seq # if in command file
+	PUSHJ	P,OUTSN##	; Put it out
+	PUSHJ	P,RDLIN##	; Read a line
+	  JRST	LVINS		; Yes, get out of insert mode>
+IFN CKPSW,<
+	PUSHJ	P,WRTBLK##	; Write checkpoint file now
+>
+	MOVEM	T1,NCNT 	; Here is the count of the new one
+	PUSHJ	P,INSED##	; Go insert
+	TRZN	FL2,ENTALT	; Alter this one?
+	JRST	NOIALT		; Don't do alter
+	SKIPL	AUTALT		; Old style?
+	JRST	IALT1		; No, do special DPY mode alter
+	OCRLF			; Give a CRLF
+	MOVEI	T5,CPOPJ##	; No implied first command
+	JRST	IALT2		; Do the alter
+
+IALT1:	SETOM	SUPSNF		; Suppress sequence number
+	TRO	FL2,SUPN	; And tab-over typeout
+	MOVEI	T5,[PUSHJ P,ALTTAB##	; Tab over internally
+		    PUSHJ P,SETPVS## ; Setup previous size
+		    MOVEI C,33		; Character needing erasure
+		    PUSHJ P,RUBAK##	; Back over it
+		    PJRST TYPSTR##]	; and erase it
+IALT2:	PUSHJ	P,ALTLIN##	; Now go do an alter
+	  JRST	ALVINS
+	PUSHJ	P,INSED 	; Re-insert the line
+NOIALT:	SOSN	ISAVEN		; Time to save?
+	PUSHJ	P,ASVCOD##	; Yes: go do it
+	PUSHJ	P,FINDN##	; Move up a line
+	SKIPE	FFFLAG		; Did he type formfeed?
+	JRST	INSFF		; Yes, go insert a new page
+INSRTX::MOVE	T1,CPG		; Set current line and page to last
+	MOVEM	T1,CPGL 	; One really inserted
+	MOVEM	T1,CURINP	; Save current page
+	MOVE	T1,HILN 	; Get next line to insert
+	MOVEM	T1,CLN		; Save as current
+	MOVEM	T1,CURINS	;  and as last line inserted
+	MOVE	T2,INCR 	; Get next line to insert
+	PUSHJ	P,ASCIAD##
+	CAMG	T1,INCR 	; Have we wrapped around
+	JRST	LVINS0		; Yes, stop
+ENTIN0:	MOVEM	T1,HILN 	; Store for reference
+ENTINS: PUSHJ	P,FINDN1##	; Point to current line
+	JUMPE	T1,INSLP	; Always insert at end of file
+	CAME	T1,PGMK 	; Or at end of page
+	CAMLE	T1,HILN 	; Found a match or passed over a line?
+	JRST	INSLP		; No, insert
+	JRST	LVINS0		; Return to command
+ 
+; Here if he quits with "Q" command in alter mode
+ 
+ALVINS: MOVE	T1,HILN 	; Get last one inserted
+	MOVEM	T1,CLN		; Make that current
+	SETOM	ALTSN		; Flag that we saw an altmode
+; 
+LVINS:	SKIPE	FFFLAG		; FF typed?
+	JRST	INSFF		; Yes, go add a page mark
+	MOVE	T1,HILN
+	MOVE	T1,CPG
+LVINS0: SKIPE	ALTSN		; No <CR><LF> when no <altmode> seen
+	SKIPE	COMFLF		; In a command file?
+	JRST	LVINS1		; Yes skip cr
+LEVINS::OCRLF
+LVINS1: SETZM	ALTSN		; Clear altmode flag
+	TLZ	FL2,INSF	; No longer doing an insert
+	JRST	COMND##
+
+
+ 
+; Here when a Form Feed is typed on input
+
+INSFF:	PUSHJ	P,NOTBSC	; Illegal in BASIC mode
+	PUSHJ	P,INSPAG	; Insert the page mark
+	MOVE	T2,CPG		; Fetch the page number
+	MOVEM	T2,DPG		; Set up so can re-find line later
+	SKIPN	COMFLF		; Suppress if reading a command file
+	PUSHJ	P,PGPRN		; And type it so he knows what happened
+	MOVE	T1,INCR		; Current increment becomes next line
+	JRST	ENTIN0		; Continue the insertion on next page
+
+
+INSMK:	PUSHJ	P,CKTRMF##	;CKECK TERMINATOR
+	SETZM	ALTSN		;NO ESC SEEN YET
+	MOVE	T1,[<ASCII /9999:/>!1];
+	MOVEM	T1,HILN		;ONE PAST END OF WORLD
+	TLO	FL,L1.MCM	;TURN ON TO FAKE MARK0
+	PUSHJ	P,MARK0		;INSERT PAGE-MARK
+	MOVE	T2,TECFST	; GET /START:
+	MOVEM	T2,LOLN		;
+	MOVEM	T2,HILN		;
+	MOVE	T2,CPG		;AND CURRENT PAGE
+	MOVEM	T2,LOPG		;
+	MOVEM	T2,HIPG		;SET UP FOR INSERT
+	PUSHJ	P,PGPRN##	;TELL THE NEW PAGE
+	JRST	INSGO		;GO
+	SUBTTL	THE M COMMAND
+ 
+; Insert a page mark at designated line
+
+MARK::	PUSHJ 	P,NOTBSC##	; Illegal in basic mode
+	TLO	FL,L1.MCM	;FLAG IN MARK COMMAND FOR GET1SD
+	PUSHJ	P,GET1SD##	; Get one line/page number
+	PUSHJ	P,MARK0		;MARK THE PAGE
+	JRST	COMND		;ALL DONE
+
+MARK0:	PUSHJ	P,CKTRMF##	;Make sure it terminates
+	PUSHJ	P,FINDHI##	; Get it
+	TLZN	FL,L1.MCM	;SEE IF GET1SD SAW PAST TOP OF PAGE
+	PUSHJ	P,FINDN##	; Go one higher
+	MOVE	T1,CPG
+	CAME	T1,HIPG 	; Page must match
+	NERROR	NSP		; Must match
+MARK1::				;
+	PUSHJ	P,INSPAG##	; Insert the new page mark
+	AOS	LSLOPG		; Now one higher
+	POPJ	P,		;ALL DONE
+	SUBTTL	THE REPLACE COMMAND
+ 
+REPLAC::TRO	FL2,RPLFLG	; We are doing a replace
+	PUSHJ	P,GET2DL	; What do we want to replace?
+	CAIN	C,";"		; Check temp
+	JRST	[MOVE T1,INCR
+		MOVEM T1,TEMINC
+		JRST RPGINC]
+	CAIE	C,","		; He can specify increment too
+	JRST	RPTERM		; But he didn't, look for terminator
+RPGINC: PUSHJ	P,SCAN##	; Get incr
+	TRNN	FL,NUMF 	; Which must be a number
+	JRST	RPTRM1		; Might be ,Y switch
+	CAMN	T1,LNZERO##	; Not 0 for incr
+	NERROR	ILC
+	MOVEM	T1,INCR
+	PUSHJ	P,SCAN##	; Scan past
+; 
+RPTERM: PUSH	P,LOPG		; Save start page
+	SKIPN	T1,LOLN 	; Fetch LOLN if not zero
+	MOVE	T1,INCR 	; Else use his increment
+	PUSH	P,T1		; Save it
+; 
+	PUSHJ	P,DELT1 	; Do the delete
+; 
+RPDONE: POP	P,HILN		; Restore starting point
+	POP	P,HIPG		; and page
+	TRZ	FL,CNTF		; Make sure this is clear
+	JRST	INSGO		; And do the insert
+ 
+; Here if we found a switch and no number.  Assume it is a ,Y switch
+ 
+RPTRM1: PUSH	P,LOPG		; Save start page
+	SKIPN	T1,LOLN 	; Fetch LOLN if non-zero
+	MOVE	T1,INCR 	; Else use increment
+	PUSH	P,T1
+; 
+	PUSHJ	P,DELT1A	; Do the delete
+	JRST	RPDONE		; And go on to insert
+	SUBTTL	THE DELETE COMMAND
+ 
+ 
+; Delete a line or a number of lines
+
+DELET:: PUSHJ	P,GET2DL	; Get line range for deletion
+	PUSHJ	P,DELT1 	; Do the deletion
+	JRST	COMND		; and get next command
+ 
+; Subroutine to delete line of text
+; Called by the D and R commands
+ 
+DELT1:	CAIE	C,","		; Check switch
+	JRST	DELT0
+	PUSHJ	P,SCAN##
+; 
+; Enter here if switch has been scanned
+
+DELT1A: MOVS	T1,ACCUM
+	TRNE	FL,IDF
+	CAIE	T1,(<SIXBIT /Y  />)
+	NERROR	ILC
+	TRO	FL2,YESFLG	; Don't ask
+	PUSHJ	P,SCAN##
+DELT0:	PUSHJ	P,CKTRMF##	; Must terminate correctly
+	SETZM	FDELLN		; No lines deleted yet
+	SETZM	LDELLN
+	SKIPN	EXPFLG		; Experts can delete anything
+	TRNE	FL2,YESFLG	; He'll delete anything
+	JRST	DELT3		; Skip the check
+	TRNN	FL,PGSN		; Second page specification given
+	TRNN	FL,LINSN	; or no line number specified
+	CAIA
+	JRST	DELT3		; No, simple deletion
+	OUTSTR	[ASCIZ /Massive delete OK? /]
+	PUSHJ	P,CONFRM##
+	  JRST	COMND		; No:
+				 CONT.
+DELT3:	TRZN	FL,LINSN	; Line number seen?
+	TRO	FL2,DELFPG	; Delete page that follows
+	TRZE	FL2,RPLFLG	; Doing a replace
+	TRZ	FL2,DELFPG	; If yes, never take PGMK that follows
+	PUSHJ	P,FINDLO##	; Find first line in range
+	JUMPE	T1,DELEND	; If no line to delete
+	MOVE	T2,CPG		; Get current page
+	MOVEM	T2,FDELPG	; Remember it as first
+	MOVEM	T2,PGDELS	; Last one deleted also
+; 
+DELT2:	PUSHJ	P,ONMOV##	; No, check for range
+	  JRST	DELEND
+DELT5:	TRZN	FL2,PGDLF	; First line on this page
+	JRST	DELT7
+	AOS	PGDELS		; These are on another page
+	SETZM	LDELLN		; Clear last line
+DELT7:	CAME	T1,PGMK 	; Is this a page mark?
+	JRST	DELT4
+	SOS	HIPG		; Decrement high since one is going away
+	SOS	BGPG		; And this since now one less
+	SKIPN	FDELLN		; First line set
+	MOVEM	T1,FDELLN	; No, set it
+	TRO	FL2,PGDLF	; We deleted another page
+	MOVE	T1,LNZERO##	; Reset CLN to line zero
+	JRST	DELT6
+
+DELT4:	AOS	DELCNT		; Deleted one more line
+	SKIPN	FDELLN		; This set yet?
+	MOVEM	T1,FDELLN	; No remember this
+	MOVEM	T1,LDELLN	; and this as last
+DELT6:	MOVEM	T1,CLN		; Update this
+	TRO	FL,LINSN	; Note that we did something
+	PUSHJ	P,DODEL 	; Delete a line
+	PUSHJ	P,FINDN1##	; Find the next
+	JUMPN	T1,DELT2	; If a next line found
+; 
+DELEND: TRNN	FL,LINSN	; Did we see anything?
+	NERROR	NLN		; No, give error
+	TRZE	FL2,DELFPG	; Delete page mark that follows?
+	JUMPN	T1,DELT5	; Go do it
+	MOVE	T1,CPG		; Yes, set current page
+	MOVEM	T1,CPGL
+	PUSHJ	P,ORDCHK	; Check order
+	SKIPN	INFFLG		; Only if desired
+	POPJ	P,		; Done--return
+				CONT.
+; Here to print the 'lines deleted message'
+; 
+	MOVE	T2,DELCNT	; Count of lines deleted
+	PUSHJ	P,DPRNT		; Print # of lines deleted
+	OUTSTR	[ASCIZ / line/]
+	SOSE	T1,DELCNT	; Count - one
+	OUTCHR	["s"]		; type "s" if plural
+	OUTSTR	[ASCIZ / (/]
+	SKIPE	T1,FDELLN	; Fetch first line.  Not set yet?
+	CAMN	T1,PGMK		; or set to a page mark?
+	MOVE	T1,[ASCIZ "/"]	; Yes, use a "/"
+	MOVEM	T1,LINOUT	; Print it
+	OUTSTR	LINOUT
+	MOVE	T2,FDELPG
+	PUSHJ	P,DPRNT		; And page #
+	MOVE	T1,LDELLN	; Last line deleted
+	MOVE	T2,PGDELS	; Last page of deleted range
+	CAMN	T2,FDELPG	; Is it different than the first
+	SKIPLE	DELCNT		; If less than 2 lines deleted
+	PUSHJ	P,[OUTCHR [":"]	; No: print it also
+		 SETZI  T2,
+		 OUTSTR T1
+		 MOVE	T2,PGDELS
+		 CAMN	T2,FDELPG
+		 POPJ   P,
+		 OUTCHR ["/"]
+		 PJRST	DPRNT##]
+	OUTSTR	[ASCIZ /) deleted
+/]
+	POPJ	P,		; Now return
+ 
+	SUBTTL	Support Routines for Delete and Replace
+
+; Subroutine to delete a line
+ 
+DODEL::	PUSHJ	P,GETLTH##	; Length of current line
+	PJRST	DLTLIN##	; Delete that many words
+ 
+
+; Subroutine to check for a null line range
+; Returns if there is a next token or user has /EXPERT set
+
+GET2DL:	PUSHJ	P,SCAN##	; Look at next
+	SKIPN	EXPFLG		; Expert
+	TRNN	FL,TERMF	; Null line range?
+	PJRST	GET2D##		; Else get it and fill in defaults
+	NERROR	ILC		; Null line range is an error
+	SUBTTL	THE K COMMAND
+ 
+; Delete a page mark
+ 
+KILL::	PUSHJ	P,GET2S##
+	TRZN	FL,LINSN	; Line number is illegal
+	TRNN	FL,TERMF	; as is junk at end of line
+	NERROR	ILC		; Must be just /n
+	TRNN	FL,CNTF		; Must not be /p!n
+	SKIPE	LOLN		; No line number may be given
+	NERROR	ILC		; Else command is considered bad
+DELPG:	MOVE	T1,LOPG 	; Get the desired page to delete
+	MOVEM	T1,DPG		; Set it
+	SOJLE	T1,DELER	; Do not try page 1
+	MOVEI	SINDEX,0	; Find line immediately after page mark
+	PUSHJ	P,FIND##	; Get it
+	MOVE	T2,CPG		; Check for match
+	CAME	T2,LOPG
+DELER:	NERROR	NSP		; No such page
+	PUSHJ	P,FINDB##	; Go back one
+	CAME	T1,PGMK 	; Is it a page mark?
+	ERROR	ICN		; Confused, give fatel error
+	PUSHJ	P,DLTPAG##	; Delete that many
+	PUSHJ	P,FINDN1##	; Load next line
+	SOS	BGPG		; Max page is now 1 lower
+	MOVE	T2,CPG		; Fetch current physical page
+	MOVEM	T2,CPGL		; Call that the current logical page
+	MOVEM	T2,LSLOPG	; Save updated page part of #
+	PUSHJ	P,ORDCHK	; Check order
+	MOVEM	T1,CLN		; Setup the current line
+	MOVEM	T1,LSLOLN	; Setup the line part of #
+	SOS	T1,HIPG		; Decrement limit page
+	CAML	T1,LOPG		; Have we done all specified pages?
+	JRST	DELPG		; No, go get the next one
+	JRST	COMND		; Get next command
+
+; Subroutine to check line order for the current line
+; Call with
+;	PUSHJ	P,ORDCHK
+;	<always returns here>
+
+ORDCHK:	PUSHJ	P,FINDB##	; Back up
+	JUMPE	T1,CPOPJ##	; If hit front of file
+	PJRST	FINDN##		; Check next
+	SUBTTL	THE RENUMBER COMMAND
+ 
+; Renumber selected lines
+
+NAFLG==PDFL1		; On if NA command
+NPFLG==PDFL2		; On if NP command
+CLNSNF==PDFL3		; On if current line was renumbered
+NFFLG==PDFL4
+ORDF==PDFL5		; Order error has been detected
+
+
+NUMBER::PUSHJ	P,NOTBSC##	; Illegal in basic mode
+	PUSHJ	P,GNCH##	; Peek at next input character
+	MOVEM	C,SAVC		; Save it, may need it later
+	TRZ	C,40		; In case it was lower case
+	CAIN	C,"A"		; A switch
+	TRO	FL2,NAFLG	; Yes, so indicate
+	CAIN	C,"P"		; P switch
+	TRO	FL2,NPFLG	; So indicate
+	CAIN	C,"F"		; F switch (Full File)
+	TRO	FL2,NFFLG	; F switch
+	TRNE	FL2,NFFLG!NAFLG!NPFLG	; Find a switch?
+	SETZM	SAVC		; Yes, character already used
+	SKIPN	NEWCMD		;IN COMPATIBILITY MODE?
+	 TRNE	FL2,NFFLG!NAFLG!NPFLG;YES--NOT FIND A SWITCH?
+	  SKIPA			;NO
+	TRO	FL2,NFFLG	;YES--MAKE NF FOR COMPATIBILITY
+	PUSHJ	P,FINDCL##	; Find current logical line
+	TRNN	FL2,NAFLG	; Never move if NA type renumber
+	CAMN	SINDEX,LNZERO##	; Pointing to the top?
+	JRST	NUMLNB		; Yes, leave CLN alone
+	CAME	T1,PGMK		; Is it a page mark?
+	JRST	NUMLN1		; No
+	PUSHJ	P,FINDB		; Find previous
+	CAIE	T1,0		; Beginning of file
+	CAMN	T1,PGMK		; or page mark?
+	MOVE	T1,LNZERO##	; Null page
+NUMLN1:	MOVEM	T1,CLN		; Setup current line to a real line
+NUMLNB:	MOVE	T1,INCR 	; If no incr is seen
+	MOVEM	T1,REINC	; We will use the current increment
+	MOVEM	T1,INCST	; Provisional starting increment
+	PUSHJ	P,SCAN##	; Get the renumber increment
+	TRNN	FL,NUMF 	; Was it a number
+	JRST	NUMBB		; No number, check for comma
+	MOVEM	T1,REINC	; The increment to use
+	MOVEM	T1,INCST	; Line to start with
+	PUSHJ	P,SCAN##	; Scan past number
+NUMBB:	TRNN	FL2,NAFLG	; Special A-type renumber?
+	JRST	NUMBC		; No, continue
+	PUSHJ	P,FINDN1##	; Point to current line
+	CAMN	T1,SINDEX	; Same as current logical?
+	PUSHJ	P,FINDN##	; Yes, find next
+	CAME	T1,PGMK##	; Page mark?
+	CAIN	T1,0		; Or end of file?
+	NERROR	NLN		; No lines to renumber
+	MOVE	T2,CPG		; T1 is first line, current page to T2
+	DMOVEM	T1,LOLN		; Save as start of range
+	MOVE	T1,[<ASCII/99999/>!1]	; A very high line
+	DMOVEM	T1,HILN		; Save as end of range
+	MOVE	T1,CLN		; Current line number
+	MOVE	T2,REINC	; Chosen increment
+	PUSHJ	P,ASCIAD##	; Add them
+	MOVEM	T1,INCST	; Number to start with
+	MOVE	T1,INCR		; Increment
+	MOVEM	T1,REINC	; Set it up
+	TRZ	FL,CNTF
+	CAIE	C,","		; Did he give a second increment
+	JRST	NUMBL		; Guess not
+	PUSHJ	P,SCAN##	; Get it
+	TRNN	FL,NUMF		; Must be a number
+	NERROR	ILC
+	MOVEM	T1,REINC	; Use his value as increment
+	JRST	NUMBLS		; Join processing
+
+NUMBC:	CAIN	C,","		; And check for comma
+	JRST	NUMB1		; Get a range
+	MOVEI	T1,0		; First line
+	MOVE	T2,CPGL		; No range, do this page only unless
+	TRNE	FL2,NPFLG!NFFLG	; number across pages which
+	MOVEI	T2,1		; changes default range to whole file.
+	DMOVEM	T1,LOLN 	; Setup low page limit
+	MOVE	T1,[<ASCII/99999/>!1]
+	TRNE	FL2,NPFLG!NFFLG	; NF or NP type re-number?
+	MOVSI	T2,1		; Make for very large page
+	DMOVEM	T1,HILN
+	TRZ	FL,CNTF 	; Make sure this is off
+	JRST	NUMBL		; and check for terminator
+
+NUMB1:	TRNE	FL2,NFFLG	; Whole File?
+	JRST   [MOVEI	T1,0	; Yes, set up the range
+		MOVEI	T2,1
+		DMOVEM	T1,LOLN
+		MOVE	T1,[<ASCII/99999/>!1]
+		MOVSI	T2,1
+		DMOVEM	T1,HILN
+		TRZ	FL,CNTF
+		JRST	.+2]
+	PUSHJ	P,GET2SD## 	; No, get a range
+	SKIPE	T1,LOLN		; First number in range
+	MOVEM	T1,INCST	; Start reseqence with first
+	CAIE	C,","		; See if there is a fourth argument
+	JRST	NUMBL		; No
+	PUSHJ	P,SCAN##	; Yes, get it
+	TRNN	FL,NUMF 	; Is it a number?
+	NERROR	ILC		; If not it's an error
+	MOVEM	T1,INCST	; Use as starting number
+NUMBLS:	PUSHJ	P,SCAN##	; Scan past it
+NUMBL:	PUSHJ	P,CKTRMF	; Make sure it terminates correctly
+	TRNN	FL2,NAFLG	; NA mode?
+	JRST	NUMBL1		; No
+	MOVE	T1,REINC	; Numbering increment
+	MOVE	T2,INCST	; Starting
+	PUSHJ	P,ASCIAD	; Make room for one more line
+	MOVEM	T1,INCST	; Set it up
+NUMBL1:	MOVE	T1,REINC	; Get start increment
+	MOVE	T2,INCST	; First number to use
+	CAME	T2,LNZERO##	; Is either one zero?
+	CAMN	T1,LNZERO##	; Make sure non-zero
+	NERROR	ILC		; Yes, ask him to try again
+	TLO	FL2,NORENT	; Don't allow wild reentering
+	PUSHJ	P,FINDLO##	; Get first line of range
+	TRZ	FL,LINSN	; Set to none seen and no order error
+	PUSHJ	P,FINDB 	; Back up and see how order looks
+	JUMPE	T1,NUMB5	; Start of file it must be ok
+	CAME	T1,PGMK 	; Also if a page mark
+	CAMGE	T1,INCST	; Or if in correct order
+	SKIPA
+	TRO	FL2,ORDF 	; Wrong set flag
+NUMB5:	PUSHJ	P,FIND##	; Get the correct line back
+NUMB2:	PUSHJ	P,ONMOV##	; Check range
+	  JRST	NUMB3
+	AOS	CHGCNT		; We changed the file
+	CAMN	T1,PGMK 	; Page mark?
+	JRST	NUMB4		; Special treatment
+	MOVE	T1,INCST	; Get starting number
+	MOVE	T2,REINC	; And increment
+	TRON	FL,LINSN	; Was a line seen?
+	JRST	FSTLIN		; No, first one is special
+	PUSHJ	P,ASCIAD	; Skip this the ffrst time
+	CAML	T1,REINC	; Have we wraped
+	JRST	SETINC		; No, set increment
+	RERROR	WAR		; Tell him he lost
+	MOVE	T2,CPG		; Print the page
+	PUSHJ	P,PGPRN##
+	JRST	SETINC		; And set increment
+
+FSTLIN: MOVEM	T1,LSLOLN	; Save new name for LOLN
+SETINC:	MOVEM	T1,INCST	; Save for next line
+	MOVE	T2,0(PNTR)	; Old name for current line
+	CAME	T2,CURINS	; Could it be the current insertion?
+	JRST	NOTINS		; No, it doesn't match
+	MOVE	T2,CPG		; Page must match also
+	CAMN	T2,CURINP	; Does it?
+	MOVEM	T1,CURINS	; Save new name for CURINS
+NOTINS:	MOVE	T2,CPG		; Current page
+	TRNN	FL2,CLNSNF	; Have we seen current logical line?
+	CAME	T2,CPGL		; or on the wrong page?
+	JRST	FSTLN1		; Yes, no update to do
+	MOVE	T2,(PNTR)	; Get line that we're pointing to
+	CAME	T2,CLN		; Is this the logically current line?
+	JRST	FSTLN1		; No, nothing to do
+	TRO	FL2,CLNSNF	; We've seen it
+	MOVEM	T1,CLN		; Remember the new number
+FSTLN1:	MOVEM	T1,(PNTR)	; Put it in
+	PUSHJ	P,FINDN 	; Get next
+	JRST	NUMB2		; And go range check
+
+NUMB3:	TRNN	FL,LINSN	; Done, was there something there?
+	NERROR	NLN		; No,  null range error
+	DMOVE	T2,LOLN		; Get bottom of the range
+IFE KIONLY,<	; Ka-10?
+	TRNE	FL2,CLNSNF!NAFLG; Current line was seen?
+	JRST	.+3		; Yes, don't change CLN/CPGL
+>
+IFN KIONLY,<	; KI/KL -10's have DMOVEM instruction
+	TRNN	FL2,CLNSNF!NAFLG
+>
+	DMOVEM	T2,CLN		; Save current line
+	TRNE	FL2,ORDF 	; Was there an order error?
+	NERROR	ORDER		; Yes, flag it
+	JUMPE	T1,COMND	; Check to see if losage now
+	CAME	T1,PGMK
+	CAMLE	T1,INCST
+	JRST	COMND
+	NERROR	ORDER
+
+NUMB4:				; Page mark
+	TRO	FL,LINSN	; We saw one
+	TRNN	FL2,NPFLG	; If continuous numbering
+	SETZM	INCST		; Start over on numbers
+	PUSHJ	P,FINDN 	; Now get next line
+	JRST	NUMB2
+ 
+	END

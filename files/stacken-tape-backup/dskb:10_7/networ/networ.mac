@@ -1,0 +1,2605 @@
+TITLE	NETWORK Program to list the nodes in a network
+	SUBTTL	S. Sullivan/SES/RCB	14-Jul-88
+
+	SALL			;Pretty	listings
+	.DIREC	FLBLST		;Prettier listings
+
+	.TEXT	\/SYMSEG:HIGH/LOCALS\
+
+COMMENT@
+
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1979,1988.
+ALL RIGHTS RESERVED.	
+
+
+THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+ONLY  IN  ACCORDANCE  WITH  THE	 TERMS	OF  SUCH LICENSE AND WITH THE
+INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE	OR ANY	OTHER
+COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE	MADE AVAILABLE TO ANY
+OTHER PERSON.  NO TITLE	TO AND OWNERSHIP OF THE	 SOFTWARE  IS  HEREBY
+TRANSFERRED.
+
+THE INFORMATION	IN THIS	SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+AND  SHOULD  NOT  BE  CONSTRUED	 AS A COMMITMENT BY DIGITAL EQUIPMENT
+CORPORATION.
+
+DIGITAL	ASSUMES	NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+@
+	SUBTTL	Edit history
+
+COMMENT	@
+[1]	Add the	/TYPE: switch to determine a node by its type
+[2]	Fix the	core freeing code in CLRDAT to not zero	DDT when loaded
+[3]	Fix the	BLT in CLRDAT so it does not initalize MATCH to	-1
+[4]	Fix the	.ISCAN call so indirect	files are illegal if logged out
+[5]	Make sure the user can't get into a "*"	mode if	not logged in
+[6]	Take care of the way the NODE. UUO error returns easier	now
+[7]	Make CONC use .ISLGI in	SCAN to	be consistant in checking if logged in
+[10]	We saved the temps too early in	the OFLINE routine
+[11]	Make sure that we are able to recover from a node in a "funny" state
+[12]	Buffer TTY output to reduce monitor overhead
+[13]	Change "NODE" in output	to "Node"
+[14]	Change the HOST	switch to be HOSTESS to	be monitor compatable
+[15]	Make the program Reenterable by	setting	up .JBREN
+[16]	Change the way TRMOP. errors are handled and fix
+	miscellaneous bugs.
+[17]	Make a zero low	segment. Remove	EXPs and replace with BLOCK.
+[20]	Don't allow "*"	mode if	not logged in...only can do when we
+	get control because SCAN has a matching	bug, before we get it.
+[21]	Add a reset instruction	because	the dispatch through RUNAME
+	or RUNAMC in COMCON or the RUN/R command will not do a
+	reset unless the program is gotten from	DSK. This means
+	that if	the sharable dormant high seg was there	and there
+	was no low seg an address check	was the	result.
+[22]	Fix OFLINE and correct other error recovery problems
+[23]	Add the	/TOPOLOGY,/COST, and /SORT switches and	fix some
+	more small bugs	including a stack phase	problem	when we
+	used the default case (null node name).
+[24]	Fix the	output from /TOPOLOGY so final node,cost pair is
+	preceeded by a tab.
+[25]	Version	2! Add DECnet to the program. Reorganize the structure
+	to make	it easier to add new networks as they come along.
+	Also, fix some bugs
+[26]	Fix /LINKS to work consistantly, consolidate code in the
+	DECnet listing routines.
+[27]	Fix to work with new DNET. uuo,	as per MCO 10716.
+
+%2(27)	Shipped	with 7.02
+
+[30]	Fix to work with DECnet	Phase IV.
+[31]	Update copyright notice	for 7.03.
+[32]	Teach how to report non-named nodes on DECnet display
+
+33	RDH	16-Apr-85
+	De-PRGEND this beast. Call version 3.
+
+34	RDH	16-Apr-85
+	Add LAT service junk.
+
+35	LEO	4-Sep-85
+	Do Copyrights.
+
+36	WXD	3-Oct-85
+	Teach about DECnet endnode support.
+
+Become version 3A.
+
+37	RCB	6-Nov-86
+	Fix LAT support.
+
+40	RCB	26-Nov-86
+	More fixes to LAT support.
+
+41	RCB	12-May-87
+	Fix LAT support to account for MCO 13392.
+
+42	RCB	25-May-87
+	Fix LAT support to defer the header line until we find a need to
+	type it.
+
+43	RCB	14-Jun-88
+	Fix for FTNET on but M.NET off.
+
+44	RCB	14-Jul-88
+	Fix OUTC to preserve T1 like SCAN expects of its .TCHAR routines.
+
+@
+	SUBTTL	Constants, symbols, and	registers
+
+	SEARCH UUOSYM,JOBDAT,MACTEN,SCNMAC
+
+	.REQUE	REL:SCAN.REL
+	.REQUE	REL:HELPER.REL
+
+	TWOSEG	400000			;So the	program	will have two segments
+
+;** Define the version word
+
+	CUSTVR==0			;Customer version
+	DECVER==3			;DEC version
+	DECMVR==3			;DEC minor version
+	DECEVR==44			;DEC edit number
+
+	NETVER==<BYTE(3)CUSTVR(9)DECVER(6)DECMVR(18)DECEVR>
+
+	LOC	137
+
+	NETVER
+
+;Make sure of version on output files if using Tim's MACRO
+
+IFDEF .MCRV.,<IFDEF .VERSION,<.VERSION <NETVER>>>
+
+
+;** Set	up .JBINT for interrupt	trapping
+
+	LOC	134			;Set PC	at .JBINT and
+	EXP	INTBLK			;make it point to our interrupt	block
+
+;** Set	up .JBREN to allow users to "Reenter" the program
+
+	LOC	124			;Set PC	at .JBREN
+	EXP	START+1			;Begin at CCL start address
+
+	RELOC				;Set back to the high segment
+
+
+COPYRIGHT (c) DIGITAL EQUIPMENT	CORPORATION 1979,1988. ALL RIGHTS RESERVED.
+\;END COPYRIGHT MACRO
+;REGISTER DEFINITIONS
+
+F==0		;Flags
+	F.SEL==1B0
+	F.HED==1B1
+T1==1		;Temps
+T2==2
+T3==3
+T4==4
+P1==5		;Save registers
+P2==6
+P3==7		;For passing arguments to SCAN
+P4==10
+T5==11
+T6==12
+T7==13
+CN==14		;Current node we are processing
+L1==15		;First loop counter
+L2==16		;Second	loop counter
+P==17		;Stack pointer
+
+
+;DEFINITIONS NOT YET IN	UUOSYM
+
+DN%ARE==176000			;DECnet	area number
+DN%NOD==001777			;DECnet	node number field
+;Program parameters
+
+MAXSPC==^D100		;The max number	of specs we will allow
+DNMAX==^D1024		;The max number	of DECnet nodes	we support
+DNINFL==40		;Size of DNINF block
+MAXNOD==200		;The max number	of ANF nodes we can handle
+NODDLN==100		;Size of NODE. block data buffer
+LTMAX==6*^D200		;The max size of LAT links list we can handle
+BLKSIZ==.FXLEN		;Number	of words allocated to each Scan	block
+PREALO==MAXNOD/10	;How many nnode specs to preallocate for
+MAXNFE==MAXNOD/2	;Maximum # of non-fatal	errors we will allow
+MAXCOR==10000		;The maximum amount of core we allow (in words)
+MO.CHR==400000		;Character mode	 bit
+DEFWID==^D72		;Define	our default width
+PSIZ==100		;Number	of words in the	stack
+	SUBTTL	Impure storage
+
+	RELOC		;Set to	low segment for	data and stack
+
+PDL:	BLOCK	PSIZ		;Stack
+
+;** Interrupt block
+
+INTBLK:	BLOCK	1		;4 words long,,interrupt handler
+	BLOCK	1		;No message control,, 2	^C
+LASTPC:	BLOCK	1		;User PC stored	here when interrupted
+INTYPE:	BLOCK	1		;interrupt type	in LH
+	SUBTTL	UUO  argument blocks
+
+STDAT:!			;Start of core to be zeroed on initalization
+
+LTLCNT:	BLOCK	1			;How many LAT TTYs are connected
+LTLINK:	BLOCK	LTMAX			;List of LAT terminal connections
+LATUNM:	BLOCK	2			;User name for link info
+LATPRG:	BLOCK	1			;Program name for link info
+LATPPN:	BLOCK	1			;PPN for link info
+LATJOB:	BLOCK	1			;Job for link info
+LATTNM:	BLOCK	1			;TTY name for link info
+LATPNM:	BLOCK	22			;Port name for link info
+NOPBLK:	BLOCK	.NOPNM+1		;NETOP. arg block
+
+DNLOOP:	BLOCK	1			;AOBJN loop counter
+DNLOC:	BLOCK	1			;SIXBIT	name of	local node
+DNADR:	BLOCK	1			;Local node network address
+DNLST:	BLOCK	DNMAX			;Max size of DECnet network
+DNBIT:	BLOCK	DNMAX			;Parallel table	to DNLST for flags
+	DN.LST==400000			;*don't	list this node
+	DN.ONL==200000			;*this node is on-line
+	DN.ACT==100000			;*this node is active
+DNBLK:	BLOCK	20			;Size of info block
+DNCNT:	BLOCK	1			;Count of nodes	returned
+DNMCNT:	BLOCK	1			;Count of nodes	matched	by specs
+DNINF:	BLOCK	DNINFL			;DNET. UUO block for info
+DNLINE:	BLOCK	5			;String	block for line descriptor
+	DNLINN==<<.-DNLINE>*5>-1	;How many bytes	for the	descriptor
+
+;** Argument block for the NODE. UUO's .NDNDB function
+
+NODBLK:	BLOCK	1		;NODE. UUO arg block
+CURNOD:	BLOCK	1		;Current node number
+FLDNUM:	BLOCK	1		;Field number we want
+DATBLK:	BLOCK	NODDLN		;Data area
+
+;** Argument block for the TRMOP. UUO's	.TOWID function
+
+TTWID:	BLOCK	1		;Function code to get TTY width
+UDX:	BLOCK	1		;Our TTY's UDX
+
+;** argument block for the NODE. UUO's .NDLND function
+;   This generates a list of all the nodes in the network by number
+
+NODNUM:	BLOCK	1		;Header	for UUO
+NODBIN:	BLOCK	MAXNOD		;The list of the node numbers
+NODNAM:	BLOCK	MAXNOD		;The list of the node names
+	SUBTTL	Tables to allow	wildcarding node names
+;** List of valid node spec's
+
+SPCCNT:	BLOCK	1		;Count of valid	specs
+SPCFLG:	BLOCK	MAXSPC		;List for flags	pertaining to specs
+	;LH bits - non error conditions
+	SP.ANF==400000		;Node found in the ANF10 network
+	SP.DEC==200000		;Node found in the DECnet network
+	SP.LAT==100000		;Node found in LAT network
+	;RH bits - error conditions
+	SP.NNN==400000		;Node not found
+	SP.NWD==200000		;Node went away	while processing
+SPCLST:	BLOCK	MAXSPC		;List of node specs we have read
+WLDLST:	BLOCK	MAXSPC		;List of wild card masks
+
+;** Our	model of an NDB. We copy the nodes NDB here so we can get it easier
+
+NNM:	BLOCK	1		;Node number
+SNM:	BLOCK	1		;Node name in sixbit
+SID:	BLOCK	10		;Software ID (asciz)
+DAT:	BLOCK	10		;Software date (asciz)
+LMA:	BLOCK	1		;Last NCL message assigned
+LMS:	BLOCK	1		;Last NCL ACK message sent
+LAR:	BLOCK	1		;Last NCL ACK recieved
+LAP:	BLOCK	1		;Last NCL ACK processed
+LMR:	BLOCK	1		;Last NCL message recieved
+LMP:	BLOCK	1		;Last NCL message processed
+LAS:	BLOCK	1		;Last NCL ACK sent
+MOM:	BLOCK	1		;Maximum outstanding message counter
+TOP:	BLOCK	20		;Network topology table	in the form
+				;XWD Level , Node
+CNF:	BLOCK	20		;Configuration table in	the form
+				;XWD Object , Number
+ENDB:	BLOCK	1		;End of	our NDB
+	SUBTTL	Scan related switces
+
+;** Scan switch	storage
+
+FIRSW:!				;Start of switch area
+WIDWD:	BLOCK	1		;/WIDTH:nn switch.
+FASWD:	BLOCK	1		;Short listing switch
+SILWD:	BLOCK	1		;/SILENCE switch
+ANF10W:	BLOCK	1		;/ANF10	switch
+DECNWD:	BLOCK	1		;/DECNET switch
+LATNWD:	BLOCK	1		;/LAT switch
+URCHWD:	BLOCK	1		;/UNREACHABLE switch
+HEADWD:	BLOCK	1		;/HEADERS switch
+BRIEWD:	BLOCK	1		;/BRIEF	switch
+TOPWD:	BLOCK	1		;/TOPOLOGY switch
+ERRWD:	BLOCK	1		;/ERROR	switch
+COSTWD:	BLOCK	1		;/COST switch
+SORTWD:	BLOCK	1		;/SORT switch
+LINKWD:	BLOCK	1		;/LINKS	switch
+
+;** The	following ^d13 locations must be contigous and in the same order
+
+MCRWD:	BLOCK	1		;Switch	for nodes with "MCR"
+TTYWD:	BLOCK	1		;Switch	for nodes with "TTY"
+CDRWD:	BLOCK	1		;Switch	for nodes with "CDR"
+LPTWD:	BLOCK	1		;Switch	for nodes with "LPT"
+PTRWD:	BLOCK	1		;Switch	for nodes with "PTR"
+PTPWD:	BLOCK	1		;Switch	for nodes with "PTP"
+PLTWD:	BLOCK	1		;Switch	for nodes with "PLT"
+MTAWD:	BLOCK	1		;Switch	for nodes with "MTA"
+DTAWD:	BLOCK	1		;Switch	for nodes with "DTA"
+TSKWD:	BLOCK	1		;Switch	for nodes with "TSK"
+RDAWD:	BLOCK	1		;Switch	for nodes with "RDA"
+CDPWD:	BLOCK	1		;Switch	for ndoes with "CDP"
+DDPWD:	BLOCK	1		;Switch	for nodes with "DDP"
+	NDEV==.-MCRWD		;Length	of table of device switches
+
+TYPWD:	BLOCK	1		;Value for the /TYPE switch
+LASTSW:!			;Last switch location
+;** Other random variables used	in odd places
+
+JOB:	BLOCK	1		;Our job number
+MATCH:	BLOCK	1		;Count of matches or match errors
+CARWID:	BLOCK	1		;The width we are using
+FIRSTL:	BLOCK	1		;Count of times	through	the SHOLST code
+SBMCNT:	BLOCK	1		;Count of Scan block error message
+OFFSET:	BLOCK	1		;The starting offset
+WMATCH:	BLOCK	1		;Flag for status of a wildcard search
+HPOS:	BLOCK	1		;The current horizontallocation	of the carriage
+NFECNT:	BLOCK	1		;Number	of non-fatal errors
+OUTCON:	BLOCK	1		;Output	control	word
+ANFCNT:	BLOCK	1		;Count of nodes	that were found	to match specs
+FTANF:	BLOCK	1		;-1 means monitor has ANF10 software
+FTDEC:	BLOCK	1		;-1 means monitor has DECnet software
+FTEND:	BLOCK	1		;-1 means DECnet running as ethernet endnode
+FTLAT:	BLOCK	1		;-1 means monitor has LAT software
+TEMP:	BLOCK	BLKSIZ+1	;Our scratch area
+
+;** TTY	buffer space
+
+NCHAR:	BLOCK	1		;Number	of characters in the buffer
+BUFFP:	BLOCK	1		;Pointer into the buffer
+BUFFER:	BLOCK	^D100		;TTY buffer
+	BUFSIZ==<<.-BUFFER> * 5	> - 2	;Number	of characters in the buffer
+	SUBTTL	Scan block storage area
+
+;** Counters to	keep track of the Scan block allocation
+
+OUTFIL:	BLOCK	1		;Number	of output specs
+INFIL:	BLOCK	1		;Number	of input specs
+NUMBLK:	BLOCK	1		;Number	of scan	blocks allocated so far
+
+;** Default area to store Scan blocks.
+;   Must be at the end of core incase we want to expand
+
+SBLKS:	BLOCK	PREALO*BLKSIZ	;Make large enough to hold 1 Scan block
+
+ENDAT:!				;End of	our low	seg to be zeroed
+	SUBTTL	Start up and main loop code
+
+	RELOC			;Back to pure code
+
+;** Here to get	the show on the	road
+
+START:	TDZA	P,P			;Run start
+	MOVEI	P,1			;CCL start
+	MOVEM	P,OFFSET		;Save starting offset for Scan
+	MOVE	P,[IOWD PSIZ,PDL]	;Set up	the stack
+	RESET				;RESET to prevent address checks
+	MOVEI	T1,START		;Get the reenter address
+	MOVEM	T1,.JBREN		;  and set it up
+	PUSHJ	P,INITIA		;Clear the data	base...
+	PUSHJ	P,FLUSH			;Set up	the output buffer header
+	PUSHJ	P,ISCN			;Initalize Scan
+;	JRST	LOOP			;Fall into the main loop
+
+;** Here to process the	main loop
+
+LOOP:	PUSHJ	P,TSCN			;SCAN a	command	line
+	PUSHJ	P,DISECT		;Parse the node spec's
+	PUSHJ	P,ANF10			;Check out the ANF10 network
+	PUSHJ	P,DECNET		;Check out the DECnet network
+	PUSHJ	P,LATSER		;Check out the LAT 'network'
+	PUSHJ	P,ERRSCN		;Check if node constraints too tight
+LOOP1:	SKIPE	OFFSET			;Did we	CCL start?
+	  JRST	FINISH			;Yes, exit and flush buffers
+	PUSHJ	P,.ISLGI		;Are we	logged in?
+	  JRST	FINISH			;No, exit and flush buffers
+	PUSHJ	P,FLUSH			;Output	anything in the	buffer
+	PUSHJ	P,INITIA		;Clear the data	base...
+	PUSHJ	P,FLUSH			;Set up	our buffer headers again
+	JRST	LOOP			;and look for another line of input
+	SUBTTL	Data initialization routine
+;** Routine to reset the data areas
+
+INITIA:	HLRZ	T1,.JBSA		;Reduce	our core back to small
+	SKIPN	.JBDDT			;Don't lose VMDDT
+	CORE	T1,			;as we should be.
+	  JFCL				;We don't care
+	MOVE	T2,OFFSET		;Save our start	address	offset
+	MOVE	T1,[STDAT,,STDAT+1]	;Get the start and end of impure data
+	SETZM	STDAT			;Zero the first	word
+	BLT	T1,ENDAT-1		;to the	last word
+	SETOM	FIRSW			;Set the first location	of the
+	MOVE	T1,[FIRSW,,FIRSW+1]	;Switch	block to -1, then
+	BLT	T1,LASTSW-1		;The last one
+					;*All switchs must be initalized
+					;to -1 or Scan won't work right
+	MOVE	T1,[INT,,INTBLK]	;initalize interrupt control block
+	BLT	T1,INTBLK+IBLKLN	;from data in the high seg
+	MOVEI	T1,.TOWID		;Set up	the argument block for TTY width
+	MOVEM	T1,TTWID		;So we can find	his TTY's width
+	MOVEI	T1,MAXNOD+1		;The max number	of nodes we can	handle
+	MOVEM	T1,NODNUM		;So we can build tables	of nodes
+	ADDI	T1,2			;Fix the value for the
+	MOVEM	T1,NODBLK		;.NDNDB	function of the	NODE. UUO
+	MOVEM	T2,OFFSET		;Restore the offset
+	PJOB	T2,			;Get our job number
+	MOVEM	T2,JOB			;Save it
+	TRMNO.	T2,			;Get our TTY's UDX
+	  SETO	T2,			;No, TRMNO. error, default is -1
+	MOVEM	T2,UDX			;Yes, save it in TRMOP.	argument block
+	MOVEI	T1,.TOWID		;TRMOP.	width function
+	MOVE	T3,[XWD	2,T1]		;Set up	to get the TTY width
+	TRMOP.	T3,			;Try for it
+	  MOVEI	T3,DEFWID		;Error,	use the	default	width!
+	MOVEM	T3,CARWID		;Save for other	routines
+	SETZ	T1,			;There is no function zero
+	NODE.	T1,			;Get an error
+	SKIPE	T1			;UUO not implemented (AC unchanged)?
+	SETO	T1,			;No, set the flag
+	MOVEM	T1,FTANF		;Remember ANF-10 flag
+	MOVE	T4,[%CNST2]		;Get the monitor status	word
+	GETTAB	T4,			;...
+	  PUSHJ	P,GTABER		;GETTAB	error? tell user and die
+	TLNN	T4,(ST%D36)		;DECnet	here?
+	TDZA	T1,T1			;No, zero the flag
+	SETO	T1,			;Yes, set the flag
+	MOVEM	T1,FTDEC		;Remember DECnet flag
+	TLNN	T4,(ST%END)		;DECnet ethernet endnode?
+	TDZA	T1,T1			;No, zero the flag
+	SETO	T1,			;Yes, set the flag
+	MOVEM	T1,FTEND		;Remember DECnet ethernet endnode flag
+	MOVEI	T1,T2			;Point to pseudo-LATOP block
+	SETZ	T2,			;Invalid length word
+	LATOP.	T1,			;Try it
+	CAIE	T1,LAADC%		;Get the right error return?
+	TDZA	T1,T1			;No, have no LAT service
+	SETO	T1,			;Yes, we win
+	MOVEM	T1,FTLAT		;Save flag
+	POPJ	P,			;Done...return
+	SUBTTL	ANF10 processing loop
+
+;** Here to do the ANF10 network display
+
+ANF10:	SKIPE	FTANF			;Do we have ANF10 software?
+	SKIPN	ANF10W			;Did we	have /NOANF?
+	  POPJ	P,			;Yes just return
+	SKIPLE	LINKWD			;/LINKS??
+	SKIPLE	ANF10W			;Specify /ANF10?
+	 CAIA				;Sense is wrong
+	  POPJ	P,			;YES, skip ANF10 output
+	SKIPG	ANF10W			;Specify /ANF10?
+	SKIPG	DECNWD			;Specify DECnet	list?
+	 CAIA				;Sense is wrong
+	  POPJ	P,			;Yes, just return
+	SKIPG	ANF10W			;Specify /ANF10?
+	SKIPG	LATNWD			;Specify LAT list?
+	 CAIA				;Sense is wrong
+	  POPJ	P,			;Yes, just return
+	PUSHJ	P,ANFTAB		;Build the ANF10 tables
+	PUSHJ	P,ANFWLD		;Resolve ANF10 wildcarded node names
+	SKIPN	ANFCNT			;Do we have anything to	print?
+	  POPJ	P,			;No, quit now and save computes
+	PUSHJ	P,ANFHEA		;Do ANF10 headers
+	MOVN	L1,NODNUM		;Negate	the number of nodes
+	HRLZS	L1			;Make it an AOBJN counter
+ANFLOP:	HRRZ	CN,NODBIN(L1)		;Get the current node number
+	MOVSI	T1,SP.ANF		;Do we want to list this node?
+	TDNN	T1,NODBIN(L1)		;???
+	  JRST	ANFLO1			;Nope!
+	PUSHJ	P,BLDNDB		;Build a copy of the node's NDB
+	  JRST	ANFLO1			;Skip the rest,	not quite there
+	PUSHJ	P,SELECT		;Does node meet	switch constraints?
+	TXNE	F,F.SEL			;Is the	node selected for printing?
+	  PUSHJ	P,PRINFO		;Yes, Print selected info
+ANFLO1:	AOBJN	L1,ANFLOP		;Increment and loop till done
+	PJRST	CRLFH			;Finish	with a CRLF
+;Here to print the ANF10 header, if we have any	nodes to print and
+;if we did not specify /NOHEADERS
+
+ANFHEA:	SKIPN	HEADWD			;Did they say no headers?
+	  POPJ	P,			;Yes, don't!
+	MOVEI	T1,[ASCIZ \[ANF10 network: connected to \] ;Say	what we	are doing
+	PUSHJ	P,.TSTRG##		;...
+	MOVE	T3,UDX			;Get our TTY's UDX
+	GTNTN.	T3,			;Change	to NODE,,LINE
+	  SETZ	T3,			;Don't care, catch it later
+	HLRZS	T3			;Make the node number
+	MOVEI	T2,2			;No, set up an argument	block
+	MOVE	T1,[.NDRNN,,T2]		;and an	ac
+	NODE.	T1,			;Use NODE. UUO to check	node
+	  JRST	[MOVEI	T1,[ASCIZ \??????\]	;Unknown
+		 PUSHJ	P,.TSTRG##	;Type it
+		 JRST	.+2]		;Continue
+	PUSHJ	P,.TSIXN##		;and type it
+	MOVEI	T1,"("			;Open paren for the number
+	PUSHJ	P,.TCHAR##		;...
+	MOVE	T1,T3			;Get the local node's number
+	PUSHJ	P,.TOCTW##		;Type it in octal
+	MOVEI	T1,[ASCIZ \), located at \]	;Close the node name
+	PUSHJ	P,.TSTRG##		;Type it out
+	HRROI	T3,.GTLOC		;Get where we are located
+	GETTAB	T3,			;Do the	GETTAB
+	  SETZ	T3,			;Don't care, catch it later
+	MOVEI	T2,2			;No, set up an argument	block
+	MOVE	T1,[.NDRNN,,T2]		;and an	ac
+	NODE.	T1,			;Use NODE. UUO to check	node
+	  JRST	[MOVEI	T1,[ASCIZ \??????\]	;Unknown
+		 PUSHJ	P,.TSTRG##	;Type it
+		 JRST	.+2]		;Continue
+	PUSHJ	P,.TSIXN##		;and type it
+	MOVEI	T1,[ASCIZ \(\]		;Open paren for	the number
+	PUSHJ	P,.TSTRG##		;...
+	MOVE	T1,T3			;Get the local node's number
+	PUSHJ	P,.TOCTW##		;Type it in octal
+	MOVEI	T1,[ASCIZ \), \]	;Close the node name
+	PUSHJ	P,.TSTRG##		;Type it out
+	MOVE	T1,NODNUM		;Get the node number
+	PUSHJ	P,.TDECW##		;Type the number of nodes
+	MOVE	T1,NODNUM		;Get the node number
+	CAIG	T1,1			;Is it singular	or plural
+	  SKIPA	T1,[[ASCIZ \ node]\]]	;Singular
+	MOVEI	T1,[ASCIZ \ nodes]\]	;Plural
+	PUSHJ	P,.TSTRG##		;...
+	PJRST	CRLFH			;Cap off ANF header with a <CR><LF>
+;** Here to resolve the	wild cards in the node spec's we got
+
+ANFWLD:	SKIPN	T1,SPCCNT		;Do we have any	specs
+	  JRST	ANFWL4			;None, take the	default
+	MOVN	L1,T1			;Get the negative count	of specs
+	HRLZS	L1			;Make an AOBJN pointer
+ANFWL1:	MOVE	T3,SPCLST(L1)		;Get the name
+	SKIPN	T4,WLDLST(L1)		;Is this a wild	card entry?
+	  PUSHJ	P,ANFWL6		;No, make sure it's a name and -1 mask
+	ANDCAM	T4,T3			;Mask it
+	SETZ	T1,			;Clear the match counter
+	MOVN	L2,NODNUM		;Get count of known nodes
+	HRLZS	L2			;Make an AOBJN pointer
+ANFWL2:	MOVE	T2,NODNAM(L2)		;Get a node name
+	ANDCAM	T4,T2			;Mask it
+	CAME	T2,T3			;Match?
+	  JRST	ANFWL3			;No, Try the next one
+	AOS	ANFCNT			;Increment the count of	nodes found
+	MOVSI	T1,SP.ANF		;Yes, Flag it to be listed
+	IORM	T1,SPCFLG(L1)		;Mark the match	in the spec flags
+	IORM	T1,NODBIN(L2)		;Mark the match	in known node list
+ANFWL3:	AOBJN	L2,ANFWL2		;Loop over all known nodes
+ANFWL8:	AOBJN	L1,ANFWL1		;And all node specs
+	POPJ	P,			;Return
+
+;Here to set up	for the	default	case
+ANFWL4:	MOVN	T1,NODNUM		;Get the number	of nodes
+	HRLZ	T1,T1			;Make an AOBJN pointer
+	MOVSI	T2,SP.ANF		;"LIST NODE" Flag
+ANFWL5:	IORM	T2,NODBIN(T1)		;Flag all nodes
+	AOBJN	T1,ANFWL5		;Loop over all nodes
+	AOS	ANFCNT			;Increment the count of	matches
+	POPJ	P,			;Return
+
+;Here to setup mask for	the non-wilcarded case
+ANFWL6:	JUMPE	T3,.POPJ##		;Forget it if explicit blank name
+	MOVEI	T2,2			;No, set up an argument	block
+ANFWL7:	MOVE	T1,[.NDRNN,,T2]		;and an	ac
+	NODE.	T1,			;Use NODE. UUO to check	node
+	  POPJ	P,			;Error,	Use what we have to use
+	MOVE	T3,T1			;Put it	where it's expected
+	TLNN	T1,777777		;Is what we have a name?
+	  JRST	ANFWL7			;Try for a SIXBIT result
+	POPJ	P,			;No, Just return
+;** Here to build our network tables, this is our snapshot of the network
+
+ANFTAB:	MOVE	T1,[XWD	.NDLND,NODNUM]	;Set up	ac for NODE. UUO
+	NODE.	T1,			;Can we	get the	table of node numbers?
+	  PUSHJ	P,NODERR		;No, tell user why and die
+	MOVEM	T1,NODNUM		;Stash the number of nodes in network
+	MOVE	T1,SORTWD		;Get the sort status
+	JUMPL	T1,ANFTA1		;No switch, default to sorted
+	CAIE	T1,SRT.DF		;Default sort?
+	CAIN	T1,SRT.NU		;Did the user type /SORT:NUMBER
+ANFTA1:	  PUSHJ	P,ANFSRT		;Yes, Sort the numbers
+	MOVN	L2,NODNUM		;Negate	the number of nodes
+	HRLZS	L2			;Make it an AOBJN counter
+	MOVEI	T3,2			;Get the argument block	length
+ANFTA2:	MOVE	T4,NODBIN(L2)		;Get a node number
+	MOVE	T1,[XWD	.NDRNN,T3]	;Set up	T1 for NODE. UUO
+	NODE.	T1,			;Can we	change number to sixbit	name?
+	  SETZ	T1,			;No, make it a zero name and wing it
+	MOVEM	T1,NODNAM(L2)		;Yes, stash in ajacent table of	names
+	AOBJN	L2,ANFTA2		;Loop till done
+	MOVE	T1,SORTWD		;Get the sort status
+	CAIN	T1,SRT.NA		;Did the user type /SORT:NAME
+	  PUSHJ	P,ANFNSR		;Yes, Sort them	by name
+CPOPJ:	POPJ	P,			;Return
+
+;** Here to shellsort the node names gotten above
+
+ANFNSR:	HRRZ	T1,NODNUM		;T1=Number_of_nodes
+ANFNS1:	LSH	T1,-1			;T1=T1/2
+	JUMPE	T1,CPOPJ		;IF T1=0 then RETURN
+	MOVEI	T2,1			;T2=1
+ANFNS2:	HRRZ	T3,T2			;T3=T2
+ANFNS4:	HRRZ	T4,T3
+	ADDI	T4,(T1)			;T4=T3+T1
+	MOVE	T5,<NODNAM-1>(T4)	;T5=node[T3+T1]
+	CAML	T5,<NODNAM-1>(T3)	;IF node[T3] <=	node[T3+T1]
+	JRST	ANFNS3			;then GOTO SORT3
+	EXCH	T5,<NODNAM-1>(T3)
+	MOVEM	T5,<NODNAM-1>(T4)	;exchange
+
+	MOVE	T5,<NODBIN-1>(T4)	;Exchange the node numbers too
+	EXCH	T5,<NODBIN-1>(T3)
+	MOVEM	T5,<NODBIN-1>(T4)	;exchange
+	SUBI	T3,(T1)			;T3=T3-T1
+	JUMPG	T3,ANFNS4		;IF T3>=1 GOTO SORT4
+ANFNS3:	HRRZ	T5,NODNUM		;delayed T2=T2+1
+	SUBI	T5,1(T1)		;then comparison
+	CAILE	T2,(T5)			;IF T2>N-T1 then
+	  AOJA	T2,ANFNS1		;GOTO SORT1
+	AOJA	T2,ANFNS2		;ELSE GOTO SORT2
+;** Here to shellsort the node numbers gotten above
+
+ANFSRT:	HRRZ	T1,NODNUM		;T1=Number_of_nodes
+ANFSR1:	LSH	T1,-1			;T1=T1/2
+	JUMPE	T1,CPOPJ		;IF T1=0 then RETURN
+	MOVEI	T2,1			;T2=1
+ANFSR2:	HRRZ	T3,T2			;T3=T2
+ANFSR4:	HRRZ	T4,T3
+	ADDI	T4,(T1)			;T4=T3+T1
+	MOVE	T5,<NODBIN-1>(T4)	;T5=node[T3+T1]
+	CAML	T5,<NODBIN-1>(T3)	;IF node[T3] <=	node[T3+T1]
+	JRST	ANFSR3			;then GOTO SORT3
+	EXCH	T5,<NODBIN-1>(T3)
+	MOVEM	T5,<NODBIN-1>(T4)	;exchange
+	SUBI	T3,(T1)			;T3=T3-T1
+	JUMPG	T3,ANFSR4		;IF T3>=1 GOTO SORT4
+ANFSR3:	HRRZ	T5,NODNUM		;delayed T2=T2+1
+	SUBI	T5,1(T1)		;then comparison
+	CAILE	T2,(T5)			;IF T2>N-T1 then
+	  AOJA	T2,ANFSR1		;GOTO SORT1
+	AOJA	T2,ANFSR2		;ELSE GOTO SORT2
+	SUBTTL	Build a	node data block
+
+;** Here to build a copy of the	node's NDB in our space
+
+BLDNDB:	HRRZM	CN,NNM			;Stash node number
+	HRRZM	CN,CURNOD		;Again for NODE. UUO
+	MOVEI	T1,2			;Set up	the field number
+	MOVEM	T1,FLDNUM		;for the NODE. UUO
+	MOVE	T2,CN			;Get the current node #
+	MOVE	T3,[.NDRNN,,T1]		;Set up	the AC
+	NODE.	T3,			;Try to	get the	name
+	  JRST	BLDND2			;Oops, node in a funny state
+	MOVEM	T3,SNM			;Stash it
+	MOVE	T1,[.NDNDB,,NODBLK]	;Set up	the ac
+	AOS	FLDNUM			;Point to next field in	NDB
+	NODE.	T1,			;Get next info?
+	  JRST	BLDND3			;No, investigate
+	MOVE	T3,[DATBLK,,SID]	;Yes, set up to	BLT software ID
+	BLT	T3,DAT			;to our	NDB copy
+	AOS	FLDNUM			;Point to software date	field
+	NODE.	T1,			;Get more info?
+	  JRST	BLDND4			;No, investigate
+	MOVE	T3,[DATBLK,,DAT]	;Yes, set up to	BLT date
+	BLT	T3,LMA			;to our	NDB copy
+	AOS	FLDNUM			;Point to next field
+	MOVE	L2,[-10,,LMA]		;make loop counter for one word	fields
+BLDND1:	NODE.	T1,			;Get the info?
+	  JRST	BLDND4			;No, investigate
+	MOVE	T2,DATBLK		;Yes, move it to
+	MOVEM	T2,(L2)			;our NDB copy
+	AOS	FLDNUM			;Increment to point to next field
+	AOBJN	L2,BLDND1		;Loop till done
+	NODE.	T1,			;Get the topology table?
+	  JRST	BLDND5			;No, investigate
+	MOVE	T3,[DATBLK,,TOP]	;Yes, copy topology table
+	BLT	T3,CNF			;to our	NDB copy
+	AOS	T3,FLDNUM		;Point to the configuration field
+	NODE.	T1,			;Can we	get it?
+	  JRST	BLDND6			;No, investigate
+	MOVE	T3,[DATBLK,,CNF]	;Yes, BLT it to
+	BLT	T3,ENDB			;our NDB copy
+	AOS	(P)			;Skip return for success
+	POPJ	P,			;Return
+
+BLDND2:	SETZM	SNM			;Zero the info we can not get
+BLDND3:	SETZM	SID			;...
+BLDND4:	SETZM	DAT			;...
+BLDND5:	SETZM	TOP			;...
+BLDND6:	SETZM	CNF			;...
+	PJRST	OFLINE			;Tell the user
+	SUBTTL	ANF10 output routines
+
+;** Here to decide whether or not to print a node. The decision	is
+;   based on the selection of /<device-name> switches.
+;   A skip return is taken if the node is not to be printed.
+
+SELECT:	MOVSI	T1,-NDEV		;Make a	AOBJN pointer to switch	words
+	TXO	F,F.SEL
+SELEC0:	SKIPLE	MCRWD(T1)		;Switch	selected for a match?
+	  JRST	[SKIPGE	DECNWD		;Did we	specify	DECnet listing?
+		 SETZM	DECNWD		;No, don't list	if device switch
+		 SKIPGE	LATNWD		;Did we specify a LAT listing?
+		 SETZM	LATNWD		;No, suppress on device switch(es)
+		 PUSHJ	P,SEL0		;Yes, Look for a match
+		 TXZA	F,F.SEL		;No match, clear the selected flag
+		 JRST	SELEC1		;Continue
+		 POPJ	P,]		;No match, return
+	SKIPN	MCRWD(T1)		;Switch	selected for a non-match?
+	  JRST	[PUSHJ	P,SEL0		;Yes, Look for a match
+		 CAIA			;Opposite sense	from before
+		 TXZA	F,F.SEL		;No match, clear the selected flag
+		 JRST	SELEC1		;Continue
+		 POPJ	P,]		;No match, return
+SELEC1:	AOBJN	T1,SELEC0		;Loop through all switches
+	SETO	T1,			;Make T1 -1
+	CAMN	T1,TYPWD		;Did we	specify	/TYPE:?
+	  JRST	SELEC4			;No, don't check it
+	MOVE	T1,TYPWD		;Get the type we are looking for
+	MOVEI	T2,SID			;Point to the software ID
+	PUSHJ	P,ASCSIX		;See if	it matches
+	  TXZ	F,F.SEL			;No Match, Clear the print flag
+SELEC4:	AOS	MATCH			;Count the number of matches
+	POPJ	P,			;We want to print this node, just return
+
+;Subroutine to see if a	device type is in the NDB The device type
+;is in the RH of T1
+;CALL	PUSHJ	P,SEL0
+;	  Return with no match
+;	Return with a match
+
+SEL0:	MOVSI	T2,-NDEV		;AOBJN pointer to the configuration info
+SEL1:	SKIPN	CNF(T2)			;No more devices?
+	  POPJ	P,			;None, just return, no match
+	HLRZ	T3,CNF(T2)		;Get the object	type
+	CAIN	T3,(T1)			;Are they the same device?
+	  AOSA	(P)			;Skip return means we will print it
+	AOBJN	T2,SEL1			;No, loop till found or	NDEV
+	POPJ	P,			;...
+;** Routine to compare the first six characters	of an ASCIZ string
+;   with the SIXBIT value it T1
+;
+;   call:	T1=SIXBIT\value\
+;		T2=[ASCIZ\string\]
+;	PUSHJ	P,ASCSIX
+;	  <no match>	;First six chars of string converted to	sixbit in T2
+;	<match>
+
+ASCSIX:	PUSHJ	P,.PSH4T##		;Save the temps
+	MOVSI	T1,-6			;Set up	an AOBJN pointer
+	SETZB	T4,TEMP			;Clear temps where necessary
+	HRLI	T2,(POINT 7)		;Byte pointer for the asciz string
+	MOVE	T3,[POINT 6,TEMP]	;Byte pointer for sixbit conversion
+ASCSI1:	ILDB	T4,T2			;Get a byte from the string
+	SUBI	T4," "			;Make SIXBIT
+	JUMPLE	T4,ASCEOS		;Is the	character a space?
+	IDPB	T4,T3			;Place into the	save byte
+	AOBJN	T1,ASCSI1		;Loop about 6 times
+ASCEOS:	PUSHJ	P,.POP4T##		;Restore the temps
+	CAMN	T1,TEMP			;Is it the same??
+	  AOSA	(P)			;Yes, do the skip return
+	  MOVE	T2,TEMP			;No, copy what we had to T2
+	POPJ	P,			;Return
+;** Here to print the information about	a node.
+;   This routine dispatches according to the switches selected:
+;   /SILENCE, /FAST, /BRIEF, /WIDTH, /TOPOLOGY
+;
+;   destroys many registers
+
+PRINFO:	AOS	MATCH			;If here we must have had a match
+	SKIPLE	SILWD			;/SILENCE?
+	  POPJ	P,			;Yes, Just return...errors only!
+PRINF1:	SKIPLE	TOPWD			;If /TOPOLOGY was specified
+	  JRST	PRTOPO			; then go print	it
+	SKIPG	FASWD			;/NOFAST or default?
+	  PUSHJ	P,PFIRST		;Yes, print the	first line
+	SKIPLE	FASWD			;/FAST?
+	  PUSHJ	P,SHOLST		;Yes, do a short list
+	SKIPG	FASWD			;/FAST?
+	  JRST	PRINF2			;No, /BRIEF is the default
+	SKIPE	BRIEWD			;Did he	say /BRIEF?
+	  POPJ	P,			;Yes, don't print configuration
+PRINF2:	SKIPG	BRIEWD			;Here if /NOBRIEF or default
+	  PUSHJ	P,PCONF			;No, print the configuration
+PRINF3:	POPJ	P,			;Return	to loop
+;** Here to print the first line in the	default	format
+;
+
+PFIRST:	MOVEI	T1,[ASCIZ \Node	\]	;Print the lead	word
+	PUSHJ	P,.TSTRG##		;...
+	MOVE	T1,SNM			;Get the sixbit	node name
+	PUSHJ	P,.TSIXN##		;and print it
+	PUSHJ	P,.TTABC##		;followed by a <tab>
+	MOVEI	T1,"("			;Get a <left-paren>
+	PUSHJ	P,.TCHAR##		;and print it
+	MOVE	T1,NNM			;Get out node number
+	PUSHJ	P,.TOCTW##		;and print it in octal
+	MOVEI	T1,")"			;Get a <right-paren>
+	PUSHJ	P,.TCHAR##		;and print it
+	PUSHJ	P,.TTABC##		;followed by a <tab>
+	MOVEI	T1,^D28			;This is our horizontal	position
+	MOVEM	T1,HPOS			;so set	it
+	MOVEI	T1,SID			;Point at the software ID (asciz)
+	PUSHJ	P,KILBLK		;And kill leading blanks
+	PUSHJ	P,TCARE			;and print it carefully
+	PUSHJ	P,.TTABC##		;followed by a <tab>
+	MOVEI	T1,DAT			;Point to the software date (asciz)
+PSTCRL:	PUSHJ	P,TCARE			;and print it carefully
+	PJRST	CRLFH			;Cap off with a <CR><LF>
+;Here to print topology	information for	a node
+;P1 points to topo, p2 = count
+
+PRTOPO:	SETZ	P2,			;Clear the count of chars printed
+	MOVEI	T1,[ASCIZ \Node	\]	;Lead off with "node<tab>"
+	PUSHJ	P,.TSTRG##		;...
+	MOVE	T1,SNM			;Get the name
+	PUSHJ	P,.TSIXN##		; and print it
+	PUSHJ	P,.TTABC##		;Print a <TAB>
+	MOVEI	T1,"("			;Get an	open paren
+	PUSHJ	P,.TCHAR##		; and print it
+	MOVE	T1,NNM			;Get the node's	number
+	PUSHJ	P,.TOCTW##		; and print it
+	MOVEI	T1,")"			;Finally, get the close	paren
+	PUSHJ	P,.TCHAR##		; and print it
+	PUSHJ	P,.TTABC##		;Print another <TAB>
+	MOVEI	P2,30			;3 <TAB>s bring	us to col # ^D24
+	MOVEM	P2,HPOS			;Save our horizontal position
+
+;Set up	to output the topology information
+
+	MOVEI	P1,TOP			;Get the address of the	topology
+	SKIPE	(P1)			;Check if has neighbors
+	JRST	PRTOP3			;Yes, skip ","<TAB> the first time
+	MOVEI	T1,[ASCIZ \None\]	;No, get the string
+	PJRST	PSTCRL			; and tell the user
+
+;Here to type a	comma in the correct place
+
+PRTOP2:	MOVEI	T1,[ASCIZ \, \]		;Point to ","<space>
+	CAIE	P2,10			;No ","<TAB> if	CRLFH called
+	PUSHJ	P,TCARE			;type it
+
+;Here to print the neighbor's node number
+
+PRTOP3:	MOVE	P2,HPOS			;Get the horizontal position
+	HRRZ	T1,(P1)			;Get the neighbors node number
+	PUSHJ	P,FLATSO		;Account for the size
+	PUSHJ	P,.TOCTW##		; and print it in octal
+	SKIPE	COSTWD			;Should	we print the link costs?
+	  PUSHJ	P,PRCOST		;Print the link	costs
+	SKIPE	1(P1)			;See if	there are any more entrys
+	AOJA	P1,PRTOP2		; and if so, go	process	them
+	PUSHJ	P,CRLFH			;Cap off the topology/cost line
+	SKIPN	BRIEWD			;Check for configuration typeout
+	  PUSHJ	P,PCONF			;Yes, do the configuration
+	POPJ	P,			;No more neighbors to process
+;Here to print the link	costs
+
+PRCOST:	HLRZ	T1,(P1)			;Get the link's	cost
+	PUSHJ	P,FLATSD		;Account for the size
+	ADDI	P2,2			;Allow for the ")" & "("
+	MOVE	T1,P2			;Save P2
+	SUB	T1,HPOS			;Get the length	of the string
+	CAML	P2,CARWID		;exceeded the carrage width?
+	  PUSHJ	P,CRLFH			;Yes, <CRLF> now
+	ADDM	T1,HPOS			;add the length	of the string
+	MOVE	P2,HPOS			;Restore the horizontal	postion
+	MOVEI	T1,"("			;Get an	open paren
+	PUSHJ	P,.TCHAR##		; and print it
+	HLRZ	T1,(P1)			;Get the link's	cost
+	PUSHJ	P,.TDECW##		; and print it in decimal
+	MOVEI	T1,")"			;Finish	off the	entry
+	PJRST	.TCHAR##		; with a close paren
+;** Routines to	count (in P2) the number of chars used in the printed
+;   representation of the item in T1.
+
+FLATSN:	PUSH	P,T1			;Here for counting names
+	MOVEM	P2,HPOS			;Save the horizontal position
+FLATN1:	SKIPE	T1			;If we haven't zeroed the whole	wd
+	JRST	[LSH T1,6		;yet, then shift the name
+		 AOJA P2,FLATN1]	;and count it
+	CAML	P2,CARWID		;Can this fit??
+	  PUSHJ	P,CRLFH			;Too big to fit, <CRLF>	now
+	MOVE	P2,HPOS			;Restore the local count
+	POP	P,T1			;Restore the name
+	POPJ	P,			;and return
+
+FLATSO:	PUSH	P,T1			;Here for octal	numbers
+	MOVEM	P2,HPOS			;Save the horizontal position
+	SKIPE	T1			;Worry about a zero
+FLATO1:	SKIPE	T1			;if we're not done yet
+	JRST	[LSH T1,-3		;divide	the number by 8
+		 AOJA P2,FLATO1]	;and count the digit
+	CAML	P2,CARWID		;Can this fit??
+	  PUSHJ	P,CRLFH			;Too big to fit, <CRLF>	now
+	MOVE	P2,HPOS			;Restore the local count
+	POP	P,T1			;restore the number
+	POPJ	P,			;and return
+
+FLATSD:	PUSH	P,T1			;Here for decimal numbers
+	SKIPE	T1			;Make sure zero	counts 1
+FLATD1:	SKIPE	T1			;If there are still more digits
+	JRST	[IDIVI T1,5+5		;divide	by 10
+		 AOJA P2,FLATD1]	;and count the char
+	MOVEM	P2,HPOS			;Save the horizontal position
+	POP	P,T1			;Restore the number
+	POPJ	P,			;and return
+;** Here to print the configuration information
+
+PCONF:	MOVE	P1,[XWD	-20,CNF]	;Make a	AOBJN pointer
+	PUSHJ	P,.TTABC##		;Type a	<tab>
+	MOVEI	T5,10			;and set up horizontal position
+PCONF1:	SKIPN	(P1)			;Any more devices?
+	JRST	PCONF2			;No, all done
+	HLRZ	T1,(P1)			;Yes, get the configuration word
+	MOVE	T1,CTAB(T1)		;and the asciz name string
+	PUSHJ	P,.TSTRG##		;and print it
+	HRRZ	T1,(P1)			;Get how many
+PCONF3:	IDIVI	T1,^D10			;and find the number of	digits
+	ADDI	T5,1			;add one to the	horizontal position
+	JUMPG	T1,PCONF3		;loop till we have counted all digits
+	HRRZ	T1,(P1)			;Get how many, again
+	PUSHJ	P,.TDECW##		;and print it this time
+	MOVEI	T1,"]"			;Get a <left bracket>
+	PUSHJ	P,.TCHAR##		;and print it
+	PUSHJ	P,.TSPAC##		;followed by a space
+	ADDI	T5,6			;Add number of characters in the:
+					;device	name [3]
+					;brackets [2]
+					;<space> [1]
+					;to the	horizontal position
+	PUSH	P,T5			;save T5
+	ADDI	T5,11			;Add the max expected for the
+					;next device
+	CAMLE	T5,CARWID		;Do we exceed the TTY's	width?
+	  JRST	PCONF4			;Yes, do a <CR><LF>
+	POP	P,T5			;No, restore T5	and
+	AOBJN	P1,PCONF1		;loop till done
+PCONF2:	PJRST	CRLFH			;Cap off configuration line
+
+PCONF4:	SKIPG	1(P1)			;any more devices?
+	  JRST	PCONF5			;Yes, loop back
+	PUSHJ	P,CRLFH			;Type a	<CR><LF>
+	PUSHJ	P,.TTABC##		;and a <tab>
+PCONF5:	POP	P,T5			;then restore T5
+	MOVEI	T5,10			;Reset the horizontal position counter
+	AOBJN	P1,PCONF1		;and loop back
+;** routine to produce a listing of nodes in the network
+;   by name and	number only on one or two lines
+
+SHOLSS:	EXP	[ASCIZ/)/]			;Zero
+	EXP	[ASCIZ/) /]			;One
+	EXP	[ASCIZ/)  /]			;Two
+	EXP	[ASCIZ/)   /]			;Three
+	EXP	[ASCIZ/)    /]			;Four
+	EXP	[ASCIZ/)     /]			;Five
+	EXP	[ASCIZ/)      /]		;Six
+	EXP	[ASCIZ/)       /]		;Seven
+	EXP	[ASCIZ/)	/]		;Eight
+	EXP	[ASCIZ/)	 /]		;Nine
+	EXP	[ASCIZ/)	  /]		;Ten
+	EXP	[ASCIZ/)	   /]		;Eleven
+	EXP	[ASCIZ/)	    /]		;Twelve
+	EXP	[ASCIZ/)	     /]		;Thirteen
+	EXP	[ASCIZ/)	      /]	;Fourteen
+	EXP	[ASCIZ/)	       /]	;Fifteen
+	SPCPRT=^D12
+SHOLST:	SKIPN	FIRSTL			;Is this the first spec?
+	  PUSHJ	P,CRLFH			;Yes, do a <CR><LF>
+	AOS	FIRSTL			;Count the number of specs we do
+	MOVE	T2,HPOS			;Get our horizontal position
+	ADDI	T2,SPCPRT		;INCREMENT by on tab to	get here
+	IDIVI	T2,SPCPRT		;Worst case node spec
+	IMULI	T2,SPCPRT		;Make the number of 12 bit tabs
+	MOVEM	T2,HPOS			;Save it for later
+	CAMLE	T2,CARWID		;Enough	space left?
+	  JRST	[PUSHJ P,CRLFH		;Do a <CR><LF>
+		 MOVEI	T1,SPCPRT	;Get new HPOS
+		 MOVEM	T1,HPOS		;Save the new position
+		 JRST	.+1]		;Continue
+	SETZ	P1,			;Zero the position counter
+	MOVE	T2,[POINT 6,SNM]	;Get the node name
+	MOVEI	T1,6			;Max number of characters in a name
+SHOLS0:	ILDB	T3,T2			;Get a character
+	JUMPE	T3,SHOLS1		;Is it blank?
+	ADDI	P1,1			;No, count characters in the spec
+	SOJG	T1,SHOLS0		;Have we looked	at six characters?
+SHOLS1:	ADDI	P1,2			;Done, account for parens
+	SKIPA	T1,NNM			;Get the node number, allowing for zero
+SHOLS2:	SKIPE	T1			;if we're not done yet
+	JRST	[LSH T1,-3		;divide	the number by 8
+		 AOJA P1,SHOLS2]	;and count the digit
+	MOVE	T1,SNM			;Get the sixbit	node name
+	PUSHJ	P,.TSIXN##		;Type the node name
+	MOVEI	T1,"("			;Type a	left paren
+	PUSHJ	P,.TCHAR##		;...
+	HRRZ	T1,NNM			;Type the node number
+	PUSHJ	P,.TOCTW##		;in octal...
+	MOVEI	T1,SPCPRT		;Our normal tab	stop
+	SUBI	T1,(P1)			;Subtract what we have
+	MOVE	T1,SHOLSS(T1)		;to get	pointer	to fill	string
+	PJRST	.TSTRG			;Finish	the entry
+;** Here to do a carrage return/ line feed sequence
+;   and	set HPOS (our horizontal position) to zero
+
+CRLFH:	SETZM	HPOS			;Set the horizontal position back to
+					;the left margin
+	PJRST	.TCRLF##		;And do	a real <CR><LF>
+
+;** Here to kill leading blanks	or tabs	from a string pointed to by T1
+;   Returns with T1 pointing to	the start of the new string
+;   * destroys P3
+
+KILBLK:	PUSHJ	P,.PSH4T##		;Save the temps
+	HRLI	T1,(POINT 7)		;Make T1 a byte	pointer
+	MOVE	T3,T1			;Copy it
+	MOVE	T4,T1			;Keep another copy
+KILBL1:	ILDB	T2,T1			;Load a	byte
+	CAIE	T2,11			;Is it a <TAB>?
+	CAIN	T2,40			;Is it a <blank>
+	  JRST	KILBL1			;Loop til we find a non-blank character
+	CAMN	T1,T3			;Are the byte pointers different?
+	  JRST	KILBL4			;No, return to the caller
+KILBL2:	IDPB	T2,T3			;Deposit the current byte
+	ILDB	T2,T1			;Get another byte
+	JUMPN	T2,KILBL2		;Loop until zero byte
+	IDPB	T2,T3			;and deposit it
+KILBL4:	MOVE	T1,T4			;Init the pointer
+KILBL5:	ILDB	T2,T1			;Get another byte
+	JUMPE	T2,KILBL7		;Bind off at end
+	CAIE	T2,40			;Is this a blank
+	CAIN	T2,11			; or a <TAB>?
+	JRST	KILBL5			;Yes, don't keep it if trailing
+	MOVE	T4,T1			;No, make sure we keep this one
+	JRST	KILBL5			;Loop over entire string
+KILBL7:	IDPB	T2,T4			;Store the null after the last non-blank
+	PUSHJ	P,.POP4T##		;Restore the temps
+	POPJ	P,			;and return
+;** here to type a asciz string	without	exceeding the page width
+;   (if	possible).
+
+TCARE:	PUSHJ	P,.PSH4T##		;Save the temps
+	MOVE	T3,HPOS			;Get the current horizontal position
+	HRLI	T1,(POINT 7)		;Make a	byte pointer
+TCARE1:	ILDB	T2,T1			;Get the first byte
+	CAIN	T2,"	"		;Is this a <tab>
+	  JRST	[ADDI	T3,10		;Yes, add to get to the	next tab stop
+		 TRZ	T3,7		;and get rid of	the remainder
+		 JRST	.+2	]	;Continue with corrected HPOS
+	AOS	T3			;Increment the string length
+	JUMPN	T2,TCARE1		;Loop till the end of the string
+	SOS	T3			;Correct for the Off By	One error
+	MOVEM	T3,HPOS			;Save our horizontal position
+	CAMLE	T3,CARWID		;Is this less than the width?
+	  PUSHJ	P,CRLFH			;Reset HPOS and	do a CRLF
+TCARE3:	PUSHJ	P,.POP4T##		;and restore the temps
+	PJRST	.TSTRG##		;Type the string and return
+	SUBTTL	DECnet processing loop
+
+;ROUTINE to do the DECnet part of the program
+
+DECNET:	SKIPE	FTDEC			;Is there DECnet software??
+	SKIPN	DECNWD			;Did they say /NODECNET??
+	  POPJ	P,			;Yes, just return
+	SKIPG	DECNWD			;Did we	get /DECNET?
+	SKIPG	ANF10W			;Did we	get /ANF10?
+	 CAIA				;Wrong sense
+	  POPJ	P,			;Don't output the DECnet list
+	SKIPG	DECNWD			;Did we	get /DECNET?
+	SKIPG	LATNWD			;Did we	get /LAT?
+	 CAIA				;Wrong sense
+	  POPJ	P,			;Don't output the DECnet list
+
+;Set up	to get the list	of all DECnet nodes
+
+	MOVE	T5,[.DNLNN,,DNMAX]	;Argument for DNET. list node function
+	SKIPLE	URCHWD			;Check the unreachable switch
+	TXOA	T5,DN.FLK		;List of known nodes
+	TXO	T5,DN.FLR		;List of active	(reachable) nodes
+	MOVEM	T5,DNLST		;Save the function code
+	MOVEI	T5,DNLST		;Arg block for DNET.
+	DNET.	T5,			;Get a list of node names
+	  PUSHJ	P,DNETER		;Error,	Check it out
+	MOVE	T3,.DNCNT(T5)		;Get the count of nodes
+	MOVEM	T3,DNCNT		;Save it for later
+	MOVNS	T3			;Make an AOBJN pointer
+	HRLS	T3			;-count	in LH
+	HRRI	T3,2(T5)		;Point at the first node name
+	MOVEM	T3,DNLOOP		;Save it for later reference
+	MOVE	T1,SORTWD		;Get the sort status
+	JUMPL	T1,DECNE1		;No /SORT switch?
+	CAIE	T1,SRT.DF		;Default sort?
+	CAIN	T1,SRT.NA		;/SORT:NAME?
+DECNE1:	  PUSHJ	P,DNSRT			;Yes, sort the DECnet nodes by name
+
+;Continued on next page
+;Continued from previous page
+
+;Get the local node name
+
+	MOVEI	T5,DNBLK		;Point to the DNET. arg	block
+	MOVE	T2,[DN.FLE+<.DNLNN,,3>];Get the	local node name
+	MOVEM	T2,.DNFFL(T5)		;Save the function
+	DNET.	T5,			;Get the local node name
+	  PUSHJ	P,DNETER		;Error,	Check it out
+	MOVE	T1,.DNCNT+1(T5)		;Get the local node name
+	MOVEM	T1,DNLOC		;Save it
+	MOVEI	T5,DNINF		;Pointer to DNET. argument block
+	MOVE	T2,[.DNNDI,,DNINFL]	;Get local node's network address
+	MOVEM	T2,.DNFFL(T5)		;...
+	MOVEM	T1,.DNNAM(T5)		;Store local node's name
+	DNET.	T5,			;Get network address of	local node
+	  PUSHJ	P,DNETER		;Error,	Check it out
+	MOVE	T1,.DNADR(T5)		;Get local node's network address
+	MOVEM	T1,DNADR		;Save for later
+	PUSHJ	P,DECWLD		;Handle	wild cards
+	SKIPN	DNMCNT			;Any spec's match?
+	  POPJ	P,			;No, don't bother any more
+	PUSHJ	P,DECHEA		;Print the header line if needed
+	PUSHJ	P,CRLFH			;Lead off with a CRLF
+	SKIPE	FTEND			;DECnet running as ethernet endnode?
+	  POPJ	P,			;Yes, all done, return
+
+;Continued on next page
+;Continued from previous page
+
+DECLST:	SKIPLE	TOPWD			;Did they say /TOPOLOGY??
+	  JRST	DECTOP			;Yes, do the topology display
+	HLLZ	L1,DNLOOP		;Get the DECnet	AOBJN pointer
+DECLS1:	MOVSI	T3,DN.LST		;Get the list-it bit
+	TDNN	T3,DNBIT+2(L1)		;Do we list it?
+	  JRST	DECLS3			;No, try the next one
+
+;Do we just want nodes with links?
+
+	SKIPG	LINKWD			;/LINKS??
+	  JRST	DECLS2			;no, skip the check
+	PUSHJ	P,DECINF		;Build a node info block
+	LDB	T1,[POINTR .DNLLI(T5),DN.LNK] ;Get active links
+	JUMPE	T1,DECLS3		;Zero means ignore this	node
+DECLS2:	MOVE	T2,HPOS			;Get our horizontal position
+	ADDI	T2,10			;INCREMENT by on tab to	get here
+	TRZ	T2,7			;Get rid of the	remainder
+	MOVEM	T2,HPOS			;Save it for later
+	CAMLE	T2,CARWID		;Enough	space left?
+	  JRST	[PUSHJ P,CRLFH		;Do a <CR><LF>
+		 MOVEI	T1,10		;Get new HPOS
+		 MOVEM	T1,HPOS		;Save the new position
+		 JRST	.+1]		;Continue
+	MOVE	T1,DNLST+2(L1)		;Get the sixbit	node name
+	TLNN	T1,770000		;Make sure we have a top character
+	  JRST	[PUSH	P,T1		;[32] Remember node number
+		 MOVEI	T1,"("		;[32] Blank, type number
+		 PUSHJ	P,.TCHAR##	;
+		 LDB	T1,[POINTR(0(P),DN%ARE)] ;[32] Area number
+		 JUMPE	T1,DECL2B	;[32] Skip if none
+		 PUSHJ	P,.TDECW##	;[32] Print area number
+		 MOVEI	T1,"."		;
+		 PUSHJ	P,.TCHAR##	;
+	DECL2B:	 POP	P,T1		;[32] Node number back
+		 ANDI	T1,DN%NOD	;[32] Except for area
+		 PUSHJ	P,.TDECW##	;
+		 MOVEI	T1,")"		;
+		 PUSHJ	P,.TCHAR##	;
+		 JRST	DECL2A]		;[32] Resume with tab
+	PUSHJ	P,.TSIXN##		;Type the name
+DECL2A:	PUSHJ	P,.TTABC##		;Print a <tab>
+DECLS3:	AOBJN	L1,DECLS1		;Loop
+	PJRST	CRLFH			;Finish	with a CRLF
+;Get info about DECnet nodes
+
+DECINF:	MOVEI	T5,DNINF		;Point to the DNET. UUO	block
+	MOVE	T1,[.DNNDI,,DNINFL]	;Function,,block size
+	MOVEM	T1,.DNFFL(T5)		;Save it
+	MOVE	T1,DNLST+2(L1)		;Get the sixbit	node name
+	MOVEM	T1,.DNNAM(T5)		;Save it
+	DNET.	T5,			;Get the info
+	  PUSHJ	P,DNETER		;DNET.error, check it out
+	POPJ	P,			;Return
+
+
+
+;Routine to print the DECnet header if there are any nodes to print and
+;the user has not specified /NOHEADERS
+
+DECHEA:	SKIPN	HEADWD			;Did they say no headers?
+	  POPJ	P,			;Yes, just return
+	MOVEI	T1,[ASCIZ \[DECnet	network: local node \]	;Print the leader
+	PUSHJ	P,.TSTRG##		;...
+	MOVE	T1,DNLOC		;Get the local node name
+	PUSHJ	P,.TSIXN##		;and type it too
+	MOVEI	T1,[ASCIZ \, \]		;Local node name
+	PUSHJ	P,.TSTRG##		;...
+	SKIPE	FTEND			;DECnet running as ethernet endnode?
+	  JRST	[MOVEI	T1,[ASCIZ \running as an ethernet endnode]\]
+		 PJRST	.TSTRG##]	;...
+	SKIPG	T1,DNCNT		;Get the count of on-line nodes
+	  JRST	[MOVEI	T1,[ASCIZ \no reachable	nodes]\]
+		 PJRST	.TSTRG##]	;...
+	PUSHJ	P,.TDECW##		;Type the number of nodes
+	MOVEI	T1,[ASCIZ \ reachable\]
+	SKIPG	URCHWD			;Just reachable?
+	PUSHJ	P,.TSTRG##		;Yes, say so
+	MOVE	T1,DNCNT		;Get the count back
+	CAIG	T1,1			;More than one
+	SKIPA	T1,[[ASCIZ \ node\]]	;singular
+	MOVEI	T1,[ASCIZ \ nodes\]	;plural
+	PUSHJ	P,.TSTRG##		;...
+	LDB	T1,[POINTR(DNADR,DN%ARE)]	;Get network area number
+	JUMPE	T1,.TRBRK##		;Finish	message	if no area number
+	PUSH	P,T1			;Save area number a bit
+	MOVEI	T1,[ASCIZ \ in area \]	;Add some explanation
+	PUSHJ	P,.TSTRG##		;...
+	POP	P,T1			;Get back area number
+	PUSHJ	P,.TDECW##		;Type area number
+	PJRST	.TRBRK##		;Finish	message	and return
+;DECTOP	- print	the "topology" of the DECnet network
+DECTOP:	MOVEI	T1,[ASCIZ \Name	Number	Line		Hops	L.Links	Delay
+\]
+	SKIPE	COSTWD			;Print the cost?
+	MOVEI	T1,[ASCIZ \Name	Number	Line		Cost	Hops	L.Links	Delay
+\]
+	PUSHJ	P,.TSTRG##		;Type the header line
+	HLLZ	L1,DNLOOP		;Get the DECnet	AOBJN pointer
+DECTO1:	MOVSI	T3,DN.LST		;Get the list-it bit
+	TDNN	T3,DNBIT+2(L1)		;Do we list it?
+	  JRST	DECTO7			;No, try the next one
+	PUSHJ	P,DECINF		;Build a node information block
+	SKIPG	LINKWD			;/LINKS??
+	  JRST	DECTO2			;no, skip the check
+	LDB	T1,[POINTR .DNLLI(T5),DN.LNK] ;Get active links
+	JUMPE	T1,DECTO7		;Zero means ignore this	node
+
+;Identify the	node
+
+DECTO2:	MOVE	T1,.DNNAM(T5)		;Get the node name
+	TLNN	T1,770000		;Make sure we have a node name
+	 SETZ	T1,			;Nope, don't type it out
+	PUSHJ	P,.TSIXN##		;Type it
+	MOVEI	T1,[ASCIZ \	(\]	;Tab over
+	PUSHJ	P,.TSTRG##		;Type the string
+	MOVE	T1,.DNADR(T5)		;Get the node number
+	TXNN	T1,DN%ARE		;Is there an area number?
+	  JRST	DECTO3			;No, continue
+	LDB	T1,[POINTR(T1,DN%ARE)]	;Get area number
+	PUSHJ	P,.TDECW##		;Type it
+	MOVEI	T1,"."			;Add a seperator
+	PUSHJ	P,.TCHAR##		;...
+	MOVE	T1,.DNADR(T5)		;Get node number again
+	ANDX	T1,DN%NOD		;Mask to just node within area
+DECTO3:	PUSHJ	P,.TDECW##		;Type the node number
+	MOVEI	T1,[ASCIZ \)	\]	;Tab over
+	PUSHJ	P,.TSTRG##		;Type the string
+
+;Continued on next page
+;Continued from previous page
+
+;See if the node is reachable
+
+	LDB	T1,[POINTR .DNRTR(T5),DN.RCH]	;Is the	node reachable?
+	JUMPE	T1,[MOVEI T1,[ASCIZ\Unreachable\]
+		    PUSHJ P,.TSTRG##	;No, tell the user
+		    JRST  DECTO6]	;Continue with the next	node
+
+;Describe the	connection to the node
+
+	MOVEI	T1,.DNCKT(T5)
+	PUSHJ	P,.TSTRG##		;If non-zero type the name
+	PUSHJ	P,.TTABC##		;Tab over for fill
+	PUSHJ	P,.TTABC##		;Tab over
+
+;Check for the /COST switch setting
+
+	SKIPN	COSTWD			;Print the cost?
+	  JRST	DECTO4
+	LDB	T1,[POINTR .DNRTR(T5),DN.CST] ;Get the cost information
+	PUSHJ	P,.TDECW##		;Print it
+	PUSHJ	P,.TTABC##		;Tab over
+
+DECTO4:	LDB	T1,[POINTR .DNRTR(T5),DN.HOP]
+	PUSHJ	P,.TDECW##		;Print the number of hops
+	PUSHJ	P,.TTABC##		;Tab over
+
+;Tell	about the logical links	we have	to the node
+
+DECTO5:	SKIPL	.DNLLI(T5)		;Do we have valid information?
+	  JRST	DECTO6			;No, finish the	line
+	LDB	T1,[POINTR .DNLLI(T5),DN.LNK] ;Get active links
+	PUSHJ	P,.TDECW##		;Type it
+	PUSHJ	P,.TTABC##		;Tab over
+	LDB	T1,[POINTR .DNLLI(T5),DN.DLY] ;Get millisecond delay to	node
+	PUSHJ	P,.TDECW##		;Type it
+DECTO6:	PUSHJ	P,.TCRLF##		;end line
+DECTO7:	AOBJN	L1,DECTO1		;Loop
+	POPJ	P,			;Return
+;Routine to select specific nodes to look at by	dissecting the scan blocks
+;L1 = AOBJN pointer to the list	of DECnet node names in	SIXBIT
+
+DECWLD:	SKIPN	L1,SPCCNT		;Do we have any	specs
+	  JRST	DECWL4			;None, take the	default
+	MOVNS	L1			;Get the negative count	of specs
+	HRLZS	L1			;Make an AOBJN pointer
+DECWL1:	MOVE	T3,SPCLST(L1)		;Get the name
+	SKIPN	T4,WLDLST(L1)		;Is this a wild	card entry?
+	  SETZ	T4,			;No, mask no names
+	ANDCAM	T4,T3			;Mask it
+	HLLZ	L2,DNLOOP		;Get count of known nodes
+DECWL2:	MOVE	T2,DNLST+2(L2)		;Get a node name
+	ANDCAM	T4,T2			;Mask it
+	CAME	T2,T3			;Match?
+	  JRST	DECWL3			;No, Try the next one
+	AOS	DNMCNT			;Count nodes that match
+	MOVSI	T5,SP.DEC		;Yes, Flag it to be listed
+	IORM	T5,SPCFLG(L1)		;Mark the match	in the spec flags
+	MOVSI	T5,DN.LST		;Flag node to be listed
+	IORM	T5,DNBIT+2(L2)		;Mark the match	in known node list
+DECWL3:	AOBJN	L2,DECWL2		;Loop over all known nodes
+	AOBJN	L1,DECWL1		;And all node specs
+	POPJ	P,			;Return
+
+;Here to set up	for the	default	case
+
+DECWL4:	HLLZ	T1,DNLOOP		;Get the number	of nodes
+	MOVSI	T2,DN.LST		;"LIST NODE" Flag
+DECWL5:	IORM	T2,DNBIT+2(T1)		;Flag all nodes
+	AOBJN	T1,DECWL5		;Loop over all nodes
+	AOS	DNMCNT			;Count a match
+	POPJ	P,			;Return
+	SUBTTL DNSRT - SHELLsort the DECnet nodes
+
+;DNSRT:	T1=Number_of_nodes (N)
+;DNSR1:	T1=T1/2
+;	IF T1=0	then RETURN
+;	T2=1
+;DNSR2:	T3=T2
+;DNSR4:	IF node[T3] <= node[T3+T1] goto	SORT3
+;	EXCH(node[T3],node[T3+T1])
+;	T3=T3-T1
+;	IF T3>=1 then goto SORT4
+;DNSR3:	T2=T2+1
+;	IF T2>N-T1 then	goto SORT1
+;	goto sort2
+
+DNSRT:	HRRZ	T1,DNCNT		;T1=Number_of_nodes
+DNSR1:	LSH	T1,-1			;T1=T1/2
+	JUMPE	T1,CPOPJ		;IF T1=0 then RETURN
+	MOVEI	T2,1			;T2=1
+DNSR2:	HRRZ	T3,T2			;T3=T2
+DNSR4:	HRRZ	T4,T3
+	ADDI	T4,(T1)			;T4=T3+T1
+	MOVE	T5,<DNLST+1>(T4)	;T5=node[T3+T1]
+	MOVE	T6,<DNLST+1>(T3)	;T6=node[T3]
+	TLC	T5,(1B0)		;FLIP SIGN BITS
+	TLC	T6,(1B0)		;FOR UNSIGNED COMPARISON
+	CAML	T5,T6			;IF node[T3] <=	node[T3+T1]
+	JRST	DNSR3			;then GOTO SORT3
+	TLC	T5,(1B0)		;RESTORE VALUE
+	EXCH	T5,<DNLST+1>(T3)
+	MOVEM	T5,<DNLST+1>(T4)	;exchange
+	SUBI	T3,(T1)			;T3=T3-T1
+	JUMPG	T3,DNSR4		;IF T3>=1 GOTO SORT4
+DNSR3:	HRRZ	T5,DNCNT		;delayed T2=T2+1
+	SUBI	T5,1(T1)		;then comparison
+	CAILE	T2,(T5)			;IF T2>N-T1 then
+	  AOJA	T2,DNSR1		;GOTO SORT1
+	AOJA	T2,DNSR2		;ELSE GOTO SORT2
+	SUBTTL	LAT processing routines
+
+;Here to list info the LAT "network".
+;
+;As of this writing (18-Apr-85) the -10 doesn't support being itself a
+;"LAT server", only a "LAT host", so we can only list servers since that
+;is all we are listening for on the ethernet.
+;
+;Note also that since the LAT servers don't themselves broadcast their
+;existence the -10 only knows about LAT servers that have in the past
+;connected to the -10. As such, NETWORK can only type out a partial sum-
+;mary of the LAT network.
+
+LATSER:	SKIPE	FTLAT		;Have LATSER loaded?
+	SKIPN	LATNWD		;Did we say /NOLAT?
+	POPJ	P,		;No or yes, skip this
+	SKIPG	LATNWD		;Did we say /LAT?
+	SKIPG	ANF10W		;No, how about /ANF10?
+	CAIA			;Sense is wrong
+	POPJ	P,		;Skip LAT stuff
+	SKIPG	LATNWD		;Did we say /LAT?
+	SKIPG	DECNWD		;No, how about /DECNET?
+	CAIA			;Sense is wrong
+	POPJ	P,		;Skip LAT stuff
+	SKIPLE	TOPWD		;Did we say /TOPOLOGY?
+	SKIPLE	LATNWD		;Yes, how about /LAT?
+	CAIA			;Sense is wrong
+	POPJ	P,		;Skip default LAT list if /TOPOLOGY
+	PUSHJ	P,LATINI	;[042] Type out a header if needed
+	  POPJ	P,		;Fatal LATOP. error
+	SKIPG	P1,T1		;Save number of known servers to be listed
+	POPJ	P,		;None, just return now
+	MOVEI	P3,DNLST	;Address of list of known servers
+	SETZB	P2,HPOS		;Set up for output routines
+
+;Loop listing info for each known server
+
+LATLP:	MOVEI	T1,5		;Length
+	MOVEI	T2,.LASAS	;And LATOP. function
+	DMOVEM	T1,NODBLK+.LAACT;Set for LATOP. UUO
+	MOVEI	T1,DNINFL	;Length
+	MOVEI	T2,DNINF	;And address of aux buffer
+	DMOVEM	T1,NODBLK+.LABCT;Set aux buffer for LATOP.
+	MOVSI	T1,(POINT 7)	;7-bit byte pointer
+	HRRI	T1,1(P3)	;Address of server name string (short block)
+	MOVEM	T1,NODBLK+.LAQUA;Set for LATOP.
+	HRRZ	T1,(P3)		;Get length of server name
+	ADJBP	T1,NODBLK+.LAQUA;Point to last character of name
+	SETZ	T2,		;Get a null terminator
+	IDPB	T2,T1		;Make sure LATSER can find the name it gave us
+	MOVEI	T1,NODBLK	;LATOP. UUO arg pointer to
+	LATOP.	T1,		;Read info about LAT server
+	  JRST	[PUSHJ	P,LATOPE	;LATOP. UUO error
+		JRST	LATLP8]		;Advance to next server
+	PUSHJ	P,LATWLD	;See if want to see this name
+	  JRST	LATLP8		;Skip this LAT server
+	HRRZ	T1,DNINF+5	;Get the link state
+	SKIPLE	LINKWD		;If only want active servers,
+	JUMPE	T1,LATLP8	;Skip idle ones
+	AOS	MATCH		;Matched a LAT server
+	MOVSI	T1,SP.LAT	;Found a LAT bit
+	IORM	T1,SPCFLG(T4)	;Light for this node
+	SKIPLE	SILWD		;See /SILENCE?
+	JRST	LATLP8		;Yes, errors only
+	PUSHJ	P,LATSHO	;Show info
+
+LATLP8:	ADDI	P3,7		;Advance to next "short form" server block
+	SOJG	P1,LATLP	;Loop for all LAT servers
+	SKIPE	HPOS		;If not at BOL,
+	PUSHJ	P,CRLFH		;Get there
+	POPJ	P,		;Return successfully
+;Here to obtain initial LAT info
+
+LATINI:	TXO	F,F.HED		;[042] Assume no header desired
+	MOVEI	T1,4		;Length of UUO arg block
+	MOVEI	T2,.LASCH	;LAT function "Show Characteristics"
+	DMOVEM	T1,NODBLK	;Stash for LATOP.
+	MOVEI	T1,2*MAXNOD	;Size of aux area
+	MOVEI	T2,NODBIN	;Address of aux area
+	DMOVEM	T1,NODBLK+.LABCT;Set pointer to returned-data buffer
+	MOVEI	T1,NODBLK	;LATOP. arg pointer to
+	LATOP.	T1,		;Read general LAT host info
+	 JRST	[CAIN	T1,NODBLK	;UUO unimplemented?
+		JRST	NOLAT		;Yes, tell user no LAT here
+		JRST	LATOPE]		;No, LATOP. UUO error
+	MOVEI	T1,5		;Length of UUO arg block
+	MOVEI	T2,.LASAS	;LAT function "Show Servers"
+	DMOVEM	T1,NODBLK+.LAACT;Stash for LATOP.
+	MOVEI	T1,2*DNMAX	;Length of aux buffer
+	MOVEI	T2,DNLST	;Address of aux buffer
+	DMOVEM	T1,NODBLK+.LABCT;Set pointer for returned-info
+	SETZM	NODBLK+.LAQUA	;Want short-form blocks
+	MOVEI	T1,NODBLK	;LATOP. arg pointer to
+	LATOP.	T1,		;Read list of known LAT servers
+	 JRST	LATOPE		;LATOP. UUO erorr
+	PUSHJ	P,LATSRT	;Sort the server list appropriately
+	SKIPLE	LINKWD		;If /LINKS was typed,
+	PUSHJ	P,LATLSR	;Get and sort the list of connections
+	SKIPLE	SPCCNT		;[042] Yes, are sure there'll be a header?
+	TXZA	F,F.HED		;[042] No, allow it to print later
+	PUSHJ	P,LATHEA	;[042] Yes, print it now
+	HRRZ	T1,NODBIN+00	;[042] "N-ALLOC-CIRCUITS" (return value)
+	JRST	.POPJ1##	;[042] Return success
+
+;Type out the LAT header info
+
+LATHEA:	PUSHJ	P,CRLFH		;Space down a line for neatness
+	SKIPN	HEADWD		;User want a header?
+	POPJ	P,		;No, all done here
+	HRRZ	T1,NODBIN+00	;"N-ALLOC-CIRCUITS" (return value)
+	PUSH	P,T1		;Hang onto it for a moment
+	MOVEI	T1,[ASCIZ\[LAT service: local LAT host \]
+	PUSHJ	P,.TSTRG##	;Start up the LAT header
+	MOVEI	T1,NODBIN+24	;Our LAT host name
+	PUSHJ	P,.TSTRG##	;Type out host name string
+	MOVEI	T1,[ASCIZ\; \]	;Separating text
+	PUSHJ	P,.TSTRG##	;'Twixt name and number
+	SKIPN	T1,(P)		;Retrieve "N-ALLOC-CIRCUITS"
+	JRST	[MOVEI T1,[ASCIZ\No\]  ;If "0" then
+		PUSHJ	P,.TSTRG##	;Then type "No known..."
+		JRST	.+2]		;Blunder onwards
+	PUSHJ	P,.TDECW##	;Type number of known servers
+	MOVE	T2,0(P)		;Restore number of known servers
+	MOVEI	T1,[ASCIZ\ known server]\]  ;Cap off the LAT header text
+	CAIE	T2,1		;Singular or plural?
+	MOVEI	T1,[ASCIZ\ known servers]\]  ;Cap off the LAT header text
+	PUSHJ	P,.TSTRG##	;With the closing bracket
+	PUSHJ	P,.TCRLF##	;A <CR><LF>
+	POP	P,T1		;Return number of servers in T1
+	POPJ	P,		;[042] to caller
+;Here to sort the list of LAT servers
+
+LATSRT:	SKIPGE	T1,SORTWD	;Get the type of sorting requested
+	MOVEI	T1,SRT.DF	;Default if no switch typed
+	CAIE	T1,SRT.NA	;Sort by name?
+	CAIN	T1,SRT.DF	; or default sorting?
+	JRST	LATNSR		;Yes, sort by name string
+	CAIE	T1,SRT.NU	;No, sort by number?
+	POPJ	P,		;No, /NOSORT, so don't alter the order
+	HRRZ	T1,NODBIN+00	;Get "N-ALLOC-CIRCUITS" (number of servers)
+LATSR1:	LSH	T1,-1		;T1=T1/2
+	JUMPE	T1,CPOPJ	;IF T1=0 THEN RETURN
+	MOVEI	T2,1		;T2=1
+LATSR2:	HRRZ	T3,T2		;T3=T2
+LATSR3:	HRRZ	T4,T3
+	ADDI	T4,(T1)		;T4=T3+T1
+	IMULI	T4,7		;Account for lengths of entries
+	IMULI	T3,7		; ...
+	HLRZ	T5,DNLST-7(T3)	;Get NODNUM(T3)
+	HLRZ	T6,DNLST-7(T4)	; and NODNUM(T4)
+	CAIL	T6,(T5)		;IF node[T3] .LE. node[T4]
+	JRST	LATSR4		; THEN GOTO SORT3
+	PUSHJ	P,LATSWP	;exchange
+	IDIVI	T3,7		;Back from offset to index
+	SUBI	T3,(T1)		;T3=T3-T1
+	JUMPG	T3,LATSR3	;IF T3 .GE. 1 THEN GOTO SORT4
+LATSR4:	HRRZ	T5,NODBIN+00	;Delayed T2=T2+1
+	SUBI	T5,1(T1)	;then comparison
+	CAILE	T2,(T5)		;IF T2 .GT. N-T1 THEN
+	AOJA	T2,LATSR1	;GOTO SORT1
+	AOJA	T2,LATSR2	;ELSE GOTO SORT2
+
+;Here to shellsort the LAT servers by name
+
+LATNSR:	HRRZ	T1,NODBIN+00	;T1=N (the number of servers)
+LATNS1:	LSH	T1,-1		;T1/=2
+	JUMPE	T1,CPOPJ	;IF T1 .EQ. 0 THEN RETURN
+	MOVEI	T2,1		;T2=1
+LATNS2:	HRRZ	T3,T2		;T3=T2
+LATNS3:	HRRZ	T4,T3
+	ADDI	T4,(T1)		;T4=T3+T1
+	IMULI	T4,7		;Account for length of entries
+	IMULI	T3,7		; ...
+	PUSHJ	P,LATCMP	;IF node[T3] .LE. node[T3+T1]
+	  JRST	LATNS4		;THEN GOTO SORT4
+	PUSHJ	P,LATSWP	;exchange
+	IDIVI	T3,7		;Revert from offset to index
+	SUBI	T3,(T1)		;T3-=T1
+	JUMPG	T3,LATNS3	;IF T3 .GT. 0 THEN GOTO SORT3
+LATNS4:	HRRZ	T5,NODBIN+00	;Delayed T2++
+	SUBI	T5,1(T1)	;and comparison
+	CAILE	T2,(T5)		;IF T2 .GT. N-1
+	AOJA	T2,LATNS1	;THEN GOTO SORT1
+	AOJA	T2,LATNS2	;ELSE GOTO SORT2
+
+;Here to shellsort the LAT connections
+
+LATLSR:	MOVEI	T1,4		;Length of UUO block
+	MOVEI	T2,.LASTC	;LAT function "Show Terminal Connections"
+	DMOVEM	T1,NODBLK+.LAACT;Stash for LATOP.
+	MOVEI	T1,LTMAX	;Length of aux buffer
+	MOVEI	T2,LTLINK	;Address of aux buffer
+	DMOVEM	T1,NODBLK+.LABCT;Set pointer for returned info
+	MOVEI	T1,NODBLK	;LATOP. arg pointer
+	LATOP.	T1,		;Read list of terminal connections
+	  JRST	LATOPE		;LATOP. UUO error
+	HLRZ	T1,NODBLK+.LABCT;Get count of words returned
+	IDIVI	T1,6		;Convert to count of connections
+	MOVEM	T1,LTLCNT	;Save for later checking
+	MOVE	T2,SORTWD	;Get type of sorting requested
+	CAIN	T2,SRT.NO	;If /NOSORT, don't bother
+	POPJ	P,		;Otherwise sort connections by TTY number
+LATLS1:	LSH	T1,-1		;T1/=2
+	JUMPE	T1,CPOPJ	;IF T1 .EQ. 0 THEN RETURN
+	MOVEI	T2,1		;T2=1
+LATLS2:	HRRZ	T3,T2		;T3=T2
+LATLS3:	HRRZ	T4,T3
+	ADDI	T4,(T1)		;T4=T3+T1
+	IMULI	T4,6		;Account for length of entries
+	IMULI	T3,6		; ...
+	MOVE	T5,LTLINK-6(T4)
+	CAML	T5,LTLINK-6(T3)	;IF tty[T3] .LE. tty[T3+T1]
+	JRST	LATLS6		;THEN GOTO SORT6
+	MOVSI	T5,-6		;Start of AOBJN to entry
+	HRRI	T5,(T3)		;Pointer to source
+LATLS4:	MOVE	T6,LTLINK-6(T5)	;Get source word
+	EXCH	T6,LTLINK-6(T4)	;Exchange with destination
+	MOVEM	T6,LTLINK-6(T5)	;Finish exchange with source
+	AOBJP	T5,LATLS5	;Test for end
+	AOJA	T4,LATLS4	;Advance both pointers and loop over entries
+LATLS5:	IDIVI	T3,6		;Convert back from offset to index
+	SUBI	T3,(T1)		;T3-=T1
+	JUMPG	T3,LATLS3	;IF T3 .GT. 0 THEN GOTO SORT3
+LATLS6:	HRRZ	T5,LTLCNT	;Delayed T2++
+	SUBI	T5,1(T1)	;then comparison
+	CAILE	T2,(T5)		;IF T2 .GT. N-1
+	  AOJA	T2,LATLS1	;THEN GOTO SORT1
+	AOJA	T2,LATLS2	;ELSE GOTO SORT2
+
+;Here to compare LAT server name strings
+
+LATCMP:	PUSHJ	P,.SAVE2##	;EXTEND uses 6 ACs
+	PUSHJ	P,.PSH4T##	;Preserve all ACs used
+	MOVEI	T2,DNLST-6(T3)	;Address of node[T3]
+	MOVEI	P1,DNLST-6(T4)	;Address of node[T3+T1]
+	HRRZ	T1,DNLST-7(T3)	;Length of nodename[T3]
+	HRRZ	T4,DNLST-7(T4)	;Length of nodename[T3+T1]
+	SETZB	T3,P2		;Don't confuse the KL
+	HRLI	T2,(POINT 7)	;Set up proper byte pointers
+	HRLI	P1,(POINT 7)	; ...
+	EXTEND	T1,[EXP CMPSLE,0,0] ;Compare with zero-fill
+	  AOS	-4(P)		;Routine acts as a CMPSG
+	PUSHJ	P,.POP4T##	;Restore the temps
+	POPJ	P,		;Return with appropriate skipness
+
+;Here to swap two short blocks
+
+LATSWP:	MOVSI	T5,-7		;Set up length of transfer
+	HRRI	T5,(T3)		;Point to source block
+LATSW1:	MOVE	T6,DNLST-7(T5)	;Get a word from the source
+	EXCH	T6,DNLST-7(T4)	;Exchange with destination
+	MOVEM	T6,DNLST-7(T5)	;Finish exchange with source
+	AOBJP	T5,CPOPJ	;Return if finished
+	AOJA	T4,LATSW1	;Else, advance both pointers and do it again
+;Wildcard selection of LAT servers
+;
+;Note that only the first six characters are checked!
+
+LATWLD:	SKIPG	T4,SPCCNT	;Did user type any specs?
+	JRST	.POPJ1##	;No, then match everything
+	HRRZ	T1,DNINF+6	;Length of LAT server name string
+	MOVSI	T2,(POINT 7,)	;Prototype byte pointer
+	HRRI	T2,DNINF+10	;Address of LAT server name string
+	PUSHJ	P,LATSIX	;Get SIXBIT name in T1
+	  POPJ	P,		;Failed?
+	MOVN	T4,SPCCNT	;Count of specs to check
+	HRLZ	T4,T4		;AOBJN pointer to SPCLST/WLDLST
+
+;Loop checking wildcarded node specs
+
+LATWL2:	MOVE	T3,SPCLST(T4)	;Next user-typed name
+	XOR	T3,T1		;Contrast with proposed server name
+	ANDCM	T3,WLDLST(T4)	;(ignoring any junk that should be ignored)
+	JUMPN	T3,LATWL5	;This spec loses!
+	JRST	.POPJ1##	;No other constraints, this spec wins
+
+LATWL5:	AOBJN	T4,LATWL2	;Loop back and check the rest of the specs
+	POPJ	P,		;Reject this LAT server
+
+
+;Make SIXBIT name out of ASCIZ string
+;
+;Call with T1/count and T2/pointer
+
+LATSIX:	PUSH	P,[0]		;The prototype name
+	MOVSI	T3,(POINT 6,0(P))  ;SIXBIT name builder
+	JRST	LATSI4		;Enter loop
+
+LATSI2:	ILDB	T4,T2		;Next name string character
+	CAIL	T4,"a"		;If not lower case,
+	CAILE	T4,"z"		; ...
+	SUBI	T4,"0"-'0'	;SIXBITIFY the character
+	JUMPLE	T4,LATSI5	;Quit on space, null, or control characters
+	TLNE	T3,770000	;Filled up one word yet?
+	IDPB	T4,T3		;Nope, accumulate this character
+LATSI4:	SOJGE	T1,LATSI2	;Decrement the count
+LATSI5:	POP	P,T1		;Position name
+	JRST	.POPJ1##	;Successful return
+;Here to type information about one specific server
+
+LATSHO:	TXON	F,F.HED		;[042] Header typed yet?
+	PUSHJ	P,LATHEA	;[042] No, do it now
+	SKIPLE	FASWD		;Did we see /FAST?
+	JRST	LATFST		;Yes, format is a bit different
+	MOVEI	T1,1(P3)	;No, point to name
+	PUSHJ	P,KILBLK	;Make sure it's pretty
+	PUSHJ	P,TCARE		;Display it
+	MOVE	P2,HPOS		;Fetch column back into our register
+	CAIG	P2,7		;If not at least one tab stop,
+	PUSHJ	P,.TTABC##	;Fix that
+	CAIG	P2,17		;Unless the full 16 chars,
+	PUSHJ	P,.TTABC##	;Space over
+	MOVEI	P2,22		;Account for the extra punctuation
+	HLRZ	T1,(P3)		;Get the server number
+	PUSHJ	P,FLATSD	;Make sure it will fit
+	CAMLE	P2,CARWID	;Will it?
+	PUSHJ	P,CRLFH		;No, wrap around
+	MOVEI	T1,"("		;Parenthesize its number
+	PUSHJ	P,.TCHAR##	;Just because it looks better
+	HLRZ	T1,(P3)		;Get the number
+	PUSHJ	P,.TDECW##	;Display it
+	MOVEI	T1,")"		;Close parenthesis
+	PUSHJ	P,.TCHAR##	;Match them up
+	PUSHJ	P,.TTABC##	;Space over for location string
+	MOVE	P2,HPOS		;Get last guessed position
+	ADDI	P2,8		;Tab stops are 8 chars wide
+	TRZ	P2,7		;And aligned
+	MOVEM	P2,HPOS		;Save where TCARE looks
+	HLRZ	T1,DNINF+7	;Get length of location string
+	ADJBP	T1,[POINT 7,DNINF+14] ;Point to its last character
+	SETZ	T2,		;Get a null terminator
+	IDPB	T2,T1		;Make sure it's ASCIZ
+	MOVEI	T1,DNINF+14	;Address of the location string
+	PUSHJ	P,KILBLK	;Pretty it up
+	PUSHJ	P,TCARE		;Type the string
+	PUSHJ	P,CRLFH		;End the line
+	SETZ	P2,		;Remember the CRLF
+	SKIPLE	BRIEWD		;Supposed to be brief?
+	JRST	LATLNK		;Yes, check if supposed to show links
+
+LATCNF:	SKIPG	FASWD		;Doing a fast listing?
+	PUSHJ	P,.TTABC##	;No, indent for configuration info
+	MOVEI	T1,DNINF	;Point to Ethernet address
+	PUSHJ	P,LATADR	;Display it
+	PUSHJ	P,.TSPAC##	;Make some room
+	PUSHJ	P,.TSPAC##	;For readability
+	PUSHJ	P,.TSPAC##	;This should be enough
+	ADDI	P2,^D<8+17+3>	;How many bytes we have added
+	SKIPLE	FASWD		;Unless a fast listing,
+	SUBI	P2,8		;Then we didn't type the tab
+	MOVEM	P2,HPOS		;Put it where TCARE looks
+	HLRZ	T1,DNINF+5	;Get server type info
+	ANDI	T1,377		;Keep only the part we know about
+	CAIL	T1,LATPTL	;Do know about this product type?
+	SETZ	T1,		;No, force it to be unknown
+	MOVE	T1,LATPTC(T1)	;Get its type name
+	PUSHJ	P,TCARE		;Display it
+	PUSHJ	P,CRLFH		;End the line
+	SETZ	P2,		;Remember the CRLF
+
+LATLNK:	SKIPG	LINKWD		;Unless /LINKS was typed,
+	POPJ	P,		;Don't display the connections
+	MOVN	L1,LTLCNT	;Get negative count of links
+	HRLZ	L1,L1		;Into LH for AOBJNing
+LATLN1:	PUSHJ	P,LATACT	;Is this known link a match?
+	  JRST	LATLN2		;No, don't show this link
+	MOVE	T1,LTLINK(L1)	;Yes, get its TTY number
+	PUSHJ	P,LATTRM	;Display the TTY info
+LATLN2:	ADDI	L1,5		;Account for 6-word entries
+	AOBJN	L1,LATLN1	;Loop over all known connections
+	POPJ	P,		;Now we're done
+
+;Here to check for matching server names for active connections
+
+LATACT:	PUSHJ	P,.SAVE2##	;EXTEND wants 6 ACs
+	PUSHJ	P,.PSH4T##	;Preserve all ACs used
+	MOVEI	T2,LTLINK+2(L1)	;Point to link server's name
+	MOVE	T1,LTLINK+1(L1)	;[041] Get its length word
+	TLNE	T1,-1		;[041] Is the length where it belongs?
+	HLRZ	T1,T1		;[041] Yes, put it where we want it
+	HRRZ	T4,(P3)		;Get current server's name length
+	MOVEI	P1,1(P3)	;And address
+	SETZB	T3,P2		;Don't confuse the KL
+	HRLI	T2,(POINT 7)	;Set up proper byte pointers
+	HRLI	P1,(POINT 7)	; ...
+	EXTEND	T1,[EXP CMPSN,0,0] ;Compare with zero-fill
+	  AOS	-4(P)		;Routine emulates a CMPSE
+	PUSHJ	P,.POP4T##	;Restore the temps
+	POPJ	P,		;Return appropriate skipness to caller
+
+;Here to display the info for one LAT connection
+
+LATTRM:	TRO	T1,.UXTRM	;Make sure it's a TTY UDX
+	MOVEM	T1,NOPBLK+.NODEV;Set in arg block
+	MOVE	T1,[.NOPNM+1,,.NOGDI] ;Length,,function
+	MOVEM	T1,NOPBLK+.NOFCN;Set in arg block
+	XMOVEI	T1,LATPNM	;Location of port name string
+	MOVEM	T1,NOPBLK+.NOPNM;Stuff for UUO
+	MOVEI	T1,20		;Maximum size to return
+	MOVEM	T1,LATPNM	;Set for UUO
+	XMOVEI	T1,NOPBLK	;Point to arg block
+	NETOP.	T1,		;Get the information
+	  POPJ	P,		;Terminal must have disconnected
+	MOVE	T1,NOPBLK+.NOFLG;Get type of connection
+	TXNN	T1,NO.LAT	;Make sure it's still a LAT terminal
+	POPJ	P,		;Skip it if not
+	MOVE	T1,NOPBLK+.NODEV;Get UDX again
+	DEVNAM	T1,UU.PHY	;Get the TTY's name
+	  POPJ	P,		;Give up
+	MOVEM	T1,LATTNM	;Save
+	LDB	T1,[POINTR NOPBLK+.NODTY,TY.JOB] ;Get owning job number
+	JUMPE	T1,LATTR1	;Skip some stuff if not logged-in
+	MOVX	T2,DV.TTA	;Attached terminal bit
+	TDNN	T2,NOPBLK+.NODCH;Make sure it isn't just assigned
+	JRST	LATTR1		;It is, give up on it
+	MOVSI	T2,(T1)		;Attached, get job number in LH
+	HRRI	T2,.GTPRG	;So can read the program name
+	GETTAB	T2,		;Ask the monitor
+	  JRST	LATTR1		;Assume the job went away
+	MOVEM	T2,LATPRG	;Save for later
+	MOVSI	T2,(T1)		;Get job number as index again
+	HRRI	T2,.GTPPN	;So can read the job's PPN
+	GETTAB	T2,		;Ask the monitor
+LATTR1:	  SETZB	T2,LATPRG	;Clear out program name
+	MOVEM	T2,LATPPN	;Save or clear PPN
+	MOVEM	T1,LATJOB	;Save job number as well
+	JUMPE	T1,LATTR2	;No user name if no job
+	MOVSI	T2,(T1)		;Get job in LH
+	MOVSI	T1,(T1)		;Twice
+	HRRI	T1,.GTNM1	;Set to read the user's name
+	HRRI	T2,.GTNM2	;Both halves
+	GETTAB	T1,		;Ask the monitor
+	  SETZ	T1,		;Junk
+	GETTAB	T2,		;For both halves
+	  SETZ	T2,		;More junk
+LATTR2:	DMOVEM	T1,LATUNM	;Save username for typeout
+	PUSHJ	P,.TTABC##	;Indent to show this information
+	MOVE	T1,LATTNM	;Get the TTY's name
+	PUSHJ	P,.TSIXN##	;Display it
+	PUSHJ	P,.TTABC##	;Format a little
+	SKIPN	LATJOB		;TTY assigned?
+	JRST	LATTR3		;No, don't type a job number
+	MOVX	T1,<ASCII |Job |>;Get word to type
+	PUSHJ	P,.TASCW##	;Type it
+	MOVE	T1,LATJOB	;Get the job number
+	PUSHJ	P,.TDECW##	;Type it
+LATTR3:	PUSHJ	P,.TTABC##	;More spacing
+	SKIPN	LATPPN		;Is there really a PPN?
+	JRST	LATTR4		;No, just space over
+	HLRZ	T1,LATPPN	;Get project halfword
+	MOVEI	T3,7		;Field width
+	PUSHJ	P,.TOCTJ##	;Type it right-justified
+	PUSHJ	P,.TCOMA##	;And the comma to separate
+	HRRZ	T1,LATPPN	;Get programmer halfword
+	PUSHJ	P,.TOCTW##	;Type it left-justified
+	CAIA			;Skip over excess tab
+LATTR4:	PUSHJ	P,.TTABC##	;Extra spacing when no PPN
+	PUSHJ	P,.TTABC##	;Another just to line up
+	MOVE	T1,LATPRG	;User's program name
+	PUSHJ	P,.TSIXN##	;Display it
+	PUSHJ	P,.TTABC##	;Space over
+	MOVE	T1,LATUNM	;First half of username
+	PUSHJ	P,.TSIXS##	;Type in a 6-char field
+	MOVE	T1,LATUNM+1	;Second half of username
+	MOVEI	T3,8		;Give it an 8-bit field
+	PUSHJ	P,.TSIXJ##	;Type left-justified SIXBIT
+	HLRZ	T1,LATPNM	;How many characters in port name?
+	ADJBP	T1,[POINT 8,LATPNM+1] ;Point to last
+	SETZ	T2,		;Get a null to deposit
+	IDPB	T2,T1		;Make sure of ASCIZ8 format
+	XMOVEI	T1,LATPNM+1	;Point to port name
+	PUSHJ	P,.T8STR##	;Type the 8-bit ASCIZ string
+	SETZ	P2,		;About to be at BOL again
+	PJRST	CRLFH		;End the line and return
+
+;Here for fast format preamble
+
+LATFST:	MOVEI	T1,30(P2)	;New HPOS after we're done with the field
+	CAMLE	T1,CARWID	;Compare with our margin
+	PUSHJ	P,CRLFH		;Wrap if necessary
+	MOVE	P2,HPOS		;Make sure we're in synch
+	HRRZ	T1,(P3)		;Get length of server name
+	ADDI	P2,2(T1)	;Account for name and parens
+	HLRZ	T1,(P3)		;Get server number
+	PUSHJ	P,FLATSD	;Make sure the number will fit
+	MOVEI	T1,1(P3)	;Point to server name again
+	PUSHJ	P,.TSTRG##	;Type it
+	MOVEI	T1,"("		;Get left paren
+	PUSHJ	P,.TCHAR##	;Type it
+	HLRZ	T1,(P3)		;Get server number
+	PUSHJ	P,.TDECW##	;Type it
+	MOVEI	T1,")"		;Get right paren
+	PUSHJ	P,.TCHAR##	;Type it, too
+	MOVEI	T1,(P2)		;Get current notion of HPOS
+	IDIVI	T1,30		;Split into column and remainder
+	AOJ	T1,		;Update for next column
+	IMULI	T1,30		;Get back to HPOS
+	MOVEI	P2,(T1)		;Propagate
+	MOVEM	T1,HPOS		; to both places that care
+	HRREI	T2,-30(T2)	;Get minus count to next boundary
+	PUSHJ	P,.TSPAC##	;Type a space
+	AOJL	T2,.-1		;Keep going until we line up
+	SKIPE	BRIEWD		;Explicit /NOBRIEF?
+	POPJ	P,		;No, just leave it here
+	PJRST	LATCNF		;Yes, add configuration info
+
+;Here to type out an Ethernet address
+
+LATADR:	HRLI	T1,(POINT 8)	;Get B.P. to the address
+	MOVEI	T3,20		;And the proper radix
+	PUSH	P,T1		;Save the byte pointer
+	MOVEI	T4,6		;And the number of bytes to type
+	CAIA			;Skip the hyphen the first time through
+LATAD1:	PUSHJ	P,.TDASH##	;Separate with hyphens
+	ILDB	T1,(P)		;Get the next byte
+	IDIVI	T1,20		;Split into hex digits
+	PUSH	P,T2		;Save second half
+	PUSHJ	P,.TRDXW##	;Type first half
+	POP	P,T1		;Restore second digit
+	PUSHJ	P,.TRDXW##	;Type that one as well
+	SOJG	T4,LATAD1	;Loop over all six bytes
+	POP	P,T1		;Balance the stack
+	POPJ	P,		;Return
+;This is the list of LAT server types we know about
+
+LATPTC:	[ASCIZ	\Unknown type\]			;0
+	[ASCIZ	\Ethernet Terminal Server\]	;1
+	[ASCIZ	\DECserver 100\]		;2
+	[ASCIZ	\VAX/VMS\]			;3
+	[ASCIZ	\RSX11-M\]			;4
+	[ASCIZ	\RSX11-M+\]			;5
+	[ASCIZ	\TOPS-20\]			;6
+	[ASCIZ	\TOPS-10\]			;7
+	[ASCIZ	\ULTRIX-11\]			;8
+	[ASCIZ	\LAT-11\]			;9
+	[ASCIZ	\RSTS/E\]			;10
+	[ASCIZ	\ULTRIX-32\]			;11
+	[ASCIZ	\ELN\]				;12
+	[ASCIZ	\MS/DOS\]			;13
+	[ASCIZ	\P/OS\]				;14
+	[ASCIZ	\PCSG-LAT\]			;15
+	[ASCIZ	\DELIX\]			;16
+	[ASCIZ	\DECserver 200\]		;17
+	[ASCIZ	\DECserver 500\]		;18
+	[ASCIZ	\Actor\]			;19
+
+	LATPTL==.-LATPTC			;Length of table
+;LAT errors
+
+NOLAT:	PUSHJ	P,.PSH4T##	;Save the temps
+	MOVE	T1,['NWKNLS']	;The prefix
+	MOVE	T2,["?",,[ASCIZ	\No LAT service available
+\]]
+	PUSHJ	P,.ERMSG##	;Print the error message
+	PUSHJ	P,.POP4T##	;Restore the temps in case of dump
+	POPJ	P,		;Propagate error return
+
+
+;LATOP. UUO error
+
+LATOPE:	PUSHJ	P,.PSH4T##	;Save the "T" acs
+	PUSH	P,T1		;Save the error code
+	TXON	F,F.HED		;[042] If no header yet,
+	PUSHJ	P,LATHEA	;[042] Type it
+	MOVE	T1,['NWKLUE']	;LAT UUO Error prefix
+	MOVE	T2,["?",,[ASCIZ\LATOP. UUO error (\]]
+	PUSHJ	P,.ERMSG##	;Start up the error message
+	MOVE	T1,0(P)		;The offending error code
+	PUSHJ	P,.TOCTW##	;List the error code in octal
+	POP	P,T2		;Retrieve the error code
+	CAIG	T2,LATERL	;Is the	error code in range?
+	CAIGE	T2,0		;...?
+	  SETO	T2,		;No? make it zero!
+	MOVE	T1,LATERT(T2)	;Get the error string
+	PUSHJ	P,.TSTRG##	;and type it
+	PUSHJ	P,.TCRLF##	;Cap off the error text
+	PUSHJ	P,.POP4T##	;Restore the temps in case of dump
+	POPJ	P,		;Propagate error
+
+
+DEFINE	X(TXT),<[ASCIZ\) TXT\]>
+
+	X	Unknown LATOP UUO error
+LATERT:	X	Insufficient buffer size
+	X	Invalid parameter value
+	X	LAT is not operational
+	X	Invalid/Unknown LAT server name
+	X	Invalid LAT parameter
+	X	Invalid LAT parameter value
+	X	Invalid/Unknown LAT service name
+	X	Insufficient resources
+	X	LAT host name already set
+	X	Invalid LATOP. function
+	X	Argument list too small
+	X	Address check
+	X	Insufficient privileges
+
+	LATERL==.-LATERT
+	SUBTTL	Routines to interface to Scan
+
+;** Routine to finish I/O and exit
+;
+
+FINISH:	PUSHJ	P,FLUSH			;Finish	output
+	JRST	.MONRT##		;And exit gracefully
+
+;** Routine to flush output and	go into	character mode
+;Clobbers T1
+
+FLUSH:	MOVSI	T1,MO.CHR		;Get the output	control	bit
+	ANDCAM	T1,OUTCON		;And clear it
+	SETZ	T1,			;Send a	null character to output the
+	PJRST	OUTC			;current buffer	and return
+
+;** Routine to buffer tty output
+;   Called by SCAN and placed in character mode	for prompt
+;   The	character is in	T1
+
+OUTC:	IDPB	T1,BUFFP		;Deposit character in the buffer
+	SKIPL	OUTCON			;If bit	0 is set then line mode
+	  JRST	OUTLST			;If char mode output the buffer
+	SOSGE	NCHAR			;Decrement the character count
+	  JRST	OUTLST			;Output	it to the TTY
+	POPJ	P,			;Return
+
+OUTLST:	PUSH	P,T1			;[44] Preserve T1
+	SETZ	T1,			;Zero next character
+	IDPB	T1,BUFFP		;To make the string ASCIZ
+	OUTSTR	BUFFER			;Output	the buffer
+	MOVE	T1,[POINT 7,BUFFER]	;Reset the buffer pointer
+	MOVEM	T1,BUFFP		;...
+	MOVEI	T1,BUFSIZ		;Reset the character count
+	MOVEM	T1,NCHAR		;...
+	POP	P,T1			;[44] Restore T1
+	POPJ	P,			;Return	to SCAN
+;** Here from Scan to allocate space for Scan blocks as	node or	file specs
+;   IALLO increments number of specs on	the input side of the "="
+;   OALLO increments the number	of specs on the	output side of the "="
+;
+;   Scan will try to BLT the info into the right spot
+
+IALLO:	AOSA	INFIL			;Add one to the	number of input	specs
+OALLO:	AOS	OUTFIL			;Add one to the	number of output specs
+	MOVE	T1,NUMBLK		;Number	of blocks allocated so far
+	CAILE	T1,MAXSPC		;More than we allow?
+	  JRST	ALOCE1			;Tell user we have an allocation error
+	IMULI	T1,BLKSIZ		;Get the amount	of core	this takes
+	ADDI	T1,BLKSIZ+SBLKS		;And add one more block	& address
+	CAMG	T1,.JBREL		;Do we already have enough core?
+	  JRST	OALLO1			;Yes, We already have enough
+	PUSH	P,T1			;No, Save T1 around CORE UUO
+	CAILE	T1,MAXCOR		;Are we	still smaller than max allowed
+	  JRST	ALOCER			;No, tell user
+	ADDI	T1,BLKSIZ		;Add block size
+	ANDI	T1,777000		;Mask to pages
+	ADDI	T1,1000			;And add one
+	CORE	T1,			;...
+	  JRST	ALOCER			;Allocation error, tell	user
+	PUSHJ	P,.TCRLF##		;Do a <CR><LF>
+	MOVEI	T1,"["			;Type a	<left bracket>
+	PUSHJ	P,.TCHAR##		;...
+	MOVE	T1,.JBREL		;Get how much we got now
+	ANDI	T1,777000		;Mask to pages
+	ADDI	T1,2000			;And add one
+	PUSHJ	P,.TCORW##		;Type how much core we are using
+	MOVEI	T1,[ASCIZ \ core]\]	;Tell him it's core
+	PUSHJ	P,.TSTRG##		;...
+	POP	P,T1			;Ok, Restore T1
+OALLO1:	MOVEI	T2,BLKSIZ		;a pointer and a block size
+	SUB	T1,T2			;Backup	one block length
+	AOS	NUMBLK			;add one to the	count of
+					;Scan blocks allocated
+	POPJ	P,			;Return	to Scan
+;** Here to initalize Scan with	.ISCAN
+;   called from	the startup code
+
+ISCN:	MOVE	T2,[ISLEN,,ISBLK]	;.ISCAN	argument block if logged in
+	PUSHJ	P,.ISLGI##		;Are we	logged in?
+	  MOVE	T2,[ISLEN,,ISBLO]	;.ISCAN	argument block if logged out
+	MOVE	T1,T2			;Put the argument into T2
+	PJRST	.ISCAN##		;Call .ISCAN
+
+;** Here to do the Traditional Scanner .TSCAN
+;   called from	the startup code
+
+TSCN:	MOVE	T1,[TSLEN,,TSBLK]	;.TSCAN	arg block for DECnet and ANF10
+	PUSHJ	P,.TSCAN##		;Scan a	line of	input
+	MOVE	T1,[OSLEN,,OSBLK]	;.OSCAN	argument block
+	PUSHJ	P,.OSCAN##		;Check SWITCH.INI[,]
+	MOVSI	T1,MO.CHR		;Get the output	control	bit
+	IORM	T1,OUTCON		;Set it	for buffered mode
+	SKIPL	T1,WIDWD		;Did the user type /WIDTH?
+	  MOVEM	T1,CARWID		;Yes, save his value for it
+	POPJ	P,			;Return
+	SUBTTL	Dissect	the Scan blocks
+
+;** Routine to get a node-spec out of a	Scan block
+;
+;   If the spec	is "wild" do a search of node names for	winners
+;   If not "wild" use the NODE.	UUO to figure out who we want
+;   Then (in either case) insert the proper entries into the
+;   selection table
+;   Finally jump to the	main loop to tell the user about what we already know
+
+DISECT:	SETZB	T4,SPCCNT		;Zero both counts
+	SKIPN	T3,NUMBLK		;Any spec's typed?
+	  JRST	DISEC3			;No, just return
+	MOVN	T3,NUMBLK		;Number	of Scan	Blocks
+	HRL	T3,T3			;Make an AOBJN pointer
+	HRRI	T3,SBLKS		;Point to the first Scan block
+DISEC1:	PUSH	P,[DISEC2]		;Return	address	for error routines
+	MOVE	T1,.FXMOD(T3)		;Get the modifier word
+	TXNN	T1,FX.NDV		;Did he	type a device?
+	 JRST	SPECER			;Yes, tell him
+	TXNN	T1,FX.NUL		;Did he	type an	extension?
+	 JRST	SPECER			;Yes, tell him
+	TXNE	T1,FX.DIR		;Did he	type a P,PN?
+	 JRST	SPECER			;Yes, tell him
+	MOVE	T2,.FXNAM(T3)		;Is there a name?
+	MOVEM	T2,SPCLST(T4)		;Save the node spec
+	SETCM	T1,.FXNMM(T3)		;And out the mask
+	MOVEM	T1,WLDLST(T4)		;Save the wild card mask
+	AOS	T4			;Increment the count of	node specs
+	POP	P,(P)			;Don't do the error return
+DISEC2:	ADDI	T3,BLKSIZ-1		;Add size of the block to the pointer
+	AOBJN	T3,DISEC1		;Loop until all	the blocks are checked
+	MOVEM	T4,SPCCNT		;Save the count	of spec's
+	SKIPE	SPCLST			;If there are any spec's  then
+	  POPJ	P,			;Just return
+DISEC3:	MOVEI	T1,1			;Our default (/BRIEF)
+	SKIPGE	BRIEWD			;Did he	specify	/BRIEF or /NOBRIEF?
+	  MOVEM	T1,BRIEWD		;No, assume /BRIEF on default
+	POPJ	P,			;Return	when all blocks	are checked
+	SUBTTL	Error message handling routines
+
+;** Here when we run out of Scan block storage.
+;   tell the user once and continue, ignoring any more specs
+
+ALOCER:	SKIPE	SBMCNT			;Sure to only tell him once!
+	  JRST	ALOCE2			;Don't count errors unless we print them
+	MOVE	T1,NFECNT		;How many non-fatal errors did we have?
+	CAILE	T1,MAXNFE		;Did we	have too many?
+	  JRST	NFEERR			;Yes, tell the user and	die
+	AOS	NFECNT			;No, count the error
+	POP	P,T1			;Restore T1
+ALOCE1:	PUSHJ	P,.PSH4T##		;Save the temps
+	MOVE	T1,['NWKSBE']		;Yes, tell the user
+	MOVE	T2,["%",,[ASCIZ	\Scan Blocks used up. Node spec	ignored
+\]]
+	PUSHJ	P,.ERMSG##		;Yes, print the	error
+	PUSHJ	P,.POP4T##		;Restore the temps
+ALOCE2:	MOVEI	T2,1			;Dummy up a scan block
+	MOVE	T1,NUMBLK		;Number	of blocks allocated so far
+	IMULI	T1,BLKSIZ		;Get the amount	of core	this takes
+	ADDI	T1,BLKSIZ+SBLKS		;And add one more block	& address
+	AOS	SBMCNT			;Keep track of how many	times here
+	POPJ	P,			;Return
+;Copy of the interrupt control block to	be BLTed on initalization
+
+INT:	XWD	4,CONC		;4 words long,,interrupt handler
+	XWD	0,2		;No message control,, 2	^C
+	BLOCK	1		;User PC stored	here when interrupted
+	BLOCK	1		;Iinterrupt type in LH
+
+	IBLKLN==.-INT		;Length	of interrupt block
+
+
+
+;** Pointers to	asciz strings used by the PCONF	routine	to
+;   print the device names in the configuration	of a node. They	must
+;   be in this order since they	are indexed by their NCL device	types.
+
+CTAB:	POINT 7,[ASCIZ \MCR[\]
+	POINT 7,[ASCIZ \TTY[\]
+	POINT 7,[ASCIZ \CDR[\]
+	POINT 7,[ASCIZ \LPT[\]
+	POINT 7,[ASCIZ \PTR[\]
+	POINT 7,[ASCIZ \PTP[\]
+	POINT 7,[ASCIZ \PLT[\]
+	POINT 7,[ASCIZ \MTA[\]
+	POINT 7,[ASCIZ \DTA[\]
+	POINT 7,[ASCIZ \TSK[\]
+	POINT 7,[ASCIZ \RDA[\]
+	POINT 7,[ASCIZ \CDP[\]
+	POINT 7,[ASCIZ \DDP[\]
+	SUBTTL	Scan macro calls and definitions
+
+;** Switch definitions
+
+DEFINE SWTCHS<
+	SN	*ANF10,ANF10W,FS.NFS	;Control ANF10 portion of program
+	SN	BRIEF,BRIEWD,FS.NFS	;Control listing of devices
+	SN	CDP,CDPWD,FS.NFS	;Only nodes with CDP's
+	SN	CDR,CDRWD,FS.NFS	;Only nodes with CDR's
+	SN	COST,COSTWD,FS.NFS	;List the link cost with /TOPOLOGY
+	SN	DDP,DDPWD,FS.NFS	;Only nodes with DDP's
+	SN	*DECNET,DECNWD,FS.NFS	;Control DECnet	portion	of program
+	SN	DTA,DTAWD,FS.NFS	;Only nodes with DTA's
+	SN	ERROR,ERRWD,FS.NFS	;Control listing of errors
+	SN	FAST,FASWD,FS.NFS	;For super short list of nodes
+	SN	HEADER,HEADWD,FS.NFS	;Control listing of headers
+	SN	HOSTES,MCRWD,FS.NFS	;Same as "MCR"
+	SN	LAT,LATNWD,FS.NFS	;Control LAT portion of program
+	SN	LINKS,LINKWD,FS.NFS	;Listing of DECnet nodes with links
+	SN	LPT,LPTWD,FS.NFS	;Only nodes with LPT's
+	SN	MCR,MCRWD,FS.NFS	;Only nodes with MCR's (can be a host)
+	SN	MTA,MTAWD,FS.NFS	;Only nodes with MTA's
+	SS	NOSORT,SORTWD,SRTNON,FS.NFS	;Easy abbr. for /SORT:NONE
+	SN	PLT,PLTWD,FS.NFS	;Only nodes with PLT's
+	SN	PTP,PTPWD,FS.NFS	;Only nodes with PTP's
+	SN	PTR,PTRWD,FS.NFS	;Only nodes with PTR's
+	SN	RDA,RDAWD,FS.NFS	;Only nodes with RDA's
+	SN	SILENC,SILWD,FS.NFS	;Control non-error output
+	SL	*SORT,SORTWD,SRT,SRT.DF,FS.NFS	;To sort the node names
+	SN	*TOPOLO,TOPWD,FS.NFS	;For the TOPOLOGY listing
+	SN	TSK,TSKWD,FS.NFS	;Only nodes with TSK's
+	SN	TTY,TTYWD,FS.NFS	;Only nodes with TTY's
+	SP	TYPE,TYPWD,.SIXSW##,-1,FS.LRG!FS.NFS!FS.VRQ  ;Node type
+	SN	UNREACH,URCHWD,FS.NFS	;List all known	DECnet nodes
+	SP	WIDTH,WIDWD,.DECNW##,-1,FS.NFS!FS.LRG	;Output	width
+>	;END OF	THE SWTCHS MACRO
+
+	DOSCAN	(TOGLS)		;The DOSCAN macro generates the	tables
+				;defined by the	SWTCHS macro
+
+	KEYS	SRT,<NAME,NONE,NUMBER>
+	SRT.DF==SRT.L+1
+	SRT.NA==SRTNAM
+	SRT.NO==SRTNON
+	SRT.NU==SRTNUM
+	SUBTTL	Scan argument blocks
+
+;** .ISCAN initalization block if logged out
+
+ISBLO:	IOWD	1,ISCANI	;Acceptable CCL	commands table
+	XWD	OFFSET,'NWK'	;Starting offset,,Tmp core name
+	XWD	0,OUTC		;Default I/O
+	XWD	0,0		;Indirect file name (unknown)
+	XWD	0,0		;Monitor return,, prompt routine
+	EXP	FS.IFI!FS.INC	;Indirect files	illegal	if logged out
+
+;** .ISCAN initalization block if logged in
+
+ISBLK:	IOWD	1,ISCANI	;Acceptable CCL	commands table
+	XWD	OFFSET,'NWK'	;Starting offset,,Tmp core name
+	XWD	0,OUTC		;Default I/O
+	XWD	0,0		;Indirect file name (unknown)
+	XWD	0,0		;Monitor return,, prompt routine
+	EXP	FS.INC		;Don't allow CORE UUOs from SCAN
+ISLEN==.-ISBLK			;.ISCAN	block length
+
+;** Table of CCL names for SCAN
+
+ISCANI:	SIXBIT/NETWOR/		;Default CCL name
+
+;** .OSCAN argument block
+;   The	options	file scanner (SWITCH.INI[,])
+
+OSBLK:	IOWD	TOGLSL,TOGLSN	;SWTCHS' table length,,name table
+	XWD	TOGLSD,TOGLSM	;Table of defaults,,processor address
+	XWD	0,TOGLSP	;Pointers for storing values
+	EXP	-1		;Help word, -1 for "HLP:NETWOR.HLP"
+	SIXBIT	/NETWOR/	;Options word...our name
+OSLEN==.-OSBLK			;Length	of .OSCAN block
+
+TSBLK:	IOWD	TOGLSL,TOGLSN	;SWTCHS' table length,,name table
+	XWD	TOGLSD,TOGLSM	;Table of defaults,,processor address
+	XWD	0,TOGLSP	;Pointers for storing values
+	EXP	-1		;Use our name for help
+	XWD	0,0		;Default to clear answers and file specs
+	XWD	IALLO,OALLO	;Scan block allocation routines
+	XWD	0,0		;Default for sticky defaults
+	EXP	FS.MOT!FS.MIO	;Scan control flags
+				;1B18=More than	1 input	spec OK
+				;1B19=Global switches can be anywhere
+	XWD	0,0		;Let Scan store	the values
+TSLEN==.-TSBLK			;.TSCAN	block length
+;Here on a GETTAB error
+
+GTABER:	PUSHJ	P,.PSH4T##		;Save the temps
+	MOVE	T1,['NWKGUE']		;The prefix
+	MOVE	T2,["?",,[ASCIZ	\GETTAB	UUO error at PC	\]]
+	PUSHJ	P,.ERMSG##		;Print the error message
+	HRRZ	T1,-4(P)		;Get the PC
+	SUBI	T1,2			;Backup	to the UUO
+	PUSHJ	P,.TOCTW##		;Type the address of the error
+	PUSHJ	P,.POP4T##		;Restore the temps in case of dump
+	JRST	FINISH			;and die
+
+
+;Here with no network software loaded
+
+NNSERR:	PUSHJ	P,.PSH4T##		;Save the temps
+	MOVE	T1,['NWKNNS']		;The prefix
+	MOVE	T2,["?",,[ASCIZ	\No networks are available
+\]]
+	PUSHJ	P,.ERMSG##		;Print the error message
+	PUSHJ	P,.POP4T##		;Restore the temps in case of dump
+	JRST	FINISH			;and die
+
+
+NOANF:	MOVE	T1,['NWKNA1']		;The prefix
+	MOVE	T2,["?",,[ASCIZ	\No ANF10 software installed\]]
+	PUSHJ	P,.ERMSG##		;Print the error message
+	PUSHJ	P,.POP4T##		;Restore in case of dump
+	JRST	FINISH			;and die
+
+
+OLDMON:	MOVE	T1,['NWKMTO']		;The prefix
+	MOVE	T2,["?",,[ASCIZ	\Monitor too old. Must be 7.00 or later\]]
+	PUSHJ	P,.ERMSG##		;Print the error message
+	PUSHJ	P,.POP4T##		;Restore in case of dump
+	JRST	FINISH			;and die
+;Here on a DNET. UUO error
+;DNET. errors:
+
+DNERMS:	[ASCIZ	\DNUNE%	Unknown	DNET error\]
+	[ASCIZ	\DNADE%	Address	error\]
+	[ASCIZ	\DNWNA%	Wrong number of	arguments\]
+	[ASCIZ	\DNIDN%	Illegal	job number\]
+	[ASCIZ	\DNFNE%	Illegal	function number\]
+	[ASCIZ	\DNILF%	Illegal	flag combination\]
+	[ASCIZ	\DNNSN%	No such	node name\]
+	[ASCIZ	\DNNSC%	No such	channel\]
+DNERML=.-DNERMS				;Size of error message table
+
+DNETER:	PUSHJ	P,.PSH4T##		;Save the temps
+	MOVE	T1,['NWKDUE']		;The prefix
+	MOVE	T2,["?",,[ASCIZ	\DNET. UUO error \]]
+	PUSHJ	P,.ERMSG##		;Print the error message
+	PUSH	P,T5			;Save the error	code
+	CAIG	T5,DNERML		;Is the	error code in range?
+	CAIGE	T5,0			;...?
+	  SETZ	T5,			;No? make it zero!
+	MOVE	T1,DNERMS(T5)		;Get the error string
+	PUSHJ	P,.TSTRG##		;and type it
+	POP	P,T5			;Restore the error code
+	MOVEI	T1,[ASCIZ \ at PC \]	;End of	string
+	PUSHJ	P,.TSTRG##		;Type it
+	HRRZ	T1,-4(P)		;Get the PC
+	SUBI	T1,2			;Backup	to the UUO
+	PUSHJ	P,.TOCTW##		;Type the address of the error
+	PUSHJ	P,.POP4T##		;Restore the temps in case of dump
+	JRST	FINISH			;and die
+;Here on a NODE. UUO error
+;Error codes
+
+NODERM:	[ASCIZ	\NDUKE%	Undefined error\]
+	[ASCIZ	\NDIAL%	Illegal	argument list\]
+	[ASCIZ	\NDINN%	Illegal	node name/number\]
+	[ASCIZ	\NDPRV%	Caller not privileged\]
+	[ASCIZ	\NDNNA%	Node not available\]
+	[ASCIZ	\NDNLC%	Job not	locked in core\]
+	[ASCIZ	\NDTOE%	Time out error\]
+	[ASCIZ	\NDRNZ%	Reserved word non-zero\]
+	[ASCIZ	\NDNND%	I/O channel not	open to	or not network device\]
+	[ASCIZ	\NDIOE%	I/O Error occurred, LH is getsts info\]
+	[ASCIZ	\NDNFC%	No free	core\]
+	[ASCIZ	\NDIAJ%	In use by another job\]
+	[ASCIZ	\NDNMA%	No message available\]
+	[ASCIZ	\NDTNA%	Terminal not available\]
+	[ASCIZ	\NDNLT%	Not a legal terminal\]
+	[ASCIZ	\NDISF%	Illegal	sub function\]
+	[ASCIZ	\NDRBS%	Receive	buffer too small\]
+	[ASCIZ	\NDNUG%	No ungreeted nodes\]
+NODERL=.-NODERM
+
+NODERR:	PUSHJ	P,.PSH4T##		;Save the temps
+	MOVE	T4,[%FTPER]		;Get the feature test word
+	GETTAB	T4,			;...
+	  PUSHJ	P,GTABER		;GETTAB	error? tell user and die
+	TRNN	T4,F%NET&777777		;Do we have network software?
+	  JRST	NOANF			;No, tell the user
+	MOVE	T4,[%CNVER]		;Is the	monitor	7.00 or	later?
+	GETTAB	T4,			;...
+	  PUSHJ	P,GTABER		;GETTAB	error? tell user and die
+	LSH	T4,-6			;Right justify monitor version
+	ANDI	T4,777			;and mask out other stuff
+	CAIGE	T4,700			;7.00 or later?
+	  JRST OLDMON			;No, tell user and die
+	PUSH	P,T1			;Save the error	code
+	MOVE	T1,['NWKNUE']		;Yes, the prefix
+	MOVE	T2,["?",,[ASCIZ	\NODE UUO error	\]]
+	PUSHJ	P,.ERMSG##		;Print the error message
+	POP	P,T1			;Restore the error code
+	CAIG	T1,NODERL		;Is the	error code in range?
+	CAIGE	T1,0			;...?
+	  SETZ	T1,			;No? make it zero!
+	MOVE	T1,NODERM(T1)		;Get the error string
+	PUSHJ	P,.TSTRG##		;and type it
+	MOVEI	T1,[ASCIZ \ at PC \]	;End of	string
+	PUSHJ	P,.TSTRG##		;Type it
+	HRRZ	T1,-4(P)		;Get the PC
+	SUBI	T1,2			;Backup	to the UUO
+	PUSHJ	P,.TOCTW##		;Type the address of the error
+	PUSHJ	P,.POP4T##		;Restore the temps in case of dump
+	JRST	FINISH			;and die
+;Loop through all the specs looking for	error bits
+;in the	SPCFLG vector
+
+ERRSCN:	MOVE	T1,NFECNT		;How many non-fatal errors did we have?
+	CAILE	T1,MAXNFE		;Did we	have too many?
+	  JRST	NFEERR			;Yes, tell the user and	die
+	AOS	NFECNT			;No, count the error
+	MOVE	T1,ANF10W		;Get /ANF
+	IOR	T1,DECNWD		;And /DECNET
+	IOR	T1,LATNWD		;And /LAT
+	JUMPE	T1,NONET		;If /NO<everything> then complain
+	SKIPN	L1,SPCCNT		;Any Spec's?
+	  POPJ	P,			;No, just return
+	MOVNS	L1			;Get the count of specs
+	HRLZS	L1			;Make a	AOBJN pointer
+	SETZ	T4,			;Clear our accumulator
+ERRSC1:	MOVE	T1,SPCFLG(L1)		;Get the error mask
+	TLNN	T1,SP.DEC!SP.ANF!SP.LAT	;Did we	find this node?
+	  JRST	[PUSHJ	P,NONOD			;No, check it out
+		 AOS	T4			;Count losers
+		 JRST	ERRSC2	]		;Carry on...
+	TLNE	T1,SP.DEC		;DECnet	node?
+	  AOS	MATCH			;Yes, count the	match
+ERRSC2:	AOBJN	L1,ERRSC1		;Loop over all specs
+	SKIPE	MATCH			;Any WINNERS?
+	  POPJ	P,			;Yes, See if we	printed	it
+	SKIPN	T4			;No, Any LOSERS?
+	  PUSHJ	P,NOMAT			;Yes, Tell user
+	POPJ	P,			;Done, return to the main loop
+
+;** Here when no node can meet the constraints set by the device
+;   switches set by the	user
+;   Only prints	if no other message has	been typed
+;  uses	T1-T4
+
+NOMAT:	MOVE	T1,['NWKNNM']		;The prefix
+	MOVE	T2,["%",,[ASCIZ	\No Nodes meet constraints
+\]]
+	SETZB	T3,T4			;Zero these for	Scan
+	PJRST	.ERMSG##		;Print the error message
+					;and return
+;** Here when the user has both	/NOANF and /NODECNET selected
+
+NONET:	SKIPN	ERRWD			;Do we want to print no-node errors?
+	 POPJ	P,			;No, just return
+	MOVE	T1,['NWKNNS']		;Get the prefix	characters
+	PUSHJ	P,ERMSP			;Go to our error message processor
+	  POPJ	P,			;Prefix	only...
+	MOVEI	T1,[ASCIZ \No network type selected.\]
+	PUSHJ	P,.TSTRG##		;rest of the message
+;	MOVEI	T1,[ASCIZ\ ANF10\]	;ANF10 string
+;	SKIPE	FTANF			;If we have ANF10
+;	  PUSHJ	P,.TSTRG##		;Tell the user
+;	MOVEI	T1,[ASCIZ\ and\]	;If we have both ANF10 and DECnet
+;	SKIPE	FTANF			;...
+;	SKIPN	FTDEC			;...
+;	 CAIA				;Wrong sense
+;	  PUSHJ	P,.TSTRG##		;Tell the user
+;	MOVEI	T1,[ASCIZ\ DECnet\]	;DECnet	string
+;	SKIPE	FTDEC			;If we have DECnet
+;	  PUSHJ	P,.TSTRG##		;Tell the user
+;	MOVEI	T1,"."			;PUNCUATE my mother always told	me!
+;	PUSHJ	P,.TCHAR##		;so I did.
+	PJRST	.TCRLF			;Finish out line
+
+
+;** Here when we have to tell the user about a no-match	situation.
+
+NONOD:	SKIPN	ERRWD			;Do we want to print no-node errors?
+	 POPJ	P,			;No, just return
+	AOS	MATCH			;Printed an error, increment match count
+	MOVE	T1,['NWKNNN']		;Get the prefix	characters
+	PUSHJ	P,ERMSP			;Go to our error message processor
+	  POPJ	P,			;Prefix	only...
+	MOVEI	T1,[ASCIZ \Node \]	;If here, print	the
+	PUSHJ	P,.TSTRG##		;rest of the message
+	MOVE	T1,SPCLST(L1)		;Put the node name into	T1 for Scan
+	PUSHJ	P,.TSIXN##		;and print it
+	MOVEI	T1,[ASCIZ \ not in Network
+\]
+	PJRST	.TSTRG##		;and the rest of the message
+;** Here to handle too many non-fatal errors
+;   this is determined by MAXNFE in NDATA
+
+NFEERR:	MOVE	T1,['NWKTME']		;Too many non-fatal errors
+	MOVE	T2,["?",,[ASCIZ	\Too many errors
+\]]
+	SETZB	T3,T4			;Clear for Scan
+	PUSHJ	P,.ERMSG##		;Tell the user the bad news
+	JRST	FINISH			;and then just die
+
+;** Here to print standard error message prefixes
+;   Modified version of	Scan's .ERMSG routine to allow us to put
+;   extra things in the	line like a node spec or illegal parts of a
+;   node spec...
+;
+;   T1	=  The message prefix
+;   -1(P) = The	address	of the extra print routine
+;   uses T2-4
+
+ERMSP:	PUSH	P,T1		;Save the prefix
+	MOVE	T1,NFECNT	;How many non-fatal errors did we have?
+	CAILE	T1,MAXNFE	;Did we	have too many?
+	  JRST	NFEERR		;Yes, tell the user and	die
+	AOS	NFECNT		;No, count the error
+	SKIPE	HPOS		;If in middle of a line
+	PUSHJ	P,CRLFH		;Then position to start of new line
+	MOVEI	T1,"%"		;Get the lead character	(never called if fatal)
+	PUSHJ	P,.TCHAR##	;Issue the lead	character
+	PUSHJ	P,.VERBO##	;Get /MESSAGE setting
+	MOVE	T4,T1		;and copy it to	a safer	place
+	POP	P,T1		;Get the prefix	back
+	TXNE	T4,JWW.PR	;See if	/VERBOS:PREFIX
+	PUSHJ	P,.TSIXN##	;Yes, issue the	prefix
+	PUSHJ	P,.TSPAC##	;Space to the text area
+	TXNE	T4,JWW.FL	;See if	/MESSAGE:FIRST
+	  AOS	(P)		;Yes, Skip return to print the rest
+	POPJ	P,		;and return to there
+;** Here to tell the user he has entered a bad node spec.
+;   This happens when we get a PPN, device, or extension in a node spec
+;   We will tell him and then prompt him with a	* as we	change into
+;   run	mode by	poking our OFFSET word
+
+SPECER:	PUSHJ	P,.PSH4T##		;Save the temps
+	MOVE	T1,['NWKBNS']		;The prefix
+	PUSHJ	P,ERMSP			;Process the message
+	  JRST	SPECE1			;and exit if prefix only
+	MOVEI	T1,[ASCIZ \Bad NODE spec \]
+	PUSHJ	P,.TSTRG##		;Type the generic message
+	MOVEI	T1,(T3)			;Point to the scan block
+	PUSHJ	P,.TFBLK##		;Dump it
+SPECE1:	PUSHJ	P,.TCRLF##		;Finish	the error message with a <CRLF>
+	PUSHJ	P,.POP4T##		;Restore the temps
+	MOVSI	T1,SP.DEC!SP.ANF	;Get spec found	flags
+	MOVEM	T1,SPCFLG(T4)		;Say that we found the nodes
+	AOS	T4			;Fake out the count
+	POPJ	P,			;and fake a return to WILDS
+;** Here when a	node has gone offline when we are processing it
+
+OFLINE:	SKIPN	ERRWD			;Print "No Node" errors
+	  POPJ	P,			;No, fake loop
+	AOS	MATCH			;So we don't get the
+					;"No nodes meet	constraints"
+	MOVE	T1,['NWKNWD']		;No, The prefix
+	PUSHJ	P,ERMSP			;Error message routine
+	  JRST	OFLIN3			;and exit to the main loop
+OFLIN2:	MOVEI	T1,[ASCIZ \Node	(\]	;text
+	PUSHJ	P,.TSTRG##		;Type the string
+	MOVE	T1,CN			;Get the node number
+	PUSHJ	P,.TOCTW##		;Type it
+	MOVEI	T1,")"			;Get a <right paren>
+	PUSHJ	P,.TCHAR##		;Type it
+	MOVEI	T1,[ASCIZ \ is going on or offline\]	;Strange state msg
+	PUSHJ	P,.TSTRG##		;Type the rest of the message
+OFLIN3:	PJRST	CRLFH			;fake the end of the main loop
+	SUBTTL	Control/C and other interrupt handling!
+
+;Here on a ^C or other interrupt
+
+CONC:	PUSHJ	P,.PSH4T##		;Save the temps
+	HLRZ	T1,INTBLK+.ERCCL	;Get the interrupt type
+	TRNN	T1,ER.ICC		;Was it	a ^C interrupt?
+	  JRST	CONC1			;No, check the next type
+	PUSHJ	P,.ISLGI##		;Are we	logged in?
+	  JRST	FINISH			;No, exit!
+	PUSHJ	P,.POP4T##		;Yes, restore the temps	and make it
+	MONRT.				;look like a plain ^C
+
+;Here if the user types a CONTINUE command
+
+	PUSH	P,INTBLK+.EROPC		;Put the return	address	on the stack
+	SETZM	INTBLK+.EROPC		;and clear it in the interrupt block
+	POPJ	P,			;Finally, return to what we were doing
+
+CONC1:	CAIE	T1,ER.FUL		;is the	disk full
+	  JRST	CONC2			;No, check the next possibility
+	PUSHJ	P,.PSH4T##		;Save the temps
+	MOVE	T1,['NWKNMR']
+	MOVE	T2,["?",,[ASCIZ	\No more room on file structure\]]
+	SETZB	T3,T4			;Clear T3 and T4
+	PUSHJ	P,.ERMSG##		;Print the Message
+	PUSHJ	P,.POP4T##		;Restore the temps
+	JRST	FINISH			;Exit...(Die)
+
+CONC2:	CAIE	T1,ER.QEX		;Did he	exceed his disk	quota?
+	  JRST	CONC3			;No, check the next possibility
+	MOVE	T1,['NWKDQE']
+	MOVE	T2,["?",,[ASCIZ	\Disk Quota exceeded\]]
+	SETZB	T3,T4			;clear T3 and T4
+	PUSHJ	P,.ERMSG##		;Print the message
+	PUSHJ	P,.POP4T##		;Restore the temps
+	JRST	FINISH			;Exit...(die)
+CONC3:	CAIE	T1,ER.TLX		;Did he	exceed his time	limit?
+	  JRST	CONC4			;No, check the last possibility
+	MOVE	T1,['NWKTLE']
+	MOVE	T2,["?",,[ASCIZ	\Time Limit exceeded\]]
+	SETZB	T3,T4			;Clear T3 and T4
+	PUSHJ	P,.ERMSG##		;Print the message
+	PUSHJ	P,.POP4T##		;Restore the temps
+	MONRT.				;Do a continuable exit
+
+;Here if the	user types a CONTINUE command
+
+	PUSH	P,LASTPC		;Put the return	address	on the stack
+	SETZM	LASTPC			;and clear it in the interrupt block
+	POPJ	P,			;Finally, return to what we were doing
+
+CONC4:	CAIE	T1,ER.EIJ		;Did he	encounter a fatal error
+					;of the	fourth kind?
+	  JRST	CONC5			;No, let the user have it
+	MOVE	T1,['NWKFER']
+	MOVE	T2,["?",,[ASCIZ	\Fatal Error at	PC \]]
+	SETZB	T3,T4			;Clear T3 and T4
+	PUSHJ	P,.ERMSG##		;Print the message
+	HRRZ	T1,LASTPC		;Get the last PC
+	SUBI	T1,1			;Backup	to the error PC
+	PUSHJ	P,.TOCTW##		;and type the PC
+	PUSHJ	P,.POP4T##		;restore the temps
+	JRST	FINISH			;Exit to the monitor
+
+CONC5:	PUSHJ	P,.POP4T##		;Restore the temps
+	PUSH	P,LASTPC		;Put the last PC on the	stack
+	SETZM	LASTPC			;Clear it in the interrupt block
+	POPJ	P,			;Return	to the user program
+	XLIST				;For a neater listing
+	LIT				;Force literals	to be in high segment
+	LIST				;
+
+	END	START

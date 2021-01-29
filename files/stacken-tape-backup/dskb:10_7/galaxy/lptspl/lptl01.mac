@@ -1,0 +1,1326 @@
+	TITLE	LPTL01 - LN01 device driver for LPTSPL-10
+	SUBTTL	Nicolas Tamburri	12-Sep-85
+;
+;
+;     COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1984,1985,1986,1987.
+;			ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+;
+
+	SEARCH	GLXMAC			;SEARCH GALAXY PARAMETERS
+	SEARCH	QSRMAC			;SEARCH QUASAR PARAMETERS
+	SEARCH	ORNMAC			;SEARCH ORION/OPR PARAMETERS
+	SEARCH	LPTMAC			;Search LPTSPL parameters
+	PROLOG(LPTL01)
+
+IF2,<PRINTX Assembling GALAXY-10 LPTL01>
+
+
+	.DIRECT	FLBLST
+	SALL				;SUPPRESS MACRO EXPANSIONS
+
+	ENTRY	LPTL01			;LOAD IF LIBRARY SEARCH
+
+;LPTL01 VERSION INFORMATION
+	%%.LPT==:%%.LPT			;EDIT LEVEL
+IFDEF .MCRV.,<.VERSION <%%.LPT>>
+
+	GLOB	<LPERR,LPMSG>
+	SUBTTL	Local symbols
+
+	ACSLTH==^D38			;Maximum lenght of ACS string
+	CHTWDS==ACSLTH/5+1		;Define lenght in words
+
+	NAMBYT==7			;8 bit bytes in the name
+	RNMLTH==^D20			;Number of characters in real name
+	RNMWDS==RNMLTH/5		;Number of words (8 bit bytes)
+	NAMLTH==^D30			;Max chars in a pseudoname
+
+
+	SUBTTL	Macros
+
+	DEFINE	$ESC<[EXP .CHESC]>	;For escape sequences
+	SUBTTL	Tables -- Font list entry format
+
+	PHASE	0
+FN.LNM:! BLOCK	1			;List of names
+FN.RNM:! BLOCK	<RNMWDS>		;20 character real name
+FN.FIL:! BLOCK	1			;Name of font file
+FN.LEN:! BLOCK	1			;Lenght of the font
+FN.LND:! BLOCK	1			;Landscape flag
+FN.SIZ==.				;Size of the entry
+	DEPHASE
+
+	PHASE	0
+FC.CHC:! BLOCK	1			;Font name cached from LPFONT.INI
+FC.SIZ==.				;Size of cache entry
+	DEPHASE
+
+	PHASE	0
+FM.NAM:! BLOCK	FNMLTH			;Font name (30 char max)
+FM.SIZ==.
+	DEPHASE
+	SUBTTL	Local storage
+
+INIUDT:	BLOCK	1			;Creation date of LPFONT.INI
+FNTLST:	BLOCK	1			;List of cached names
+	SUBTTL	Tables -- FONTFD - Font file descriptor template
+
+; These two tables will be used to access the fonts needed.
+
+FONTFD:	$BUILD (FDXSIZ)
+	  $SET(.FDLEN,FD.LEN,FDXSIZ)	;Lenght of filespec block
+	  $SET(.FDLEN,FD.TYP,.FDNAT)	;Native file spec
+	  $SET(.FDSTR,,'SSL   ')	;System search list must have FNT
+	  $SET(.FDEXT,,'SIX   ')	;Extension
+	  $SET(.FDPPN,,)		;So will the PPN
+	  $SET(.FDPAT,,'LN01  ')	;SFD name for this device
+	$EOB
+
+
+	SUBTTL	Tables -- FNTFOB - Font file FOB template
+
+FNTFOB:	$BUILD (FOB.SZ)
+	  $SET(FOB.FD,,FONTFD)		;Address of file descriptor
+	  $SET(FOB.CW,FB.BSZ,7)		;Byte size
+	  $SET(FOB.US,,)		;In your behalf PPN will be filled in
+	$EOB
+
+
+	SUBTTL	Tables -- FINIFD - LPFONT.INI file dispcriptor block
+
+FINIFD:	$BUILD (FDXSIZ)
+	  $SET(.FDLEN,FD.LEN,FDXSIZ)	;Lenght of filespec block
+	  $SET(.FDLEN,FD.TYP,.FDNAT)	;Native file spec
+	  $SET(.FDSTR,,'SSL   ')	;System search list for FNT
+	  $SET(.FDNAM,,'LPFONT')	;Name to be filled in later
+	  $SET(.FDEXT,,'INI   ')	;Extension
+	  $SET(.FDPPN,,)		;So will the PPN
+	  $SET(.FDPAT,,'LN01  ')	;SFD name for this device
+	$EOB
+
+
+	SUBTTL	Tables -- INIFOB - LPFONT.INI FOB
+
+INIFOB:	$BUILD (FOB.SZ)
+	  $SET(FOB.FD,,FINIFD)		;Address of file descriptor
+	  $SET(FOB.CW,FB.BSZ,7)		;Byte size
+	$EOB
+	SUBTTL	Tables -- Function dispatch table
+
+;	This table contains the addresses of the LN01 specific functions
+; which will be called by LPTSPL at the required times. The first word
+; of the table will contain the lenght of itself, and will be used by
+; LPTSPL to BLT the table into the stream data page at the page's
+; creation. Wether the table should be loaded or not will be specified
+; GALGEN time.
+
+LPTL01::DEVDSP	(L01,<LN01>)
+
+L01STS==LPTSTS##			;Device status text
+	SUBTTL	Global routines -- L01INX - Initialize the printer
+
+;	This routine will be called when the LN01 first comes on line
+; and will reset the printer if need be. It will also return
+; a pointer to a block of four words which will contain a break
+; mask for which characters must be interpreted by the device specific routine.
+;
+; Call:		J/	Stream number
+;		M/	Setup message address or zero
+;		PUSHJ	P,L01INX
+;		$CALL	LPTL01
+;
+; Returns:	TRUE if OK, FALSE otherwise
+;		S1/	Response to setup code (%RSUxx)
+
+L01INX:	JUMPE	M,.RETT			;Return if LPTSPL initialization
+	MOVE	S1,STREAM##		;Get stream number
+	MOVE	S1,JOBOBA##(S1)		;And the object block
+	MOVE	S1,OBJ.ND(S1)		;Get station number
+	PUSHJ	P,LPTANF##		;Must be ANF-10
+	SKIPN	J$LLAT(J)		; or a LAT line
+	JUMPF	INIT.1			;No: not our kind of device
+	PUSHJ	P,CHKDEV		;See if ANF/LP-11 or asynch line
+	JUMPF	INIT.1			;Try another driver
+	MOVE	T1,['LN01  ']		;Unit type identifier
+	MOVEM	T1,J$LTYP(J)		;Save for QUASAR
+	HRLZI	T1,'FNT'		;Get name of where fonts are kept
+	DEVPPN	T1,UU.PHY		;Get the ersatz PPN
+	  MOVE	T1,[5,,36]		;Assume default
+	MOVEM	T1,FINIFD+.FDPPN	;Store for lookup
+	MOVEM	T1,FONTFD+.FDPPN
+	SETOM	J$LLCL(J)		;Flag a lower case printer
+	HRLZI	T1,LPTL01		;Build a BLT pointer
+	HRRI	T1,J$$DEV(J)		;  to the initialization vector
+	BLT	T1,J$$DND(J)		;Copy our vector
+	SETOM	J$ALNF(J)		;LN01 doesn't need alignment formfeeds
+	SETOM	J$POSF(J)		;LN01 DOES POSITIONING
+	SETOM	J$FFDF(J)		;LN01 DOES FORM FEEDS
+	SETOM	J$DC3F(J)		;LN01 SUPPORTS DC3 IN BANNERS
+	SETOM	J$MNTF(J)		;LN01 SUPPORTS MOUNTABLE FORMS
+	MOVEI	S1,%RSUOK		;LOAD THE CODE
+	SETZ	S2,			;NO EXTRA ATTRIBS
+	$RETT				;Return
+INIT.1:	MOVNI	S1,1			;-1 means device not for us
+	$RETF				;Return
+INIT.2:	SKIPA	S1,[%RSUNA]		;unit not available
+INIT.3:	MOVEI	S1,%RSUDE		;unit will never be available
+	$RETF				;Return
+; Here to check for an ANF/LP-11 LN01 or an LN01 on
+; a an asymch line.
+CHKDEV:	SKIPN	S1,SUP.ST(M)		;Have specific device?
+	MOVSI	S1,'LPT'		;Will be a LPT
+	PUSHJ	P,LPTDVN##		;Make a device name
+; LP11
+CHKLPX:	MOVE	T1,J$LDEV(J)		;Get device name
+	DEVCHR	T1,UU.PHY		;Get characteristics
+	TXNN	T1,DV.LPT		;A LPT?
+	JRST	CHKTTY			;Nope
+	MOVE	T1,[2,,T2]		;Set up UUO AC
+	MOVEI	T2,.DFHCW		;Function code
+	MOVE	T3,J$LDEV(J)		;Device name
+	DEVOP.	T1,UU.PHY		;Read hardware characteristics
+	  SETZ	T1,			;Failed??
+	LOAD	T1,T1,DF.CLU		;Get the unit type
+	CAIE	T1,.DFULN		;Device an LN01?
+	$RETF				;No, try another driver
+	$RETT				;Return goodness
+CHKTTY:	SKIPN	S1,SUP.ST(M)		;GET DEVICE NAME
+	$RETF				;MUST BE AN ALTERNATE DEVICE
+	PUSHJ	P,LPTLIN##		;GENERATE DEVICE NAME
+	$RETIF				;GIVE UP
+	MOVE	T1,J$LDEV(J)		;GET DEVICE NAME
+	DEVCHR	T1,UU.PHY		;GET DEVICE CHARACTERISTICS
+	TXNN	T1,DV.TTY		;MUST BE A TTY
+	$RETF				;ISN'T
+	MOVE	T1,[2,,T2]		;SET UP UUO AC
+	MOVEI	T2,.TOTRM		;WANT TO READ TERMINAL TYPE
+	MOVE	T3,J$LION(J)		;GET I/O INDEX
+	TRMOP.	T1,			;READ TERMINAL TYPE
+	  $RETF				;PREHISTORIC MONITOR
+	CAME	T1,['LN01S ']		;LN01 ON A TTY LINE?
+	CAMN	T1,['LN01  ']		;ALTERNATE NAME?
+	$RETT				;RETURN GOODNESS
+	$RETF				;NOPE
+	SUBTTL	Global routines -- L01CLS - CLOSE device
+
+L01CLS:	PJRST	LPTCLS##		;Call common CLOSE routine
+
+
+	SUBTTL	Global routines -- L01FLS - Flush job
+
+L01FLS:	PJRST	LPTFLS##		;Call common flush routine
+
+
+	SUBTTL	Global routines -- L01VFU - Load VFU
+
+L01VFU:	$RETT				;Do nothing
+
+
+	SUBTTL	Global routines -- L01RAM - Load RAM
+
+L01RAM:	$RETT				;Do nothing
+
+
+	SUBTTL	Global routines -- L01LER - File LOOKUP error processing
+
+L01LER:	PJRST	LPTLER##		;Call common error routine
+
+
+	SUBTTL	Global routines -- L01IER - File input error processing
+
+L01IER:	PJRST	LPTIER##		;Call common error routine
+
+
+	SUBTTL	Global routines -- L01OUT - Output a buffer
+
+L01OUT:	PJRST	LPTOUT##		;Call common output routine
+
+
+	SUBTTL	Global routines -- L01OER - Output error processing
+
+L01OER:	PJRST	LPTOER##		;Call common output routine
+
+
+	SUBTTL	Global routines -- L01EOX - Output EOF processing
+
+L01EOX:	$RETT				;No special processing
+	SUBTTL	Global routines -- L01IPC - Special IPCF message processing
+
+L01IPC:	MOVNI	S1,1			;We have no special messages
+	$RETF				;Return
+
+
+	SUBTTL	Global routines -- L01SCD - Scheduler call
+
+L01SCD:	$RETT				;Do nothing
+
+
+	SUBTTL	Global routines -- L01WAK - Wakeup time check
+
+L01WAK:	$RETT				;Return
+	SUBTTL	Global routines -- L01OPX - OPEN device
+
+L01OPX:	MOVX	T1,.IOAS8		;Open mode-ASCII, suppress VFU
+	PUSHJ	P,LPTOPN##		;Setup I/O, OPEN channel, etc.
+	JUMPF	OPEN.1			;Can't have it right now
+	PUSHJ	P,INTCNL##		;Connect to interrupt system
+	JUMPF	OPEN.2			;Give up
+	TXO	S,INTRPT		;Indicate we're connected
+	MOVEI	S1,%RSUOK		;Load the code
+	$RETT				;Return
+OPEN.1:	SKIPA	S1,[%RSUNA]		;Unit not available
+OPEN.2:	MOVEI	S1,%RSUDE		;Unit will never be available
+	$RETF				;Return
+	SUBTTL	Global routines -- L01REQ - Begining of job initialization
+
+;	This routine will be called at the beginning of each request.
+; It will be used to reset the fonts to the default ROM fonts.
+;
+; Call:		$CALL	L01BFL
+;
+; Returns:	TRUE always
+
+L01BJB:	SETOM	J$XTOP(J)		;Flag top of page
+	$TEXT(SENDCH,<^I/RIS/^A>)	;Reset the printer
+	$TEXT(SENDCH,<^7/$ESC/[1!}^A>)	;Offset the paper
+	$RETT
+
+BOXSQX:	ITEXT(<^7/$ESC/[0;100;100;2350;10!|^7/$ESC/[0;100;3190;2350;10!|^A>)
+BOXSQY:	ITEXT(<^7/$ESC/[1;100;100;3100;10!|^7/$ESC/[1;2450;100;3100;10!|^A>)
+
+
+	SUBTTL	Global routines -- L01EJB - End of job
+L01EJB:	$RETT				;Do nothing
+	SUBTTL	Global routines -- L01BFL - Begining of file initialization
+
+;	This routine is much like the above routine except that it will be
+; called on a per file basis for non-stick font specs and attributes.
+;
+;		$CALL	L01BFL
+;
+; Returns:	TRUE always
+
+L01BFL:	$SAVE	<P1>			;Save a scratch reg
+	LOAD	S1,.FPLEN(E),FP.LEN	;Get the lenght of the FP
+	CAIN	S1,FPXSIZ		;Long enough for a font to be there?
+	SKIPN	.FPFNM(E)		;Yes, Did the user specify a font name
+	 JRST	FILI.9			;No, go set to default font
+	MOVEI	S1,.FPFNM(E)		;Get the address of the name
+	PUSHJ	P,SRCROM		;Is this in the ROM?
+	JUMPT	FILI80			;Yes, don't really load the font
+	MOVEI	S1,.FPFNM(E)		;Get the address of the name
+	SKIPN	S2,J$FONT(J)		;Do we have a font already loaded?
+	 JRST	FILI.6			;No, go see about a loaded list
+	PUSHJ	P,SRCENT		;Go compare the two
+	JUMPT	FILI.8			;Same font, don't reload it
+FILI.6:	MOVEI	S1,.FPFNM(E)		;Get the address of the name
+	SKIPN	S2,J$FNTL(J)		;Do we have any fonts already loaded?
+	 JRST	FILI.7			;No, go try to find it
+	PUSHJ	P,SRCLST		;Search the loaded list
+	JUMPF	FILI.7			;Not found search file
+	MOVEM	S1,J$FONT(J)		;Store the font header address
+	JUMPT	FILI.8			;It was there, don't reload it
+FILI.7:	MOVEI	S1,.FPFNM(E)		;Get back the name again
+	PUSHJ	P,FNDFNT		;Go see if it is in LPFONT.INI
+	$RETIF				;It wasn't, that's fatal
+	MOVEM	S1,J$FONT(J)		;Store linked list of names
+	MOVE	S1,FN.FIL(S1)		;Get the file name
+	PUSHJ	P,FNTOPN		;Open it
+	$RETIF				;If not found, it's fatal
+	MOVE	P1,S1			;Save the IFN for LODFNT
+	PUSHJ	P,SETSVF		;Suppress the VFU while loading font
+	PUSHJ	P,SNDLCS		;Send the load character set sequence
+	PUSHJ	P,LODFNT		;Load up the font, into the printer
+	$RETIF				;Error is fatal
+	PUSHJ	P,ENDLOD		;And end the load
+	SETOM	J$XTOP(J)		;Put us at top of form
+	MOVE	S1,J$FONT(J)		;Point S1 at the font header
+	$TEXT(LOGCHR##,<^I/LPMSG/Loaded font named ^T20/FN.RNM(S1)/>)
+FILI.8:	PUSHJ	P,SENDFF##		;Send a form feed to the next page
+	$TEXT(SENDCH,<^7/$ESC/P1;12}^T20/FN.RNM(S1)/^7/$ESC/^7/[134]/^A>)
+	$TEXT(SENDCH,<^7/$ESC/[12m^A>)	;Select primary font
+	SKIPN	FN.LND(S1)		;Landscape font?
+	 JRST	FILI90			;No, set portrait parameters
+	JRST	FILI92			;Yes, go set landscape parameters
+
+FILI80:	SKIPN	FN.LND(S1)		;Landscape font?
+	 JRST	FILI93			;No, load portrait from ROM
+	JRST	FILI91			;Yes, load landscape from ROM
+
+FILI.9:	SKIPN	S1,J$FORM(J)		;User specify a form type?
+	 JRST	FILI91			;No, assume normal font
+	CAME	S1,[SIXBIT \NORMAL\]	;User wants portrait default?
+	 CAMN	S1,[SIXBIT \NARROW\]	; .  .  .
+	  TRNA				;Yes to either, set portrait mode
+	   JRST	FILI91			;No, set landscape
+FILI93:	PUSHJ	P,SENDFF##		;Go to the next page
+	$TEXT(SENDCH,<^I/PRTRAT/^A>)	;Set portrait mode from ROM
+FILI90:	$TEXT(SENDCH,<^I/PRTMRG/^A>)	;Set up proper margins
+SET80C:	MOVEI	S1,^D80			;Set for eighty columns
+	MOVEM	S1,J$FWID(J)		;Store it into per stream data
+	MOVEI	S1,2			;Make it width class 2
+	MOVEM	S1,J$FWCL(J)		;Store it
+	JRST	SETESC			;Set up escape mask
+
+FILI91:	PUSHJ	P,SENDFF##		;Next page
+	$TEXT(SENDCH,<^I/LANDSQ/^A>)	;Else set to default font
+FILI92:	$TEXT(SENDCH,<^I/LNDMRG/^A>)	;Set up proper margins
+	SETOM	J$XPOS(J)		;And put us at top of form
+L01WID:
+SET132:	MOVEI	S1,^D132		;Set for 132 columns
+	MOVEM	S1,J$FWID(J)		;Store it into per stream data
+	MOVEI	S1,3			;Make it width class 3
+	MOVEM	S1,J$FWCL(J)		;Store it
+	TXNE	S,BANHDR		;Loading a font?
+	PJRST	CLRSVF			;No, don't lose the <DC3>s in banners
+SETESC:	LOAD	S1,.FPINF(E),FP.FPF	;Get the information bits
+	CAIN	S1,%FPGRF		;Does he want graphics?
+	 JRST	SETES1			;Yes, go set it up
+	SETZM	J$DBRK(J)		;Assume no mask wanted
+CLRSVF:	MOVE	S2,[TXZ TF,IO.SVF]	;Get intruction to turn on VFU
+	JRST	SETES2			;And go set it up
+SETES1:	XMOVEI	S1,ESCMSK		;Get the escape mask
+	MOVEM	S1,J$DBRK(J)		;Store into the stream data
+SETSVF:	MOVE	S2,[TXO TF,IO.SVF]	;Yes, suppress VFU
+SETES2:	MOVE	S1,J$LCHN(J)		;Get the channel number
+	LSH	S1,^D23			;Position it
+	TLO	S1,(GETSTS 0,TF)	;Or in the UUO
+	XCT	S1			;Get the status
+	XCT	S2			;Modify staus as needed
+	TLC	S1,(<SETSTS@>^!<GETSTS>);Convert to set instruction
+	XCT	S1			;Set the desired status
+	$RETT
+
+SNDLCS:	SKIPLE	J$LDNF(J)		;Already sent this sequence?
+	 POPJ	P,			;Yes, return now
+	$TEXT(SENDCH,<^7/$ESC/P1;1y^A>) ;Initialize load font escape sequence
+	MOVEI	S1,1			;Set flag that we've sent out
+	MOVEM	S1,J$LDNF(J)		; ...this sequence
+	POPJ	P,
+
+ENDLOD:	$TEXT(SENDCH,<^7/$ESC/^7/[134]/^A>)
+	SETZM	J$LDNF(J)		;No londer loading
+	POPJ	P,			;Return
+
+ESCMSK:	EXP	1B27,0,0,0		;Escape is all we really need
+
+LNDMRG:	ITEXT(^7/$ESC/[75;2550r^7/$ESC/[75;3300s)
+PRTMRG:	ITEXT(^7/$ESC/[75;3300r^7/$ESC/[75;2550s)
+	SUBTTL	Global routines -- L01RUL - Draw banner ruler
+
+L01RUL:	$RETT				;No special ruler action
+
+	SUBTTL	Global routines -- L01EFL - End of file
+
+L01EFL:	$RETT				;Do nothing
+
+
+	SUBTTL	GLobal routines -- L01BAN - Initialize the banners
+
+;	This routine will initialize the banners and header for a file
+; before it starts printing.
+;
+; Call:		J/	Stream number
+;			DEVOUT## ready for characters
+;
+; Returns:	TRUE always
+
+L01BAN:
+L01HDR:	JUMPE	S1,SET132		;If he just wants to set parameters
+	SETOM	J$XTOP(J)		;Flag top of page
+	$TEXT(SENDCH,<^I/RIS/^A>) 	;Reset the printer, select landscape
+					;Make a border
+	$TEXT(SENDCH,<^I/BOXSQX/^A>)	;Type out the X escape sequence
+	$TEXT(SENDCH,<^I/BOXSQY/^A>)	;Now do the Y
+	$TEXT(SENDCH,<^I/LANDSQ/^A>)	;Select landscape
+	$TEXT(SENDCH,<^I/MARGNS/^A>)	;Setup proper margins
+	PJRST	SET132			;Go set 132 columns wide
+
+SENDCH:	MOVE	C,S1			;Copy the character
+	JRST	DEVOUT##		;And go output it
+
+LANDSQ:	ITEXT(^7/$ESC/[10m)
+PRTRAT:	ITEXT(^7/$ESC/[11m)
+MARGNS:	ITEXT(^7/$ESC/[200;2350r^7/$ESC/[250;3100s)
+RIS:	ITEXT(^7/$ESC/c)		;Master reset sequence
+	SUBTTL	Global routines -- L01CHO - Physical character output
+
+L01CHO:	$RETT				;DEVOUT needs no help
+	SUBTTL	Global routines -- L01SHT - Shut down a stream handler
+
+;	This routine should be called on stream shutdown, before the
+; LPT data page is released. It will delete all linked lists.
+;
+; Call:		J/	Stream number
+
+L01SHT:	SKIPE	S1,J$CTMP(J)		;Do we have a text buffer page?
+	 $CALL	M%RPAG			;Yes, return it
+	SETZM	J$CTMP(J)		;And clear it for next time
+	SETZM	J$FONT(J)		;Get rid of /FONT specifier
+	SKIPE	S1,J$FNTL(J)		;Do we have a font list loaded?
+	 $CALL	L%DLST			;Yes, return it
+	SETZM	J$FNTL(J)		;And clear it for next time
+	$RETT
+	SUBTTL	Global routines -- L01CHR - Escape character handler
+
+;	This routine will handle the interpretation of escape sequences
+; embedded in the file. If the escape sequence is a new font specifier,
+; it will load the font into the printer, otherwise, it will simply
+; output any intercepted characters and return.
+;
+; Call:		C/	Intercepted character
+;		J/	Stream number
+;
+; Returns:	TRUE	Font file(s) loaded or output sent
+;		FALSE	S1/	Error code
+;
+; Possible errors:
+;	Font file not found
+;	File read errors
+
+L01CHR:	$SAVE	<P1,P2,P3,P4>		;Get some scratch regs
+	SKIPN	S1,J$CTMP(J)		;Do we have an escape buffer
+	$CALL	M%GPAG			;No, Make one now
+	MOVEM	S1,J$CTMP(J)		;Remember it
+	MOVE	S1,J$FNTL(J)		;Get the name of the old list
+	MOVEM	S1,J$OLDL(J)		;Remember it
+	SETZM	J$FNTL(J)		;Clear the font list
+	SETZM	J$LDNF(J)		;Clear loading font flags
+	MOVE	P1,J$CTMP(J)		;Point to escape buffer
+	HRLI	P1,(POINT NAMBYT,)	;Make it a byte pointer
+	PUSH	P,P1			;Save it
+	JRST	CHAR10			;And go try to interpret the sequence
+CHAR.1:	PUSH	P,P1			;Save the byte pointer
+	PUSHJ	P,FILBYT		;Get a character
+	JUMPF	CHAR.3			;Error, go flush buffer
+CHAR10:	IDPB	C,P1			;Store the character
+	CAIE	C,.CHESC		;Escape character?
+	 JRST	CHAR.3			;No, go flush the buffer
+	PUSHJ	P,INTERP		;Interpret the sequence
+	JUMPF	CHAR.3			;Return if not valid
+	JUMPN	S1,CHAR.2		;LCS sequence, Go load it all in
+	POP	P,(P)			;Destroy saved pointer
+	MOVEI	S1,J$NMTP(J)		;Get the address to place the name in
+	PUSHJ	P,GETNAM		;Read it in
+	JUMPF	CHAR.4			;Error, go output what we have
+	MOVEI	S1,J$NMTP(J)		;Get the address of the name
+	PUSHJ	P,SRCROM		;See if it's already loaded
+	MOVE	S2,S1			;In case of success
+	JUMPT	CHAR14			;ROM font only needs to be assigned
+	SKIPN	S1,J$FNTL(J)		;Do we have a list yet?
+	$CALL	L%CLST			;No, get one now
+	MOVEM	S1,J$FNTL(J)		;Store the list name
+	SKIPE	S2,J$OLDL(J)		;Get address of old list, if existing
+	 SKIPE	J$LDNF(J)		;Must we load fonts?
+	  JRST	CHAR11			;Yes, don't bother with old list
+	MOVEI	S1,J$NMTP(J)		;Get the address of the name
+	PUSHJ	P,SRCLST		;Go see if name loaded
+	 JUMPT	CHAR13			;Found, go write real name
+CHAR11:	SKIPN	J$LDNF(J)		;Loading fonts?
+	 JRST	CHAR12			;No, no user fonts loaded
+	MOVEI	S1,J$NMTP(J)		;Else look in loading list
+	MOVE	S2,J$FNTL(J)		; in case we just loaded it
+	PUSHJ	P,SRCLST		; and the name is in it
+	 JUMPF	CHAR12			;Not found, Go search main lists
+	SKIPN	J$LDNF(J)		;Already flagged to load fonts?
+	SETOM	J$LDNF(J)		;Remember we must load fonts
+	JRST	CHAR14			;And go store the name
+					;Here we look through all fonts
+CHAR12:	MOVEI	S1,J$NMTP(J)		;Get the address of where the name is
+	SKIPE	S2,FNTLST		;Save the list for searching it
+	 JRST	CHA121			;List exists, go search it
+	PUSHJ	P,FNDFNT		;First time through, read in file
+	TRNA				;Check if success
+CHA121:	PUSHJ	P,SRCLST		;Go search the list
+	JUMPT	CHA122			;Found, onward
+	MOVEI	S1,J$NMTP(J)		;Get the font name
+	JRST	NOFONT			;Not found, go tell user
+CHA122:	SKIPN	J$LDNF(J)		;Already flagged to load fonts?
+	SETOM	J$LDNF(J)		;Remember we must load fonts
+CHAR13:	PUSH	P,S1			;Save the name
+	MOVE	S1,J$FNTL(J)		;Get the list name
+	MOVEI	S2,FC.SIZ		;Get the size of the entry
+	$CALL	L%CENT			;Create the entry
+	POP	P,(S2)			;Get the address of the list
+	MOVE	S1,(S2)			;And get the entry address
+CHAR14:	MOVEI	S2,FN.RNM(S1)		;Get the address of the real name
+	HRLI	S2,(POINT NAMBYT,)	;Make a byte pointer to it
+	MOVEI	S1,RNMLTH		;Get the number of bytes in a name
+CHAR15:	ILDB	C,S2			;Get a character
+	IDPB	C,P1			;Store it into the buffer
+	SOJG	S1,CHAR15		;Loop for all characters
+	MOVEI	C,.CHESC		;Close the ACS sequence
+	IDPB	C,P1
+	MOVEI	C,"\"
+	IDPB	C,P1
+	JRST	CHAR.1			;Name already cached, loop for next
+CHAR.2:	POP	P,P1			;Restore pointer to overwrite LCS seq.
+	PUSHJ	P,SNDLCS		;Send the load character set seq.
+	PUSHJ	P,GTFONT		;Output the font(s)
+	$RETIF
+	JRST	CHAR.1			;Go see if more font specs
+
+CHAR.3:	POP	P,(P)			;Adjust the stack
+CHAR.4:	SKIPE	J$LDNF(J)		;Do we have any fonts to load?
+	 JRST	CHAR.5			;Yes, go load them
+	MOVE	S1,J$OLDL(J)		;Else, get the old fonts
+	MOVEM	S1,J$FNTL(J)		;Preserve them for next time
+	JRST	CHAR.6			;And go do new font assignments
+CHAR.5:	SKIPE	S1,J$OLDL(J)		;Get the old list
+	 $CALL	L%DLST			;Destroy it
+	PUSHJ	P,LODLST		;Go load the font list
+CHAR.6:	$TEXT	(SENDCH,<^T/@J$CTMP(J)/^A>) ;Send all the assign name sequences
+	$RETT
+;	Here on a load font record sequence. We will allow the user to
+;specify embedded fonts in his file.
+
+;Here we verify the header flag word
+GTFONT:	PUSHJ	P,.SAVE4		;Save P1-P4
+	PUSHJ	P,GTFHDR		;Get the font header
+	 JUMPF	FMTERR			;Header not good, inform him
+	MOVE	S1,J$FNTL(J)		;Get the list header for the font names
+	JUMPN	S1,GTFN.1		;List exists
+	 $CALL	L%CLST			;None yet, get one
+	MOVEM	S1,J$FNTL(J)		;Save it
+
+GTFN.1:	MOVE	S1,J$FNTL(J)		;Get the list name
+	MOVX	S2,FN.SIZ		;And get the lenght of a block
+	$CALL	L%CENT			;Create an entry block
+	HRRI	P2,FN.RNM(S2)		;Calculate the place to store the name
+	HRLI	P2,(POINT NAMBYT,)	;Build a pointer to the storage area
+	MOVEI	P4,-<RNMLTH+6>(C)	;Save lenght (minus bytes read)
+	MOVX	P3,RNMLTH		;Get the number of chars in a name
+GTFN01:	PUSHJ	P,GETBYT		;Get a byte
+	 JUMPF	FMTERR
+	IDPB	C,P2			;Build the name string
+	SOJG	P3,GTFN01		;Loop over the whole name
+
+;Now we read in the rest of the font, based on the lenght of the file
+;that we got from the font header.
+GTFN.2:	PUSHJ	P,GETBYT		;Get a byte
+	$RETIF				;Never happen
+GTFN20:	SOJN	P4,GTFN.2		;Yes, count it down, and loop for all
+	PUSHJ	P,CIFMOR		;Any more fonts?
+	 JUMPF	.RETT			;No more, return now
+	JRST	GTFN.1			;More, go get it
+
+;We might have extra padding characters between fonts. Try to find
+;the next synch word if it exists.
+CIFMOR:	PUSHJ	P,FILBYT		;Get the next character
+	$RETIF
+	CAIE	C,"i"			;This character is 'sixelled' first
+					; part of font header word (AAAAH)
+	 JRST	GTFN.3			;It isn't try for other delimiters
+	PUSHJ	P,BACKUP		;Backup the byte handler
+	PUSHJ	P,GTFHDR		;Read in the header info
+	$RETIF
+	$RETT				;Else return good
+GTFN.3:	CAIN	C,";"			;Start of comment record?
+	 JRST	GTFN.4			;Yes, go eat the font
+	CAIN	C,.CHESC		;Delimiter?
+	 JRST	GTFN.5			;End the load character set sequence
+	PUSHJ	P,DEVOUT##		;Else output this character
+	JRST	CIFMOR			;And loop for a delimiter
+GTFN.4:	PUSHJ	P,DEVOUT##		;Output the semi-colon
+	PUSHJ	P,EATFNT		;Eat the rest of the record
+	$RETF				;And return 'No more'
+GTFN.5:	PUSHJ	P,ENDLCS		;End the LCS sequence
+	$RETF				;Return 'No more'
+GTFHDR:	SETZM	J$BCT8(J)		;Clear any left over converted chars
+	PUSHJ	P,GET2BY		;Get a word
+	$RETIF				;Should never happen
+	CAIE	C,125252		;Real header word?
+	 JRST	FMTERR			;No, must be error
+GTFN.0:	PUSHJ	P,GETBYT		;02H	: REV
+	$RETIF
+	PUSHJ	P,GETBYT		;03H	: FONT TYPE
+	$RETIF
+	SETZM	FN.LND(P2)		;Assume portrait font
+	TRNE	C,1			;Landscape instead
+	 SETOM	FN.LND(P2)		;Yes, remember it
+	PUSHJ	P,GET2BY		;04H-05H: FILE SIZE
+	$RETIF
+	$RETT
+
+FMTERR:	MOVE	S1,STREAM##		;Get the stream number back
+	$WTO(<Aborting job>,<Font file ^F/FNTFOB/ in wrong format>,@JOBOBA##(S1))
+	$TEXT(LOGCHR##,<^I/LPERR/Job aborted because font ^F/FNTFOB/ is incorrectly formatted>)
+	MOVE	S1,P1			;Get the IFN
+	$CALL	F%REL			;Close the file
+	$RETF				;Give bad return
+	SUBTTL	Support routines -- INTERP - Interpret escape sequence
+
+;	This routine will read the sequence of characters following the
+;escape character. It will return an index as to the function found.
+; Call:
+;		C/	Last char read
+;		P1/	Byte pointer to temporary area
+
+INTERP:	PUSHJ	P,INTCMN		;Interpret common chars
+	 JUMPF	INTER1			;Wasn't
+	PUSHJ	P,FILBYT		;Get the next
+	 $RETIF	
+	CAIE	C,"0"			;Must be numeric
+	 CAIN	C,"1"			;0 or 1
+	  TRNA				;It is
+	   JRST	INTER1			;Nope, must be some other function
+	IDPB	C,P1			;Store this character
+	PUSHJ	P,FILBYT		;Get the next
+	 $RETIF	
+	CAIN	C,"y"			;Is this a load font command?
+	 JRST	RETLCS			;Return load character set code
+	CAIL	C,"0"			;Else it must be numeric decimal
+	 CAILE	C,"9"			; .  .  .
+	  JRST	INTER1			;It isn't
+	IDPB	C,P1			;Save the character in the buffer
+	PUSHJ	P,FILBYT		;Get the next byte
+	 $RETIF				;Error
+	CAIE	C,"}"			;Must be octal 175
+	 JRST	INTER1			;Too bad
+	TDZA	S1,S1			;Return a 0 to specify ACS
+RETLCS:	SETO	S1,			;Return -1 to specify LCS
+	IDPB	C,P1			;Store it
+	$RETT				;But return true
+
+INTER1:	IDPB	C,P1			;Store the character
+	CAIL	C,60			;Final character in this sequence?
+	CAILE	C,176			; .  .  .
+	JRST	INTER2			;No, get another
+	SETZ	C,			;Make a null byte
+	IDPB	C,P1			;End the string
+	$RETF				;Return false
+INTER2:	PUSHJ	P,FILBYT		;Next character
+	JUMPT	INTER1			;Process it if it's good
+	$RETF
+INTCMN:	MOVE	P4,[POINT 7,CMNCHR]	;Get pointer to common characters
+	MOVEI	P3,3
+	PUSHJ	P,FILBYT		;Get the next character
+	 $RETIF				;Return if false
+	CAIN	C,"["			;Control sequence introducer?
+	 JRST	CMN.1			;Yes, go eat it
+	JRST	INTC10			;Else process possible good string
+INTCM1:	PUSHJ	P,FILBYT		;Get a byte
+	 $RETIF
+INTC10:	ILDB	S1,P4			;Get the byte to compare to
+	CAME	C,S1			;Valid sequence?
+	 $RETF				;No, return now
+	IDPB	C,P1			;Store if valid
+	SOJG	P3,INTCM1		;Loop for all characters
+	$RETT
+
+CMN.1:	IDPB	C,P1			;Store the character for output
+	PUSHJ	P,FILBYT		;Get the next byte
+	CAIL	C,100			;Valid parameter character?
+	CAILE	C,176			; .  .  .
+	JUMPT	CMN.1			;Else loop till final character
+	$RETF				;And return
+
+CMNCHR:	ASCII	|P1;|
+	SUBTTL	Support routines -- LODLST - Load fonts in linked list
+
+; This routine will search through the linked list of fonts and will
+;load all the fonts into the LN01.
+
+LODLST:	$SAVE	<P1,P2>			;Save some regs
+	PUSHJ	P,SNDLCS		;Send the LCS sequence for loading
+	MOVE	S1,J$FNTL(J)		;Get the name of the list
+	$CALL	L%FIRST			;Point to the first entry
+	JUMPT	LODL.2			;Go process this entry
+	$RETT
+LODL.1:	MOVE	S1,J$FNTL(J)		;Get the list of fonts back
+	$CALL	L%NEXT			;NExt font
+	JUMPT	LODL.2			;All done
+	PUSHJ	P,ENDLOD		;Go end the load sequence
+	SETOM	J$XTOP(J)		;Put us at the top of form
+	$RETT
+LODL.2:	MOVE	P2,S2			;Save the address
+	$CALL	L%SIZE			;Size of the entry
+	CAIE	S2,FC.SIZ		;Pointer to font header?
+	 JRST	LODL.1			;User defined font, already loaded
+	MOVE	P2,(P2)			;Get the address of the list header
+	MOVE	S1,FN.FIL(P2)		;Get the file name
+	PUSHJ	P,FNTOPN		;Open the file
+	 $RETIF				;Return if error
+	MOVE	P1,S1			;Save the IFN
+	PUSHJ	P,LODFNT		;Go load it
+	$RETIF
+	$TEXT(LOGCHR##,<^I/LPMSG/Loaded font named ^T20/FN.RNM(P2)/>)
+	JRST	LODL.1			;And loop for all fonts
+
+	SUBTTL	Support routines -- FNTOPN - Open font file
+
+; This routine will open the font file whose SIXBIT name is in S1. It will
+;return the IFN in S1, or will return false.
+
+FNTOPN:	CAMN	S1,[-1]			;Internal font file
+	 $RETT				;Yes, make believe it's already loaded
+	MOVEM	S1,FONTFD+.FDNAM	;Store the file for open
+	MOVEI	S1,FOB.SZ		;Get the lenght of the font file FOB
+	XMOVEI	S2,FNTFOB		;And its address
+	$CALL	F%IOPN			;And go get it
+	JUMPT	.RETT			;All fine?
+	MOVE	S1,STREAM##		;Get the stream number
+	$WTO(<Aborting job>,<Cannot find font file ^F/FNTFOB/>,@JOBOBA##(S1))
+	$TEXT(LOGCHR##,<^I/LPERR/Job aborted because font named ^T/J$NMTP(J)/ could not be found>)
+	$RETF				;Give bad return
+	SUBTTL	Support routines -- P/FLUSH - Flush temporary buffer to printer
+
+; This routine will output the temporary buffer area.
+;Call FLUSH with last char in C. Call PFLUSH with no char in C, just
+;the buffer to be output.
+
+FLUSH:	MOVE	P2,C			;Save the character
+PFLUSH:	MOVEI	P1,J$CTMP(J)		;Point to the area
+	HRLI	P1,(POINT NAMBYT,)	; to store the characters
+FLUSH1:	ILDB	C,P1			;Get a character
+	JUMPE	C,FLUSH2		;Return if done
+	PUSHJ	P,DEVOUT##		;Otherwise output it
+	JRST	FLUSH1			;And loop for all characters
+FLUSH2:	MOVE	C,P2			;Get the last character
+	PUSHJ	P,DEVOUT##		;Send it to the printer
+	$RETF				;Return bad
+	SUBTTL	Support routines -- FNDFNT - Find font file in LPFONT.INI
+
+;	This routine will see if the font the user wants exists.
+;It will first try to check the incore font cache and then will
+;parse the file FNT:LPFONT.INI.
+;
+; Call:		S1/	Address of name
+;
+; Returns:	TRUE/	S1/	Linked list of names set up
+;		FALSE/	Name could not be found
+;
+;Temporary AC usage
+;	P1/	LPFONT.INI IFN
+;	P2/	Address of name to find
+;	P3/	Current name list address
+;	P4/	Flags
+
+FNDFNT:	$SAVE	<P1,P2,P3,P4>		;Scratch regs
+	MOVE	P2,S1			;Save the name
+	SETZ	P4,			;Clear any stray flags
+	MOVEI	S1,FOB.SZ		;Get the lenght of the ini file FOB
+	XMOVEI	S2,INIFOB		;And get the address
+	$CALL	F%IOPN			;Open the file
+	JUMPT	FNDF.1			;Get found it, continue
+	MOVEI	S1,STREAM##		;Get the stream number
+	$WTO(<Aborting job>,<Cannot find system font name file ^F/INIFOB/>,@JOBOBA##(S1))
+	$TEXT(LOGCHR##,<^I/LPERR/Job aborted because system font name file could not be found>)
+	$RETF				;Give bad return
+
+;Here when we found the file. First we see if it has changed
+;since we last parsed it. If yes, we reparse it to update our cache.
+;If no and we have a cache, we will search through the cache. If we
+;find the name, we return it. If we don't find it in the cache, we
+;try to find the name in the file by reparsing.
+FNDF.1:	MOVE	P1,S1			;Save the IFN of the .INI file
+	SKIPN	INIUDT			;Have we ever read LPFONT.INI?
+	 JRST	FNDF.2			;No, force a reread
+	MOVX	S2,FI.CRE		;Say we want creation date
+	$CALL	F%INFO			;Get it
+	CAMN	S1,INIUDT		;Has it changed?
+	 JRST	FNDF.3			;Not updated, no need to rebuild
+	MOVEM	S1,INIUDT		;Remember new time
+FNDF.2:	PUSHJ	P,CRECHC		;Rebuild the font cache
+	 $RETIF				;Propegate error
+FNDF.3:	PUSHJ	P,ICLOSE		;Close the file
+	MOVE	S1,P2			;Get the address of the name
+	MOVE	S2,FNTLST		;Get the cache list name
+	PUSHJ	P,SRCLST		;Go search the list
+	JUMPT	.RETT			;Return good
+	MOVE	S1,P2			;Get the address of the name
+NOFONT:	MOVE	S2,STREAM##		;Otherwise we have a problem
+	$WTO(<Aborting job>,<No such font ^T/(S1)/>,<@JOBOBA##(S2)>)
+	$TEXT(LOGCHR##,<^I/LPERR/Job aborted because font ^T/(S1)/ does not exist>)
+	$RETF
+;Here we parse the file and (re)build our cache. Note that it expects
+;S1 to contain the UDT of the creation date so it can store it.
+CRECHC:	SKIPE	FNTLST			;Old cache?
+	PUSHJ	P,CLRCHC		;Yes, clear it
+	$CALL	L%CLST			;Create a new one
+	MOVEM	S1,FNTLST		;Store it
+CREC.1:	PUSHJ	P,FNTSIX		;Get the file name
+	JUMPF	CIFEOF			;Error, probably end of file
+	MOVE	P4,S1			;Save the file name
+	MOVX	S2,FN.SIZ		;Else, Get the size of the header entry
+	MOVE	S1,FNTLST		;Get the name of the list
+	$CALL	L%CENT			;Create a header entry
+	MOVE	P3,S2			;Store its address
+	MOVEM	P4,FN.FIL(P3)		;Store the file name into it
+	PUSHJ	P,FNTNBC		;Get the next non-blank character
+	CAIN	C,"="			;Seperator?
+	 JRST	CREC.2			;YEs, continue
+	MOVE	S1,STREAM##		;Illegal LPFONT.INI format
+	$WTO(<Aborting job>,<Illegal character ^7/C/ found in LPFONT.INI>,<@JOBOBA##(S1)>)
+	$TEXT(LOGCHR##,<^I/LPERR/Job aborted due to error parsing system LPFONT.INI file>)
+	PUSHJ	P,CLRCHC		;Clear the cache to force a reparse
+	$RETF				;Error return
+CREC.2:	MOVE	S1,P3			;Get the list header address
+	PUSHJ	P,FNTRNM		;Get the real name out of the line
+	JUMPF	INIERR
+	JUMPL	C,CREC.1		;End of line, Go parse next line
+	PUSHJ	P,FNTLIN		;Read a logical line of names
+	JUMPF	INIERR			;Error
+	MOVEM	S1,FN.LNM(P3)		;Store the list address
+	JRST	CREC.1			;Loop for all lines
+
+CIFEOF:	CAIN	S1,EREOF$		;We here because of EOF?
+	 $RETT				;Yes, all's well
+INIERR:	MOVE	S2,STREAM##		;Get the stream number
+	$WTO(<Job error>,<Error while reading LPFONT.INI>,@JOBOBA##(S2))
+NOTFOU:	PUSHJ	P,ICLOSE		;Close the file
+	$RETF				;But return false
+	SUBTTL	FNTRNM - Extract first name in line in LPFONT.INI
+
+FNTRNM:	$SAVE	<P2,P3>			;Get some scratch regs
+	MOVEI	P2,FN.RNM(S1)		;Get the place to store the name
+	HRLI	P2,(POINT 7,)		;Get the pointer for it
+	MOVEI	P3,RNMLTH		;Get the number of characters to read
+	PUSHJ	P,FNTNBC		;Get a non-blank character
+	TRNA				;Already have one
+FNTR.1:	PUSHJ	P,LINCHR		;Get a character
+	$RETIF				;Bad format
+	CAIG	C," "			;Legal
+	 JRST	FNTR.2			;No,
+	IDPB	C,P2			;Store it into the buffer
+	SOJG	P3,FNTR.1		;Loop for all characters
+FNTR.2:	MOVEI	S1," "			;Pad the rest with spaces
+	IDPB	S1,P2			;Do it
+	SOJG	P3,.-1			;Loop for all chars
+FNTR.3:	JUMPL	C,.RETT			;EOL means we're done
+	CAIN	C,.CHTAB		;Tab character?
+	 $RETT				;Yes, done with this name
+	PUSHJ	P,LINCHR		;Get a character
+	 $RETIF
+	JRST	FNTR.3			;Go see if valid
+	SUBTTL	Support routines -- SRCLST - See if named font already loaded
+
+
+; This routine checks to see if a given font is already loaded into the
+;LN01.
+;
+; Call:		S1/	Address of name
+;		S2/	List name
+;
+; Return:	TRUE/	Pointer to name list header in S1
+;		FALSE/	Font not loaded
+
+SRCLST:	$SAVE	<P1,P2,P3,P4>		;Make room
+	DMOVE	P1,S1			;Save the parameters
+	PUSHJ	P,CIFROM		;Go see if the font is internal
+	$RETIT				;If yes, we can return now
+	MOVE	S1,P2			;Get the font list name
+	$CALL	L%FIRST			;Rewind to the first entry
+	 $RETIF				;Not found? No fonts at all then
+	JRST	SRCL.2			;And go process it
+SRCL.1:	MOVE	S1,P2			;Get the real name list address
+	$CALL	L%NEXT			;Get the next entry
+	 $RETIF				;No more, font not here
+SRCL.2:	PUSH	P,S2			;Save the entry address
+	$CALL	L%SIZE			;Get the size
+	POP	P,S1			;Get back the address of the entry
+	CAIN	S2,FC.SIZ		;Is this pointing to an entry?
+	 MOVE	S1,(S1)			;Then entry points to real entry
+	MOVE	S2,S1			;Also to send to entry searcher
+	MOVE	S1,P1			;Get the user sent name
+	PUSHJ	P,SRCENT		;Search this entry
+	JUMPF	SRCL.1			;Else go search the next entry
+	$RETT				;Return good
+
+SRCENT:	$SAVE	<P1,P2>			;Save some regs
+	DMOVE	P1,S1			;Save the inputs
+	MOVEI	S2,FN.RNM(S2)		;Get the address of the real name
+	PUSHJ	P,CIFRNM		;See if it is the real name
+	JUMPT	SRCE.1			;It is loaded, return good
+	SKIPN	S2,FN.LNM(P2)		;Get the list of font names
+	 $RETF				;None for this, return false
+	MOVE	S1,P1			;Get back the user name
+	PUSHJ	P,SRCPLS		;Search the pseudoname list
+	$RETIF				;Not found
+SRCE.1:	MOVE	S1,P2			;Get the entry address
+	$RETIT				;Found
+;Here to search through a list of pseudonames.
+SRCPLS:	$SAVE	<P1,P2>			;Get a scratch reg
+	DMOVE	P1,S1			;Save the list address
+	MOVE	S1,P2			;Get the name of the pseudoname chain
+	$CALL	L%FIRST			;Rewind to the first entry
+	JRST	SRCL21			;Go process it
+SRCL20:	MOVE	S1,P2			;Get the name of our chain
+	$CALL	L%NEXT			;Next name
+	 $RETIF				;Not here
+SRCL21:	MOVE	S1,P1			;Get the address of the user name
+	MOVEI	S2,FM.NAM(S2)		;Get the address of the pseudo name
+	PUSHJ	P,CIFPNM		;See if this is a pseudoname
+	 $RETIT				;Yes, return it
+	JRST	SRCL20			;Otherwise, try next name
+	$RETT
+	SUBTTL	CIFROM - Check for fonts in ROM
+
+SRCROM:	$SAVE	P1			;Place for S1
+	SKIPA	P1,S1			;Save S1 for portrait check
+CIFROM:	MOVE	S1,P1			;Get the name sent
+	MOVEI	S2,LNDROM+FN.RNM	;And the name to check
+	PUSHJ	P,CIFRNM		;Se if the desired name
+	JUMPF	ROM.1			;Wasn't
+	MOVEI	S1,LNDROM		;Was, return address of block
+	$RETT
+ROM.1:	MOVE	S1,P1			;Get user font
+	MOVEI	S2,PRTROM+FN.RNM	;Get the portrait font
+	PUSHJ	P,CIFRNM		;Names the same
+	$RETIF
+	MOVEI	S1,PRTROM		;Return the name
+	$RETT
+
+LNDROM:	EXP	0			;No pseudoname list
+	ASCII |DELandscape13.6-@   |	;Name
+	EXP	-1			;No file flag
+	EXP	-1			;No lenght flag
+	EXP	-1			;Landscape font
+
+PRTROM:	EXP	0			;No pseudoname list
+	ASCII |DETitan10-R         |	;Name
+	EXP	-1			;No file flag
+	EXP	-1			;No lenght
+	EXP	0			;Not Landscape flag
+	SUBTTL	Support routines -- CIFRNM/CIFPNM - See if real/pseudo names
+
+; These routines will compare two names whose address are sent to them in
+;S1 and S2, and will see if they are alike. The difference between the two
+;is that CIFRNM will only check 4 words worth of name (although it checks to
+;make sure the last two words of the user name are 0), and CIFPNM will
+;check for 6 words worth of data.
+;
+; Call:		S1/	Address of user name
+;		S2/ 	Address of possible real name
+;
+; Returns:	TRUE/	If names match
+;		FALSE/	Otherwise
+
+CIFRNM:	MOVEI	TF,RNMLTH		;Get the number of words to check
+	 TRNA				;And go check them
+CIFPNM:	MOVEI	TF,NAMLTH		;Get the lenght of a long name
+	$SAVE	<P1>			;Save a scratch reg
+	HRLI	S1,(POINT 7,)		;Build byte pointers
+	HRLI	S2,(POINT 7,)
+CIFP.1:	ILDB	C,S1			;Get a word from the user name
+	ILDB	P1,S2			;Is it different from what we have
+	CAME	C,P1			;Characters the same
+	 JRST	CIFP.2			;No, go see about trailing spaces
+	SOJG	TF,CIFP.1		;Else loop over all characters
+	$RETT				;If we get here, names match
+CIFP.2:	JUMPN	C,.RETF			;User name must be exhausted
+CIFP.3:	CAIE	P1," "			;The rest of font name must be spaces
+	 $RETF
+	SOJLE	TF,.RETT		;Characters exhausted return good
+	ILDB	P1,S2			;Get next character in font name
+	JUMPE	P1,.RETT		;Null is the end
+	JRST	CIFP.3			;Else go check this char
+	SUBTTL	Support routines -- GETNAM - Get font name from ACS sequence
+
+; This routine is used to get the font name out of the ACS sequence in
+;the user's print file. It will read until an escape delimits the name,
+;but it will only keep the first FNMLTH (30) characters as remembered.
+;
+; Call:		S1/	Address of place to store name
+;
+; Return:	TRUE/	Name stored
+;		FALSE/	Error reading file
+
+GETNAM:	$SAVE	<P1,P2>			;Save some regs
+	MOVE	P1,S1			;Save the address
+	SETZM	(P1)			;Clear out any old names
+	HRL	S1,S1			;Build a BLT pointer to do it
+	AOS	S1			; .  .  .
+	BLT	S1,FNMLTH(P1)		;Clear it out
+	HRLI	P1,(POINT NAMBYT,)	;Build a byte pointer to storage
+	MOVEI	P2,NAMLTH		;Get the number of characters
+GETN.1:	PUSHJ	P,FILBYT		;Get a character
+	$RETIF				;Return now
+	CAIN	C,.CHESC		;Escape character delimiter?
+	 JRST	GETN.2			;Yes, return now
+	SOSLE	P2			;Count chars read. Past name lenght?
+	 IDPB	C,P1			;No, so store it away
+	JRST	GETN.1			;Loop until delimiter
+GETN.2:	PUSHJ	P,FILBYT		;Next character
+	 $RETIF
+	CAIE	C,"\"			;Real delimiter?
+	 JRST	GETN.1			;No, keep on looping
+	$RETT				;Yes, retunr good
+
+
+	SUBTTL	Support routines -- EATFNT - Eat font until terminator
+
+;	This routine is to be called when we can't trust the font record
+;to be a valid font. We therefore dump the record into the printer,
+;looking for the valid terminator sequence (ESC \)
+
+EATFNT:	PUSHJ	P,FILBYT		;Get a byte
+	$RETIF				;No good
+	CAIN	C,.CHESC		;End of load?
+	 JRST	ENDLCS			;Yes, go end it
+	PUSHJ	P,DEVOUT##		;Type it out
+	JRST	EATFNT			;And continue to look fo delimiter
+ENDLCS:	PUSHJ	P,FILBYT		;Next character
+	CAIE	C,"\"			;What we're looking for?
+	PUSHJ	P,DEVOUT##		;No, Type it out (We don't presume to
+					;Get too much in the user's way)
+	$RETT				;Else, return without outputting it
+	SUBTTL	Support routines -- CLRCHC - Clear cached font information
+
+;	This routine takes the font information that is built into the
+;linked list at request time, and deletes it from memory. It is to be
+;used primarily before new fonts are to be loaded.
+
+CLRCHC:	SKIPN	S1,FNTLST		;Get the cache header
+	 $RETT				;Return now
+
+CLRLST:	$SAVE	P1			;Save a reg
+	MOVE	P1,S1			;Save the list name
+	$CALL	L%FIRST			;Point to the first
+	$RETIF				;Return if none
+CLRF.1:	SKIPE	S1,FN.LNM(S2)		;Get the list of names it is known by
+	$CALL	L%DLST			;And get rid of it
+	MOVE	S1,(P1)			;Get back the name
+	$CALL	L%NEXT			;Get the next
+	JUMPT	CLRF.1			;Loop for all entries
+
+	MOVE	S1,P1			;Get back the main list of fonts
+	$CALL	L%DLST			;And get rid of it also
+	POPJ	P,			;Return
+	$RETT
+	SUBTTL	LODFNT - Load and parse font file
+
+;	This routine will load a font file from FNT: and will parse it
+; to determine the correct (20 character) font name, so that the
+; caller can know the 'physical' name of the file he is loading for
+; the Assign Character Set sequence.
+;
+; Call:	P1/	Font file IFN
+;
+; Return:
+;	True/	Font file loaded ok
+;
+;	False/	Error code in S1
+;		Message already given
+
+LODFNT:	PUSHJ	P,FNTBYT		;Get a byte
+	JUMPF	LDFN.3			;Error, go find out why
+	PUSHJ	P,DEVOUT##		;Send out this byte
+	JRST	LODFNT			;Loop for whole file
+
+LDFN.3:	CAXE	S1,EREOF$		;End of file?
+	 JRST	FNTERR			;No, go return the bad news
+ICLOSE:	MOVE	S1,P1			;Get the IFN for the font file
+	$CALL	F%REL			;Close the file
+	$RETT				;Return good
+
+FNTERR:	MOVE	S2,STREAM##		;Get the stream number
+	$WTO(<Aborting job>,<Error ^E/S1/ reading  font file ^F/FNTFOB/>,@JOBOBA##(S2))
+	$TEXT(LOGCHR##,<^I/LPERR/Job aborted due to error reading font file ^F/FNTFOB/>)
+	PUSHJ	P,ICLOSE		;Close the file
+	$RETF				;But return false
+	SUBTTL	Font input routines
+
+;	These routines will be used to return values from the font file.
+;
+; Call:	P1/	File IFN
+;
+; Return:
+;	True/	Character or quantity in C
+;	False/	Error code in S1
+;
+
+	SUBTTL	Font input routines -- FNTLIN - Read line from LPFONT.INI
+
+;	This routine will read a logical line from LPFONT.INI and will
+;build a list of pseudonames suitable for being linked into the FN.LNM
+;field of the header block. It will return the name of the list in S1.
+
+FNTLIN:	$SAVE	<P1,P2,P3,P4>		;Save some registers
+	$CALL	L%CLST			;Assume we will have a list
+	MOVE	P2,S1			;Save it from destruction
+LIN.1:	PUSHJ	P,FNTNBC		;Get the next non-blank character
+	JUMPF	LIN.6			;Bad return, clean up and return
+	JUMPL	C,LIN.5			;If EOL go return the name of the list
+	MOVE	S1,P2			;Get the name of the list
+	MOVEI	S2,FNMLTH		;And lenght of pseudonames
+	$CALL	L%CENT			;Create an entry
+	MOVE	P4,S2			;Save the entry address
+	HRLI	P4,(POINT NAMBYT,)	;Make it a byte pointer
+	MOVEI	P3,NAMLTH		;Get the max number of characters
+LIN.3:	IDPB	C,P4			;Store this character
+	PUSHJ	P,LINCHR		;Get next valid line character
+	 JUMPF	LIN.6			;Error, destroy partial list and return
+	JUMPL	C,LIN.5			;Negative is eol,,go return
+	CAIN	C,.CHTAB		;Delimiter?
+	 JRST	LIN.1			;Yes, go store name in the list
+	SOJG	P3,LIN.3		;Loop for maximum characters
+
+LIN.4:	PUSHJ	P,LINCHR		;Eat the characters until delimiter
+	JUMPF	LIN.6			;Error, go clean up
+	CAIN	C,.CHTAB		;Delimiter?
+	 JRST	LIN.1			;Yes, try for another name
+	JUMPGE	C,LIN.4			;Non-EOL, loop for more characters
+LIN.5:	MOVE	S1,P2			;Else return the name of the list
+	$RETT
+
+LIN.6:	SKIPE	S1,P2			;Get the name of the list
+	$CALL	L%DLST			;destroy it
+	$RETT
+LINCHR:	PUSHJ	P,FNTBYT		;Get a character
+	 $RETIF				;Bad return if bad
+	CAIL	C," "			;Control character?
+	 $RETT				;No, return now
+	CAIN	C,.CHTAB		;A delimiter?
+	 $RETT				;Yes, this name is done
+	CAIE	C,.CHCRT		;Another type of delimiter?
+	 $RETT				;No, normal characters
+	PUSHJ	P,FNTBYT		;Get the line feed
+	 $RETIF
+	SETO	C,			;Make the EOL flag
+	$RETT				;Return
+	SUBTTL	Font input routines -- GET2BY - Get 2 bytes in word format
+
+GET2BY:	PUSHJ	P,GETBYT		;Get a byte
+	$RETIF				;Shouldn't ...
+	PUSH	P,C			;Save the byte
+	PUSHJ	P,GETBYT		;Get the high order byte
+	JUMPF	GET2.1			;  ... happen
+	ASH	C,8			;Make room for low order byte
+	ADD	C,(P)			;Add it in
+GET2.1:	POP	P,(P)			;Throw away
+	$RETT
+
+
+	SUBTTL	Font input routines -- GETBYT - Get byte from SIXELed stream
+
+; This routine will read a sixeled character from the give input stream
+;setup in J$NMIF and will build a binary byte from it depending on how
+;far it is in the byte reading process. It will also output the byte to the
+;output device directly to keep the data stream synchronous.
+
+GETBYT:	SOSLE	J$BCT8(J)		;Attempt to get already translated byte
+	JRST	GETBYD			;Got one
+	$SAVE	<P1,P2,P3>		;Save some regs
+	SETZM	J$BYT8(J)		;Clear destination word
+	MOVEI	P2,^D3			;Number of bytes left over
+	MOVEM	P2,J$BCT8(J)		;Stash
+	MOVE	P2,[POINT 6,J$BYT8(J)] 	;Point to destination
+	MOVEI	P3,^D4			;Get 4 bytes
+GETBY1:	PUSHJ	P,FILBYT		;Get the next character
+	$RETIF
+	CAIGE	C,77			;Improper character?
+	 JRST	GETBY1			;Yes, this doesn't count
+	PUSH	P,C			;Save it
+	PUSHJ	P,DEVOUT##		;Type it to the printer
+	POP	P,C			;Restore it for use
+	SUBI	C,77			;Convert to six bits
+	IDPB	C,P2			;Stash byte
+	SOJG	P3,GETBY1		;And loop
+GETBYD:	MOVE	S2,J$BYT8(J)		;Get the bytes
+	SETZ	S1,			;Clear destination word
+	LSHC	S1,^D8			;Get a byte
+	MOVEM	S2,J$BYT8(J)		;And stash leftover
+	MOVE	C,S1			;Return it in the proper register
+	$RETT
+	SUBTTL	Font input routines -- FNTSIX - Input a SIXBIT quantity
+
+FNTSIX:	$SAVE	<P1,P2,P3,P4>		;Save some regs
+	MOVE	P3,[POINT 6,P4]		;Build a pointer to where it belongs
+	MOVEI	P2,6			;Get the number of chars to read
+	SETZ	P4,			;And clear the place to store them
+	PUSHJ	P,FNTNBC		;Get non-blank byte to start with
+	 JUMPT	SIX.2			;If valid, go process character
+	$RETIF				;Else return error
+SIX.1:	PUSHJ	P,FNTBYT		;Get a byte from the file
+	 $RETIF				;Return false on error
+SIX.2:	CAIE	C," "			;A valid delimiter?
+	 CAIN	C,.CHTAB		; .  .  .
+	  JRST	RETSIX			;Done, go return the value
+	CAIN	C,"="			;This is also a delimiter
+	 JRST	RETSVC			;If this then done (endif)
+	SUBI	C,"A"-'A'		;Convert character to SIXBIT
+	IDPB	C,P3			;Store it into the word
+	SOJGE	P2,SIX.1		;Loop for all characters in the name
+	MOVE	S1,STREAM##		;Wrong format if we get here
+	$WTO(<Aborting job>,<Error parsing FNT:LPFONT.INI. File name too long>,<@JOBOBA##(S1)>)
+	$TEXT(LOGCHR##,<^I/LPERR/Job aborted due to system error. (Parsing LPFONT.INI file)>)
+	$RETF				;Return false if too long
+
+RETSVC:	PUSHJ	P,BACKUP		;Back up this character
+RETSIX:	MOVE	S1,P4			;Here to return the file name
+	$RETT				;Return true
+
+
+	SUBTTL	Font input routines -- FNTWRD - Input a word
+
+FNTWRD:	PUSHJ	P,FNTBYT		;Get a byte
+	$RETIF				;Error
+	PUSH	P,C			;Save the value
+	PUSHJ	P,FNTBYT		;Get the most significant byte
+	JUMPF	WRD.1			;Error, go clean up stack
+	LSH	C,8			;Shift value to most significant byte
+	ADD	C,(P)			;Add the least significant bits
+	POP	P,(P)			;adjust the stack
+	$RETT				;Return good
+
+WRD.1:	POP	P,(P)			;Adjust the stack
+	$RETF				;Return error code
+	SUBTTL	Font input routines -- FNTNBC - Get next non-blank character
+
+FNTNBC:	PUSHJ	P,FNTBYT		;Get the next character out of the file
+	 $RETIF				;Error?
+	CAIE	C," "			;A space
+	 CAIN	C,.CHTAB		;or tab?
+	  JRST	FNTNBC			;Yes, don't return it
+	$RETT				;Else return it
+
+
+	Subttl	Font input routines -- BACKUP - Backup a character
+
+BACKUP:	MOVEM	C,J$SVCH(J)		;Store this character away
+	$RETT				;And return
+
+
+	SUBTTL	Font input routines -- FNTBYT - Input a byte
+
+FNTBYT:	SETZ	C,			;Make a zero
+	EXCH	C,J$SVCH(J)		;Get the last character
+	JUMPN	C,.RETT			;There was one, go return it
+BYT.0:	SOSGE	J$FCNT(J)		;Any characters in the buffer?
+	 JRST	BYT.1			;Yes, go get one
+	ILDB	C,J$FBTP(J)		;Get the character
+	$RETT
+BYT.1:	MOVE	S1,P1			;Otherwise, get the IFN
+	$CALL	F%IBUF			;Get a buffer full
+	$RETIF				;Error, return now
+	DMOVEM	S1,J$FCNT(J)		;Store count and byte pointer
+	AOS	J$ADRD(J)		;Increment number of blocks read
+	JRST	BYT.0			;And try again
+
+FILBYT:	SETZ	C,			;Make a zero
+	EXCH	C,J$SVCH(J)		;Get the last character
+	JUMPN	C,.RETT			;There was one, go return it
+	JRST	INPBYT##		;Ask for another character
+	SUBTTL	Literal pool
+
+L01LIT:	LIT
+
+	SUBTTL	End of LPTL01
+
+L01END::!END

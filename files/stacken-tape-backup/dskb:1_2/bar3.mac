@@ -1,0 +1,60 @@
+title bar
+search jobdat, uuosym,macten
+
+.text	"/symseg:low/locals"
+
+dummy:	block	1
+
+vector:
+vectcp:	exp handler, 0, 0, 0
+
+bar:	jfcl
+	reset
+	open	0,[
+		exp .iobyt+uu.aio
+		sixbit 'tcp'
+		xwd ob,ib]
+	 halt
+	movei	1,vector
+	piini.	1,
+	 jfcl
+	move	1,[
+		ps.fac+ps.fon+exp[
+			exp 0
+			xwd <vectcp-vector>,ps.rid!ps.rod!ps.rdo!ps.rol!ps.rsw
+			xwd 0,0]]
+	pisys.	1,
+	 jfcl
+	movei	1,[
+		exp 0		;Function
+		exp 0		;Channel.
+		exp 0		;Flags.
+		exp 0		;Local address.
+		byte (8) ^D192, ^D168, ^D111, ^D59
+		exp 4711	;Local port
+		exp 4711	;Remote port
+		exp 0,0]	;buffer size, ptr
+	call 1,[sixbit 'tcp.']
+	 halt
+	movei	1,^d5
+	sleep	1,
+	 jfcl
+	movei	1,[
+		exp 4
+		exp 0
+		repeat 10,<0>]
+	call 1,[sixbit 'tcp.']
+	 halt
+	jfcl
+	monrt.
+	jrst	bar
+
+handler:debrk.
+	 jfcl
+	halt
+
+ob:	block	3
+ib:	block	3
+
+end	bar
+

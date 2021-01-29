@@ -1,0 +1,1728 @@
+	TITLE	KDPLDR -- PROGRAM TO LOAD KMC-11 MICROCODE
+
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1979,1984,1986.ALL RIGHTS RESERVED.
+;
+;
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+;ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+;INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+;COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+;OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+;TRANSFERRED.
+;
+;THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+;AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+;CORPORATION.
+;
+;DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+;SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+
+	SEARCH	JOBDAT,UUOSYM,MACTEN,SCNMAC
+	.REQUIR	REL:SCAN
+	.REQUIR	REL:HELPER
+
+	.TEXT	"/SYMSEG:HIGH/LOCALS"
+
+	EXTERNAL .ISCAN, .NOCTW, .SAVE3 ,.SAVE4, .SWFIL, .POPJ, .POPJ1
+	EXTERNAL .TCHAR, .TCRLF, .TFBLK, .TOCTW, .TSCAN, .TSTRG
+	EXTERNAL .TSPAC, .STOPB
+
+	TWOSEG	600000		;TWO SEGMENT ASSEMBLY
+
+	KDLWHO==0		;WHO EDITED KLD.MAC LAST
+	KDLVER==1		;MAJOR VERSION NUMBER
+	KDLMIN==0		;MINOR VERSION NUMBER
+	KDLEDT==6		;EDIT NUMBER
+
+	LOC	<.JBVER>	;GO TO THE VERSION NUMBER
+	VRSN.	KDL		;ASSEMBLE IN THE VERSION NUMBER
+
+	PURGE	KDLWHO, KDLVER, KDLMIN, KDLEDT
+
+	RELOC	600000		;START IN THE HIGH SEG.
+
+
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1979,1986. ALL RIGHTS RESERVED.
+\;END COPYRIGHT MACRO
+
+	RADIX	10		;BEWARE...
+
+	SUBTTL	LOCAL CONSTANTS
+
+;SCAN'S AC DEFINITIONS
+
+	T1=1			;THE TEMPS
+	T2=2
+	T3=3
+	T4=4
+
+	P1=5			;THE PRESERVED
+	P2=6
+	P3=7
+	 N=7			;SCAN'S "N"
+	P4=8
+
+	P=15
+
+;KONSTANTS
+
+	PDLLEN==100		;STACK LENGTH
+	CRAMSZ==1024		;CRAM SIZE
+
+	OPNLEN==3		;LENGTH OF AN OPEN BLOCK
+	LEBLEN==6		;LENGTH OF A LOOKUP/ENTER BLOCK
+	PTHLEN==9		;LENGTH OF A PATH BLOCK
+
+	$BIN==5			;CHANNEL TO READ BINARY FILE ON
+
+;MASKS
+	M.BYT1==^O377000000	;FIRST BYTE
+	M.BYT2==^O177400000000	;SECOND BYTE
+	M.BYT3==^O377		;NEXT TO LAST BYTE
+	M.BYT4==^O177400	;LAST BYTE
+
+	FL.BT1==1B0		;FIRST BYTE VALID
+	FL.BT2==1B1		;SECOND BYTE VALID
+	FL.BT3==1B18		;THIRD BYTE VALID
+	FL.BT4==1B19		;FOURTH BYTE VALID
+	SUBTTL	MACROS
+
+DEFINE URERR(CODE,STRING,ROUTINE),<
+	JRST	[JSP T1,ERRHAN	;;CALL THE ERROR HANDLER
+		 XWD 0,ROUTINE	;;FIRST ARGUMENT IS EXIT ROUTINE
+		 ASCIZ |? KDL'CODE STRING|]
+>
+
+	OPDEF	RETSKP [JRST .POPJ1]
+	SUBTTL	INITIALIZATION
+
+GO:	PORTAL	.+2		;ALLOW FOR PROTECTED EXECUTION
+	PORTAL	.+2		;CCL ALSO
+	TDZA	P,P		;ZERO P IF NOT CCL
+	MOVEI	P,1		;GET A "1" IF CCL
+	MOVEM	P,K.CCL		;SAVE FOR .ISCAN
+	MOVE	P,[IOWD PDLLEN,PDL] ;SET UP THE STACK
+	MOVE	T1,.JBFF	;GET THE FIRST FREE LOCATION
+	MOVEM	T1,K.JBFF	;  AND REMEMBER THAT INCASE OF A RESTART
+	RESET			;CLOSE ALL DEVICES
+
+;NOW SEE IF WE ARE RUNNING ON FRCLIN.  IF NOT, CLEAR JACCT. IF SO, REMEMBER
+
+	SETOM	T1		;GET OUR LINE NUMBER USING THE
+	GETLCH	T1		;  -1 MEANS "ME" CONSTRUCT
+	ANDI	T1,^O777	;GET JUST THE LINE NUMBER
+	MOVX	T2,%CNFLN	;NOW DETERMINE WHICH LINE
+	GETTAB	T2,		;  "FRCLIN" IS.
+	  SETOM	T2		;IF NO "FRCLIN" THEN ALWAYS CLEAR JACCT
+	MOVE	T3,PRGNAM	;GET OUR NAME IN PREPARATION
+	SETOM	K.FRC		;ASSUME WE ARE ON FRCLIN
+	CAIE	T2,(T1)		;IF WE ARE NOT,
+	JRST	[SETZM K.FRC	;REMEMBER THAT WE AREN'T
+		 SETNAM T3,	;  AND CHANGE OUR NAME
+		 JRST .+1]	;  SO AS TO CLEAR JACCT
+;READ THE NUMBER OF KMC-11S ON THE SYSTEM
+
+	MOVE	T1,[XWD 2,T2]	;ARG LIST 2 WORDS LONG AT "T2"
+	MOVEI	T2,.KDPKN	;FCN IS RETURN NUMBER OF KMC-11S
+	SETZ	T3,		;RTN VALUE IN T3
+	KDP.	T1,		;DO THE KDP. UUO
+	  URERR	KND,KDP. UUO not defined.,EREXIT
+	MOVEM	T3,K.KMCN	;REMEMBER THE NUMBER OF KMC-11'S
+	SKIPG	T3		;SEE IF THERE ARE ANY KMC-11'S
+	  URERR	NKS,This system has no KMC-11s.,EREXIT
+
+;INITIALIZE SCAN
+
+	MOVE	T1,[XWD ISLEN,ISBLK] ;ISCAN BLOCK
+	SKIPN	K.FRC		;DON'T CALL SCAN IF "FORCED"
+	PUSHJ	P,.ISCAN	;INITIALIZE SCAN
+
+;	JRST	LOOP		;FALL INTO MAIN COMMAND PROCESSOR
+	SUBTTL	MAIN LOOP
+
+;FIRST CALL SCAN TO PROCESS THE COMMAND LINE
+
+LOOP:	SETOM	FIRONE		;SET THE FIRST SWITCH TO -1
+	MOVE	T1,[XWD FIRONE,FIRONE+1] ;MAKE A BLT POINTER
+	BLT	T1,LSTONE	;  AND SET ALL SWITCHES TO -1
+	SETZM	FIRZER		;ZAP FIRST WORD TO ZERO
+	MOVE	T1,[XWD FIRZER,FIRZER+1] ;GET NEXT WORD TO ZERO
+	BLT	T1,LSTZER	;CLEAR ALL WE'RE SUPPOSED TO
+	MOVE	T1,[XWD TSLEN,TSBLK] ;TSCAN BLOCK
+	SKIPN	K.FRC		;CALL SCAN ONLY IF WE'RE NOT "FORCED"
+	PUSHJ	P,.TSCAN	;GO GET A COMMAND LINE
+;	JSR	$0BPT##		;CALL DDT TO SEE WHAT HAPPENED
+
+;CHECK FOR /AUTO OR IF WE HAVE BEEN FORCED.  IF SET, DEFAULT OTHER SWITCHES.
+
+	SKIPGE	S.AUTO		;WAS /AUTO SEEN
+	SKIPE	K.FRC		;OR WERE WE "FRCLIN'ED"
+	CAIA			;IF SO, THEN DO EVERYTHING
+	JRST	LOOP1		;GO PROCESS THE REST OF THE SWITCHES
+	MOVSI	T1,'ALL'	;GET A SIXBIT /ALL   /.  IT SAYS WE SHOULD
+	MOVEM	T1,S.MCLR	;FIRST MASTER CLEAR ALL THE KMC-11'S
+	MOVEM	T1,S.LOAD	;  THEN LOAD THEM
+	MOVEM	T1,S.VRFY	;  THEN VERIFY THEM
+	MOVEM	T1,S.USTR	;  THEN START THEIR MICROCODE.
+	MOVEM	T1,S.KMC	;ALSO, FOR ALL KMC-11S
+	MOVEM	T1,S.STRT	;  START ALL THEIR DUPS
+
+LOOP1:	MOVEI	T1,COMIOP	;THE DEFAULT UCODE IS COMIOP/DUP
+	MOVEM	T1,CRAMST	;  SO SAVE THAT AS THE START OF THE CRAM DATA
+	PUSHJ	P,C.BFIL	;SEE IF DIFFERENT CRAM DATA WAS SPECIFIED.
+
+;NOW PROCESS THE COMMANDS
+
+	PUSHJ	P,C.MCLR	;PROCESS /MCLEAR (IF SET)
+	PUSHJ	P,C.LOAD	;  THEN /LOAD
+	PUSHJ	P,C.VRFY	;  THEN /VERIFY
+	PUSHJ	P,C.USTR	;  THEN /USTART
+
+	PUSHJ	P,C.STOP	;PROCESS /STOP
+	PUSHJ	P,C.STRT	;PROCESS /START
+
+	SKIPE	K.FRC		;IF WE WE'RE "FORCED"
+	EXIT			; THEN WE'RE DONE.  OTHERWISE --
+	JRST	LOOP		;DO IT TILL WE GET IT WRONG
+	SUBTTL	COMMAND PROCESSORS
+
+;MASTER CLEAR COMMAND
+C.MCLR:	MOVE	T2,S.MCLR	;GET THE NUMBER OF KMC-11S
+	JSP	T1,ALLKMC	;CALL ROUTINE TO CALL US ONCE FOR EACH KMC
+	MOVE	T1,[XWD 2,T2]	;XWD LENGTH,ADDR
+	MOVEI	T2,.KDPMC	;MASTER CLEAR
+	MOVEI	T3,(P1)		;KMC NUMBER
+	KDP.	T1,		;RESET THE KMC
+	  URERR	MCF,Master clear of the KMC-11 failed.,ERREST
+	POPJ	P,		;RETURN
+
+
+;USTART (MICROCODE START) COMMAND
+C.USTR:	MOVE	T2,S.USTR	;GET THE NUMBER OF THE KMC-11 TO START
+	JSP	T1,ALLKMC	;CALL FOLLOWING CODE WITH P1 SETUP FOR EACH
+	MOVE	T1,[XWD 2,T2]	;GET LENGTH,ADDR
+	MOVEI	T2,.KDPST	;START MICROCODE
+	MOVEI	T3,(P1)		;GET KMC NUMBER
+	KDP.	T1,		;START THE KMC
+	  URERR	MSF,Microcode start failed.,ERREST
+	POPJ	P,
+	SUBTTL	C.LOAD -- LOAD MICROCODE COMMAND PROCESSOR
+
+C.LOAD:	MOVE	T2,S.LOAD	;GET THE KMC-11 SPECIFICATION
+	JSP	T1,ALLKMC	;CALL FOLLOWING CODE ONCE FOR EACH KMC
+	MOVSI	T2,-CRAMSZ	;GET MINUS THE CRAM SIZE
+	HRR	T2,CRAMST	;GET THE START OF THE CRAM
+	MOVEI	T1,.KDPWR	;GET THE FUNCTION
+	MOVEM	T1,A.FCN	;SAVE IT IN THE ARG BLOCK
+	MOVEM	P1,A.KMC	;SAVE THE KMC NUMBER
+	SETZM	A.ADR		;START AT CRAM LOCATION ZERO
+LOAD.1:	MOVE	T1,(T2)		;GET THE NEXT CRAM WORD
+	MOVEM	T1,A.VAL	;SAVE IT IN THE ARG BLOCK
+	MOVE	T1,[XWD 4,A.FCN];GET LENGTH,ADDR
+	KDP.	T1,		;DO THE FUNCTION
+	  URERR	CWF,KMC-11 CRAM write failed.,ERREST
+	AOS	A.ADR		;GO TO THE NEXT ADDRESS
+	AOBJN	T2,LOAD.1	;LOOP OVER ALL CRAM LOCATIONS
+	POPJ	P,		;ALL DONE.  MICROCODE LOADED
+	SUBTTL	C.VRFY -- VERIFY CRAM COMMAND PROCESSOR
+
+C.VRFY:	MOVE	T2,S.VRFY	;GET THE KMC-11 SPECIFICATION
+	JSP	T1,ALLKMC	;CALL FOLLOWING CODE ONCE FOR EACH KMC
+	MOVSI	T2,-CRAMSZ	;GET MINUS THE CRAM SIZE
+	HRR	T2,CRAMST	;GET THE START OF THE CRAM
+	MOVEI	T1,.KDPRE	;GET THE FUNCTION
+	MOVEM	T1,A.FCN	;SAVE IT IN THE ARG BLOCK
+	MOVEM	P1,A.KMC	;SAVE THE KMC NUMBER
+	SETZM	A.ADR		;START AT CRAM LOCATION ZERO
+VRFY.1:	MOVE	T1,[XWD 4,A.FCN];GET LENGTH,ADDR
+	KDP.	T1,		;DO THE FUNCTION
+	  URERR	CRF,KMC-11 CRAM read failed.,ERREST
+	MOVE	T1,(T2)		;GET THE VALUE THAT SHOULD BE THERE
+	CAME	T1,A.VAL	;  AND SEE IF IT'S WHAT WE GOT BACK
+	PUSHJ	P,VRFY.E	;VERIFY ERROR.  GO TYPE OUT THE INFO
+	AOS	A.ADR		;GO TO THE NEXT CRAM ADDR
+	AOBJN	T2,VRFY.1	;LOOP OVER ALL CRAM LOCATIONS
+	POPJ	P,		;ALL DONE.  MICROCODE VERIFIED
+
+VRFY.E:	PUSH	P,T2		;SAVE THE AOBJN POINTER
+	MOVEI	T1,[ASCII |% KDLCVE CRAM verify error @|]
+	PUSHJ	P,.TSTRG	;TYPE THE STRING
+	MOVE	T1,A.ADR	;GET THE ADDRESS
+	PUSHJ	P,.TOCTW	;TYPE IT OUT
+	MOVEI	T1,[ASCII | should be |]
+	PUSHJ	P,.TSTRG	;TYPE THE STRING
+	MOVE	T1,(P)		;GET THE AOBJN POINTER
+	MOVE	T1,(T1)		;GET THE VALUE
+	PUSHJ	P,.TOCTW	;TYPE THE VALUE
+	MOVEI	T1,[ASCII | was |]
+	PUSHJ	P,.TSTRG	;TYPE STRING
+	MOVE	T1,A.VAL	;GET VALUE RETURNED
+	PUSHJ	P,.TOCTW	;TYPE OUT ACTUAL CONTENTS
+	MOVEI	T1,"."		;GET A TERMINATING PERIOD
+	PUSHJ	P,.TCHAR	;TYPE THAT
+	PUSHJ	P,.TCRLF	;TYPE THE CRLF
+	POP	P,T2		;RESTORE THE AOBJN POINTER
+	POPJ	P,		;  AND BACK TO THE VERIFY ROUTINE
+	SUBTTL	C.STRT -- START DDCMP COMMAND PROCESSOR
+
+C.STRT:	MOVE	T2,S.KMC	;GET KMC DESCRIPTOR
+	JSP	T1,ALLKMC	;START FOR ALL KMCS
+	MOVE	T2,S.STRT	;GET DUP SPEC
+	JSP	T1,ALLDUP	;DO ALL DUPS
+	MOVE	T1,[XWD 3,T2]	;XWD LENG,ADDR
+	MOVEI	T2,.KDLST	;START DDCMP SUB-FUNCTION
+	MOVE	T3,P1		;  ON KMC # P1
+	MOVE	T4,P2		;  DUP # P2
+	KDP.	T1,		;DO THE UUO
+	  URERR	LFS,Line failed to start DDCMP.,ERREST
+	POPJ	P,		;ALL DONE
+	SUBTTL	C.STOP -- STOP DDCMP COMMAND PROCESSOR
+
+C.STOP:	MOVE	T2,S.KMC	;GET KMC TO STOP DDCMP ON
+	JSP	T1,ALLKMC	;'ALL' IS LEGAL
+	MOVE	T2,S.STOP	;GET DUP TO STOP
+	JSP	T1,ALLDUP	;'ALL' IS LEGAL
+	MOVE	T1,[XWD 3,T2]	;GET XWD LENG,ADDR
+	MOVEI	T2,.KDLHA	;STOP DDCMP SUB-FUNCTION
+	MOVE	T3,P1		;  ON KMC # P1
+	MOVE	T4,P2		;  DUP # P2
+	KDP.	T1,		;DO THE UUO
+	  URERR	SLF,Stop DDCMP on line failed.,ERREST
+	POPJ	P,		;ALL DONE
+	SUBTTL	C.BFIL -- BINARY CRAM DATA FILE PROCESSING
+
+; DESCRIPTION OF OUTPUT FROM MACX11/P GENERATED ASSEMBLY
+; THAT IS, WHAT INPUT SHOULD LOOK LIKE
+; APPROXIMATELY
+
+; -----------------------------------------------------------------------
+; [(0-1)/8-BIT BYTE#2/8-BIT BYTE #1,,(18-19)/8-BIT BYTE #4/8-BIT BYTE #3]
+; -----------------------------------------------------------------------
+
+; THE ABOVE IS SO-CALLED PACKED MODE.  IN IMAGE MODE, THEY APPEAR
+; ONE BYTE PER WORD IN ASCENDING BYTE ORDER.
+
+; 	THE BYTES IN -11 ORDERING (IE, AFTER ABOVE UNTANGLING) ARE:
+; 		ANY NUMBER OF 0 BYTES (DISCARD)
+; 		CONSTANT 1
+; 		CONSTANT 0
+; 		BCL
+; 		BCU
+; 		AL
+; 		AU
+; 		BC-6 BYTES OF DATA IN ORDER STARTING WITH THE BYTE FOR A
+; 		C
+; 			WHERE BC=BCU*400+BCL	THE BYTE COUNT
+; 			      A =AU *400+AL	THE FIRST BYTE ADDRESS
+; 			      C =          	THE CHECKSUM
+; 	THE ABOVE CAN BE REPEATED INDEFINITELY.
+; 	THE LAST SUCH GROUP HAS BC=6 AND THE STARTING ADDRESS IS A.
+
+; THE CHECKSUM IS A SIMPLE ADD OF THE BYTES STARTING WITH CONSTANT 1 AND
+; INCLUDING THE CHECKSUM--THE RESULT IS 0 IN 8 BITS.
+C.BFIL:	MOVEI	T1,F.BFIL	;GET ADDRESS OF SCAN BLOCK
+	SKIPN	.FXDEV(T1)	;IF THE USER DIDN'T SPECIFY THE /BFILE
+	POPJ	P,		;  SWITCH, DON'T DO ANYTHING
+	MOVE	T2,.FXMOD(T1)	;GET SCAN MOD WORD
+	MOVSI	T3,'SYS'	;GET DEFAULT DEVICE
+	TXNE	T2,FX.NDV	;IF THE USER DIDN'T SPECIFY A DEVICE
+	MOVEM	T3,.FXDEV(T1)	;  SUS "SYS:" AS A DEFAULT
+	MOVE	T3,[SIXBIT |CMIODP|] ;GET DEFAULT FILE NAME
+	SKIPL	.FXNMM(T1)	;  AND IF THE USER DIDN'T SPECIFY A NAME
+	MOVEM	T3,.FXNAM(T1)	;  THEN USE "CMIODP"
+	SETOM	.FXNMM(T1)	;TELL SCAN THAT THE NAME HAS BEEN SPECIFIED
+	MOVE	T2,.FXEXT(T1)	;GET THE EXTENSION AND MASK
+	TRC	T2,-1		;COMPLEMENT THE MASK
+	TRCE	T2,-1		;MAKE SURE THE MASK WAS -1
+	MOVE	T2,[XWD 'BIN',-1] ;  OTHERWISE DEFAULT TO AN EXT OF .BIN
+	MOVEM	T2,.FXEXT(T1)	;STORE THE DEFAULTED EXTENSION
+	MOVEI	T2,B.OPN	;GET THE OPEN BLOCK ADDRESS
+	MOVEI	T3,B.LEB	;  THE LOOKUP/ENTER BLOCK
+	MOVEI	T4,B.PTH	;  AND THE PATH BLOCK
+	PUSHJ	P,.STOPB	;TELL SCAN TO CONVERT THE MESS TO MONITOR FORM
+	  JRST	BFIL.E		;FILE SPEC ERROR
+	MOVEI	T1,5		;GET THE LENGTH OF THE LOOKUP/ENTER BLOCK
+	MOVEM	T1,B.LEB	;  SET IT SO LOOKUP WILL WORK
+	MOVX	T1,.IOIMG	;WE WANT IMAGE MODE
+	MOVEM	T1,B.OPN	;  SO STORE THAT IN THE OPEN BLOCK
+	MOVEI	T1,B.IBUF	;GET THE INPUT BUFFER HEADER ADDRESS
+	MOVEM	T1,B.OPN+2	;  AND SET IT UP FOR THE OPEN
+	OPEN	$BIN,B.OPN	;OPEN THE DEVICE
+	  JRST	BFIL.E		;FILE SPEC ERROR
+	LOOKUP	$BIN,B.LEB	;LOOKUP UP THE FILE
+	  JRST	BFIL.E		;FILE SPEC ERROR
+	PUSHJ	P,BFIL.R	;GO READ THE BITS
+	CLOSE	$BIN,		;CLOSE THE FILE
+	RELEAS	$BIN,		;  AND RELEASE IT
+	POPJ	P,		;ALL DONE
+
+
+;HERE IF THE FILE SPEC IS IN ERROR
+BFIL.E:	MOVEI	T1,[ASCIZ |? KDLFSE Binary file-spec error |]
+BFIL0E:	PUSHJ	P,.TSTRG	;TYPE THE MESSAGE
+BFIL1E:	MOVEI	T1,F.BFIL	;GET THE SCAN BLOCK ADDRESS
+	PUSHJ	P,.TFBLK	;TYPE OUT THE FILE IN ERROR
+	PUSHJ	P,.TCRLF	;TYPE THE CRLF
+	JRST	ERREST		;RESTART
+	SUBTTL	BFIL.R -- READ THE BINARY FILE
+
+;ROUTINE TO READ THE FILE AN ASSEMBLE THE CRAM-IMAGE IN MAIN MEMORY.
+;  FIRST ALLOCATE MEMORY FOR THE CRAM IMAGE.
+
+BFIL.R:	PUSHJ	P,.SAVE4	;SAVE THE P'S
+	MOVE	T1,.JBFF	;GET THE ADDRESS OF THE FIRST FREE LOCATION
+	ADDI	T1,CRAMSZ	;WE NEED THIS MANY WORDS
+	MOVEI	T2,(T1)		;COPY THE ADDRESS
+	CORE	T2,		;GET THE CORE
+	  URERR	CUF,Core uuo failed.,ERREST
+	EXCH	T1,.JBFF	;STORE THE NEW FIRST FREE ADDRESS
+	MOVEM	T1,CRAMST	;REMEMBER THE START OF THE CRAM
+
+	MOVSI	T2,(T1)		;COPY THE ADDRESS
+	HRRI	T2,1(T1)	;  AND MAKE A BLT POINTER
+	SETZM	(T1)		;ZERO THE FIRST WORD
+	BLT	T2,CRAMSZ-1(T1)	;  AND ZAP THE REST
+;MAIN LOOP TO READ EACH RECORD.
+;  REGISTER CONVENTION IS
+;	P1 := THE ADDRESS TO STORE THE NEXT BYTE
+;	P2 := THE COUNT OF BYTES LEFT IN THIS RECORD (+- 6)
+;	P3 := THE CHECKSUM
+;	P4 := TEMP CONTAINING THE LAST -10 WORD READ
+
+	SETZ	P4,		;CLEAR THE LAST -10 WORD READ
+BFIL.L:	PUSHJ	P,BFIL.B	;GET THE NEXT BYTE
+	JRST	[MOVEI T1,[ASCIZ |? KDLNER No end record on binary file |]
+		 JRST BFIL0E]	;PRINT THE ERROR
+	CAIE	T1,1		;IS THIS THE RECORD HEADER
+	JRST	BFIL.L		;  IF NOT START OF RECORD, KEEP LOOKING
+
+	MOVEI	P3,T1		;START OF VALID RECORD.  INIT CHECKSUM
+	PUSHJ	P,BFIL.1	;GET THE NEXT BYTE
+	CAIE	T1,0		;MAKE SURE THE NEXT BYTE IS "0"
+	JRST	[MOVEI T1,[ASCIZ |? KDLBFE Binary file format error |]
+		 JRST BFIL0E]	;PRINT THE FILE SPEC AND EXIT
+
+;COUNT
+	PUSHJ	P,BFIL.1	;GET THE LOW-ORDER
+	MOVEI	P2,(T1)		;  BYTE-COUNT BYTE
+	PUSHJ	P,BFIL.1	;GET THE HIGH-ORDER
+	DPB	T1,[POINTR P2,M.BYT4] ;  BYTE-COUNT BYTE
+	SUBI	P2,6		;FIXUP THE SCREWY COUNT VALUE
+
+;ADDRESS
+	PUSHJ	P,BFIL.1	;GET THE NEXT BYTE
+	MOVEI	P1,(T1)		;  AND SAVE IT AS ADDR(LOWER)
+	PUSHJ	P,BFIL.1	;GET THE ONE AFTER THAT
+	DPB	T1,[POINTR P1,M.BYT4] ;  AND SAVE IT AS ADDR(HIGHER)
+
+	JUMPE	P2,BFIL.X	;IF LAST RECORD, CHECK THE CHECKSUM AND RETURN
+
+;FALL THROUGH TO READ THE RECORD'S DATA BYTES
+;NOW LOOP OVER ALL THE BYTES IN THIS RECORD.
+
+BFIL.Q:	PUSHJ	P,BFIL.1	;GET THE NEXT DATA BYTE
+	MOVEI	T2,(P1)		;GET THE ADDRESS TO STORE IT
+	LSH	T2,-1		;MAKE BYTE ADDRESS A WORD ADDRESS
+	CAIL	T2,CRAMSZ	;MAKE SURE THIS IS A LEGAL CRAM-ADDRESS
+	JRST	[MOVEI T1,[ASCIZ |? KDLAOR Cram address out of range |]
+		 JRST BFIL0E]	;PRINT THE ERROR
+	TRNE	P1,1		;IF THIS IS THE ODD (HIGH) BYTE
+	TLOA	T2,(POINTR 0,M.BYT4) ;THEN STORE IN THE HIGH BYTE
+	TLO	T2,(POINTR 0,M.BYT3) ;  OTHERWISE IN THE LOW BYTE
+	ADD	T2,CRAMST	;RELOCATE TO THE LOCATION OF THE CRAM
+	DPB	T1,T2		;STORE THE BYTE.
+	ADDI	P1,1		;STEP TO THE NEXT BYTE ADDRESS
+	SOJG	P2,BFIL.Q	;LOOP OVER ALL BYTES IN THIS RECORD
+
+;FINISHED RECORD.  CHECK CHECKSUM AND DO NEXT RECORD
+
+	PUSHJ	P,BFIL.X	;CHECK CHECKSUM
+	JRST	BFIL.L		;GO BACK TO MAIN RECORD LOOP
+;ROUTINE TO READ A BYTE FROM THE INPUT FILE
+;CALL	PUSHJ	P,BFIL.B
+;	  EOF
+;	BYTE IN T1
+;USES P4 AS A GLOBAL SCRATCH LOCATION.
+BFIL.B:	TXZE	P4,FL.BT1	;IS BYTE #1 VALID
+	JRST	[LDB T1,[POINTR(P4,M.BYT1)]
+		 RETSKP]
+	TXZE	P4,FL.BT2	;IS BYTE #2 VALID
+	JRST	[LDB T1,[POINTR(P4,M.BYT2)]
+		 RETSKP]
+	TXZE	P4,FL.BT3	;IS BYTE #3 VALID
+	JRST	[LDB T1,[POINTR(P4,M.BYT3)]
+		 RETSKP]
+	TXZE	P4,FL.BT4	;IS BYTE #4 VALID
+	JRST	[LDB T1,[POINTR(P4,M.BYT4)]
+		 RETSKP]
+	PUSHJ	P,BFIL.W	;NO VALID BYTES, GO READ A WORD
+	  POPJ	P,		;PROPAGATE THE EOF RETURN
+	MOVX	P4,FL.BT1!FL.BT2!FL.BT3!FL.BT4 ;GET ALL THE VALID BITS
+	IOR	P4,T1		;OR IN THE "GOOD" DATA
+	JRST	BFIL.B		;GO GET THE NEXT BYTE
+
+
+
+;ROUTINE TO READ ONE BYTE FROM INPUT FILE AND GIVE ERROR IF EOF
+;CALL	AS BFIL.B
+;RETURN	CPOPJ			;ALWAYS UNLESS AN ERROR.
+BFIL.1:	PUSHJ	P,BFIL.B	;GET THE NEXT BYTE
+	JRST	[MOVEI T1,[ASCIZ |? KDLPEF Premature end of binary file |]
+		 JRST BFIL0E]	;PRINT ERROR AND RETURN
+	ADD	P3,T1		;ACCUMULATE THE CHECKSUM
+	POPJ	P,
+;ROUTINE TO READ A WORD FROM THE INPUT FILE.
+;CALL	PUSHJ	P,BFIL.W
+;	  EOF
+;	CHAR IN T1
+BFIL.W:	SOSL	B.IBUF+.BFCTR	;COUNT DOWN ONE MORE BYTE
+	JRST	[ILDB T1,B.IBUF+.BFPTR ;GET THE BYTE
+		 RETSKP]	;GIVE GOOD RETURN
+	IN	$BIN,		;DO THE IN
+	JRST	BFIL.W		;  IF IT'S GOOD, GO RETURN THE BYTE
+	STATZ	$BIN,IO.EOF	;IF IT'S AN EOF,
+	POPJ	P,		;  THEN GIVE THE EOF RETURN
+	MOVEI	T1,[ASCIZ |? KDLIFE Input file error #|]
+	PUSHJ	P,.TSTRG	;TYPE THE ERROR MESSAGE
+	GETSTS	$BIN,T1		;GET THE FILE ERROR
+	PUSHJ	P,.TOCTW	;  AND TYPE THE ERROR CODE
+	PUSHJ	P,.TSPAC	;PRINT A SPACE
+	PJRST	BFIL1E		;GO PRINT THE FILE NAME AND CAUSE ERROR
+
+
+;ROUTINE TO VERIFY THE CHECKSUM
+
+BFIL.X:	PUSHJ	P,BFIL.1	;GET THE CHECKSUM BYTE
+	TRNN	P3,M.BYT3	;IF THE LOW 8 BITS ARE ZERO, THEN
+	POPJ	P,		;  RETURN WITH CHECKSUM VERIFYED
+	MOVEI	T1,[ASCIZ |? KDLBCE Binary file checksum error |]
+	PJRST	BFIL0E		;GO PRINT THE FILENAME
+	SUBTTL	SUBROUTINES
+
+
+;ROUTINE CALLED BY SCAN TO ALLOCATE INPUT SCAN FILE BLOCK AREAS
+ALCIFL:	MOVEI	T1,F.IFIL	;RETURN START OF INPUT FILE
+	MOVEI	T2,.FXLEN	;LENGTH OF BLOCK
+	POPJ	P,
+
+
+;ROUTINE CALLED BY SCAN TO ALLOCATE OUTPUT SCAN FILE BLOCKS
+ALCOFL:	MOVEI	T1,F.OFIL	;RETURN START OF OUTPUT BLOCK
+	MOVEI	T2,.FXLEN	;LENGTH OF BLOCK
+	POPJ	P,
+;ALLKMC	ROUTINE TO CALL ".+1" FOR ALL KMCS SPECIFIED BY T1
+;CALL	MOVX	T2, ONE OF 	-1    MEANS NO KMCS
+;				N     MEANS KMC "N"
+;				'ALL' MEANS ALL KMC'S ON SYSTEM
+;	JSP	T1,ALLKMC	;CALL CODE FOR ALL KMC-11S
+;THIS ROUTINE CALLS ITS CALLER WITH P1 SET UP TO THE KMC NUMBER
+;  IT POPJ'S WHEN ALL KMC-11S HAVE BEEN PROCESSED
+ALLKMC:	PUSHJ	P,.SAVE3	;SAVE THE P'S
+	MOVEM	T1,P3		;SAVE ADDRESS OF ROUTINE TO CALL
+	CAME	T2,[SIXBIT |ALL   |]	;WAS 'ALL' SPECIFIED
+	JRST	[JUMPL T2,.POPJ	;EXIT IF .LE. ZERO
+		 MOVE P1,T2	;NO. MAKE FIRST AND
+		 MOVE P2,T2	;  LAST BE THE ONE SPECIFIED
+		 JRST ALLKM1]	;CALL ROUTINE
+	SETZ	P1,		;WE START WITH THE ZERO'TH
+	MOVE	P2,K.KMCN	;  AND THIS IS THE LAST +1
+	SOS	P2		;  AND THIS IS THE LAST
+ALLKM1:	PUSHJ	P,(P3)		;CALL THE ROUTINE
+	CAIL	P1,(P2)		;IF WE'RE DONE,
+	POPJ	P,		;  THEN RETURN
+	AOJA	P1,ALLKM1	;LOOP OVER ALL KMCS
+;ALLDUP	SIMILAR TO ALLKMC
+;CALL	MOVEI	P1,KMC #
+;	MOVEI	T2,ONE OF {-1, N, 'ALL'}
+;	JSP	T1,ALLDUP
+;CALLS CODE FOLLOWING JSP WITH
+;	P1 := KMC
+;	P2 := DUP
+
+ALLDUP:	PUSHJ	P,.SAVE4	;WE'RE A LITTLE MORE EXTRAVAGANT
+	MOVEM	T1,P4		;SAVE THE ADDRESS OF THE ROUTINE TO CALL
+	CAME	T2,[SIXBIT |ALL   |] ;WAS 'ALL' SPECIFIED
+	JRST	[JUMPL T2,.POPJ	;IF NOT, MAKE SURE WE HAVE A DUP NUMBER
+		 MOVE P2,T2	;START AT "T2"
+		 MOVE P3,T2	;END AT "T2"
+		 JRST ALLDU1]	;GO CALL CALLER BACK
+	MOVE	T1,[XWD 3,T2]	;LENGTH AND ADDRESS OF ARG BLOCK
+	MOVEI	T2,.KDPDN	;  TO RETURN NUMBER OF DUPS
+	MOVEI	T3,(P1)		;  ON KMC # (P1)
+	KDP.	T1,		;GET THE NUMBER OF DUPS
+	  URERR	RDF,Read of the number of DUP-11s failed.,ERREST
+	SKIPG	T4		;MAKE SURE THERE ARE SOME
+	SETZ	P2,		;FIRST DUP TO DO
+	SOS	P3,T4		;LAST DUP TO DO
+ALLDU1:	PUSHJ	P,(P4)		;CALL OUR CALLER
+	CAIL	P2,(P3)		;SEE IF WE'RE DONE
+	POPJ	P,		;IF SO, RETURN TO CALLER'S CALLER
+	AOJA	P2,ALLDU1	;GO DO NEXT DUP
+	SUBTTL	ERRHAN -- VARIOUS ERROR HANDLING ROUTINES
+
+;ERRHAN	ROUTINE TO PROCESS THE BLOCK SET UP BY THE URERR MACRO
+;CALL	MOVX	T1,ADDRESS OF "XWD 0,EXIT-ROUTINE
+;			       ASCIZ STRING"
+;	JRST	ERRHAN
+;RETURN	TO "EXIT-ROUTINE"
+ERRHAN:	PUSH	P,(T1)		;SAVE THE RETURN ADDRESS
+	AOS	T1		;POINT TO ASCIZ STRING
+	PUSHJ	P,.TSTRG	;PRINT THE STRING
+	SKIPN	K.FRC		;IF NOT IN "FORCED" MODE,
+	PJRST	.TCRLF		;PRINT THE CRLF
+	EXIT			;IF FORCED, THEN FREE UP FRCLIN
+
+
+;HERE ON VARIOUS ERRORS
+EREXIT:	MONRT.			;RETURN ONCE.
+ERREST:	MOVE	T1,K.JBFF	;GET OLD VALUE OF .JBFF
+	MOVEM	T1,.JBFF	;  AND DEALLOCATE ALL THE SPACE WE USED
+	JRST	GO		;GO RESTART THE PROGRAM AGAIN
+
+;ROUTINE TO PRINT THE PROMPT
+PRMPT:	OUTSTR	[ASCIZ |KDL|]	;PROGRAM NAME
+	JUMPL	T1,PRMPT1	;IF THIS IS A CONTINUATION, USE "#"
+	OUTCHR	[EXP 62]	;THE ANGLE BRACKET
+	POPJ	P,
+PRMPT1:	OUTCHR	[EXP 35]	;PRINT THE "#"
+	POPJ	P,
+	SUBTTL	SCAN -- ROUTINES CALLED BY SCAN TO READ SWITCH VALUES
+
+;ROUTINE TO SCAN A DUP-11 NUMBER OR "ALL"
+;CALLED FROM SCAN WITH
+;	P1 := POINTER INTO SWITCH TABLE
+SCNDUP:	PUSHJ	P,.NOCTW	;CALL SCAN TO PICK UP THE SWITCHES VALUE
+	CAMN	N,[SIXBIT |ALL|];SEE IF "ALL" WAS SPECIFIED
+	POPJ	P,		;'ALL' IS LEGAL, RETURN
+	SKIPL	N		;IF IT'S LESS THAN 0
+	CAIL	N,16		;  OR GREATER THAN 15,
+	JRST	.+2		;  IT'S AN ERROR
+	POPJ	P,		;IT'S IN RANGE, GIVE GOOD RETURN
+	MOVE	N,KDPSWN(P1)	;GET THE NAME OF THE SWITCH WITH THE ERROR
+	M.FAIN	<KDLIDN Illegal DUP-11 number on switch >
+
+
+SCNKMC:	PUSHJ	P,.NOCTW	;CALL SCAN TO PICK UP THE SWITCH VALUE
+	CAMN	N,[SIXBIT |ALL|];SEE IF IT WAS "ALL"
+	POPJ	P,		;IF "ALL" THEN IT'S OK
+	SKIPL	N		;IF IT'S LESS THAN 0
+	CAML	N,K.KMCN	;  OF GREATER THAN THE MAXIMUM KMC NUMBER
+	JRST	.+2		;  IT'S AN ERROR
+	POPJ	P,		;IF A GOOD KMC-11 SPEC, LET IT GO
+	MOVE	N,KDPSWN(P1)	;GET THE NAME OF THE SWITCH THAT WITH BAD ARG
+	M.FAIN	<KDLIKN Illegal KMC-11 number on switch >
+	SUBTTL	SWITCH DEFINITIONS
+
+	DEFINE	SWTCHS,	<	;SWTCHS MACRO FOR DOSCAN TO EXPAND
+
+;	SP	AFILE,	F.AFIL,	.SWFIL,	FIL,	FS.NFS!FS.VRQ
+	SS	*AUTO,	S.AUTO,	1,		FS.NFS
+	SP	BFILE,	F.BFIL,	.SWFIL,	FIL,	FS.NFS!FS.VRQ
+	SP	KMC,	S.KMC,	SCNKMC,	KMC,	FS.NFS!FS.VRQ
+	SP	LOAD,	S.LOAD,	SCNKMC,	KMC,	FS.NFS!FS.VRQ
+	SP	MCLEAR,	S.MCLR,	SCNKMC,	KMC,	FS.NFS!FS.VRQ
+	SP	START,	S.STRT,	SCNDUP,	DUP,	FS.NFS!FS.VRQ
+	SP	STOP,	S.STOP,	SCNDUP,	DUP,	FS.NFS!FS.VRQ
+	SP	USTART,	S.USTR,	SCNKMC,	KMC,	FS.NFS!FS.VRQ
+	SP	VERIFY,	S.VRFY,	SCNKMC,	KMC,	FS.NFS!FS.VRQ
+>
+
+	DM	(KMC,0,-1,0)
+	DM	(DUP,0,-1,0)
+	DM	(FIL,.FXLEN,0,0)
+
+	DOSCAN	(KDPSW)		;EXPAND ALL THIS...
+
+ISBLK:	IOWD	1,PRGNAM	;LET "KDPLDR" COMMAND WORK
+	XWD	K.CCL,'KPL'	;CCL ENTRY. TMP:KPL IS CCL FILE
+	XWD	0,0		;TYPE OUT,IN ROUTINES
+	EXP	0		;ADDRESS OF INDIRECT FILE BLOCK
+	XWD	PRMPT,0		;ADDRESS OF PROMPT ROUTINE
+	XWD	0,0		;ISCAN FLAGS
+	ISLEN==.-ISBLK		;LENGTH OF ISCAN BLOCK
+
+TSBLK:	IOWD	KDPSWL,KDPSWN	;SWITCH TABLE
+	XWD	KDPSWD,KDPSWM	;MORE SWITCH TABLE
+	XWD	0,KDPSWP	;LAST OF SWITCH TABLE
+	EXP	-1		;HELP
+	XWD	0,0		;CLEAR ANSWERS, FILE
+	XWD	ALCIFL,ALCOFL	;ALLOCATE FILE AREAS
+	XWD	0,0		;STICKY DEFAULT PROCESSING
+	XWD	0,0		;ROUTINE TO STORE SWITCH VALUES
+	TSLEN==.-TSBLK		;LENGTH OF TSCAN BLOCK
+
+PRGNAM:	SIXBIT	|KDPLDR|	;OUR PROGRAM NAME
+	SUBTTL	COMIOP/DUP BINARY
+
+comiop:	xlist			;no one want's to look...
+	radix	8		;This is all in octal
+	exp	61220		; [cram loc 0]
+	exp	61222		; [cram loc 1]
+	exp	63234		; [cram loc 2]
+	exp	63233		; [cram loc 3]
+	exp	63224		; [cram loc 4]
+	exp	16400		; [cram loc 5]
+	exp	123600		; [cram loc 6]
+	exp	60400		; [cram loc 7]
+	exp	103412		; [cram loc 8]
+	exp	100405		; [cram loc 9]
+	exp	440		; [cram loc 10]
+	exp	63225		; [cram loc 11]
+	exp	74524		; [cram loc 12]
+	exp	63220		; [cram loc 13]
+	exp	60365		; [cram loc 14]
+	exp	101427		; [cram loc 15]
+	exp	63064		; [cram loc 16]
+	exp	2777		; [cram loc 17]
+	exp	4457		; [cram loc 18]
+	exp	70000		; [cram loc 19]
+	exp	76613		; [cram loc 20]
+	exp	62614		; [cram loc 21]
+	exp	114707		; [cram loc 22]
+	exp	4003		; [cram loc 23]
+	exp	10375		; [cram loc 24]
+	exp	16451		; [cram loc 25]
+	exp	16517		; [cram loc 26]
+	exp	2777		; [cram loc 27]
+	exp	123620		; [cram loc 28]
+	exp	103163		; [cram loc 29]
+	exp	10375		; [cram loc 30]
+	exp	4003		; [cram loc 31]
+	exp	140620		; [cram loc 32]
+	exp	120440		; [cram loc 33]
+	exp	103501		; [cram loc 34]
+	exp	120440		; [cram loc 35]
+	exp	103434		; [cram loc 36]
+	exp	400		; [cram loc 37]
+	exp	61222		; [cram loc 38]
+	exp	2511		; [cram loc 39]
+	exp	100434		; [cram loc 40]
+	exp	2511		; [cram loc 41]
+	exp	10377		; [cram loc 42]
+	exp	50220		; [cram loc 43]
+	exp	101434		; [cram loc 44]
+	exp	55223		; [cram loc 45]
+	exp	55224		; [cram loc 46]
+	exp	55225		; [cram loc 47]
+	exp	55226		; [cram loc 48]
+	exp	55227		; [cram loc 49]
+	exp	55222		; [cram loc 50]
+	exp	10376		; [cram loc 51]
+	exp	57221		; [cram loc 52]
+	exp	43220		; [cram loc 53]
+	exp	2517		; [cram loc 54]
+	exp	767		; [cram loc 55]
+	exp	60360		; [cram loc 56]
+	exp	101474		; [cram loc 57]
+	exp	406		; [cram loc 58]
+	exp	62400		; [cram loc 59]
+	exp	40361		; [cram loc 60]
+	exp	101477		; [cram loc 61]
+	exp	100500		; [cram loc 62]
+	exp	2777		; [cram loc 63]
+	exp	10375		; [cram loc 64]
+	exp	123400		; [cram loc 65]
+	exp	103105		; [cram loc 66]
+	exp	2441		; [cram loc 67]
+	exp	100434		; [cram loc 68]
+	exp	2443		; [cram loc 69]
+	exp	700		; [cram loc 70]
+	exp	61231		; [cram loc 71]
+	exp	100434		; [cram loc 72]
+	exp	120400		; [cram loc 73]
+	exp	103514		; [cram loc 74]
+	exp	100451		; [cram loc 75]
+	exp	3020		; [cram loc 76]
+	exp	61202		; [cram loc 77]
+	exp	102121		; [cram loc 78]
+	exp	2524		; [cram loc 79]
+	exp	100434		; [cram loc 80]
+	exp	2531		; [cram loc 81]
+	exp	600		; [cram loc 82]
+	exp	100507		; [cram loc 83]
+	exp	120440		; [cram loc 84]
+	exp	103127		; [cram loc 85]
+	exp	100533		; [cram loc 86]
+	exp	120400		; [cram loc 87]
+	exp	102121		; [cram loc 88]
+	exp	120440		; [cram loc 89]
+	exp	103034		; [cram loc 90]
+	exp	2451		; [cram loc 91]
+	exp	457		; [cram loc 92]
+	exp	63225		; [cram loc 93]
+	exp	123072		; [cram loc 94]
+	exp	60532		; [cram loc 95]
+	exp	70005		; [cram loc 96]
+	exp	57233		; [cram loc 97]
+	exp	47234		; [cram loc 98]
+	exp	70213		; [cram loc 99]
+	exp	14414		; [cram loc 100]
+	exp	75231		; [cram loc 101]
+	exp	56226		; [cram loc 102]
+	exp	56227		; [cram loc 103]
+	exp	70213		; [cram loc 104]
+	exp	120440		; [cram loc 105]
+	exp	102555		; [cram loc 106]
+	exp	102272		; [cram loc 107]
+	exp	100764		; [cram loc 108]
+	exp	102254		; [cram loc 109]
+	exp	400		; [cram loc 110]
+	exp	61222		; [cram loc 111]
+	exp	123620		; [cram loc 112]
+	exp	116353		; [cram loc 113]
+	exp	100434		; [cram loc 114]
+	exp	521		; [cram loc 115]
+	exp	61271		; [cram loc 116]
+	exp	400		; [cram loc 117]
+	exp	63232		; [cram loc 118]
+	exp	73233		; [cram loc 119]
+	exp	67234		; [cram loc 120]
+	exp	100607		; [cram loc 121]
+	exp	123620		; [cram loc 122]
+	exp	116353		; [cram loc 123]
+	exp	63072		; [cram loc 124]
+	exp	420		; [cram loc 125]
+	exp	60372		; [cram loc 126]
+	exp	101436		; [cram loc 127]
+	exp	4457		; [cram loc 128]
+	exp	63220		; [cram loc 129]
+	exp	60532		; [cram loc 130]
+	exp	70000		; [cram loc 131]
+	exp	57233		; [cram loc 132]
+	exp	47234		; [cram loc 133]
+	exp	70213		; [cram loc 134]
+	exp	54620		; [cram loc 135]
+	exp	43220		; [cram loc 136]
+	exp	101572		; [cram loc 137]
+	exp	62560		; [cram loc 138]
+	exp	101172		; [cram loc 139]
+	exp	76620		; [cram loc 140]
+	exp	56224		; [cram loc 141]
+	exp	56225		; [cram loc 142]
+	exp	415		; [cram loc 143]
+	exp	61230		; [cram loc 144]
+	exp	43231		; [cram loc 145]
+	exp	120600		; [cram loc 146]
+	exp	102222		; [cram loc 147]
+	exp	23421		; [cram loc 148]
+	exp	60731		; [cram loc 149]
+	exp	106750		; [cram loc 150]
+	exp	23100		; [cram loc 151]
+	exp	23417		; [cram loc 152]
+	exp	103637		; [cram loc 153]
+	exp	1400		; [cram loc 154]
+	exp	106441		; [cram loc 155]
+	exp	60617		; [cram loc 156]
+	exp	107576		; [cram loc 157]
+	exp	100572		; [cram loc 158]
+	exp	402		; [cram loc 159]
+	exp	62004		; [cram loc 160]
+	exp	415		; [cram loc 161]
+	exp	61230		; [cram loc 162]
+	exp	120600		; [cram loc 163]
+	exp	102243		; [cram loc 164]
+	exp	23007		; [cram loc 165]
+	exp	23030		; [cram loc 166]
+	exp	60617		; [cram loc 167]
+	exp	100632		; [cram loc 168]
+	exp	110740		; [cram loc 169]
+	exp	110470		; [cram loc 170]
+	exp	110545		; [cram loc 171]
+	exp	137140		; [cram loc 172]
+	exp	14770		; [cram loc 173]
+	exp	62660		; [cram loc 174]
+	exp	56226		; [cram loc 175]
+	exp	123160		; [cram loc 176]
+	exp	740		; [cram loc 177]
+	exp	62700		; [cram loc 178]
+	exp	42227		; [cram loc 179]
+	exp	401		; [cram loc 180]
+	exp	62223		; [cram loc 181]
+	exp	556		; [cram loc 182]
+	exp	63236		; [cram loc 183]
+	exp	405		; [cram loc 184]
+	exp	114643		; [cram loc 185]
+	exp	120560		; [cram loc 186]
+	exp	102277		; [cram loc 187]
+	exp	17400		; [cram loc 188]
+	exp	76560		; [cram loc 189]
+	exp	100702		; [cram loc 190]
+	exp	136500		; [cram loc 191]
+	exp	136500		; [cram loc 192]
+	exp	422		; [cram loc 193]
+	exp	76222		; [cram loc 194]
+	exp	134560		; [cram loc 195]
+	exp	2401		; [cram loc 196]
+	exp	103707		; [cram loc 197]
+	exp	2400		; [cram loc 198]
+	exp	42223		; [cram loc 199]
+	exp	421		; [cram loc 200]
+	exp	61230		; [cram loc 201]
+	exp	120600		; [cram loc 202]
+	exp	102312		; [cram loc 203]
+	exp	123560		; [cram loc 204]
+	exp	103724		; [cram loc 205]
+	exp	122142		; [cram loc 206]
+	exp	2600		; [cram loc 207]
+	exp	102722		; [cram loc 208]
+	exp	2400		; [cram loc 209]
+	exp	422		; [cram loc 210]
+	exp	100732		; [cram loc 211]
+	exp	2626		; [cram loc 212]
+	exp	42222		; [cram loc 213]
+	exp	2444		; [cram loc 214]
+	exp	103331		; [cram loc 215]
+	exp	2440		; [cram loc 216]
+	exp	600		; [cram loc 217]
+	exp	62263		; [cram loc 218]
+	exp	736		; [cram loc 219]
+	exp	63236		; [cram loc 220]
+	exp	114645		; [cram loc 221]
+	exp	120560		; [cram loc 222]
+	exp	1400		; [cram loc 223]
+	exp	103343		; [cram loc 224]
+	exp	400		; [cram loc 225]
+	exp	100746		; [cram loc 226]
+	exp	410		; [cram loc 227]
+	exp	63220		; [cram loc 228]
+	exp	42700		; [cram loc 229]
+	exp	76222		; [cram loc 230]
+	exp	2633		; [cram loc 231]
+	exp	120560		; [cram loc 232]
+	exp	103753		; [cram loc 233]
+	exp	2605		; [cram loc 234]
+	exp	400		; [cram loc 235]
+	exp	76223		; [cram loc 236]
+	exp	136540		; [cram loc 237]
+	exp	454		; [cram loc 238]
+	exp	70013		; [cram loc 239]
+	exp	2400		; [cram loc 240]
+	exp	556		; [cram loc 241]
+	exp	63236		; [cram loc 242]
+	exp	114645		; [cram loc 243]
+	exp	22144		; [cram loc 244]
+	exp	22165		; [cram loc 245]
+	exp	415		; [cram loc 246]
+	exp	61230		; [cram loc 247]
+	exp	120440		; [cram loc 248]
+	exp	1400		; [cram loc 249]
+	exp	102775		; [cram loc 250]
+	exp	432		; [cram loc 251]
+	exp	100776		; [cram loc 252]
+	exp	411		; [cram loc 253]
+	exp	60413		; [cram loc 254]
+	exp	63226		; [cram loc 255]
+	exp	120600		; [cram loc 256]
+	exp	106000		; [cram loc 257]
+	exp	23017		; [cram loc 258]
+	exp	120560		; [cram loc 259]
+	exp	113002		; [cram loc 260]
+	exp	417		; [cram loc 261]
+	exp	70006		; [cram loc 262]
+	exp	43625		; [cram loc 263]
+	exp	1400		; [cram loc 264]
+	exp	107033		; [cram loc 265]
+	exp	2440		; [cram loc 266]
+	exp	70206		; [cram loc 267]
+	exp	136500		; [cram loc 268]
+	exp	136520		; [cram loc 269]
+	exp	123160		; [cram loc 270]
+	exp	700		; [cram loc 271]
+	exp	60660		; [cram loc 272]
+	exp	1400		; [cram loc 273]
+	exp	1400		; [cram loc 274]
+	exp	1400		; [cram loc 275]
+	exp	1400		; [cram loc 276]
+	exp	62620		; [cram loc 277]
+	exp	60525		; [cram loc 278]
+	exp	103556		; [cram loc 279]
+	exp	434		; [cram loc 280]
+	exp	63235		; [cram loc 281]
+	exp	114450		; [cram loc 282]
+	exp	500		; [cram loc 283]
+	exp	62705		; [cram loc 284]
+	exp	43225		; [cram loc 285]
+	exp	403		; [cram loc 286]
+	exp	70006		; [cram loc 287]
+	exp	104414		; [cram loc 288]
+	exp	60601		; [cram loc 289]
+	exp	1400		; [cram loc 290]
+	exp	107045		; [cram loc 291]
+	exp	100634		; [cram loc 292]
+	exp	404		; [cram loc 293]
+	exp	62004		; [cram loc 294]
+	exp	415		; [cram loc 295]
+	exp	61230		; [cram loc 296]
+	exp	120600		; [cram loc 297]
+	exp	106051		; [cram loc 298]
+	exp	20400		; [cram loc 299]
+	exp	107456		; [cram loc 300]
+	exp	100634		; [cram loc 301]
+	exp	22106		; [cram loc 302]
+	exp	22127		; [cram loc 303]
+	exp	123220		; [cram loc 304]
+	exp	501		; [cram loc 305]
+	exp	63260		; [cram loc 306]
+	exp	414		; [cram loc 307]
+	exp	61311		; [cram loc 308]
+	exp	454		; [cram loc 309]
+	exp	70013		; [cram loc 310]
+	exp	43620		; [cram loc 311]
+	exp	113105		; [cram loc 312]
+	exp	451		; [cram loc 313]
+	exp	70013		; [cram loc 314]
+	exp	40620		; [cram loc 315]
+	exp	1400		; [cram loc 316]
+	exp	107107		; [cram loc 317]
+	exp	106100		; [cram loc 318]
+	exp	100634		; [cram loc 319]
+	exp	23140		; [cram loc 320]
+	exp	770		; [cram loc 321]
+	exp	62266		; [cram loc 322]
+	exp	773		; [cram loc 323]
+	exp	63677		; [cram loc 324]
+	exp	62222		; [cram loc 325]
+	exp	110520		; [cram loc 326]
+	exp	20400		; [cram loc 327]
+	exp	107116		; [cram loc 328]
+	exp	20420		; [cram loc 329]
+	exp	102634		; [cram loc 330]
+	exp	3020		; [cram loc 331]
+	exp	110515		; [cram loc 332]
+	exp	103634		; [cram loc 333]
+	exp	43620		; [cram loc 334]
+	exp	106164		; [cram loc 335]
+	exp	463		; [cram loc 336]
+	exp	63236		; [cram loc 337]
+	exp	445		; [cram loc 338]
+	exp	114632		; [cram loc 339]
+	exp	43621		; [cram loc 340]
+	exp	76461		; [cram loc 341]
+	exp	106152		; [cram loc 342]
+	exp	62224		; [cram loc 343]
+	exp	56225		; [cram loc 344]
+	exp	414		; [cram loc 345]
+	exp	63260		; [cram loc 346]
+	exp	61070		; [cram loc 347]
+	exp	400		; [cram loc 348]
+	exp	62223		; [cram loc 349]
+	exp	120600		; [cram loc 350]
+	exp	106136		; [cram loc 351]
+	exp	36002		; [cram loc 352]
+	exp	22420		; [cram loc 353]
+	exp	23140		; [cram loc 354]
+	exp	402		; [cram loc 355]
+	exp	62006		; [cram loc 356]
+	exp	421		; [cram loc 357]
+	exp	61230		; [cram loc 358]
+	exp	120600		; [cram loc 359]
+	exp	106147		; [cram loc 360]
+	exp	100634		; [cram loc 361]
+	exp	105155		; [cram loc 362]
+	exp	14400		; [cram loc 363]
+	exp	104561		; [cram loc 364]
+	exp	560		; [cram loc 365]
+	exp	63236		; [cram loc 366]
+	exp	114743		; [cram loc 367]
+	exp	400		; [cram loc 368]
+	exp	76223		; [cram loc 369]
+	exp	42222		; [cram loc 370]
+	exp	104542		; [cram loc 371]
+	exp	113040		; [cram loc 372]
+	exp	20420		; [cram loc 373]
+	exp	107573		; [cram loc 374]
+	exp	62560		; [cram loc 375]
+	exp	60611		; [cram loc 376]
+	exp	1400		; [cram loc 377]
+	exp	107120		; [cram loc 378]
+	exp	401		; [cram loc 379]
+	exp	62223		; [cram loc 380]
+	exp	104542		; [cram loc 381]
+	exp	404		; [cram loc 382]
+	exp	70013		; [cram loc 383]
+	exp	64214		; [cram loc 384]
+	exp	57231		; [cram loc 385]
+	exp	60610		; [cram loc 386]
+	exp	117550		; [cram loc 387]
+	exp	144620		; [cram loc 388]
+	exp	2611		; [cram loc 389]
+	exp	572		; [cram loc 390]
+	exp	77236		; [cram loc 391]
+	exp	104620		; [cram loc 392]
+	exp	2615		; [cram loc 393]
+	exp	572		; [cram loc 394]
+	exp	77236		; [cram loc 395]
+	exp	104620		; [cram loc 396]
+	exp	106627		; [cram loc 397]
+	exp	653		; [cram loc 398]
+	exp	77236		; [cram loc 399]
+	exp	74611		; [cram loc 400]
+	exp	113545		; [cram loc 401]
+	exp	43220		; [cram loc 402]
+	exp	76607		; [cram loc 403]
+	exp	43227		; [cram loc 404]
+	exp	62600		; [cram loc 405]
+	exp	160616		; [cram loc 406]
+	exp	2605		; [cram loc 407]
+	exp	435		; [cram loc 408]
+	exp	63235		; [cram loc 409]
+	exp	110635		; [cram loc 410]
+	exp	2656		; [cram loc 411]
+	exp	404		; [cram loc 412]
+	exp	70013		; [cram loc 413]
+	exp	456		; [cram loc 414]
+	exp	62671		; [cram loc 415]
+	exp	43231		; [cram loc 416]
+	exp	601		; [cram loc 417]
+	exp	60367		; [cram loc 418]
+	exp	105653		; [cram loc 419]
+	exp	405		; [cram loc 420]
+	exp	60367		; [cram loc 421]
+	exp	111545		; [cram loc 422]
+	exp	620		; [cram loc 423]
+	exp	60367		; [cram loc 424]
+	exp	105653		; [cram loc 425]
+	exp	114567		; [cram loc 426]
+	exp	401		; [cram loc 427]
+	exp	62711		; [cram loc 428]
+	exp	110545		; [cram loc 429]
+	exp	2663		; [cram loc 430]
+	exp	407		; [cram loc 431]
+	exp	70013		; [cram loc 432]
+	exp	62607		; [cram loc 433]
+	exp	110545		; [cram loc 434]
+	exp	2677		; [cram loc 435]
+	exp	410		; [cram loc 436]
+	exp	70013		; [cram loc 437]
+	exp	477		; [cram loc 438]
+	exp	62667		; [cram loc 439]
+	exp	63271		; [cram loc 440]
+	exp	404		; [cram loc 441]
+	exp	70013		; [cram loc 442]
+	exp	700		; [cram loc 443]
+	exp	60667		; [cram loc 444]
+	exp	62711		; [cram loc 445]
+	exp	110545		; [cram loc 446]
+	exp	2701		; [cram loc 447]
+	exp	110545		; [cram loc 448]
+	exp	2703		; [cram loc 449]
+	exp	110545		; [cram loc 450]
+	exp	2717		; [cram loc 451]
+	exp	74611		; [cram loc 452]
+	exp	1400		; [cram loc 453]
+	exp	106710		; [cram loc 454]
+	exp	110545		; [cram loc 455]
+	exp	40367		; [cram loc 456]
+	exp	111545		; [cram loc 457]
+	exp	404		; [cram loc 458]
+	exp	70013		; [cram loc 459]
+	exp	420		; [cram loc 460]
+	exp	62711		; [cram loc 461]
+	exp	110545		; [cram loc 462]
+	exp	2721		; [cram loc 463]
+	exp	100572		; [cram loc 464]
+	exp	2727		; [cram loc 465]
+	exp	107324		; [cram loc 466]
+	exp	114555		; [cram loc 467]
+	exp	60611		; [cram loc 468]
+	exp	102172		; [cram loc 469]
+	exp	104756		; [cram loc 470]
+	exp	437		; [cram loc 471]
+	exp	63236		; [cram loc 472]
+	exp	114627		; [cram loc 473]
+	exp	105334		; [cram loc 474]
+	exp	104737		; [cram loc 475]
+	exp	60611		; [cram loc 476]
+	exp	103172		; [cram loc 477]
+	exp	110545		; [cram loc 478]
+	exp	405		; [cram loc 479]
+	exp	70013		; [cram loc 480]
+	exp	2743		; [cram loc 481]
+	exp	100572		; [cram loc 482]
+	exp	107356		; [cram loc 483]
+	exp	114557		; [cram loc 484]
+	exp	120600		; [cram loc 485]
+	exp	106345		; [cram loc 486]
+	exp	100572		; [cram loc 487]
+	exp	3002		; [cram loc 488]
+	exp	42722		; [cram loc 489]
+	exp	706		; [cram loc 490]
+	exp	63236		; [cram loc 491]
+	exp	416		; [cram loc 492]
+	exp	110722		; [cram loc 493]
+	exp	2633		; [cram loc 494]
+	exp	60611		; [cram loc 495]
+	exp	107364		; [cram loc 496]
+	exp	400		; [cram loc 497]
+	exp	63235		; [cram loc 498]
+	exp	110635		; [cram loc 499]
+	exp	417		; [cram loc 500]
+	exp	70013		; [cram loc 501]
+	exp	57224		; [cram loc 502]
+	exp	57223		; [cram loc 503]
+	exp	57222		; [cram loc 504]
+	exp	57221		; [cram loc 505]
+	exp	57220		; [cram loc 506]
+	exp	76604		; [cram loc 507]
+	exp	76603		; [cram loc 508]
+	exp	76602		; [cram loc 509]
+	exp	76601		; [cram loc 510]
+	exp	76600		; [cram loc 511]
+	exp	60531		; [cram loc 512]
+	exp	114762		; [cram loc 513]
+	exp	120440		; [cram loc 514]
+	exp	1400		; [cram loc 515]
+	exp	112414		; [cram loc 516]
+	exp	454		; [cram loc 517]
+	exp	70013		; [cram loc 518]
+	exp	43220		; [cram loc 519]
+	exp	423		; [cram loc 520]
+	exp	62700		; [cram loc 521]
+	exp	601		; [cram loc 522]
+	exp	110420		; [cram loc 523]
+	exp	417		; [cram loc 524]
+	exp	63235		; [cram loc 525]
+	exp	114571		; [cram loc 526]
+	exp	605		; [cram loc 527]
+	exp	63222		; [cram loc 528]
+	exp	426		; [cram loc 529]
+	exp	63223		; [cram loc 530]
+	exp	426		; [cram loc 531]
+	exp	63235		; [cram loc 532]
+	exp	110663		; [cram loc 533]
+	exp	417		; [cram loc 534]
+	exp	70006		; [cram loc 535]
+	exp	2602		; [cram loc 536]
+	exp	120560		; [cram loc 537]
+	exp	1400		; [cram loc 538]
+	exp	107005		; [cram loc 539]
+	exp	100556		; [cram loc 540]
+	exp	100572		; [cram loc 541]
+	exp	114567		; [cram loc 542]
+	exp	104732		; [cram loc 543]
+	exp	60611		; [cram loc 544]
+	exp	1400		; [cram loc 545]
+	exp	113051		; [cram loc 546]
+	exp	400		; [cram loc 547]
+	exp	62222		; [cram loc 548]
+	exp	2003		; [cram loc 549]
+	exp	757		; [cram loc 550]
+	exp	62660		; [cram loc 551]
+	exp	104542		; [cram loc 552]
+	exp	626		; [cram loc 553]
+	exp	76222		; [cram loc 554]
+	exp	401		; [cram loc 555]
+	exp	76223		; [cram loc 556]
+	exp	43221		; [cram loc 557]
+	exp	62561		; [cram loc 558]
+	exp	105142		; [cram loc 559]
+	exp	451		; [cram loc 560]
+	exp	70013		; [cram loc 561]
+	exp	110446		; [cram loc 562]
+	exp	105124		; [cram loc 563]
+	exp	20420		; [cram loc 564]
+	exp	113533		; [cram loc 565]
+	exp	60600		; [cram loc 566]
+	exp	112522		; [cram loc 567]
+	exp	473		; [cram loc 568]
+	exp	63235		; [cram loc 569]
+	exp	110731		; [cram loc 570]
+	exp	774		; [cram loc 571]
+	exp	23140		; [cram loc 572]
+	exp	62266		; [cram loc 573]
+	exp	451		; [cram loc 574]
+	exp	70013		; [cram loc 575]
+	exp	43620		; [cram loc 576]
+	exp	61620		; [cram loc 577]
+	exp	107115		; [cram loc 578]
+	exp	112127		; [cram loc 579]
+	exp	100634		; [cram loc 580]
+	exp	112541		; [cram loc 581]
+	exp	2400		; [cram loc 582]
+	exp	451		; [cram loc 583]
+	exp	70013		; [cram loc 584]
+	exp	40620		; [cram loc 585]
+	exp	1400		; [cram loc 586]
+	exp	107107		; [cram loc 587]
+	exp	3000		; [cram loc 588]
+	exp	410		; [cram loc 589]
+	exp	60671		; [cram loc 590]
+	exp	62302		; [cram loc 591]
+	exp	621		; [cram loc 592]
+	exp	104546		; [cram loc 593]
+	exp	402		; [cram loc 594]
+	exp	62223		; [cram loc 595]
+	exp	652		; [cram loc 596]
+	exp	63236		; [cram loc 597]
+	exp	114645		; [cram loc 598]
+	exp	454		; [cram loc 599]
+	exp	70013		; [cram loc 600]
+	exp	2423		; [cram loc 601]
+	exp	100634		; [cram loc 602]
+	exp	422		; [cram loc 603]
+	exp	63223		; [cram loc 604]
+	exp	473		; [cram loc 605]
+	exp	63235		; [cram loc 606]
+	exp	601		; [cram loc 607]
+	exp	110734		; [cram loc 608]
+	exp	62560		; [cram loc 609]
+	exp	404		; [cram loc 610]
+	exp	62223		; [cram loc 611]
+	exp	104542		; [cram loc 612]
+	exp	430		; [cram loc 613]
+	exp	70013		; [cram loc 614]
+	exp	43622		; [cram loc 615]
+	exp	1400		; [cram loc 616]
+	exp	113160		; [cram loc 617]
+	exp	435		; [cram loc 618]
+	exp	63235		; [cram loc 619]
+	exp	571		; [cram loc 620]
+	exp	63236		; [cram loc 621]
+	exp	414		; [cram loc 622]
+	exp	110722		; [cram loc 623]
+	exp	563		; [cram loc 624]
+	exp	63236		; [cram loc 625]
+	exp	114631		; [cram loc 626]
+	exp	111204		; [cram loc 627]
+	exp	43622		; [cram loc 628]
+	exp	112167		; [cram loc 629]
+	exp	110577		; [cram loc 630]
+	exp	572		; [cram loc 631]
+	exp	63236		; [cram loc 632]
+	exp	114615		; [cram loc 633]
+	exp	60562		; [cram loc 634]
+	exp	62226		; [cram loc 635]
+	exp	14621		; [cram loc 636]
+	exp	42222		; [cram loc 637]
+	exp	61230		; [cram loc 638]
+	exp	545		; [cram loc 639]
+	exp	63235		; [cram loc 640]
+	exp	120600		; [cram loc 641]
+	exp	112201		; [cram loc 642]
+	exp	110714		; [cram loc 643]
+	exp	40620		; [cram loc 644]
+	exp	112213		; [cram loc 645]
+	exp	14000		; [cram loc 646]
+	exp	14776		; [cram loc 647]
+	exp	76662		; [cram loc 648]
+	exp	62607		; [cram loc 649]
+	exp	110627		; [cram loc 650]
+	exp	616		; [cram loc 651]
+	exp	63236		; [cram loc 652]
+	exp	114615		; [cram loc 653]
+	exp	74607		; [cram loc 654]
+	exp	62223		; [cram loc 655]
+	exp	42222		; [cram loc 656]
+	exp	60602		; [cram loc 657]
+	exp	112225		; [cram loc 658]
+	exp	421		; [cram loc 659]
+	exp	110626		; [cram loc 660]
+	exp	621		; [cram loc 661]
+	exp	61230		; [cram loc 662]
+	exp	426		; [cram loc 663]
+	exp	70013		; [cram loc 664]
+	exp	745		; [cram loc 665]
+	exp	63236		; [cram loc 666]
+	exp	401		; [cram loc 667]
+	exp	114741		; [cram loc 668]
+	exp	426		; [cram loc 669]
+	exp	70013		; [cram loc 670]
+	exp	43622		; [cram loc 671]
+	exp	112242		; [cram loc 672]
+	exp	110654		; [cram loc 673]
+	exp	645		; [cram loc 674]
+	exp	63236		; [cram loc 675]
+	exp	114615		; [cram loc 676]
+	exp	74562		; [cram loc 677]
+	exp	62226		; [cram loc 678]
+	exp	42222		; [cram loc 679]
+	exp	621		; [cram loc 680]
+	exp	61230		; [cram loc 681]
+	exp	120600		; [cram loc 682]
+	exp	112252		; [cram loc 683]
+	exp	420		; [cram loc 684]
+	exp	63223		; [cram loc 685]
+	exp	604		; [cram loc 686]
+	exp	63222		; [cram loc 687]
+	exp	411		; [cram loc 688]
+	exp	60413		; [cram loc 689]
+	exp	63226		; [cram loc 690]
+	exp	70206		; [cram loc 691]
+	exp	56226		; [cram loc 692]
+	exp	56227		; [cram loc 693]
+	exp	123220		; [cram loc 694]
+	exp	501		; [cram loc 695]
+	exp	63260		; [cram loc 696]
+	exp	43221		; [cram loc 697]
+	exp	414		; [cram loc 698]
+	exp	60661		; [cram loc 699]
+	exp	61311		; [cram loc 700]
+	exp	406		; [cram loc 701]
+	exp	70006		; [cram loc 702]
+	exp	57220		; [cram loc 703]
+	exp	43221		; [cram loc 704]
+	exp	413		; [cram loc 705]
+	exp	70006		; [cram loc 706]
+	exp	56342		; [cram loc 707]
+	exp	54441		; [cram loc 708]
+	exp	76223		; [cram loc 709]
+	exp	651		; [cram loc 710]
+	exp	77236		; [cram loc 711]
+	exp	40620		; [cram loc 712]
+	exp	1400		; [cram loc 713]
+	exp	117245		; [cram loc 714]
+	exp	110740		; [cram loc 715]
+	exp	400		; [cram loc 716]
+	exp	63223		; [cram loc 717]
+	exp	604		; [cram loc 718]
+	exp	63222		; [cram loc 719]
+	exp	411		; [cram loc 720]
+	exp	110736		; [cram loc 721]
+	exp	63223		; [cram loc 722]
+	exp	3400		; [cram loc 723]
+	exp	63221		; [cram loc 724]
+	exp	63224		; [cram loc 725]
+	exp	601		; [cram loc 726]
+	exp	63222		; [cram loc 727]
+	exp	110746		; [cram loc 728]
+	exp	400		; [cram loc 729]
+	exp	63223		; [cram loc 730]
+	exp	600		; [cram loc 731]
+	exp	63222		; [cram loc 732]
+	exp	432		; [cram loc 733]
+	exp	60413		; [cram loc 734]
+	exp	63226		; [cram loc 735]
+	exp	416		; [cram loc 736]
+	exp	63236		; [cram loc 737]
+	exp	70206		; [cram loc 738]
+	exp	57220		; [cram loc 739]
+	exp	57221		; [cram loc 740]
+	exp	43224		; [cram loc 741]
+	exp	10376		; [cram loc 742]
+	exp	4003		; [cram loc 743]
+	exp	50220		; [cram loc 744]
+	exp	76612		; [cram loc 745]
+	exp	76600		; [cram loc 746]
+	exp	76601		; [cram loc 747]
+	exp	62603		; [cram loc 748]
+	exp	60602		; [cram loc 749]
+	exp	112361		; [cram loc 750]
+	exp	2400		; [cram loc 751]
+	exp	110763		; [cram loc 752]
+	exp	400		; [cram loc 753]
+	exp	63223		; [cram loc 754]
+	exp	77124		; [cram loc 755]
+	exp	63124		; [cram loc 756]
+	exp	63124		; [cram loc 757]
+	exp	63524		; [cram loc 758]
+	exp	76703		; [cram loc 759]
+	exp	76602		; [cram loc 760]
+	exp	10376		; [cram loc 761]
+	exp	57220		; [cram loc 762]
+	exp	40620		; [cram loc 763]
+	exp	115410		; [cram loc 764]
+	exp	60360		; [cram loc 765]
+	exp	115412		; [cram loc 766]
+	exp	10376		; [cram loc 767]
+	exp	767		; [cram loc 768]
+	exp	60360		; [cram loc 769]
+	exp	115406		; [cram loc 770]
+	exp	406		; [cram loc 771]
+	exp	62400		; [cram loc 772]
+	exp	174616		; [cram loc 773]
+	exp	2517		; [cram loc 774]
+	exp	174616		; [cram loc 775]
+	exp	62600		; [cram loc 776]
+	exp	110777		; [cram loc 777]
+	exp	70200		; [cram loc 778]
+	exp	3200		; [cram loc 779]
+	exp	42700		; [cram loc 780]
+	exp	174616		; [cram loc 781]
+	exp	417		; [cram loc 782]
+	exp	70006		; [cram loc 783]
+	exp	64214		; [cram loc 784]
+	exp	43620		; [cram loc 785]
+	exp	117430		; [cram loc 786]
+	exp	70206		; [cram loc 787]
+	exp	432		; [cram loc 788]
+	exp	63236		; [cram loc 789]
+	exp	406		; [cram loc 790]
+	exp	114741		; [cram loc 791]
+	exp	60520		; [cram loc 792]
+	exp	117435		; [cram loc 793]
+	exp	737		; [cram loc 794]
+	exp	62660		; [cram loc 795]
+	exp	170615		; [cram loc 796]
+	exp	677		; [cram loc 797]
+	exp	62660		; [cram loc 798]
+	exp	403		; [cram loc 799]
+	exp	70006		; [cram loc 800]
+	exp	57220		; [cram loc 801]
+	exp	57221		; [cram loc 802]
+	exp	57222		; [cram loc 803]
+	exp	70206		; [cram loc 804]
+	exp	76600		; [cram loc 805]
+	exp	76601		; [cram loc 806]
+	exp	62602		; [cram loc 807]
+	exp	70206		; [cram loc 808]
+	exp	56224		; [cram loc 809]
+	exp	56225		; [cram loc 810]
+	exp	401		; [cram loc 811]
+	exp	63220		; [cram loc 812]
+	exp	55310		; [cram loc 813]
+	exp	120600		; [cram loc 814]
+	exp	116056		; [cram loc 815]
+	exp	37004		; [cram loc 816]
+	exp	37025		; [cram loc 817]
+	exp	465		; [cram loc 818]
+	exp	63236		; [cram loc 819]
+	exp	114721		; [cram loc 820]
+	exp	37002		; [cram loc 821]
+	exp	23023		; [cram loc 822]
+	exp	36400		; [cram loc 823]
+	exp	36420		; [cram loc 824]
+	exp	76604		; [cram loc 825]
+	exp	76605		; [cram loc 826]
+	exp	476		; [cram loc 827]
+	exp	63236		; [cram loc 828]
+	exp	114721		; [cram loc 829]
+	exp	23020		; [cram loc 830]
+	exp	36420		; [cram loc 831]
+	exp	76602		; [cram loc 832]
+	exp	76603		; [cram loc 833]
+	exp	76604		; [cram loc 834]
+	exp	76605		; [cram loc 835]
+	exp	43222		; [cram loc 836]
+	exp	540		; [cram loc 837]
+	exp	60662		; [cram loc 838]
+	exp	62700		; [cram loc 839]
+	exp	411		; [cram loc 840]
+	exp	60413		; [cram loc 841]
+	exp	60366		; [cram loc 842]
+	exp	115543		; [cram loc 843]
+	exp	74564		; [cram loc 844]
+	exp	116126		; [cram loc 845]
+	exp	62224		; [cram loc 846]
+	exp	60605		; [cram loc 847]
+	exp	62225		; [cram loc 848]
+	exp	414		; [cram loc 849]
+	exp	63260		; [cram loc 850]
+	exp	61070		; [cram loc 851]
+	exp	120600		; [cram loc 852]
+	exp	116124		; [cram loc 853]
+	exp	36420		; [cram loc 854]
+	exp	16407		; [cram loc 855]
+	exp	60617		; [cram loc 856]
+	exp	1400		; [cram loc 857]
+	exp	116542		; [cram loc 858]
+	exp	2400		; [cram loc 859]
+	exp	404		; [cram loc 860]
+	exp	63717		; [cram loc 861]
+	exp	62222		; [cram loc 862]
+	exp	542		; [cram loc 863]
+	exp	63236		; [cram loc 864]
+	exp	114672		; [cram loc 865]
+	exp	170615		; [cram loc 866]
+	exp	754		; [cram loc 867]
+	exp	43220		; [cram loc 868]
+	exp	63260		; [cram loc 869]
+	exp	62460		; [cram loc 870]
+	exp	170615		; [cram loc 871]
+	exp	117157		; [cram loc 872]
+	exp	60530		; [cram loc 873]
+	exp	117561		; [cram loc 874]
+	exp	406		; [cram loc 875]
+	exp	114562		; [cram loc 876]
+	exp	410		; [cram loc 877]
+	exp	114562		; [cram loc 878]
+	exp	412		; [cram loc 879]
+	exp	114562		; [cram loc 880]
+	exp	424		; [cram loc 881]
+	exp	63223		; [cram loc 882]
+	exp	436		; [cram loc 883]
+	exp	63235		; [cram loc 884]
+	exp	605		; [cram loc 885]
+	exp	110657		; [cram loc 886]
+	exp	435		; [cram loc 887]
+	exp	63235		; [cram loc 888]
+	exp	64214		; [cram loc 889]
+	exp	757		; [cram loc 890]
+	exp	63677		; [cram loc 891]
+	exp	62222		; [cram loc 892]
+	exp	600		; [cram loc 893]
+	exp	63236		; [cram loc 894]
+	exp	114672		; [cram loc 895]
+	exp	420		; [cram loc 896]
+	exp	63717		; [cram loc 897]
+	exp	62222		; [cram loc 898]
+	exp	621		; [cram loc 899]
+	exp	61230		; [cram loc 900]
+	exp	54620		; [cram loc 901]
+	exp	2633		; [cram loc 902]
+	exp	1400		; [cram loc 903]
+	exp	117212		; [cram loc 904]
+	exp	2605		; [cram loc 905]
+	exp	120600		; [cram loc 906]
+	exp	116212		; [cram loc 907]
+	exp	170615		; [cram loc 908]
+	exp	56226		; [cram loc 909]
+	exp	56227		; [cram loc 910]
+	exp	123220		; [cram loc 911]
+	exp	501		; [cram loc 912]
+	exp	63260		; [cram loc 913]
+	exp	414		; [cram loc 914]
+	exp	63221		; [cram loc 915]
+	exp	40661		; [cram loc 916]
+	exp	61311		; [cram loc 917]
+	exp	170616		; [cram loc 918]
+	exp	407		; [cram loc 919]
+	exp	114632		; [cram loc 920]
+	exp	424		; [cram loc 921]
+	exp	70013		; [cram loc 922]
+	exp	43221		; [cram loc 923]
+	exp	76561		; [cram loc 924]
+	exp	115640		; [cram loc 925]
+	exp	14000		; [cram loc 926]
+	exp	170616		; [cram loc 927]
+	exp	43221		; [cram loc 928]
+	exp	76561		; [cram loc 929]
+	exp	170616		; [cram loc 930]
+	exp	3221		; [cram loc 931]
+	exp	114647		; [cram loc 932]
+	exp	402		; [cram loc 933]
+	exp	3021		; [cram loc 934]
+	exp	23140		; [cram loc 935]
+	exp	62006		; [cram loc 936]
+	exp	23160		; [cram loc 937]
+	exp	62107		; [cram loc 938]
+	exp	115255		; [cram loc 939]
+	exp	114662		; [cram loc 940]
+	exp	123220		; [cram loc 941]
+	exp	404		; [cram loc 942]
+	exp	63000		; [cram loc 943]
+	exp	515		; [cram loc 944]
+	exp	61271		; [cram loc 945]
+	exp	123200		; [cram loc 946]
+	exp	555		; [cram loc 947]
+	exp	60660		; [cram loc 948]
+	exp	60701		; [cram loc 949]
+	exp	61230		; [cram loc 950]
+	exp	120600		; [cram loc 951]
+	exp	116267		; [cram loc 952]
+	exp	160616		; [cram loc 953]
+	exp	402		; [cram loc 954]
+	exp	70013		; [cram loc 955]
+	exp	56226		; [cram loc 956]
+	exp	56227		; [cram loc 957]
+	exp	123220		; [cram loc 958]
+	exp	501		; [cram loc 959]
+	exp	63260		; [cram loc 960]
+	exp	414		; [cram loc 961]
+	exp	61311		; [cram loc 962]
+	exp	621		; [cram loc 963]
+	exp	61230		; [cram loc 964]
+	exp	114733		; [cram loc 965]
+	exp	100572		; [cram loc 966]
+	exp	460		; [cram loc 967]
+	exp	73013		; [cram loc 968]
+	exp	60013		; [cram loc 969]
+	exp	115315		; [cram loc 970]
+	exp	64214		; [cram loc 971]
+	exp	100414		; [cram loc 972]
+	exp	67114		; [cram loc 973]
+	exp	400		; [cram loc 974]
+	exp	73233		; [cram loc 975]
+	exp	100414		; [cram loc 976]
+	exp	402		; [cram loc 977]
+	exp	23100		; [cram loc 978]
+	exp	62004		; [cram loc 979]
+	exp	23120		; [cram loc 980]
+	exp	62105		; [cram loc 981]
+	exp	123200		; [cram loc 982]
+	exp	115336		; [cram loc 983]
+	exp	416		; [cram loc 984]
+	exp	63260		; [cram loc 985]
+	exp	61070		; [cram loc 986]
+	exp	120600		; [cram loc 987]
+	exp	116333		; [cram loc 988]
+	exp	174616		; [cram loc 989]
+	exp	404		; [cram loc 990]
+	exp	63000		; [cram loc 991]
+	exp	114730		; [cram loc 992]
+	exp	63220		; [cram loc 993]
+	exp	56400		; [cram loc 994]
+	exp	43220		; [cram loc 995]
+	exp	76500		; [cram loc 996]
+	exp	115347		; [cram loc 997]
+	exp	164616		; [cram loc 998]
+	exp	43220		; [cram loc 999]
+	exp	404		; [cram loc 1000]
+	exp	62400		; [cram loc 1001]
+	exp	164616		; [cram loc 1002]
+	exp	500		; [cram loc 1003]
+	exp	61271		; [cram loc 1004]
+	exp	761		; [cram loc 1005]
+	exp	63236		; [cram loc 1006]
+	exp	420		; [cram loc 1007]
+	exp	110722		; [cram loc 1008]
+	exp	100434		; [cram loc 1009]
+	exp	117567		; [cram loc 1010]
+	exp	100572		; [cram loc 1011]
+	exp	0		; [cram loc 1012]
+	exp	0		; [cram loc 1013]
+	exp	0		; [cram loc 1014]
+	exp	0		; [cram loc 1015]
+	exp	0		; [cram loc 1016]
+	exp	0		; [cram loc 1017]
+	exp	0		; [cram loc 1018]
+	exp	0		; [cram loc 1019]
+	exp	0		; [cram loc 1020]
+	exp	0		; [cram loc 1021]
+	exp	0		; [cram loc 1022]
+	exp	0		; [cram loc 1023]
+cramck:	exp	22520021	;cram checksum
+
+	radix	10		;back to decimal
+
+	lit			;put literals in the high seg
+	list			;turn listing back on
+
+	SUBTTL	IMPURE STORAGE
+
+	RELOC	0		;GO TO THE LOW SEG
+
+FIRZER:				;ADDRESS OF FIRST WORD TO ZERO
+F.BFIL:	BLOCK	.FXLEN		;/BFILE:BINARY-FILE-TO-LOAD
+F.IFIL:	BLOCK	.FXLEN		;INPUT FILE SPEC (JUST TO KEEP TSCAN HAPPY)
+F.OFIL:	BLOCK	.FXLEN		;OUTPUT FILE SPEC (JUST TO KEEP TSCAN HAPPY)
+A.FCN:	BLOCK	1		;FUNCTION CODE FOR CRAM READ/WRITE KDP.
+A.KMC:	BLOCK	1		;KMC NUMBER FOR READ/WRITE
+A.ADR:	BLOCK	1		;CRAM ADDRESS FOR READ/WRITE
+A.VAL:	BLOCK	1		;CRAM DATA FOR READ/WRITE
+B.OPN:	BLOCK	OPNLEN		;OPEN BLOCK FOR BFILE
+B.LEB:	BLOCK	LEBLEN		;LOOKUP/ENTER BLOCK FOR BFILE
+B.PTH:	BLOCK	PTHLEN		;PATH BLOCK FOR BFILE
+B.IBUF:	BLOCK	3		;INPUT BUFFER HEADER FOR BFILE
+CRAMST:	BLOCK	1		;POINTER TO MICROCODE TO LOAD
+LSTZER==.-1			;LAST WORD TO ZERO
+
+FIRONE:				;FIRST WORD TO SETOM
+S.AUTO:	BLOCK	1		;/AUTO MEANS LOAD AND START ALL LINES
+S.KMC:	BLOCK	1		;/KMC TO SPECIFY A SINGLE KMC TO LOAD
+S.LOAD:	BLOCK	1		;/LOAD:KMC KMC-11 TO LOAD
+S.MCLR:	BLOCK	1		;/MCLEAR:KMC TO RESET A KMC-11
+S.STRT:	BLOCK	1		;/START:DUP TO START DDCMP ON ONE LINE
+S.STOP:	BLOCK	1		;/STOP:DUP TO STOP DDCMP ON ONE LINE
+S.USTR:	BLOCK	1		;/USTART:KMC TO START KMC MICROCODE
+S.VRFY:	BLOCK	1		;/VERIFY:KMC VERIFY KMC MICROCODE
+LSTONE==.-1			;LAST WORD TO SETOM
+
+;KONSTANTS
+K.CCL:	BLOCK	1		;SET TO 1 IF CCL ENTRY
+K.KMCN:	BLOCK	1		;NUMBER OF KMC-11'S ON THE SYSTEM
+K.JBFF:	BLOCK	1		;INITIAL VALUE OF .JBFF
+K.FRC:	BLOCK	1		;NON-ZERO IF RUNNING ON FRCLIN
+
+PDL:	BLOCK	PDLLEN+1	;STACK
+
+	END	GO

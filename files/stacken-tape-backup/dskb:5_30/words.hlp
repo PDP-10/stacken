@@ -1,0 +1,44 @@
+
+
+
+WORDS.HLP  Versjon 4(27)-5                      17. Februar 1981
+
+
+WORDS er et morsomt lite program som skriver ut en liten melding (p}
+engelsk) hver gang det kj|res.
+
+Innholdet best}r av alt fra sp}dommer om din fremtid til kjente (?)
+sitater, livsvisdom og varianter av Murphy's lov.
+
+Programmet startes ved kommandoen:
+
+        .RUN GAM:WORDS
+
+For } f} en melding til (hvis du synes det er S] morsomt), trykk START
+eller CONTINUE.
+
+Dersom du f|ler deg deprimert om morgenen og gjerne skulle ha et
+oppmuntrende ord, foresl}r jeg f|lgende tillegg p} LOGIN-linja i
+SWITCH.INI:
+
+LOGIN /..andre velgere../RUN:GAM:WORDS
+
+Da vil WORDS automatisk kj|res hver gang du logger inn. Om du i
+tillegg leser MAIL hver dag f}r du WORDS til } starte opp MAIL ved }
+henge p} velgeren /RUNOFFSET:1 etter /RUN:. Alts}:
+
+LOGIN /..../RUN:GAM:WORDS/RUNOFFSET:1
+
+NB!  Du m} fjerne eventuelt andre /RUN-velgere i LOGIN.
+
+Hvis du har ett eller flere (helst flere) visdomsord } bidra med, s}
+gi beskjed til undertegnede.
+
+Hilsen Egil Pedersen, UiO
+
+
+P.S.  Jeg st}r ikke p} noen m}te ansvarlig  for  det  programmet
+m}tte   produsere  av  feilsl}tte  sp}dommer,  usannheter  eller
+liknende.
+
+	<Slut p} GAM:WORDS.HLP - 820917/SO>

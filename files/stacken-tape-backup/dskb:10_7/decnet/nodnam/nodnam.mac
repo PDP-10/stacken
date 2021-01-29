@@ -1,0 +1,645 @@
+	TITLE NODNAM - Define some nodes with Network Manglement
+	SEARCH DCN
+	LALL
+	$ONLY==I.LUO!I.GTT!I.PRM!I.FLE
+	$INIT NOD
+ND FT2OPS,0		;Default to no -20 code
+IFN FT2OPS,<
+	SEARCH	MONSYM
+	DEFINE	NT.MAN<PUSHJ P,NETMAN>
+>
+IFE FT2OPS,<
+	OPDEF	NT.MAN [NTMAN. T1,]
+	.NODDT	NT.MAN
+>
+ 
+
+	NODVER==2
+	NODMIN==2
+	NODEDT==17
+	NODWHO==0
+
+	VRSN.	NODWHO,NODVER,NODMIN,NODEDT
+
+IFDEF .VERSION,<IFDEF .MCRV.,<.VERSION <%%%NOD>>>
+	SUBTTL	Revision History
+
+REPEAT 0,<
+	Edit History
+
+6	TL	Change to read VAX list known nodes format file.  This
+		lets you go to your level II router, LIST KNOWN NODES TO 
+		NODNAM.INI, NFT the file to your 10, and run.  No funny
+		TECO macros, no version skews.
+
+7	TL	Add code to read SET NODE n NAME foo (old) format files.
+		Figure out what to do dynamically.  Tell OPR what we did.
+		Get rid of HALTs.
+
+10	TL	Add code to allow us to run under TOPS-20
+
+11	TL	Fix code to not ILL MEM REF under 7.03.  
+
+12	RCB	Add code to allow INI:NODNAM.LCL to be taken after
+		INI:NODNAM.INI.
+
+13	RCB	Compare the filespecs we get back to avoid taking the
+		same file twice (PATH/OVERRIDE problem).
+
+14	RCB	If running detached, wait for ORION to start up before
+		doing the WTO to display the statistics
+
+15	RCB	Add code to start up MX after we finish (if needed).
+
+16	RCB	Conditionalize TOPS-20 support for ease of packaging.
+
+17	RCB	Only start up MX if we were started on FRCLIN.  This way,
+		monitor debuggers can define DECnet nodes without undue
+		aggravation.
+
+	>;End of revision history
+	SUBTTL	Lowseg storage
+
+
+	NOD=1		;I/O channel to read file on
+
+
+$LOSEG
+NDSDEF:	BLOCK	1	;# nodes defined (For debuging)
+TOTNDS:	BLOCK	1	;Total nodes in file
+BLKSRD:	BLOCK	1	;#File blocks read
+QCTR:	BLOCK	1	;Bytes left
+QPTR:	BLOCK	1	;Pointer to
+	QMAXC==^D300	;Max chars in
+QBUF:	BLOCK	<QMAX==<QMAXC+1+4>/5>	;text buffer
+
+QUEBLK:	EXP	.QUWTO	;Write to OPR
+	EXP	0,0	;Node, response buffer
+QTXT:	.-.,,.QBMSG	;WTO TEXT - len filled in later
+	EXP	0	;WTO text address
+	QHLEN,,.QBTYP	;WTO message header
+	EXP	NODHDR	;Address
+QUELEN==.-QUEBLK
+
+SPCBLK:	BLOCK	.FOFMX+1
+	SPCLEN==.-SPCBLK
+SPCBL2:	BLOCK	SPCLEN
+INHD:	BLOCK	3
+CURNOD:	BLOCK	1	;Scratch - current node number
+X.NODE:	BLOCK	2	;WILL GET MY NODE NUMBER
+MYAREA:	BLOCK	1	;My area number for Phase IV
+U.AREA:	BLOCK	1	;Area as specified by user
+FRCLIN:	BLOCK	1	;UDX of FRCLIN for starting MX after we finish
+IFN FT2OPS,<
+T20MON:	BLOCK	1	;Non-zero if TOPS-20
+NTMBLK:	BLOCK	.NTMAX	;Copy of arg block for TOPS-20, which advances BPs.
+SPCBUF:	BLOCK	^D<<39+39+39+39+6+5+1+4>/5>	;TOPS-20 filespec
+> ;END IFN FT2OPS
+	SUBTTL	Argument Blocks for NTMAN.
+
+; Argument block for reading the executor node name
+NTREX:	EXP	.NTMAX
+	EXP	.NTNOD
+	EXP	0
+	EXP	.NTREX
+	EXP	0
+	EXP	0
+	POINT	8,X.NODE
+	EXP	0
+	EXP	0
+
+; Argument block for setting a node's name
+
+NMXBLK:	.NTMAX			;Number or words in block
+	.NTNOD			;entity we
+	POINT 8,ENTITY		;byte pointer to entity id
+	.NTSET			;set function, which is way to create node name
+	Z			;selection. none
+	Z			;qualifier. none.
+	POINT 8,STRING		;byte pointer to data string
+	^D16			;number of bytes (we won't use more than this)
+	Z			;error code. Ignore it.
+	SUBTTL	Highseg Storage
+
+$HISEG
+NODHDR:	ASCIZ ~Message from NODNAM~
+	QHLEN==.-NODHDR
+
+FOPBLK:	XWD	NOD,.FOFIL
+	XWD	SPCLEN,SPCBLK
+	FOPLEN==.-FOPBLK
+
+$BLOCK	ENTITY,4
+$BLOCK	STRING,16
+	SUBTTL	Initialization
+
+
+DEFNOD::$SETUP
+	MOVEI	T1,QMAXC	;Get max chars
+	MOVEM	T1,QCTR		;Save
+IFN FT2OPS,<
+	GTTAB.	T1,[%CNMNT]	;Get monitor type
+	LDB	T1,[POINTR(T1,CN%MNT)] ;Get type
+	CAXN	T1,.CNT10	;TOPS-10?
+	 TDZA	T1,T1		;Yes
+	MOVEI	T1,1		;No
+	MOVEM	T1,T20MON	;Remember
+	JUMPN	T1,NODET	;On TOPS-20, don't detach
+> ;END IFN FT2OPS
+	GTTAB.	T1,[%CNFLN]	;See which line is FRCLIN
+	TRO	T1,200000	;Make into UDX
+	SETO	T2,
+	TRMNO.	T2,		;Get my terminal number
+	  SETZ	T2,		;Oh well
+	CAME	T1,T2		;Am I running on FRCLIN?
+DETPAT:	  JRST	NODET		;No, don't detach OR change PPN
+
+	MOVEM	T1,FRCLIN	;Save FRCLIN's UDX for running MX
+	HRROI	T1,0		;Args for attach
+	ATTACH	T1,		;Detach!
+	 NOOP			;Someone is being mean and vicious. ignore him.
+	GTTAB.	T1,[%LDFFA]	;Find out who is GOD
+	CHGPPN	T1,		;make ourselves him.
+	 NOOP			;Someone is hacking. Don't amuse him.
+SETDET:	MOVEI	T1,QCHAR	;New char output routine
+	PUSHJ	P,.TYOCH##	;Make it SCAN's
+	MOVE	T1,[POINT 7,QBUF]
+	MOVEM	T1,QPTR		;Pointer too
+NODET:	MOVEI	T1,0
+	DMOVE	T2,[SIXBIT	/INI/
+			EXP	INHD]
+	OPEN	NOD,T1		;Open a channel for reading node names
+	 $ERROR	FOI,<Failed to OPEN INI:>,,,ABORT
+	DMOVE	T1,[SIXBIT	/NODNAM/
+		    SIXBIT	/INI/]
+	SETZB	T3,T4
+	LOOKUP	NOD,T1		;Find the file
+	 JRST	[HRRZS	T2
+		 $ERROR FFF,<Failed to find INI:NODNAM.INI - >,<LERR. T2,>,T2,ABORT]
+	SETZM	TOTNDS
+	SETZM	NDSDEF		;NONE DONE YET
+	MOVEI	T1,^D9
+	MOVEM	T1,NTREX+.NTBYT	;NTMAN WIL RETURN MAX OF 9 CHARS
+	MOVEI	T1,NTREX	;Now get my own node number
+	NT.MAN			;Do a UUO of some sort
+	 $ERROR	NDS,<Not a DECNET system>,,,ABORT
+	LDB	T1,[POINT 8,X.NODE,7+8]	;GET HI ORDER BYTE OF NODE NUMBER
+	MOVEM	T1,MYAREA	;SAVE AS MY AREA NUMBER
+	LSH	T1,-^D<8-6>	;Only hi 6 bits are really area
+	MOVEM	T1,U.AREA	;My area (really)
+	SKIPN	T1		;Require Phase IV
+	$ERROR	NP4,<Not a Phase IV system>,,,ABORT
+	TSTRG.	[ASCIZ .Local area: .]
+	MOVE	T1,U.AREA	;Get our area
+	TDECW.	T1,		;Type it
+	TSTRG.	[ASCIZ . Extracting all nodes
+.]
+	SETZM	SPCBL2+.FOFDV	;In case we get run twice
+	PUSHJ	P,PRCFIL	;Process this file
+	DMOVE	T1,[SIXBIT	/NODNAMLCL/]	;LOCAL DEFINITIONS
+	SETZB	T3,T4		;Clear PPN & junk
+	LOOKUP	NOD,T1		;Find the file
+	  JRST	FINISH		;Ok if not there
+	MOVE	T1,[SPCBLK,,SPCBL2] ;Xfer vector
+	BLT	T1,SPCBL2+SPCLEN-1  ;Move the filespec for comparisons
+	PUSHJ	P,PRCFIL	;Process this file, too
+
+FINISH:	TSTRG.	[ASCIZ .Done:  .]
+	MOVE	T1,NDSDEF	;Nodes
+	TDECW.	T1,
+	TSTRG.	[ASCIZ . of .]
+	MOVE	T1,TOTNDS
+	TDECW.	T1,
+	TSTRG.	[ASCIZ . nodes defined.]
+	MOVE	T1,[%SIMAI]	;[SYSTEM]MAILER's PID
+	GETTAB	T1,		;Ask the monitor if it's around
+	  JRST	ABORT		;Old monitor--punt
+	JUMPN	T1,ABORT	;MX is already running--don't start it
+	SKIPN	T3,FRCLIN	;UDX of the FRCLIN terminal
+	JRST	ABORT		;Don't want to start up the mailer
+	MOVEI	T2,.TOTYP	;Function to type on it
+	MOVE	T1,[3,,T2]	;Arument pointer
+	MOVEI	T4,[BYTE(7)"L","O","G",.CHCRT,"M","X",.CHCRT,0] ;The string
+	TRMOP.	T1,		;Start up MX
+	  TRN			;Ignore failures
+ABORT:	MOVE	T1,QCTR		;Get chars left in QUEUE. buffer
+	CAXN	T1,QMAXC	;Is it empty?
+	 EXIT			;Yes, exit now.
+	MOVNS	T1		;Compute
+	ADDI	T1,QMAXC+1+4	; Max-left + null + round
+	IDIVI	T1,5		; Words
+	HRLM	T1,QTXT		;For QUEUE.
+	MOVSI	T1,QBUF		;Where
+	HLRZM	T1,QTXT+1	;for QUEUE.
+	IDPB	T1,QPTR		;Ensure ASCIZ
+	MOVE	T1,[QUELEN,,QUEBLK]
+QUEPAT:	PUSHJ	P,OPRWAT	;Wait for ORION to start up
+	QUEUE.	T1,		;Tell OPR what we did
+	 HALT	.		;eh
+	EXIT			;Done
+
+OPRWAT:	MOVX	T2,%SIOPR	;Index for ORION's pid
+	GETTAB	T2,		;Fetch from the monitor
+	  POPJ	P,		;Just try it if the GETTAB fails
+	JUMPN	T2,CPOPJ	;ORION is running, go on a head with the WTO
+	MOVEI	T2,1		;No ORION yet, setup for a second of SLEEP
+	SLEEP	T2,		;Give ORION some time
+	JRST	OPRWAT		;Try again
+SUBTTL	PRCFIL - Process a file
+
+PRCFIL:	SETZM	BLKSRD		;No blocks yet this file
+IFN FT2OPS,<
+	SKIPE	T20MON		;TOPS-20?
+	 JRST	PRFS20		;Yes, very different
+>
+	MOVE	T1,[XWD FOPLEN,FOPBLK]
+	FILOP.	T1,		;Get real file spec
+	 $ERROR FSF,<Filespec FILOP. Failed>,<LERR. T1,>,T1,ABORT
+	MOVSI	T1,-SPCLEN	;Size of returned filespec blocks
+CMPF:	MOVE	T2,SPCBLK(T1)	;Current
+	CAMN	T2,SPCBL2(T1)	;Compare to previous
+	AOBJN	T1,CMPF		;Check for a non-match
+	JUMPGE	T1,CPOPJ	;Skip this file if same as previous
+	TSTRG.	[ASCIZ .Processing .]
+	MOVE	T1,SPCBLK+.FOFDV;Device
+	TSIXN.	T1,
+	TCHRI.	":"
+	MOVE	T1,SPCBLK+.FOFFN
+	TSIXN.	T1,
+	TCHRI.	"."
+	HLLZ	T1,SPCBLK+.FOFEX
+	TSIXN.	T1,
+	TCHRI.	"["
+	MOVE	T1,SPCBLK+.FOFPP
+	TXWDW.	T1,
+	MOVEI	T4,SPCBLK	;Point to block
+PRSFD:	SKIPN	.FOFSF(T4)	;End?
+	 JRST	PRSFE		;Yes
+	TCHRI.	","
+	MOVE	T1,.FOFSF(T4)	;Get name
+	TSIXN.	T1,
+	AOJA	T4,PRSFD	;Loop
+
+PRSFE:	TCHRI.	"]"
+IFN FT2OPS,<
+	JRST	PRFSE		;End of filespec
+
+PRFS20:	MOVE	T1,[XWD 3,T2]	;Point to UUO
+	DMOVE	T2,[XWD NOD,5	;Channel,,do JFNS
+		    POINT 7,SPCBUF] ;Pointer to buffer
+	MOVE	T4,[INSVL.(.JSAOF,JS%DEV)!INSVL.(.JSAOF,JS%DIR)!
+		    INSVL.(.JSAOF,JS%NAM)!INSVL.(.JSAOF,JS%TYP)!
+		    INSVL.(.JSAOF,JS%GEN)!INSVL.(.JSNOF,JS%PRO)!
+		    INSVL.(.JSNOF,JS%ACT)!JS%PAF]
+	COMPT.	T1,		;Do it
+	 HALT	.		;We're very confused
+	TSTRG.	[ASCIZ .Processing .]
+	TSTRG.	SPCBUF		;Print the string
+
+> ;END IFN FT2OPS
+
+PRFSE:	TCRLF.
+	SUBTTL	Identify format of this line
+
+;	Now loop reading NODNAM.INI to get node number and name
+;
+;File is mostly junk.  Important lines are of the form
+; Executor node = area.node (name)
+;or
+; Remote node = area.node (name)
+;or
+; SET NODE area.node NAME name
+;or
+; DEFINE NODE area.node NAME name
+;
+;Where area. is optional.
+
+NEWNOD:	DMOVE	T1,[POINT 7,P1	;Where to store
+		    DEC 10]	;MAX CHARS
+	SETZB	P1,P2		;CLEAR RESULT
+	PUSHJ	P,GETTOK	;Get Remote or Executor
+	 JRST	DONE
+	CAMN	P1,[ASCII /Remot/]
+	 CAME	P2,[ASCII /e/]
+	CAIA			;Nope
+	 JRST	GETNOD		;Yes, onwards
+	CAMN	P1,[ASCII /Execu/]
+	 CAME	P2,[ASCII /tor/]
+	CAIA			;No, try SET
+	 JRST	GETNOD		;OK
+
+;Here line isn't VAX LIST format, try old (SET NODE)
+
+	DMOVE	T1,P1		;Make a copy
+	XOR	T1,[ASCII /DEFIN/]
+	XOR	T2,[ASCII /E/]
+	TXZ	T1,<BYTE(7)40,40,40,40,40>
+	TXZ	T2,<BYTE(7)40>
+	IOR	T1,T2
+	JUMPE	T1,GETNN
+	XOR	P1,[ASCII /SET/];Compare case invariant
+	TXZ	P1,<BYTE(7)40,40,40>
+	IOR	P1,P2
+	JUMPN	P1,NXTNOD	;Not known format, skip line
+	SUBTTL	Process a SET/DEFINE node format line
+
+GETNN:	DMOVE	T1,[POINT 7,P1	;Where to store
+		    DEC 10]	;Max chars
+	SETZB	P1,P2		;Results
+	PUSHJ	P,GETTOK	;Read another
+	 JRST	DONE		;EOF
+	XOR	P1,[ASCII /NODE/]
+	TXZ	P1,<BYTE(7)40,40,40,40>
+	IOR	P1,P2
+	JUMPN	P1,NXTNOD	;Nope
+	PUSHJ	P,READNN	;Get node Number
+	 JRST	DONE		;EOF
+	JUMPE	T1,NXTNOD	;Error, skip line
+	MOVEM	T1,CURNOD	;Save node Number
+	DMOVE	T1,[POINT 7,P1	;Where to store
+		    DEC 10]	;Max chars
+	SETZB	P1,P2		;Answer
+	PUSHJ	P,GETTOK	;Next token
+	 JRST	DONE		;EOF
+	XOR	P1,[ASCII /NAME/]
+	TXZ	P1,<BYTE(7)40,40,40,40>
+	IOR	P1,P2
+	JUMPN	P1,NXTNOD	;Nope, flush line
+	MOVE	T1,CURNOD	;Restore node number
+	PUSHJ	P,NODNM		;Store #, parse name
+	 JRST	DONE		;EOF
+	 JRST	NXTNOD		;Parse error
+	JRST	SETNOD		;All set, define this one
+	SUBTTL	Process a VAX NCP LIST KNOWN NODES format line
+
+GETNOD:	DMOVE	T1,[POINT 7,P1	;WHERE TO STORE
+		    DEC 10]	;MAX CHARS TO STORE
+	SETZB	P1,P2		;CLEAR RESULT
+	PUSHJ	P,GETTOK	;READ THE TOKEN
+	 JRST	DONE		;FINI
+	CAMN	P1,[ASCII /node/]
+	 SKIPE	P2
+	JRST	NXTNOD		;LOOK ONWARD
+	PUSHJ	P,EATSPC	;CHEW ON SPACES
+	 JRST	DONE
+	CAIE	C,"="		;DELIMITER WHAT WE EXPECT?
+	 JRST	NXTNOD		;NO, NOT OUR LINE
+	PUSHJ	P,CHRIN		;Get next character
+	 JRST	DONE		;EOF
+	PUSHJ	P,READNN	;READ NODE NUMBER
+	  JRST	DONE		;HIT EOF
+	JUMPE	T1,NXTNOD	;0 NODE NUMBER IS BAD TOO
+	PUSHJ	P,EATSPC	;Eat spaces
+	 JRST	DONE		;EOF
+	CAIE	C,"("		;Should be (nodename
+	 JRST	NXTNOD		;Isn't, this line not for us.
+	PUSHJ	P,CHRIN		;Find next char
+	 JRST	DONE		;EOF
+	PUSHJ	P,NODNM		;Store node #, parse name
+	 JRST	DONE		;EOF
+	 JRST	NXTNOD		;Parse error
+	CAIE	C,")"		;Should end right
+	 JRST	NXTNOD		;Didn't, don't set
+	SUBTTL	Do the SET, Process EOL, End of processing
+
+SETNOD:	MOVEI	T1,NMXBLK	;Pointer to NTMAN block
+	NT.MAN			;Do a UUO of some sort (Define node)
+	  CAIA			;Yes, continue
+	AOS	NDSDEF		;Count one done
+NXTNOD:	PUSHJ	P,EATLIN	;munch the rest of this line
+	JRST	NEWNOD
+
+
+DONE:	TSTRG.	[ASCIZ .Processed .]
+	MOVE	T1,BLKSRD	;Blocks
+	TDECW.	T1,
+	TSTRG.	[ASCIZ . block.]
+	SOSE	BLKSRD		;Other than 1?
+	TCHRI.	"s"		;Yes--pluralize
+	TCRLF.
+	POPJ	P,		;Done here
+	SUBTTL	Subroutine to store node number and parse node name
+
+
+;	Here we have a node number from the file.
+;
+;	The convolutions below are to ensure that this program will
+;	run with either a Phase III or a Phase IV file, on either a
+;	Phase III or a Phase IV system - without change.
+;
+;	If area routing system
+;		if file didn't specify area
+;			assume node is in local area
+;		node number is valid
+;
+;	Else Phase III system, but file may be phase IV
+;		If file didn't specify an area
+;			assume in ours, node passes
+;		else it did
+;			if specified area is ours
+;				we pass node
+;			else
+;				node is in another area, can't tell monitor
+
+NODNM:	SKIPE	MYAREA		;Are we using area routing?
+	  JRST	[MOVE	T2,U.AREA ;Default area
+		 TRNN	T1,176000 ;Area specified in file?
+		  DPB	T2,[POINT 6,T1,35-10] ; No, use our area
+		 JRST	DONOD]	;Node number is valid
+	TRNN	T1,177400	;NO area routing, trying to specify an area?
+	  JRST	DONOD		;No, OK to do
+	LDB	T2,[POINT 8,T1,35-8] ;Yes, get high byte
+	TRNE	T2,3		;IF node # > 255, ignore - Phase III can't hack
+	  JRST	REJNOD		;Yes, just ignore this node then
+	LSH	T2,-^D<8-6>	;Get only real area number
+	CAME	T2,U.AREA	;Area number of node = my area number?
+	 JRST	REJNOD		;No, since not area routing, ignore this one
+	ANDI	T1,377		;Yes, this is my area.  Keep only node number.
+DONOD:	AOS	TOTNDS		;Total nodes in file
+	MOVE	T2,NMXBLK+.NTEID	;POINTER TO ENTITY
+	IDPB	T1,T2		;STORE LO BYTE OF NODE NUMBER
+	LSH	T1,-^D8		;POSITION HI BYTE
+	IDPB	T1,T2		;STUFF IT TOO
+	MOVE	T1,NMXBLK+.NTBPT	;Point to string
+	MOVX	T2,<<^D500>&<377>>	;Get low order byte of 500
+	IDPB	T2,T1		;Store as first byte in command string
+	MOVX	T2,<<<^D500>&377_8>_-8> ;Get high order byte of 500
+	IDPB	T2,T1		;Store as next byte in command string
+	IBP	T1		;SKIP OVER COUNT FOR NOW
+	MOVEI	T2,6		;Max characters a nodename can have
+	PUSHJ	P,GETTOK	;get nodename
+	  POPJ	P,		;None.
+	MOVNS	T2		;GET -NUMBER OF CHARS LEFT IN NAME
+	SKIPLE	T2		;If the guy had more than 6 chars
+	MOVEI	T2,0		;Cut it down to 6
+	ADDI	T2,6		;Now T2 has number of chars in node name
+	DPB	T2,[POINT 8,STRING,23]		;STUFF CHAR COUNT
+	ADDI	T2,3		;COUNT OVERHEAD BYTES
+	MOVEM	T2,NMXBLK+.NTBYT ;STORE TOTAL COUNT
+	AOS	(P)
+	JRST	CPOPJ1
+
+REJNOD:	AOS	TOTNDS
+	JRST	CPOPJ1
+	SUBTTL	Subroutine to do NTMAN. or NTMAN%
+
+IFN FT2OPS,<
+
+NETMAN:	SKIPE	T20MON		;TOPS-20?
+	 JRST	NETT20		;Yes
+	NTMAN.	T1,		;Do it
+	 POPJ	P,		;Done
+	JRST	CPOPJ1		;Sucessfully
+
+NETT20:	IFN T1-1,<
+	PUSH	P,1
+	MOVE	1,T1>
+	PUSH	P,T1		;Save given address
+	MOVSS	T1		;Source
+	HRRI	T1,NTMBLK	;We copy arg block because pointers advance
+	BLT	T1,NTMBLK+.NTMAX-1 ;On TOPS-20, but not on TOPS-10
+	MOVEI	T1,NTMBLK	;Use our block
+	NTMAN%			;NTMAN%
+	ERJMP	[POP	P,T1
+		 IFN T1-1,<POP P,1>
+		 POPJ	P,]
+	POP	P,T1		;User arg
+	IFN	T1-1,<POP P,1>
+	AOS	(P)
+	POPJ	P,
+> ;END IFN FT2OPS
+	SUBTTL	Subroutine to discard rest of line
+
+EATLIN:	CAIN	C,12		;THROW AWAY
+	  POPJ	P,		;  THE REST
+	PUSHJ	P,CHRIN		;    OF THE
+	  POPJ	P,		;      LINE
+	JRST	EATLIN	
+	SUBTTL	Subroutine to read a node number
+
+READNN:	PUSHJ	P,DECIN		;READ Decimal
+	  POPJ	P,		;BAD
+	CAIE	C,"."		;WAS IT TERMinated by a "." ?
+	  JRST	CPOPJ1		;NO, JUST GIVE number without area
+	PUSHJ	P,CHRIN		;READ NEXT CHAR TO GET THINGS STARTED
+	  POPJ	P,		;PROPAGATE ERROR
+	LSH	T1,^D10		;SHIFT area to proper field
+	PUSH	P,T1		;SAVE IT
+	PUSHJ	P,DECIN		;READ local part of node number
+	  JRST	[POP	P,T1
+		POPJ	P,]	;NO CHARS, GIVE ERROR
+	POP	P,T2		;GET AREA PART BACK
+	IOR	T1,T2		;STUFF THEM TOGETHER
+	JRST	CPOPJ1
+	SUBTTL	Subroutine for decimal input
+
+
+DECIN:	PUSHJ	P,EATSPC	;DON'T CARE ABOUT LEADING SPACES
+	  POPJ	P,
+	MOVEI	T2,0
+DECINL:	MOVEI	T1,-"0"(C)
+	JUMPL	T1,DECIND
+	CAILE	T1,^D9
+	JRST	DECIND
+	IMULI	T2,^D10
+	ADD	T2,T1
+	PUSHJ	P,CHRIN
+	  JRST	DECIND
+	JRST	DECINL
+DECIND:	MOVE	T1,T2
+	JRST	CPOPJ1
+	SUBTTL	Token parsing routines
+
+;
+;	Routine EATSPC eats chars until it gets a non-control char
+;
+;	Call:	PUSHJ	P,EATSPC
+;
+;	Return:	+1	;ran out of characters
+;		+2	;first non-control character in C
+;
+EATSPC:	CAILE	C,40	;is it a control char (including space)?
+	JRST	CPOPJ1	;yes already, good return
+	PUSHJ	P,CHRIN	;Read next char
+	  POPJ	P,	;Ran out
+	JRST	EATSPC	;continue
+
+;
+;	Routine SKPTOK skips over a random token.
+;	A TOKEN is defined to be a string of non-control characters.
+;	But "(", ")", and "=" are breaks as well.
+;
+;	Call:	PUSHJ	P,SKPTOK
+;
+;	Return:	+1	;Ran out of characters
+;		+2	;Skipped the token, terminator in C
+;
+SKPTOK:	SETZB	T1,T2		;NO byte pointer and zero space to store
+;	JRST	GETTOK		;fall into GETTOK
+;
+;	Routine GETTOK parses a token from the input file
+;	skipping leading spaces/tabs/control-chars
+;
+;	CALL:	T1/ IDPB pointer to store ASCII string from parse
+;		T2/ max bytes to store
+;
+;
+;	Return:	+1	;ran out of characters eating spaces
+;		+2	;Stored the token, terminator in C
+;
+GETTOK:	PUSHJ	P,EATSPC
+	  POPJ	P,
+GETTO1:	CAIE	C,")"		;This ends a nodename
+	 CAIG	C,40		;Is it a separator?
+	JRST	CPOPJ1		;Yes, return
+	CAIE	C,"("		;This starts one
+	 CAIN	C,"="		;and this ends the word "node"
+	JRST	CPOPJ1		;(Usually there are spaces, but...)
+	SOSL	T2		;Has user got room?
+	 IDPB	C,T1		;Stuff the character in caller's string
+	PUSHJ	P,CHRIN		;GET NEXT CHARACTER
+	  JRST	CPOPJ1		;We stored something, so give good return
+	JRST	GETTO1		;Got a character, continue
+	SUBTTL	Character input
+
+CHRIN1:	AOS	BLKSRD		;Looks like we'll read a block
+	IN	NOD,		;READ A NEW BUFFER
+	  JRST	CHRIN
+	SOS	BLKSRD		;Gues we didn't after all
+	STATZ	NOD,IO.EOF	;EOF?
+	  POPJ	P,		;Yes
+	GETSTS	NOD,T1		;Get error status
+	$ERROR	IOE,<Input error on data file, status = >,<TOCTW. T1,>,T1,ABORT
+CHRIN:	SOSGE	INHD+.BFCNT	;ANY CHARS?
+	JRST	CHRIN1
+	ILDB	C,INHD+.BFPTR	;YES, GET ONE
+CPOPJ1:	AOS	(P)
+CPOPJ:	POPJ	P,
+	SUBTTL	Character output
+
+;Here to output a char for SCAN when we are detached.
+
+QCHAR:	SOSL	QCTR		;Space?
+	 JRST	QCHAR1		;Yes
+	PUSH	P,T1		;Save char a bit
+	MOVE	T1,[XWD QMAX,QBUF]	;Size in wds,,buffer
+	HLLM	T1,QTXT		;Tell UUO
+	HRRZM	T1,QTXT+1	; ...
+	SETZ	T1,		;Make sure asciz
+	IDPB	T1,QPTR
+	MOVE	T1,[XWD QUELEN,QUEBLK]
+	PUSH	P,T2		;Preserve our register
+	PUSHJ	P,OPRWAT	;Wait for ORION
+	POP	P,T2		;Restore the AC
+	QUEUE.	T1,		;Talk
+	 HALT	.		;Will give error in det job, anyhow.
+	MOVEI	T1,QMAXC-1	;Allow for current char
+	MOVEM	T1,QCTR		;Store
+	MOVE	T1,[POINT 7,QBUF]
+	MOVEM	T1,QPTR		;Reset
+	POP	P,T1		;Get char back
+
+QCHAR1:	IDPB	T1,QPTR		;Deposit it
+	POPJ	P,		;Duh
+
+	END	DEFNOD

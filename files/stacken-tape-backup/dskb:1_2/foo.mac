@@ -1,0 +1,49 @@
+search	jobdat, uuosym, macten
+.text	"/symseg:low/locals"
+
+dsk==1	;Disk channel
+
+ibh:	block	3		;Input buffer header.
+count:	exp	0		;Loop count.
+vector:	exp indone, 0, 0, 0	;Interrupt vector.
+
+foo:	jfcl
+	reset
+	open	dsk,[
+		exp	uu.aio
+		sixbit	"dsk"
+		xwd	0,ibh]
+	 halt
+	movei	1,vector
+	piini.	1,
+	 halt
+	move	1,[
+		exp ps.fon+ps.fac+exp[
+			exp	dsk
+			xwd	0,ps.rid
+			xwd	0,0]]
+	pisys.	1,
+	 halt
+	lookup	dsk,[
+		exp	3,0
+		sixbit	"foo"
+		sixbit	"mac"]
+	 halt
+loop:	in	dsk,
+	 jrst	gotdata
+	aos	count
+	movei	1,^D10
+	sleep	1,
+	jrst	loop
+
+gotdata:outstr[	asciz "Input OK.
+"]
+	monrt.
+	jrst	foo
+
+indone:	outstr[ asciz " - "]
+	debrk.
+	 jfcl
+	halt
+
+	end	foo

@@ -1,0 +1,5 @@
+; L1DLNK -- Load TOPS-10 multi-segment debug version of LINK.
+
+/RUN:SYS:LINK/RUNOFFSET:1/TMPFIL:LNK:"@DEBINI"
+
+

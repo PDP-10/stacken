@@ -1,0 +1,541 @@
+
+    Hacker-uttryck p} KTH (NADA och Elektro), LiTH samt Uppsala
+    ===========================================================
+
+Denna fil inneh}ller en ordlista |ver svensk "hacker-slang". Somligt
+{r inspirerat fr}n HACKER.JAR, den amerikanska ordlistan, men de
+flesta orden {r insamlade fr}n KTH (NADA, Datorf|reingen Stacken,
+ELVIRA/ELMER-milj|n), Link|ping (Datorf|reningen LYSATOR) och Uppsala
+(AIDA-milj|n).
+
+F|r att kunna h}lla denna fil uppdaterad, skrivs numera allt in i
+bokstavordning. Alla {r v{lkomna med nya uttryck. Bidrag l{mnas
+enklast till Per Lindberg QZ, eller PER-D p} Aida i Uppsala. [ven
+ut|kningar av redan existerande begrepp {r v{lkomna.
+
+
+
+17              Meta-uttryck. Betecknar Det Minst Slumpm{ssigt Valda
+                Talet. Anv{nds d} man vill beteckna ett tal, vilket
+                som helst. Dess ursprung {r h|ljt i dunkel. Anv{nds
+                med f|rk{rlek av |vningsassistenter: "Tag ett tal, l}t
+                oss s{ga 17, och..."
+
+666		Ett helt vanligt tal. Mycket vanligt.
+
+42		Det Slutgiltiga Svaret p} fr}gan om Livet, Universum,
+                och Allting. F|rekommer ymnigt, (se t.ex The 
+		Hitch-Hiker's Guide to the Galaxy)
+
+4711            Anv{nds ibland i.st.f. 17, vid tillf{llen d} man vill
+                beteckna ett lite st|rre tal. Kommer troligen fr}n
+                namnet p} "{kta" Eau-de-colonge, "No.4711"
+
+11147           4711 i bas 8.
+
+ANALFABETEN     Annat namn p} ABC80. Kallas {ven KAMRAT 80, ABC-40.
+
+ANV[NDARE	En programmerare som tror p} allt du s{ger till honom.
+                N}gon som st{ller fr}gor i st{llet f|r att l{sa
+                innantill i manualerna.
+
+APL             APe Language.
+
+ATTAN OTUR      Att fint beklaga (n}gon annans) misstag, baserat p} ren
+                klumpighet, eller okunnighet. Ex. Attans otur att det inte
+                finns ett systemprogram som s{tter privilegiebiten.
+
+AVLUSA          Att ta bort fel (L\SS) i program. Fr}n eng: DEBUG.
+
+AUTOMAGISKT	Automatiskt, men s} pass invecklat att jag inte har
+                tid eller lust att f|rklara det just nu. Se MAGI.
+
+BANAN           Meta-uttryck, typ FOO, men  mindre anv{nt. Anv{nds
+                som ett godtyckligt password.
+
+BITT            Svenskt namn p} bit.
+
+BUGG            Av engelskans BUG. Inneb{r ett (oftast litet) fel i
+                ett program. Kallas {ven LUS.
+
+BURK            Burk, dator, terminalburk.
+
+CC		Coca-Cola.
+
+CD              F|rkortning f|r Control Data och Chalmers Dataklubb.
+
+CDR		(Kudder). Fr}n LISP-v{rlden. Att ta resten av n}got.
+                [ven vanligt utrop d} n}gon vill byta samtals{mne.
+
+COBOL-FINGRAR   fingrar som best}r av sm} korta stumpar, kapade
+                ungef{r vid f|rsta leden. Sjukdom som kommer
+                av att programmera i COBOL, som {r ett programmerings-
+                spr}k d{r texten blir oerh|rt volumin|s. COBOL-FINGRAR
+                beror p} att man n|tt ned fingrarna p} tangentbordet.
+
+CONSA		(Fr}n LISP-v{rlden). Att s{tta ihop n}got. "Om vi
+                consar de h{r rutinerna b|r vi f} ett fungerande program".
+
+COMPUTTER       Dator. F|rsvenskning av engelskans "Computer".
+                Kallas {ven K[RRA. "Den h{r k{rran dyker snart!"
+
+DET BJUDER VI P]        Mindre fel som man f}r st} ut med, som man inte
+                        orkar r{tta.
+
+DISABLA         Om|jligg|ra.
+
+DISKETT         Tunn skiva belagd med magnetiskt material, precis som
+                p} ett magnetband. Anvv{nds till massminne p} mindre
+                datorer. Kallas {ven FLOPPY, av engelskans FLOPPY DISC.
+                Skall enligt svensk norm heta FLEXSKIVA, men det {r s}
+		sv}rt att uttala.
+
+DUNDERKLUMP     Ben{mning p} en Teletype ASR33, urtypen f|r en
+                pappersterminal. Modellen {r s}ld i n exemplar,
+                och finns spridd |ver hela v{rlden. Alla (tills
+                helt nyligen) som sysslat med programmering har
+                n}gon g}ng kommit i kontakt med DUNDERKLUMPEN. Den
+                k{nnetecknas av sin stora vikt och h|ga ljudniv}. Har
+                gett upphov till betecningen TTY som avser terminal.
+
+DYKA            Totalt systemsammanbrott i en dator. K{nnetecknas av
+                att systemet inte l{ngre g|r n}gonting. Inneb{r f|r
+                det mesta att mycket arbete g}r f|rlorat. "Datorn
+                d|k i g}r kv{ll". Kallas {ven f|r att KRASCHA, ST\RTA,
+                G] NER. N{r datorn {r riktigt seg kraxar olycks-
+                korparna "Nu {r den p} v{g ner.", "Nu dyker den snart.".
+
+ELAKE F\RH\RSLEDAREN    Fantasifull hacker som provar en anv{ndares
+                program med avsikt att hitta fel och on|diga begr{nsningar.
+                Tex program som inte klarar ppn. eng 'devils advocate'.
+
+ELVIRA          Elektros PDP-11/45. (Numera h{dang}ngen)
+
+ELMER		Elektros VAX/11-780. Efterf|ljare till ELVIRA, som nu
+                g}tt dit datorer g}r, n{r de blivit f|r gamla. Namnet
+                kommer ur "MER {n ELvira".
+
+EPSILON		En mycket liten m{ngd av n}got. Kommer fr}n den
+                matematiska v{rlden. "Det kostar epsilon att f} en
+                syltklick p} glassstruten".
+
+ERROR 220       Fel som uppst}r d} man kopplar in elverket p} datorbuss.
+                Brukar ge upphov till en del intressanta ljusfenomen.
+
+ESOTERISK       Den som vet han vet........
+
+FAS		(Hos m{nniskor) F|rh}llandet mellan det vanliga
+                24-timmarsdygnet och vakencykeln. (Kallas {ven
+                "fysiska" och "logiska" dygn.)
+
+FINT OCH VACKERT        Ironisk kommentar om klumpighet.
+
+FISKA DISK      Samla oallokerat diskutrymme, ursprungligen i samband med
+                att man tappat (tagit bort av mistag) sin enda kopia av
+                ett program.
+
+FORTRAN         FORmal TRAsh Notation. Fult ord. Skrivs ofta "F-N".
+
+FOO             Metauttryck som anv{nds till slaskvariabel, tempor{r-
+		filer, och allt	annat. (Se ODEN::DOC:HACKER.JAR,
+		eller Aida::Info:Jargon.Txt). Andra liknande uttryck
+		{r KAKA, ALLAN, HATMAX, HASMAX och FOOBAR.
+		"ALLAN TAR KAKAN", vanlig nonsensmening fr}n ELVIRA-milj|n.
+		"Antag att vi har tv} rutiner, l}t oss kalla dem FOO
+		och BAR. Om nu FOO anropar BAR..."
+
+FROBYT          FROM BY TO (WHILE DO OD)-djur. Ett av de tre dator-
+                djuren frobyts, buggar och gremlins.
+
+FURK-BE         S} uttalas FIRQB, en minnesarea p} en PDP-11, d{r man l{gger
+                sina parametrar n{r man anropar RISTES.
+
+FULT		anv{nds om ett program som g|r n}got p} ett (inte
+ 		n|dv{ndigtvis intelligent men) ov{ntat eller
+		kraftfullt s{tt.
+
+F]RTRAN         Annan popul{r beteckning p} k{nt programmeringsspr}k.
+                (Fettmassa som utvinnes ur br{kande lurviga djur)
+
+GARB            Fr}n LISP-v{rlden. Betecknade fr}n b|rjan orefererade
+                data, som d} och d} m}ste st{das bort ur systemet f|r
+                att inte ta on|dig plats. Processen kallas "Garbage Collect"
+                (f|rk. GC). GARB anv{nds om saker och ting som ligger och
+                skr{par. Att GARBA {r att st{da bort GARB.
+                [ven namnet p} LYSATORS klubbtidning.
+                V{rma upp GC, FOAuttryck f|r att generera mycket garbage.
+
+GEB		F|rkortning f|r "G|del, Escher, Bach: an eternal golden braid",
+		titeln p} en bok av Douglas R. Hofstadter. Boken handlar om en
+		massa olika saker, centrerat kring G|dels sats och AI. Den har
+		blivit n}got av en kultbok bland hackers. Rekommenderas!
+
+GOON SYMBOL     Semikolon p} ALGOL 68. Uttalas "go on".
+
+GREMLIN         1. Mytologiskt v{sen, som f|rorsakade of|rklarliga
+                st|rningar i elektroniken i RAFs radarsystem under
+                andra v{rldskriget. 2. En SEMA i ALGOL 68. N{r man
+                g|r UP gremlins, kan det b|rja h{nda konstiga saker,
+                s{rskilt med filer. Men det {r faktiskt the gremlins
+                som ser till att programmet fungerar ungef{r som i
+                RR, trots v{rddatorns og{stv{nliga operativsystem.
+                3) Person, som har samma effekt p} operativsystem,
+                som en riktig gremlin.
+
+HACK		1. Ett snabbt jobb som fixar n}got, men inte mer.
+		2. Resultatet av (1).  3. SNYGG HACK: En listig l|sning.
+
+HACKA		Att programmera. "Vad g|r du?" --"Jag hackar AMIS".
+		HACKA S\NDER: Att g|ra en massa of|rsiktiga {ndringar
+                s} att resultatet blir oanv{ndbart.
+
+HACKER		En person som {r skicklig i programmering och framf|r
+		allt avlusning av sina egna och andras program.
+		Beteckningen kommer fr}n att han kan "yxa till"
+		program v{ldigt snabbt. Beteckningen kan paradoxalt
+		nog anv{ndas i b}de positiv och negativ beteckning.
+
+HACKV[RDE	Anledningen till att g|ra n}got till synes
+                meningsl|st, bara f|r att resultatet {r en snygg hack.
+		T.ex. {r kommandot "M-X Phase of the moon" i AMIS
+                inlagt enbart f|r sitt h|ga hackv{rde.
+
+HALL]!          Vanligt utrop av hackers d} systemet {r tr|gt, dvs. det
+                tar l}ng tid innan man f}r svar.
+
+HAT!		Rytande n{r saker skrynklar sig alldeles ovanligt mycket.
+		Ryts vid Aida vid de mest ov{ntade situationer...
+
+HB              Flippra ur, g} i ett obest{mt s|mntillst}nd. Tappa
+                intresset f|r n}got. Ex 'G} i HB', 'Hibernera'.
+
+HJ[RND\D        Ett uttryck som anv{nds i negativ betydelse, mestadels
+                om program. "Det h{r programmet har ett hj{rnd|tt
+                I/O-paket!" Anv{nds inte om personer.
+
+H]RIG		On|digt invecklad, obegriplig. "Kommandona till CHANGE
+                {r otroligt h}riga!"
+
+H[ND!		Anv{nds f|retr{desvis vid Aida n{r det g}r klister i maskinen.
+		Likartat med HALL]!.
+
+INTERRUPTA      (Tillf{lligt) p}kalla n}gons uppm{rksamhet. En request
+                f|r n}gon att stacka.
+
+ISY             Officiell f|rkortning f|r Institutionen f|r SYstem-
+                teknik p} LiTH.
+
+JOJO-MOD	Beskriver det tillst}nd hos datorer, d{r de har en
+                tendens att dyka alldeles f|r ofta.
+
+JUNK            Odefinierbar h}rdvara, vanligtvis oanv{ndbar. FOO
+                med avseende p} h}rdvara.
+
+KANNA           Ben{mning p} IC-kapsel. "Det g}r }t cirka 20 kannor
+                f|r att bygga det d{r minneskortet."
+
+KANONISK	Normaltillst}nd, vanligt beteende, det vanliga s{ttet
+                att g|ra n}got. "Det kanoniska s{ttet att kn{cka ett
+                godtyckligt program {r att sl} vilt p} tangentbordet i
+                tjugo minuter". (Denna metod {r {ven k{nd p} Stacken
+                som "Mathias-metoden").
+
+KLINGON		Obehaglig person som tror sig vara hacker men i sj{lva
+		verket {r en MOBY LUSER. Mycket irriterande sak.
+		Ursprungligen Fienden i TV-serien "Star Trek".
+
+KL[GGIG         Om programering, ormbo.
+
+KRACKO          Trasig, s|nder patchad.
+
+LABEL           Etikett p} en person, inte s{llan elak s}dan.
+
+LEPRA           Sv. "femte hjulet". N{r n}gon inte f}r plats i gemenskapen
+                t.ex. femte man vid 4-mans bordet p} en resturang.
+
+LISP            Ett popul{rt och trevligt programmeringsspr}k.
+                F|rkortning f|r Lots of Infernal Stupid Parentheses.
+
+LURING          Tankef{lla.
+
+LYS-16          Beteckning p} 16-bit datorbyggsats framtagen av LYSATOR
+                Datorn {r konstruerad med s.k. "bit-slice" teknik.
+
+LYSATOR         Datorf|rening p} LiTH. Systerorganisation till STACKEN.
+                Namnet kommer fr}n LYS, som tidigare var betecning f|r
+                Link|pings Y-teknologers S{llskap. (Y=sektionen f|r
+                fysik p} LiTH). Organisationen uppl|stes n{r D-
+                sektionen kom till omkr. 1975. (Ett tag fanns "Nya"
+                och "Gamla LYS")
+
+MAD             F|rkortning f|r Malm| Amat|r Datorister.
+
+MAGI		N}got komplicerat, sv}rf|rklarat. Vanligt f|rekommande
+                i hackerv{rlden, som {r starkt beroende av magi.
+
+MAGISKT		N}got obegripligt eller med en f|rklaring som tar en timme.
+
+MAIN LUPE       Klassisk felstavning av "Main Loop", finns numera i alla
+                h|gklassiga systemprogram p} bl.a. ELVIRA.
+
+MANUL           Annat ord f|r MANUAL, dvs handbok.
+
+MINUS ETT       Universal default enligt TOPS-20 terminologi. Anv{ndes
+                som svar p} fr}gor av typen: 'Var ska vi {ta i dag d}?'.
+                -1 svaret p} svaret -1 betyder 'Nej, inte nu igen!'.
+
+MIKROPROFESSOR  Rolig omskrivning av "mikroprocessor".
+
+MIS[R           Beklaga (ev. i ironisk bem{rkelse) ex. det {r mis{r n{r
+                diskpacken krashar.
+
+MJ[K?		Metauttryck som anv{nds fr{mst vid Nadja. Betyder inte.
+
+MJ[KVARA	1. Mikrokod; 2. Firmware ("styvvara").
+
+M]NE		En himlakropp som har stor betydelse f|r hackers.
+
+M]NENS FAS	En slumpm{ssig parameter, som man inte kan utpeka.
+                Exempel: "Detta fel uppst}r bara udda torsdagar vid
+                fullm}ne". "Om det d{r fungerar, beror det p} att man
+                har FOO-switchen satt, de senaste tio kommandona och
+                p} m}nens fas."
+
+M\SS-L]S	Rolig |vers{ttning av "Caps Lock".
+
+N		Ett godtyckligt (stort) tal. "Det finns n buggar i det
+                d{r BASIC-programmet!" "F|r n:te och sista g}ngen: ..."
+
+NADA            Officiell f|rkortning f|r institutionen f|r Numerisk
+                Analys och DAtalogi p} KTH.
+
+NADJA           NADAs DEC-2020.
+
+NIL		(Fr}n LISP-v{rlden) Nej, inte, tomt, ingenting,
+                falskt. Motsats: T. Vanligt svar p} fr}gor enligt
+                "P"-konventionen. "Jag fattar NIL av den h{r h}riga
+                manulen!"
+
+NIL LISP        Nilssons Implementation of Lisp, av elaka tungor kallat
+                a Non-Intelligent Lisp.
+
+NJUT-OPTIMERAT  Beskrivning av n}got (vanligtvis program) som {r bra.
+                Uttalas oftast med inlevelse: "njiiuuutoptimerat!"
+
+NORMALSTIG      Default path, connected directory.
+
+NO-OP		Betecknar n}got som inte g|r n}got. H{rstammar fr}n
+		maskininstruktioner som brukar kallas "NOP", och som
+		bara hoppar fram till n{sta. "Den h{r tomma Coca-Cola
+		burken {r en no-op!"
+
+-P		"P"-konventionen. Man st{ller en fr}ga genom att l{gga
+                till ett "-P" efter}t. Besvaras med T (ja) eller NIL
+                (nej). Kommer fr}n LISP-v{rlden. Exempel:
+			(MATP)		"Ska du med och {ta?"
+			(HEMMAP)	"Sitter du och k|r hemifr}n?"
+
+PERMAFROST      Elektorstatiska urladdningar. Lustiga fenomen som uppst}r
+                p} en bildsk{rm (speciellt Elite terminaler), vid elektro-
+                statiska urladdningar.
+
+PERONIST	Anh{ngare av PERONISM, en vid vissa datorsystem utbredd
+		ideologi som {r h{mmande f|r hackers. Kan {ven stavas
+		P[RONISM. Har inget med frukt eller Argentina att
+                g|ra. (Uttrycket anv{nds bara vid Aida).
+
+PILLA           [ndra i operativsystemet.
+
+POPPA		Av POP (stackoperation). ]terg} till en tidigare
+                aktivitet eller samtals{mne. Motstas: PUSHA.
+
+POOL            Endloop.
+
+PR7             Disable interrupt, st{nga yttre avbrott, inte lyssna eller
+                reagera p} yttre signaler.
+
+PRIMAL          HB
+
+PROGRAM[TAREN   Ett litet djur som kryper omkring och avl{gsnar alla program
+                (speciellt k{llkod), som inte anv{nds p} l{nge eller
+                sparats p} arkivmedium. Program{tarens f{rg {r gr|n.
+                Den lilla gr|na program{taren har varit framme igen.
+		Under Twenex finns det en "officiell" liten gr|n program-
+		{tare, som kallar sig Reaper. Den sparar bort programmen
+		p} magnetband, som det tar dagar att f} tillbaka fr}n.
+
+PROGRAMR\TA     Hypotetisk sjukdom som drabbar program som s{llan eller
+                aldrig anv{nds, och d{rf|r blir inkompatibla med nyare
+                versioner av systemprogramvara. Kallas {ven
+                "bits|derfall", (bit decay).
+
+PULT		1. Enkhram Pult, figur i en Dungeon&Dragons-kampanj i Upsala.
+		2. Pult Guden, lokal gud vid Aida.
+		3. Beteckning p} person med stor makt |ver ett datorsystem.
+		   Se WIZARD.
+
+PULTA		1. Aktivera sina privilegier.
+		2. Av misstag g|ra n}got katastrofalt.
+
+PUSHA		Av PUSH (Stackoperation). Att avbryta n}got (t.ex. ett
+                samtals{mne) f|r att senare }terg} till det. "Kan du
+                inte pusha det d{r och f|jla med och {ta?"
+
+RANDOM POKA     testa monitorns integritet (testa monitorns MTBF)
+
+REKURSION	Se "rekursion"...
+
+REKOMMENDERAS AV FACKMAN        ]tg{rd som rekommenderas av fackman (Hacker)
+
+RISTES          Operativsystem till PDP-11. Heter egentligen RSTS/E, men det
+                {r s} sv}rt att s{ga.
+
+ROGERF[LLA      Tankef{lla, som uppkommer vid f|rs|k att t{ppa till lucka,
+                och som
+                        1) inte t{pper till denna helt, eller
+                        2) |ppnar nya m|jligheter f|r en hacker
+
+RR              Revised Report on the Algorithmic Language ALGOL 68.
+
+RTFM		Read The Fucking Manual. Anv{nds n{r man ber{ttar
+                om hur n}gon klantat till det f|r att han/hon
+		inte visste hur ett program fungerade, eller
+		ens brydde sig om att ta reda p} det.
+
+RYCKA           Anv{nds i samband med SN\RE. RYCKA I SN\RET inneb{r
+                att s{nda logiska signaler p} ledningen, vanligtvis
+                logisk etta.
+
+SASYNE          Mnemo f|r syntax error p} RSTS/E, identiskt med "s} synd!"
+                (se detta)
+
+SBS             F|rkortning f|r Skit Bakom Spakarna. Avser att ett fel
+                inte beror p} systemet, utan p} anv{ndaren.
+
+SKRYNK		(SKRYNK!, SKRYNKLA (SIG) etc) G} s|nder p} ett spektakul{rt
+		s{tt, framf|rallt mjukvara.
+
+SLIPPA          F|rlora ett program, inte f} eller ha m|jlighet att g|ra,
+                bli av med n}got v{rdefullt. t.ex. slippa k|ra (ev privi-
+                ligierat) program som har fel skyddskod.
+
+SLEM		(SLEM!, SLEMMIG etc) Neds{ttande ben{mning p} det mesta.
+		Anv{nds vid Aida.
+
+SMAK		Variant, typ, sort. "kommandona till AMIS kommer i tv}
+                olika smaker: CTRL-kommandon och META-kommandon". Se
+                VANILJ.
+
+SMARTKODA       Att med hj{lp av alla fula knep g|ra sitt program ex.vis
+                litet, kort, eller snabbt (tror man!)
+
+SN\RE           Ben{mning p} elektrisk f|rbindning, ledning. (t}t)
+
+SOCKER          N}got som visserligen {r on|digt, men v{ldigt trevligt
+                att ha. Exempel: expansion av kommandon i Twenex.
+                SYNTAKTISKT SOCKER, en spr}klig konstruktion som man
+                egentligen inte beh|ver, men som g|r koden enkel,
+                l{ttl{st etc.
+
+SPRATTLA        Som RYCKA, men i avseende p} att ta emot signaler.
+                "Nu sprattlar det {ntligen i sn|ret!"
+
+SP[KA           \sa, skyffla, t.ex sp{ka disk, sp{ka control-c.
+
+STACKA          Tillf{lligt byta samtals{mne, samtalspartner, eller lik-
+                nande, f|r att senare }teruppta detta. G}r att applicera
+                rekursivt. Se PUSHA och POPPA.
+
+STACKEN         Datorf|rening p} KTH. Systerorganisation till LYSATOR.
+
+STARK           Motsats - svag. En Hacker {r definitionsm{ssigt stark.
+                Anv{nds ofta i ironiskt syfte.
+
+SVAG            Motsats - stark. En okunnig, oansvarig anv{ndare {r
+                definitionsm{ssigt svag och har extension ".SVG"
+
+SVART H]L	Ett svart h}l {r en terminallinje som inte {r kopplad
+		n}gonstans. Upptr{der vanligtvis i terminalv{xlar, genom
+		att man beg{r kontakt med en viss dator, och f}r en 
+		icke-existerande linje.
+
+S] SYND         Ironiskt beklaga, t.ex: S} synd, du slipper (}terf} ditt
+                program).
+
+S[NKA MASKINEN	En person som k|r n}got ovanligt resurskr{vande
+		program kan f} h|ra det ov{nliga tillropet:
+		"M}ste du s{nka maskinen?" Anv{nds {ven d}
+		maskinen dyker (se DYKA) pga av n}gon operativ-
+		systembugg. "Jag s{nkte maskinen n{r jag gjorde
+		remove p} disken i st{llet f|r dismount."
+
+T		(Fr}n LISP-v{rlden) Ja, sant, r{tt. Motsats till NIL.
+
+TECKENNAMN      M}nga specialtecken har speciella namn p} hackiska.
+                M}nga anv{nds i humoristiskt syfte, andra f|r att
+                de {r praktiska.
+                "       -Dubbelblipp, flarp, fnutt-fnutt, hartass
+                         ,flerp, duppel-blipp, dubbel-snott
+		#	-Br{dh|g, br{dg}rd, skr{p, galler
+		&	-Ampersand (ursprungligt namn p} tecknet)
+                '       -Blipp, enkelblipp, quote, enkelkvot (NILssons p}fund)
+                         snott, enkelsnott, blipp, knott, klutt
+                @       -Kanelbulle, |ra, alfa-slang, snabel-a
+		[]	-Hakparenteser, brackor
+		{}	-krulliga parenteser, fiskm}sar
+		\	backslash (ursprunglig ben{mning innan SIS kom..)
+		<>	-Serganter, pilar, brackor
+		^	-Pil-upp, tak
+                _       -Underscore (ursprungligt namn p} tecknet)
+                /       -Slash
+
+TEKNOLOGS[KER   Sak som t}l k|ttyxa. Funktionss{ker burk, om|jlig att lura.
+                (Det g}r att g|ra saker 1. Idiots{kra, 2. Barns{kra, men
+                 det g}r INTE att g|ra dem teknologs{kra.)
+
+TILT            Anv{nds f|r att beskriva n}got som har stoppat eller
+                eljest {r d}ligt. Ordet har sitt ursprung fr}n
+                s.k. flipperspel, d{r slag eller st|tar p} maskinen
+                avbryter p}g}ende spel och t{nder en skylt "TILT" p}
+                panelen. F}r man {ven n{r man sl}r och bankar p}
+                terminalburken f|r att f} datorn att g} fortare.
+
+TILT ERROR      Helt ov{ntat och/eller obegripligt fel, g{rna med ett
+                felmeddelande som inte s{ger n}gonting om vad som
+                egentligen {r orsaken. Ofta orsakat av att anv{ndaren
+                har gjort n}got som f}r helt andra effekter {n han
+                t{nkt sig. Se TILT.
+
+TIME OUT        Ingen reaktion vid interrupt (m|jligen p.g.a PR)
+
+TRAPPA          F}nga
+
+TUGGPEKARE      F|rsvenskning av engelskans Bytepointer.
+
+TV[TTMASKINSPROCESSOR   Allm{n beteckning p} en 8-bitars mikroprofessor,
+                en s}n d{r som man bruka s{tta i tv{ttmaskiner o. dyl.
+
+TWENEX          (TWENty EXecutive) ben{mning p} DEC-operativsystemet
+                TOPS-20. Efter TENEX (TEN EXecutive), f|reg}ngare
+                till TOPS-20 p} ombyggda DEC-10 system.
+
+VANILJ		N}got som {r standard. Ej f|rb{ttrat av n}gon hacker.
+		Se SMAK.
+
+VR]L            Mycket (f|rst{rkningsuttryck) t.ex. VRAAL.DAT =
+                stor slaskfil. speciellt i samband med att man fiskar disk
+                (se detta)
+
+VOIDA           Kasta bort ett utr{knat v{rde, coersa det till variabel-
+                typen void.
+
+WIZARD		Se "\verstepr{st".
+
+WHEEL           \verstepr{st p} TWENEX-system (se dessa ord).
+                Efter "WHEEL CAPABILITY" en bit i TWENEX-anv{ndares
+                capability word som ger en m|jlighet att g|ra allt.
+
+[PPLET          Annan beteckning p} APPLE-II.
+
+\VERSTEPR[ST    (WIZARD) En hacker som {r systemprogrammerare och har
+                makt |ver ett st|rre datorsystem.

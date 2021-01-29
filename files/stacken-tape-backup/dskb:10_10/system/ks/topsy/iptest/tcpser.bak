@@ -1,0 +1,1813 @@
+title	tcpser -- TCP device handler.
+
+debug==1			;We ARE debugging this code.
+
+search	f, s, devprm
+search	ip4sym
+
+tcpser::entry tcpser
+
+	$reloc
+	$high
+
+; Autoconfigure data:
+
+; driver chararcteristics:
+;
+;	tcp	= tcpcnf
+;	tcp	= tcp channel
+;	0	= maximum devices in system
+;	0	= kontroller type
+;	0	= maximum drives per kontroller
+;	0	= highest drive number on kontroller
+;	mdsec0	= section for kdb/udb
+;	mdsec0	= section for ddb
+
+drvchr	(tcp,tcp,0,0,0,0,mdsec0,mdsec0,<dr.sft>)
+
+$phase	devlen
+
+tcptcb:	block	1		;TCB of connection.
+tcplen:!			;length of TCP ddb
+
+$dephase
+
+	$low
+
+tcpbfz==<^D512+3>/4		;Size of TCP buffers in normal I/O mode.
+
+tcpmod==1_A + 1_AL + 1_BYTMOD + 1_A8
+
+tcpddb:	ddbbeg	(tcp,tcplen)
+	 setwrd	(devchr,<tcpbfz+1>)		;devchr
+	 setwrd	(devser,<mcsec0+tcpdsp>)	;devser
+	 setwrd	(devmod,<dvin!dvout,,tcpmod>)	;devmod
+	 setwrd	(devtyp,<<.tytcp*.tyest>,,depevm>) ;devtyp
+	 setwrd	(devcpu,<707b8>)		;devcpu
+
+	 setwrd (tcptcb, 0)
+	ddbend
+
+	; Variables local to this module:
+
+tcblst:	exp	0		;List of all known TCB's.
+
+	$high
+
+equate	(LOCAL,0,<tcpckt,tcpkdb,tcpkln,tcpudb,tcpuln>)
+equate	(LOCAL,0,<tcpicd,tcpicl,tcpint,tcpulb,tcpulp>)
+
+tcxdsp:	drvdsp	(tcp,,tcpddb,tcplen,0)
+
+	$high
+
+tcpcfg:	skipn	tcptab##	;Done this already?
+	 skpcpu	(0)		; On policy CPU?
+	  popj	p,		;  No, ignore.
+	jrst	tcpcf1		;Go do init code.
+
+	$init
+
+tcpcf1:	pushj	p,save1##	;Preserve P1.
+	movsi	p1,-M.TCPN##	;Number of DDBs.
+
+tcpcf2:	movsi	t1,'TCP'	;Generic name.
+	hrr	t1,p1		;Unit number.
+	setz	t2,		;Local device, in a way.
+	pushj	p,autddb##	;Construct the DDB.
+	 popj	p,		; No core?
+	setzm	tcptcb(f)	;No TCB pointer.
+	movem	f,tcptab(p1)	;Save DDB pointer.
+	aobjn	p1,tcpcf2	;Loop over them all.
+	popj	p,		;Done, return.
+
+	$high
+
+;Dispatch table for TCP: I/O calls.
+
+	jrst	cpopj1##	;tcp is always on-line
+	popj	p,0		;special error status
+	jrst	regsiz##	;size can be gotten from ddb
+	popj	p,0		;sysini call
+	popj	p,0		;hung device
+tcpdsp:	jrst	tu.rel		;release
+	jrst	tu.cls		;close
+	jrst	tu.out		;output
+
+	;* fall down into input code.
+;
+; Here on an input UUO:
+;
+tu.in:	pushj	p,save3##	;p1 = deviad, p2/p3 = counters.
+	pushj	p,savw##	;
+	movsi	s,iobeg!io
+	andcab	s,devios(f)
+	skipn	w,tcptcb(f)	;Any TCB here?
+	 jrst	t.impm		; No, "improper mode".
+	skipe	tcbctr(w)	;Any data waiting?
+	 jrst	i.loop		; Yes, just go on.
+	move	t1,tcbflg(w)	;No, get flags.
+	trne	t1,f%rfin	;Seen FIN?
+	 jrst	t.eof		; Yes, no data & FIN means EOF.
+
+i.loop:	hrrz	p1,deviad(f)	;Get (user) address of input buffer.
+	skipe	t1,p1		;Check that there is one, -
+	 exctux <skipge (t1)>	; and that it is empty.
+	  popj	p,		;  No empty buffer, return.
+	pushj	p,brnge##	;Make buffer addressable.
+	skipn	tcbctr(w)	;Any input data wating?
+	 jrst	i.wait		; Nope, wait some.
+	exctux	<hlrz p2,(p1)>	;Get length of input buffer, +1.
+	sojle	p2,t.impm	;Check that there is space.
+
+	;* Handle eight-bit bytes with a BLT?
+
+	pushj	p,srlptr##	;Fix byte ptr/ctr.
+	movei	p3,0		;Count of bytes moved.
+iloop1:	pushj	p,nxtbyt	;Get next byte.
+	 jrst	iloop9		; No more, done.
+	exctuu <idpb t3,p1>	;Store in user buffer.
+	addi	p3,1		;Count one more for user.
+	sojg	p2,iloop1	;Count down and loop.
+
+iloop9:	hrrz	p1,deviad(f)	;Recover iad.
+	exctuu <hrrm p3,1(p1)>	;Store byte count for user.
+	pushj	p,advbff##	;Advance user buffer.
+	 popj	p,		; Stop now.
+	jrst	i.loop		;Try for more input.
+
+nxtbyt:	skipn	tcbiqh(w)	;Got a queue?
+	 popj	p,		; No, don't even try.
+	sosge	tcbctr(w)	;Count down
+	 jrst	nxtbuf		; Check for next buffer.
+	ildb	t3,tcbptr(w)	;Get next byte.
+	sos	tcbisz(w)	;Decrement total counter.
+	jrst	cpopj1##	;Skip return.
+
+nxtbuf:	ip4off			;Interlock this!
+	move	t2,tcbiqh(w)	;$ Get input queue head.
+	skipn	t1,bf.nxt(t2)	;$ Get next buffer in line.
+	 setzm	tcbiqt(w)	;$  No next, no tail.
+	movem	t1,tcbiqh(w)	;$ Set up as new head.
+	jumpe	t1,nxtbf2	;$ None, clean up.
+	move	t3,bf.len(t1)	;$ Get next byte count.
+	movem	t3,tcbctr(w)	;$ New ildb counter.
+	add	t1,[point 8,bf.dat]
+	movem	t1,tcbptr(w)	;$ New ildb pointer.
+	jrst	nxtbf3		;$ Go return block.
+
+nxtbf2:	setzm	tcbctr(w)	;$ No counter.
+	setzm	tcbisz(w)	;$ No total size.
+nxtbf3:	ip4on			;Done with interlock.
+	pushj	p,givbuf	;Return this buffer.
+	jrst	nxtbyt		;Loop back for next byte.
+;
+; Here to wait for input:
+;
+i.wait:	move	t1,tcbflg(w)	;Get flags.
+	trne	t1,f%rfin	;Seen FIN?
+	 popj	p,		; Yes, return and let next input get EOF.
+	move	t2,devaio(f)	;Get asynch bits.
+	hrrz	t1,devbuf(f)	;Get buffer control block address.
+	jumpe	t1,cpopj##	;No buffers, can't do I/O.
+	exctux	<hrrz t1,(t1)>	;Get address of next (user) buffer.
+	exctux	<skipl (t1)>	;Is it still users?
+	 trne	t2,depaio	; Is this asynch I/O?
+	  popj	p,		;  Return to user.
+	movei	t1,ev.tcp	;Have to wait.
+	pushj	p,esleep##
+	jrst	i.loop		;Go back and try for more.
+;
+; Here on an output UUO:
+;
+tu.out:	pushj	p,save4##	;p1 = deviad, p2 = ... etc.
+	pushj	p,savw##
+	movsi	s,iobeg		;Fix flags.
+	andcab	s,devios(f)
+	movsi	s,io
+	iorb	s,devios(f)
+	skipe	w,tcptcb(f)	;Any TCB here?
+	 pushj	p,tcpoko	; Yes, state OK for output?
+	  jrst	t.impm		;  No, "improper mode".
+
+o.loop:	hrrz	p1,devoad(f)	;Get (user) address of output buffer.
+	skipe	t1,p1		;Check that there is one, -
+	 exctux <skipl (t1)>	; and that there is data.
+	  popj	p,		;  No buffer with data, exit.
+	pushj	p,brnge##	;Make buffer addressable.
+
+	;* check that we can send/queue more data.
+
+	skipe	tcbosz(w)	;Got any data on queue?
+	 jrst	o.wait		; Yes, stall for now.
+
+	exctux <hrrz t2,1(p1)>	;Get user byte count.
+	pushj	p,srlptr##	;Set p1 = byte ptr, p2 = byte count.
+	jfcl			;Patch space...
+	move	p2,t2		;Copy byte count.
+	pushj	p,getbuf	;Get a buffer.
+	 jrst	o.wait		; Can't, have to wait.
+	move	p4,t1		;Keep buffer pointer.
+	movei	t4,bf.dat(t1)	;Build a byte pointer -
+	hrli	t4,(point 8)	; to the data area.
+oloop1:	exctux <ildb t3,p1>	;Get next user byte.
+	idpb	t3,t4		;Store in buffer.
+	sojg	p2,oloop1	;Loop over all data.
+
+	pushj	p,lnkout	;Link buffer to output queue, do first send.
+
+oloop9:	pushj	p,advbfe##	;Advance buffers.
+	 popj	p,		; No more, return.
+	jrst	o.loop		;Loop for more.
+
+;*
+;* Here to wait until we can do output.
+;*
+
+o.wait:	move	t1,devaio(f)	;Get async bits.
+	trne	t1,depaio	;Doint asnc?
+	 popj	p,		; Yep.
+	movei	t1,ev.tcp	;Else wait a while.
+	pushj	p,esleep##	; ...
+	jrst	o.loop		;Try again.
+
+;*
+;* check retransmission queue for acked data:
+;*
+
+chkrxq:	skipn	t2,tcboqh(w)	;Get output queue head.
+	 popj	p,		; None, this is easy.
+	hrrz	t1,bf.len(t2)	;Get length of data.
+	add	t1,bf.seq(t2)	;Compute seqence number of next octet.
+	sub	t1,snduna(w)	;Compute -(unacked amount) in this buffer.
+	jumpl	t1,cpopj##	;Still not acked, wait more.
+	push	p,bf.nxt(t2)	;Save next pointer.
+	pushj	p,givbuf	;Return this buffer.
+	pop	p,tcboqh(w)	;New queue header.
+	pushj	p,twakeo	;Wake up waiters.
+	skipe	tcboqh(w)	;Still got a queue?
+	 jrst	chkrxq		; Yes, check rest.
+	setzm	tcboqt(w)	;No, wipe our tail.
+	setzm	tcbosz(w)	;No data left.
+	popj	p,
+
+; Here to set various error bits:
+
+t.eof:	movsi	s,ioend		;end-of-file.
+	jrst	t.set		;(cant use SKIPA to load s).
+
+t.impm:	movei	s,ioimpm	;Improper mode.
+t.set:	iorb	s,devios(f)	;Set bit everywhere.
+	popj	p,
+;*
+;* Here on release:
+;*
+
+tu.rel:
+
+;* If device is not assigned to job, zap connection to the TCB here.
+
+	popj	p,		;For now.
+;*
+;* Here on output close:
+;*
+
+tu.cls:
+
+;* Send a FIN?  NO! we are not closing the tcp connection, only the device!
+
+	popj	p,		;For now.
+
+;**********************************************************************
+;*
+;*  Wake up someone waiting for input or output.
+;*
+
+twakei: tdza	t2,t2		;Signal "input".
+twakeo: movei	t2,1		;Signal "output".
+	move	t1,devaio(f)	;Get async I/O bits.
+	trnn	t1,depaio	;Is this async?
+	 jrst[  ldb t1,pjobn##  ; No, try wake someone if sleeping.
+		jumpn t1,ewake##; ... but not nobody.
+		popj	p,]
+	push	p,devios(f)	;Save devious state.
+	push	p,s		;Save s as well.
+	movsi	s,io		;Set "input" or "output".
+	xct[	andcab  s,devios(f)
+		iorb	s,devios(f)](t2)
+	pushj	p,setiod##	;Gen an input/output done interrupt.
+	pop	p,s		;Restore state.
+	pop	p,devios(f)
+	popj	p,		;Done.
+
+;*
+;* Generate software interrupts:
+;*
+
+ir.tcp==ir.rsw			;For the time being.
+
+;* generate an on-line interrupt.
+
+tcponl:	movei	t1,ir.onl!ir.tcp
+	jrst	tcppsi
+
+;* generate an off-line interrupt.
+
+tcpofl:	movei	t1,ir.dol!ir.tcp
+	jrst	tcppsi
+
+;* generate a state-change interrupt.
+
+tcpnst:	movem	t1,tcbsta(w)	;Store new state.
+	movei	t1,ir.tcp	;Give interrupt.
+tcppsi:	skipe	f,tcbddb(w)
+	 jrst	psidvb##
+	popj	p,
+
+;**********************************************************************
+;
+; Here for TCP. UUO:
+
+$phase 0
+.tcfnc:!block	1	;Function code.
+.tcdev:!block	1	;Device/channel.
+.tcflg:!block	1	;Flags etc.
+.tclad:!block	1	;local address.
+.tcrad:!block	1	;remote address.
+.tclpr:!block	1	;local port.
+.tcrpr:!block	1	;remote port.
+.tcbuf:!block	1	;status buffer ptr.
+.tccnt:!block	1	;status buffer size.
+.tclen:!block	0	;length of data block.
+$dephase
+
+;* error codes:
+
+tcilf%==ecod1##		;Illegal function.
+tcnsd%==ecod2##		;No such device.
+tcntc%==ecod3##		;Not a TCP device.
+
+tcurk%==ecod17##	;other error.
+
+;* function codes:
+
+.tcfoa==0		;Open active.
+.tcfop==1		;Open passive.
+.tcfcl==2		;Close.
+.tcfab==3		;Abort.
+.tcfgs==4		;Get status etc.
+.tcfli==5		;Listen.
+.tcfza==6		;Zap all tcb's. (debug)
+
+.tcfrd==10		;Read data.
+.tcfwr==11		;Write data.
+
+tcpuuo::pushj	p,save4##	;Save P1-P4 over this.
+	move	u,t1		;Keep user arg block address in U.
+	movei	t2,.tclen-1(t1)	;Get last user address.
+	pushj	p,trnge##	;Check access.
+	umove	p1,.tcfnc(u)	;Get function code:	
+	cail	p1,0		;Range check:
+	 cail	p1,maxfnc	; In range?
+	  jrst	tcilf%		;  Not really.
+	jrst	@disp(p1)	;Dispatch.
+
+disp:	exp	tcpfoa		; 0 - open active.
+	exp	tcpfop		; 1 - open passive.
+	exp	tcpfcl		; 2 - close.
+	exp	tcpfab		; 3 - abort.
+	exp	tcpfgs		; 4 - get status.
+	exp	tcpfli		; 5 - listen.
+	exp	tcpfza		; 6 - zap all tcbs. (debug)
+	exp	tcilf%
+	exp	tcpfrd		;10 - read data.
+	exp	tcpfwr		;11 - write data.
+maxfnc==:.-disp
+
+fnddev:	umove	t1,.tcdev(u)	;Get user device name.
+	pushj	p,dvcnsg##	;Lookup DDB.
+	 jrst	tcnsd%		; Failed.
+	tlz	f,-1		;Wipe uninteresting (to us) bits.
+	ldb	t1,pdvtyp##	;Get device type.
+	caie	t1,.tytcp	;Is it a TCP: device?
+	 jrst	tcntc%		; Nope, fsck you.
+
+	;** XXX ** check ownership of device.
+
+	movei	t1,s%clos	;Assume closed.
+	skipe	w,tcptcb(f)	;Get tcb pointer.
+	 move	t1,tcbsta(w)	; Got tcb, get actual state.
+	jrst	cpopj1##	;Skip return.
+
+;* TCP. function, open active:
+
+tcpfoa:	pushj	p,fnddev	;Set up F and possbly W.
+	 popj	p,		; Failed, error code stored.
+	jumpn	w,tcurk%	;Got a previous state, bad.
+	umove	p1,.tcrad(u)	;Get remote address.
+	trz	p1,17		;Left-justified, 32 bits.
+	jumpe	p1,tcurk%	;No remote address.
+	umove	p2,.tcrpr(u)	;Get remote port.
+	andi	p2,177777	;Right-justified, 16 bits.
+	jumpe	p2,tcurk%	;No remote port.
+	umove	p3,.tclad(u)	;Get local address.
+	trz	p3,17		;Left-justified, 32 bits.
+	skipe	t1,p3		;Copy to t1, check if zero.
+	 jrst	foa.2		; Got one, check if ours.
+	move	t1,p1		;Get remote.
+	pushj	p,ipgtla##	;Get a suitable local address.
+	move	p3,t1		;...
+foa.2:	pushj	p,ipisme##	;Check that it is ours.
+	 jrst	tcurk%		; Not a local address.
+	umove	p4,.tclpr(u)	;Get local port.
+	andi	p4,177777	;Right-justified, 16 bits.
+	jumpn	p4,foa.4	;Got a port?
+	movei	p4,^D4711	;Get one then!
+foa.4:	jumpn	w,foa.5		;Got a TCB?
+	pushj	p,gettcb	;Get a new tcb for us.
+	 jrst	tcurk%		; No memory.
+	movem	w,tcptcb(f)	;Point to it.
+	movem	f,tcbddb(w)	;Point back.
+
+foa.5:	movem	p1,tcbrad(w)
+	movem	p2,tcbrpr(w)
+	movem	p3,tcblad(w)
+	movem	p4,tcblpr(w)
+
+	pushj	p,getiss	;Get a new initial seq. number.
+	movem	t1,tcbiss(w)	;Remember ISS.
+	movem	t1,snduna(w)	;Remember SND.UNA.
+	addi	t1,1
+	tlz	t1,740K		;Keep it a 32-bit value.
+	movem	t1,sndnxt(w)	;Remember SND.NXT.
+	movei	t1,s%syns	;New state:
+	movem	t1,tcbsta(w)	;Set up in tcb. (*** give interrupt? ***)
+
+	;* set up timing.
+
+	pushj	p,newsyn	;Get a new SYN segment.
+	 jrst	cpopj1##	; Can't, let retransmissions handle it.
+
+	movei	t1,^D1024
+	stor.	t1,tc.win,(p3)
+
+;	move	t1,tcbiss(w)
+;	stor.	t1,tc.seq,(p3)
+	movei	t1,tf%syn
+	stor.	t1,tc.flg,(p3)
+
+	movei	t1,^D24		;Length of segment.
+	pushj	p,sndtcp	;Send segment.
+	jrst	cpopj1##	;Good return.
+
+;* TCP. function, open passive:
+
+tcpfop:	jrst	tcurk%		;Not yet done.
+	pushj	p,fnddev	;Setup F and W.
+	 popj	p,
+	jumpn	w,tcurk%	;Can't have a previous state.
+
+	;* XXX check for at least a local port number here.
+
+	pushj	p,gettcb	;Get a new TCB.
+	 jrst	tcurk%		; No memory.
+	movei	t1,s%list	;New state.
+	movem	t1,tcbsta(w)	;Set up in tcb. (*** give interrupt? ***)
+
+	;* more code here.
+
+	jrst	cpopj1##	;Good return maybe.
+
+;* TCP. function, close:
+
+tcpfcl:	jrst	tcurk%		;Not yet done.
+	pushj	p,fnddev	;Set up F and W.
+	 popj	p,		; Failed, error code stored.
+
+	;* XXX code missing.
+
+	jrst	cpopj1##	;Good return.
+
+;* TCP. function, abort:
+
+tcpfab:	pushj	p,fnddev	;Set up F and W.
+	 popj	p,		; Failed, error code stored.
+	jumpe	w,cpopj1##	;Just return if no tcb.
+	pushj	p,givtcb	;Delete tcb.
+	jrst	cpopj1##	;Good return.
+
+;* TCP. function, get status:
+
+tcpfgs:	pushj	p,fnddev	;Lookup device.
+	 popj	p,		; Failed, error stored.
+	jumpe	w,stotc1##	;If no TCB, store code (s%clos) and return.
+
+	;** XXX ** copy data from tcb.
+
+	jrst	stotc1##	;Return state code.
+
+;* TCP. function, listen:
+
+tcpfli:	jrst	tcilf%		;Illegal function for now.
+	pushj	p,fnddev	;Lookup device.
+	 popj	p,		; Failed, error stored.
+	;...
+
+ifn DEBUG,<
+
+;* TCP. function, zap all TCBs. (debug)
+
+tcpfza:	skipn	w,tcblst	;Get a tcb from the list.
+	 jrst	cpopj1##	; None, we are done.
+	pushj	p,givtcb	;Zap it.
+	jrst	tcpfza		;Loop.
+
+>; end ifn DEBUG
+
+;* TCP. function, read data.
+
+tcpfrd:	jrst	tcurk%		;Not yet done.
+	pushj	p,fnddev	;Lookup device.
+	 popj	p,		; Failed, error code stored.
+	jumpe	w,tcurk%	;No tcb, no good.
+	skipe	p4,tcbctr(w)	;Any data?
+	 jrst	frd.2		; Yes, go read some.
+	move	t2,tcbflg(w)	;No, get flags.
+	trne	t2,f%rfin	;Received FIN?
+	 jrst	t.eof		; Yes, set EOF and return.
+	umovem	p4,.tccnt(u)	;Give byte count (=0) to user.
+	jrst	cpopj1##	;Also give good return.
+
+frd.2:	movei	p3,0		;Count of bytes moved.
+	umove	p1,.tcbuf(u)	;Get user buffer pointer.
+	hrli	p1,(point 8)	;Make a byte pointer.
+
+	;* XXX check buffer access.
+
+frd.3:	pushj	p,nxtbyt	;Get next byte.
+	 jrst	frd.4		; No more, fixup things.
+	exctuu <idpb t3,p1>	;Give byte to user.
+	addi	p3,1		;Count user byte.
+	sojg	p4,frd.3	;Count down and loop.
+
+frd.4:	umovem	p3,.tccnt(u)	;Store byte count for user.
+	jrst	cpopj1##	;Give good return.
+
+;* TCP. function, write data.
+
+tcpfwr:	pushj	p,fnddev	;Lookup device.
+	 popj	p,		; Failed, error code stored.
+	jumpe	w,tcurk%	;No tcb, can't work.
+	pushj	p,tcpoko	;OK to do output in this state?
+	 jrst	tcurk%		; Nope.
+	skipe	tcbosz(w)	;Got data waiting?
+	 jrst	tcurk%		; Yes, wait. (for now)
+	umove	p2,.tccnt(u)	;Get user byte count.
+	jumpl	p2,tcurk%	;Negative?
+	caile	p2,^D512	;Within reason?
+	 jrst	tcurk%		; No, too large.
+	jumpe	p2,cpopj1##	;Zero is always OK.
+
+	;* XXX verify buffer access.
+
+	move	t2,p2		;Copy length.
+	pushj	p,getbuf	;Get a data buffer.
+	 jrst	tcurk%		; No core.
+	move	p4,t1		;Keep buffer pointer.
+	umove	t1,.tcbuf(u)	;Get user buffer address.
+	hrl	t1,t1		;Source,,0.
+	hrri	t1,bf.dat(p4)	;Source,,dest.
+	movei	t2,3(p2)	;Length, -
+	lsh	t2,-2		; in words.
+	addi	t2,(t1)		;Compute last word of transfer.
+	exctux <blt t1,-1(t2)>	;Move the data.
+
+	pushj	p,lnkout	;Link output data, and send it.
+	jrst	cpopj1##	;Good return.
+
+;* here to link a new output buffer to a tcb, and do first send.
+
+lnkout:	hrrz	t2,bf.len(p4)	;Recover length.
+	ip4off			;Prevent races:
+	skipn	t3,tcboqt(w)	;$ Get tail.
+	 jrst	lout.2		;$  None, just us here.
+	movem	p4,bf.nxt(t3)	;$ Link us in.
+	movem	p4,tcboqt(w)	;$ We are last now.
+	addm	t2,tcbosz(w)	;$ Update size.
+	jrst	lout.3		;$ Join common code.
+
+lout.2:	movem	p4,tcboqh(w)	;$ We are new head, -
+	movem	p4,tcboqt(w)	;$  and tail.
+	movem	t2,tcbosz(w)	;$ Remember size.
+lout.3:	ip4on			;Int's OK again.
+
+	;* fixup buffer with seq. numbers etc.
+
+	move	t1,sndnxt(w)	;Get snd.nxt.
+	movem	t1,bf.seq(p4)	;Store in this buffer.
+	addm	t2,sndnxt(w)	;Update snd.nxt.
+	;* should do it mod 2^32
+
+;	jrst	sndbuf		;Send buffer.
+
+;*
+;* send a buffer block as a segment.
+;*
+
+sndbuf:
+	movei	t1,^D5		;Init timer for retransmission.
+	movem	t1,tcbtim(w)	; ...
+
+	hrrz	t1,bf.len(p4)	;Recover length.
+	pushj	p,newseg	;Try get a segment.
+	 popj	p,		; Can't, nothing to do.
+	hrli	t1,bf.dat(p4)	;Get source.
+	hrri	t1,5(p3)	;Get destination.
+	move	t2,bf.len(p4)	;Get length, in octets.
+	addi	t2,3		;Round up, -
+	lsh	t2,-2		; and make it words.
+	addi	t2,4(p3)	;Compute last word of transfer.
+	blt	t1,(t2)		;Move the data.
+
+	;* the code above needs to be fixed.
+
+	move	t1,bf.seq(p4)	;Get our sequence number.
+	stor.	t1,tc.seq,(p3)	;Store in segment.
+
+        move    t1,rcvwnd(w)
+        stor.   t1,tc.win,(p3)  ;set up window info.
+        move    t1,rcvnxt(w)
+        stor.   t1,tc.ack,(p3)  ;<ack=rcv.nxt>
+	movei	t1,tf%ack!tf%psh
+	stor.	t1,tc.flg,(p3)	;Set ACK and PSH flags.
+	movei	t1,f%dack	;Clear delayed ACK flag, -
+	andcam	t1,tcbflg(w)	; since we send an ACK now.
+	hrrz	t1,bf.len(p4)	;Recover data length again.
+	addi	t1,^D20		;Include header.
+	jrst	sndtcp		;Fixup segment and send it.
+
+;**********************************************************************
+;
+; Here once a second to do timing.
+;
+
+tcpsec::pushj	p,save4##	;Preserve P1-P4.
+	push	p,w		;Preserve W.
+	skipn	w,tcblst	;Get first tcb, if any.
+	 jrst	wpopj##		; None, this is easy.
+tsec.1:	skiple	tcbtim(w)	;Timer running?
+	 sosle	tcbtim(w)	; Yes, expired?
+	  jrst	tsec.9		;  No, dont worry (yet).
+
+	;* Timer expired, handle it according to state.
+
+;* closed	- why are we here?
+;* syn-sent	- retransmit syn.
+;* syn-recv	- retransmit ack or syn+ack.
+;* listen	- why are we here?
+;* establ	- retransmit data.
+;* fin-wait-1	- retransmit data + fin.
+;* closing	- retransmit data + fin.
+;* fin-wait-2	- delete tcb, we timed out.
+;* time-wait	- delete tcb, we timed out.
+;* close-wait	- nothing.
+;* last-ack	- retransmit fin.
+
+tsec.2:	move	t1,tcbsta(w)	;Get state.
+	caie	t1,s%estb	;Established?
+	 jrst	tsec.3		; No.
+
+	;* Do retransmit.
+
+	skipe	p4,tcboqh(w)	;Get first block to rexmit.
+	 pushj	p,sndbuf	; Send it!
+	jrst	tsec.9		;Go check for next.
+
+tsec.3:	cain	t1,s%fin2	;Fin-wait 2?
+	 caie	t1,s%timw	; Time-wait?
+	  jrst	tsec.4		;  No.
+	movei	t1,s%clos	;New state = closed.
+	pushj	p,tcpnst	;Inform eventual user.
+	push	p,tcbnxt(w)	;Save next.
+	pushj	p,givtcb	;Delete the tcb.
+	pop	p,w		;Restore next as current.
+	jumpn	w,tsec.1	;Continue with next.
+	jrst	wpopj##		;No next, we are done.
+
+tsec.4:	jfcl
+
+tsec.9:	move	t1,tcbflg(w)	;Get flags.
+	trne	t1,f%dack	;Want a delayed ack?
+	 pushj	p,sndack	; Yes, try to send one.
+	skipe	w,tcbnxt(w)	;Get next tcb, if any.
+	 jrst	tsec.1		; Got one, loop.
+	jrst	wpopj##		;No more, return.
+
+;**********************************************************************
+;*
+;* store a chunk of input data to a tcb.
+;*
+;*	call with t1/ pointer to data, and t2/ byte count.
+;*	skip return if OK, non-skip if not stored.
+
+store:	jumple	t2,cpopj	;Ignore stupid args.
+	caige	t2,^D16		;Less than 16 bytes, -
+	 skipn	t3,tcbiqt(w)	; and we have a tail?
+	  jrst	store1		;  No, do this the normal way.
+	move	t4,bf.len(t3)	;Get length of tail.
+	andi	t4,17		;Get remainder.
+	addi	t4,(t2)		;Plus new data.
+	caile	t4,^D16		;Would it fit?
+	 jrst	store1		; No, sorry.
+
+	;* move small amount with ildb/idpb.
+
+store1:	push	p,t1		;Save data pointer.
+	pushj	p,getbuf	;Get a buffer.
+	 jrst	tpopj##		; Got none, fail.
+	hrl	t3,(p)		;Source into left half.
+	hrri	t3,bf.dat(t1)	;Destination into right.
+	move	t2,bf.len(t1)	;Recover length.
+	movei	t4,3(t2)	;Compute length in words.
+	lsh	t4,-2		; ...
+	addi	t4,bf.dat(t1)	;Point to end of transfer.
+	blt	t3,-1(t4)	;Block move the data (and possibly some junk).
+	ip4off			;Interlock:
+	skipn	t3,tcbiqt(w)	;$ Got previous data here?
+	 jrst	store4		;$  No, set us up as last.
+	movem	t1,bf.nxt(t3)	;$ Yes, link us in.
+	movem	t1,tcbiqt(w)	;$ We are last now.
+	addm	t2,tcbisz(w)	;$ Count these new bytes.
+	ip4on			;Done with interlock.
+	jrst	tpopj1##	;Restore t1 and give good return.
+
+store4:	movem	t1,tcbiqh(w)	;$ We are new head, -
+	movem	t1,tcbiqt(w)	;$  and tail.
+	movem	t2,tcbisz(w)	;$ Size matters...
+	movem	t2,tcbctr(w)	;$ New chunk ildb counter.
+	add	t1,[point 8,bf.dat]
+	movem	t1,tcbptr(w)	;$ New chunk ildb pointer.
+	ip4on			;Done with interlock.
+	pop	p,t1		;Restore t1.
+	skipe	f,tcbddb(w)	;Get F, if we have one.
+	 pushj	p,twakei	; Wake up job.
+	jrst	cpopj1##	;Give good return.
+
+;*
+;* Check for a tcb that can do input.
+;*
+
+tcpoki:	move	t1,tcbsta(w)	;Get state.
+	cain	t1,s%estb	;Established?
+	 jrst	cpopj1##	; Yes, OK.
+	caie	t1,s%fin1	;Fin-wait?
+	 cain	t1,s%fin2	; (either style)
+	  jrst	cpopj1##	;  Yes, OK.
+	popj	p,		;Not OK to to input.
+
+;*
+;* Check for a tcb that can do output.
+;*
+
+tcpoko:	move	t1,tcbsta(w)	;Get state.
+	caie	t1,s%estb	;Established?
+	 cain	t1,s%clsw	; Close wait?
+	  jrst	cpopj1##	;  Yes, OK.
+	popj	p,		;Not OK to do output.
+
+;*
+;* get a (random) ISS.
+;*
+
+getiss:	movei	t1,0		;Fix this!!!
+	popj	p,
+
+;*
+;* allocate a new tcb, and link it in.
+;*
+
+gettcb:	movei	t2,tcblen	;Get length.
+	pushj	p,getiwd##	;Get memory.
+	 popj	p,		; Can't, fail.
+	move	w,t1		;Keep pointer in W.
+;;;;	aos	tcb+tcbnum	;Bump serial number.
+	hrli	t1,tcb		;init the new tcb from prototype.
+	blt	t1,tcblen-1(w)
+	ip4off			;Interlock this:
+	skipe	t1,tcblst	;$ Get old tcb list.
+	 movem	w,tcbprv(t1)	;$  If any, make us previous.
+	movem	t1,tcbnxt(w)	;$ Put us in before first.
+	movem	w,tcblst	;$ We are now first in list.
+	ip4on			;Done with interlock.
+	jrst	cpopj1##	;Skip return with tcb pointer in W.
+
+;*
+;* deallocate a tcb.
+;*
+
+givtcb:	skipe	f,tcbddb(w)	;Linked to a DDB?
+	 setzm	tcptcb(f)	; Yes, remove link back.
+	ip4off			;Interlock list munging:
+	move	t1,tcbprv(w)	;$ Get prev.
+	skipe	t2,tcbnxt(w)	;$ Get next.
+	 movem	t1,tcbprv(t2)	;$  Got one, set up its prev.
+	jumpn	t1,givt.2	;$ Got a prev?
+	movem	t2,tcblst	;$ No, deleting first in list.
+	jrst	givt.3
+
+givt.2:	movem	t2,tcbnxt(t1)	;$ Got a prev, fix its forward link.
+givt.3:	ip4on			;Done with interlock.
+
+	;* XXX deallocate buffers etc.
+
+givt.4:	skipn	t2,tcbiqh(w)	;Get input queue head, if any.
+	 jrst	givt.5		; None, move on.
+	push	p,bf.nxt(t2)	;Save next.
+	pushj	p,givbuf	;Return buffer.
+	pop	p,tcbiqh(w)	;Set our next as head, -
+	jrst	givt.4		; and loop.
+
+givt.5:	skipn	t2,tcboqh(w)	;Get output queue head, if any.
+	 jrst	givt.6		; None, move on.
+	push	p,bf.nxt(t2)	;Save next.
+	pushj	p,givbuf	;Return buffer.
+	pop	p,tcboqh(w)	;Set our next as head, -
+	jrst	givt.5		; and loop.
+
+givt.6:	movei	t1,tcblen	;Get length.
+	move	t2,w		;Get pointer.
+	jrst	giviwd##	;Return memory.
+
+;**********************************************************************
+;*
+;* here to get a buffer block for storing data.
+;*
+
+$phase 0
+bf.nxt:!block	1		;pointer to next block.
+bf.len:!block	1		;flags in left half, length (octets) in right.
+bf.tim:!block	1		;timer for retransmissions.
+bf.seq:!block	1		;seq. # for first octet.
+bf.dat:!block	0		;Start of data.
+$dephase
+
+getbuf:	cail	t2,1		;Check length: at least some data, -
+	 caile	t2,^D512	; but not too much?
+	  popj	p,		;  Bad size wanted.  (do a STOPCD?)
+	push	p,t2		;Save length wanted.
+	addi	t2,^D15		;Round up to a four-word boundary.
+	lsh	t2,-2		;Get words needed.
+	trz	t2,3		; ...
+	addi	t2,bf.dat	;Include overhead.
+	pushj	p,getiwd##	;Get memory.
+	 jrst	tpopj##		; No? Restore t1 and return.
+	pop	p,bf.len(t1)	;Restore length into block.
+	setzm	bf.nxt(t1)	;No next pointer, please.
+	jrst	cpopj1##	;Give good return.
+
+givbuf:	hrrz	t1,bf.len(t2)	;Get length, in octets.
+	addi	t1,^D15		;Convert to number of words.
+	lsh	t1,-2
+	trz	t1,3
+	addi	t1,bf.dat	;Include overhead.
+	jrst	giviwd##	;Return memory.
+
+;**********************************************************************
+;*
+;* here to get a new segment, returns pd pointer in P1, etc.
+;*
+
+newseg:	addi	t1,^D20		;Include space for a TCP header.
+	pushj	p,makipd##	;Make an IP packet.
+	 popj	p,		; No?
+	move	t1,tcblad(w)	;Get source address.
+	stor.	t1,ih.src,(p2)
+	move	t1,tcbrad(w)	;Get destination address.
+	stor.	t1,ih.dst,(p2)
+	movei	t1,^D6		;TCP protocol number.
+	stor.	t1,ih.pro,(p2)
+
+	move	t1,tcblpr(w)	;Get local port.
+	stor.	t1,tc.src,(p3)
+	move	t1,tcbrpr(w)	;Get remote port.
+	stor.	t1,tc.dst,(p3)
+	movei	t1,^D5		;Normal data offset.
+	stor.	t1,tc.dof,(p3)
+	jrst	cpopj1##	;Skip return
+
+newsyn:	movei	t1,4		;Size of options (MSS).
+	pushj	p,newseg	;Get a segment.
+	 popj	p,		; No?
+	movei	t1,^D6		;Data after options.
+	stor.	t1,tc.dof,(p3)	;Update data offset.
+	move	t1,[byte (8) 2, 4 (16) ^D512]
+	movem	t1,5(p3)	;Put in options. 
+	move	t1,tcbiss(w)	;Get ISS.
+	stor.	t1,tc.seq,(p3)	;Store in segment.
+	jrst	cpopj1##	;Skip return.
+
+;*
+;* Here to take an incoming segment, and turn it around for an answer.
+;*
+
+retseg:	movei	t1,5		;Standard TCP header, -
+	stor.	t1,tc.dof,(p3)	; no options.
+        movei   t1,5(p3)        ;End of TCP header, -
+        subi    t1,(p2)         ; minus start of IP header, -
+        lsh     t1,2            ; times 4 = new IP length.
+        stor.   t1,ih.len,(p2)	;Trim down packet length.
+	movem	t1,pd.siz(p1)
+	caile	t1,^D40		;Do we have IP options?
+	 setzm	5(p2)		; Yes, put in an end-of-option marker.
+        load.   t1,tc.src,(p3)	;Swap source and destination port numbers.
+        load.   t2,tc.dst,(p3)
+        stor.   t2,tc.src,(p3)
+        stor.   t1,tc.dst,(p3)
+	jrst	swpipa##	;Swap IP addresses, and return.
+
+;*
+;* here to send an ACK.
+;*
+
+sndack:	pushj	p,save4##	;Save what we use.
+	movei	p4,f%dack	;Get delayed ack bit.
+	iorm	p4,tcbflg(w)	;Make sure flag is set.
+	movei	t1,0		;No data.
+	pushj	p,newseg	;Get a segment.
+	 popj	p,		; Silently fail (with f%dack set).
+	andcam	p4,tcbflg(w)	;Clear bit.
+	move	t1,rcvwnd(w)
+	stor.	t1,tc.win,(p3)	;set up window info.
+	move	t1,sndnxt(w)
+	stor.	t1,tc.seq,(p3)	;<seq=snd.nxt>
+	move	t1,rcvnxt(w)
+	stor.	t1,tc.ack,(p3)	;<ack=rcv.nxt>
+	movei	t1,tf%ack
+	stor.	t1,tc.flg,(p3)	;<ctl=ACK>
+	movei	t1,^D20
+	jrst	sndtcp		;Fall into sndtcp.
+
+;*
+;* fixup the checksum on an outgoing segment, and send it.
+;*
+
+sndtcp:	movei	t2,0		;Wipe old checksum.
+	stor.	t2,tc.csm,(p3)
+	pushj	p,tcpcsm	;Compute new checksum, -
+	stor.	p4,tc.csm,(p3)	; and store it.
+	pushj	p,savw##	;Preserve W, -
+	jrst	ipout##		; and send datagram.
+
+;**********************************************************************
+
+; TCP states:
+
+s%clos==^D0			;closed (not really a state)
+s%list==^D1			;listen
+s%syns==^D2			;SYN sent
+s%synr==^D3			;SYN received
+s%estb==^D4			;established
+s%fin1==^D5			;FIN wait 1
+s%fin2==^D6			;FIN wait 2
+s%clsn==^D7			;closing
+s%timw==^D8			;time wait
+s%clsw==^D9			;close wait
+s%lack==^D10			;last ACK
+
+; Layout of the tcp control block.
+
+tcb:	phase	0		;Generate a prototype TCB.
+tcbnxt:!exp	0		;Link to next, or zero if last.
+tcbprv:!exp	0		;Link to previous, or zero if first.
+tcbnum:!exp	0		;Serial number of this TCB.
+tcbflg:!exp	0		;Flags.
+    f%dack==1b35		;    Delayed ACK wanted.
+    f%rfin==1b34		;    We have seen FIN.
+tcbjob:!exp	0		;Job number "owning" us.
+tcbsta:!exp	s%clos		;TCP state.
+tcblad:!exp	0		;Local IP address.
+tcblpr:!exp	0		;Local port.
+tcbrad:!exp	0		;Remote IP address.
+tcbrpr:!exp	0		;Remote port.
+tcbddb:!exp	0		;Pointer to TCP: ddb, if any.
+tcbldb:!exp	0		;Pointer to LDB, if telnet.
+tcbfut:!exp	0		;Pointer to PD list of future msgs.
+tcbmss:!exp	^D512		;Default mss.
+tcbtim:!exp	0		;Countdown timer.
+
+; send seq. variables.
+
+snduna:!exp	0		;send unacknowledged.
+sndnxt:!exp	0		;send next.
+sndwnd:!exp	0		;send window.
+sndup:!	exp	0		;send urgent pointer.
+sndwl1:!exp	0		;seg seq # used for last win upd.
+sndwl2:!exp	0		;seg ack # used for last win upd.
+
+tcbiss:!exp	0		;initial send seq #.
+
+; recv seq. variables.
+
+rcvnxt:!exp	0		;receive next.
+rcvwnd:!exp	^D1024		;receive window.
+rcvup:!	exp	0		;receive urgent pointer.
+
+tcbirs:!exp	0		;initial recv seq #.
+
+; input queue.  (incoming data, ACKed).
+
+tcbiqh:!exp	0		;Input queue, head.
+tcbiqt:!exp	0		;Input queue, tail.
+tcbisz:!exp	0		;Total amount of data in above.
+
+tcbptr:!exp	0		;ildb pointer to data.
+tcbctr:!exp	0		;count of data for above.
+
+; output queue. (list of segments we are waiting for ACK for).
+
+tcboqh:!exp	0		;Output queue, head.
+tcboqt:!exp	0		;Output queue, tail.
+tcbosz:!exp	0		;Total amount of data in above.
+
+; pointers to data we accepted (OUT) but had no window for.
+
+dephase
+tcblen==.-tcb			;Length of tcb.
+
+repeat 0,<
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |        Source port            |       Destination port        |       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                        Sequence Number                        |       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                    Acknowledgment Number                      |       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |  Data |           |U|A|P|R|S|F|                               |       |
+   | Offset| Reserved  |R|C|S|S|Y|I|            Window             |       |
+   |       |           |G|K|H|T|N|N|                               |       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |           Checksum            |         Urgent Pointer        |       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                    Options                    |    Padding    |       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                             data                              |       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+>;end repeat 0
+
+    defstr tc.src, 0,  0, 16
+    defstr tc.dst, 0, 16, 16
+    defstr tc.seq, 1,  0, 32
+    defstr tc.ack, 2,  0, 32
+    defstr tc.dof, 3,  0,  4
+;   defstr tc.cwr, 3,  8,  1
+;   defstr tc.ecn, 3,  9,  1
+    defstr tf.urg, 3, 10,  1
+    defstr tf.ack, 3, 11,  1
+    defstr tf.psh, 3, 12,  1
+    defstr tf.rst, 3, 13,  1
+    defstr tf.syn, 3, 14,  1
+    defstr tf.fin, 3, 15,  1
+    defstr tc.flg, 3,  4, 12	;All flags and reserved bits.
+	tf%cwr==1b28
+	tf%ecn==1b29
+	tf%urg==1b30
+	tf%ack==1b31
+	tf%psh==1b32
+	tf%rst==1b33
+	tf%syn==1b34
+	tf%fin==1b35
+    defstr tc.win, 3, 16, 16
+    defstr tc.csm, 4,  0, 16
+    defstr tc.urg, 4, 16, 16
+
+; Compute the TCP checksum:
+
+tcpcsm:	movei	p4,^D6(t1)	;Compute TCP checksum: length and protocol.
+	move	t2,p3		;Address of bulk data:
+	pushj	p,csmbts##	;Checksum bulk.
+        load.   t1,ih.sa,(p2)
+        pushj   p,csmfwd##      ;Include source address.
+        load.   t1,ih.da,(p2)
+        pushj   p,csmfwd##      ;Include destination address.
+	jrst	csmdon##	;Done, fold checksum.
+
+;**********************************************************************
+;*
+;* Dispatch here when we receive a TCP datagram, with:
+;*    p1/ packet descriptor.
+;*    p2/ IP header.
+;*    p3/ TCP header.
+;*
+;* We set up and use:
+;*    p4/ amount of TCP data (seg.len), when not checksumming.
+;*    s/  TCP flags from segment.
+;*    w/  pointer to TCB.
+
+tcpin::	load.	s, tc.flg,(p3)	;Get TCP flags from segment.
+	load.	t1,ih.len,(p2)	;Get total datagram length.
+	load.	w, ih.ihl,(p2)	;Get IP header length, in words.
+	lsh	w,2		;Convert to octets.
+	subb	t1,w		;Compute TCP length, keep copy.
+	pushj	p,tcpcsm	;Compute checksum.
+	caie	p4,177777	;Correct checksum?
+	 jrst	givpd##		; No, toss packet.
+	load.	p4,tc.dof,(p3)	;Get TCP header length.
+	lsh	p4,2		;Convert to octets.
+	subm	w,p4		;p4 := seg.len.
+
+	;* Find TCB, if any.
+
+	pushj	p,fndtcb	;Lookup the TCB for this packet.
+	jumpn	w,tcpi.2	;Got one, skip on...
+
+	;* Check if we should create a TCB here.
+	;* (really, do syncache stuff).
+
+;;;;	jumpn	w,tcpi.2	;Got a new shiny TCB.
+
+	;* here with a segment we don't want.
+
+	trne	s,tf%rst	;Is RST on?
+	 jrst	givpd##		; Yes, silently toss packet.
+
+	;* prepare segment for return:
+
+drop.r:	pushj	p,retseg	;Turn segment around.
+
+	movei	t1,0
+	stor.	t1,tc.win,(p3)	;No window.
+	load.	t2,tc.ack,(p3)	;Get seg.ack.
+	load.	t3,tc.seq,(p3)	;Get seg.seq.
+	stor.	t2,tc.seq,(p3)	;<seq=seg.ack> (if ACK is on).
+	trce	s,tf%ack	;Check and complement ACK bit.
+	 jrst	foo.2		; Ack set, handle diff.
+	addi	t3,1(p4)	;(add seg.len?)
+	trne	s,tf%fin	;Fin set?
+	 addi	t3,1		; Yes, occupies seq. space.
+	stor.	t3,tc.ack,(p3)	;<ack=seg.seq+seg.len>
+	stor.	t1,tc.seq,(p3)	;<seq=0>
+foo.2:	tro	s,tf%rst
+	andi	s,tf%ack!tf%rst	;Only allow RST and ACK bits here.
+	stor.	s,tc.flg,(p3)
+foo.4:	movei	t1,^D20
+	jrst	sndtcp
+
+tcpi.2:	move	t1,tcbsta(w)	;Get state.
+	cain	t1,s%list	;Listen?
+	 jrst	list.1		; Yes, dispatch.
+	cain	t1,s%syns	;SYN-SENT?
+	 jrst	syns.1		; Yes, dispatch.
+	jrst	othr.1		;No, other state.
+
+;**********************************************************************
+;*
+;*   If the state is LISTEN then
+
+list.1:
+
+;      first check for an RST
+;
+;        An incoming RST should be ignored.  Return.
+
+	trne	s,tf%rst	;Reset on?
+	 jrst	givpd##		; Yep, ditch this packet.
+
+list.2:
+
+;      second check for an ACK
+;
+;        Any acknowledgment is bad if it arrives on a connection still in
+;        the LISTEN state.  An acceptable reset segment should be formed
+;        for any arriving ACK-bearing segment.  The RST should be
+;        formatted as follows:
+;
+;          <SEQ=SEG.ACK><CTL=RST>
+;
+;        Return.
+
+	trnn	s,tf%ack	;ACK on?
+	 jrst	list.3		; No, proceed.
+	jrst	drop.r		;Go drop/reset.
+
+;	pushj	p,retseg	;Yes, prepare to complain.
+;	load.	t1,tc.ack,(p3)	;<seq=seg.ack>
+;	stor.	t1,tc.seq,(p3)
+;	movei	t1,tf%rst	;<ctl=rst>
+;	stor.	t1,tc.flg,(p3)
+;	jrst	foo.4		;Go fixup segment, and send it.
+
+list.3:
+
+;      third check for a SYN
+;
+;        If the SYN bit is set:
+;
+;        Set RCV.NXT to SEG.SEQ+1, IRS is set to SEG.SEQ and any other
+;        control or text should be queued for processing later.  ISS
+;        should be selected and a SYN segment sent of the form:
+;
+;          <SEQ=ISS><ACK=RCV.NXT><CTL=SYN,ACK>
+;
+;        SND.NXT is set to ISS+1 and SND.UNA to ISS.  The connection
+;        state should be changed to SYN-RECEIVED.  Note that any other
+;        incoming control or data (combined with SYN) will be processed
+;        in the SYN-RECEIVED state, but processing of SYN and ACK should
+;        not be repeated.  If the listen was not fully specified (i.e.,
+;        the foreign socket was not fully specified), then the
+;        unspecified fields should be filled in now.
+
+	trnn	s,tf%syn	;SYN set?
+	 jrst	list.4		; No, proceed.
+	pushj	p,getiss	;Get an ISS.
+	movem	t1,tcbiss(w)	;Save.
+	load.	t2,tc.seq,(p3)	;Get seg.seq.
+	movem	t2,tcbirs(w)	;IRS = seg.seq.
+	addi	t2,1		;Increment, -
+	tlz	t2,740K		; modulo 2^32.
+	movem	t2,rcvnxt(w)	;rcv.nxt = seg.seq + 1.
+
+	;* more code, see above.
+
+list.4:
+
+;      fourth other text or control
+;
+;        Any other control or text-bearing segment (not containing SYN)
+;        must have an ACK and thus would be discarded by the ACK
+;        processing.  An incoming RST segment could not be valid, since
+;        it could not have been sent in response to anything sent by this
+;        incarnation of the connection.  So you are unlikely to get here,
+;        but if you do, drop the segment, and return.
+
+	jrst	givpd##		;Sorry...
+
+;**********************************************************************
+;*
+;*   If the state is SYN-SENT then
+;*
+;      first check the ACK bit
+;
+;        If the ACK bit is set
+;
+;          If SEG.ACK =< ISS, or SEG.ACK > SND.NXT, send a reset (unless
+;          the RST bit is set, if so drop the segment and return)
+;
+;            <SEQ=SEG.ACK><CTL=RST>
+;
+;          and discard the segment.  Return.
+;
+;          If SND.UNA =< SEG.ACK =< SND.NXT then the ACK is acceptable.
+
+syns.1:	trnn	s,tf%ack	;ACK?
+	 jrst	syns.2		; No, skip on.
+	load.	t1,tc.ack,(p3)	;get seg.ack.
+	camg	t1,tcbiss(w)	;seg.ack =< iss?
+	 jrst	syns1b		; Yes, bad.
+	camg	t1,sndnxt(w)	;seg.ack > snd.nxt?
+	 jrst	syns.2		; No, the ACK is in range.
+syns1b:	trne	s,tf%rst	;RST on?
+	 jrst	givpd##		; Yes, just drop segment.
+
+	jrst	drop.r		;Go drop/reset.
+
+;	pushj	p,retseg	;No, prepare to complain.
+;	load.	t1,tc.ack,(p3)	;<seq=seg.ack>
+;	stor.	t1,tc.seq,(p3)
+;	movei	t1,tf%rst	;<ctl=rst>
+;	stor.	t1,tc.flg,(p3)
+;	jrst	foo.4		;Go fixup segment, and send it.
+
+;      second check the RST bit
+;
+;        If the RST bit is set
+;
+;          If the ACK was acceptable then signal the user "error:
+;          connection reset", drop the segment, enter CLOSED state,
+;          delete TCB, and return.  Otherwise (no ACK) drop the segment
+;          and return.
+
+syns.2:	trnn	s,tf%rst	;Reset on?
+	 jrst	syns.3		; No, skip on.
+	trnn	s,tf%ack	;ACK?
+	 jrst	givpd##		; No, drop segment.
+
+	movei	t1,s%clos	;Get new state.
+	movem	t1,tcbsta(w)	;New (temp) state.
+	pushj	p,tcpofl	;Give off-line & state change ints.
+	pushj	p,givtcb	;Enter closed, delete tcb.
+	jrst	givpd##		;Drop segment.
+
+;      third check the security and precedence
+;
+;	(not done here)
+
+syns.3:
+
+;      fourth check the SYN bit
+;
+;        If the SYN bit is on:
+;	   IRS is set to SEG.SEQ.
+;          RCV.NXT is set to SEG.SEQ+1,
+;	 SND.UNA should be advanced to equal SEG.ACK (if there
+;        is an ACK), and any segments on the retransmission queue which
+;        are thereby acknowledged should be removed.
+;
+;        If SND.UNA > ISS (our SYN has been ACKed), change the connection
+;        state to ESTABLISHED, form an ACK segment
+;
+;          <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>
+;
+;        and send it.  Data or controls which were queued for
+;        transmission may be included.  If there are other controls or
+;        text in the segment then continue processing at the sixth step
+;        below where the URG bit is checked, otherwise return.
+;
+;        Otherwise enter SYN-RECEIVED, form a SYN,ACK segment
+;
+;          <SEQ=ISS><ACK=RCV.NXT><CTL=SYN,ACK>
+;
+;        and send it.  If there are other controls or text in the
+;        segment, queue them for processing after the ESTABLISHED state
+;        has been reached, return.
+
+syns.4:	trnn	s,tf%syn	;SYN?
+	 jrst	syns.5		; No, skip on.
+	load.	t1,tc.seq,(p3)	;get seg.seq.
+	movem	t1,tcbirs(w)	;remember irs.
+	movem	t1,sndwl1	;(1122)
+	addi	t1,1
+	tlz	t1,740K
+	movem	t1,rcvnxt(w)	;remember rcv.nxt.
+	trnn	s,tf%ack	;ACK?
+	 jrst	syns4b		; No.
+	load.	t2,tc.ack,(p3)	;get seg.ack.
+	movem	t2,snduna(w)	;update snd.una.
+	movem	t2,sndwl2	;(1122)
+	load.	t3,tc.win,(p3)	;(1122)
+	movem	t3,sndwnd(w)	;(1122)
+syns4b:	move	t2,tcbiss(w)
+	sub	t2,snduna(w)
+	tlnn	t2,(1b3)	;ISS less than snd.una?
+	 jrst	syns4c		; No.
+	movei	t3,s%estb	;Yes.
+	movem	t3,tcbsta(w)	;State := established.
+	pushj	p,sndack	;Send an ack segment, no delay.
+	pushj	p,tcponl	;give on-line int, wake job.
+
+	;* should join step6 if data or FIN present.
+
+	jrst	givpd##		;Done with this segment.
+
+syns4c:
+
+	;* enter syn-received.
+
+;      fifth, if neither of the SYN or RST bits is set then drop the
+;      segment and return.
+
+syns.5:	jrst	givpd##
+
+;**********************************************************************
+;*
+;*  Otherwise,
+
+othr:
+
+;    first check sequence number
+;
+;      SYN-RECEIVED STATE
+;      ESTABLISHED STATE
+;      FIN-WAIT-1 STATE
+;      FIN-WAIT-2 STATE
+;      CLOSE-WAIT STATE
+;      CLOSING STATE
+;      LAST-ACK STATE
+;      TIME-WAIT STATE
+;
+;        Segments are processed in sequence.  Initial tests on arrival
+;        are used to discard old duplicates, but further processing is
+;        done in SEG.SEQ order.  If a segment's contents straddle the
+;        boundary between old and new, only the new parts should be
+;        processed.
+;
+;        There are four cases for the acceptability test for an incoming
+;        segment:
+;
+;        Segment Receive  Test
+;        Length  Window
+;        ------- -------  -------------------------------------------
+;
+;           0       0     RCV.NXT = SEG.SEQ
+;
+;           0      >0     RCV.NXT =< SEG.SEQ < RCV.NXT+RCV.WND
+;
+;          >0       0     not acceptable
+;
+;          >0      >0     RCV.NXT =< SEG.SEQ < RCV.NXT+RCV.WND
+;                      or RCV.NXT =< SEG.SEQ+SEG.LEN-1 < RCV.NXT+RCV.WND
+;
+;        If the RCV.WND is zero, no segments will be acceptable, but
+;        special allowance should be made to accept valid ACKs, URGs and
+;        RSTs.
+;
+;        If an incoming segment is not acceptable, an acknowledgment
+;        should be sent in reply (unless the RST bit is set, if so drop
+;        the segment and return):
+;
+;          <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>
+;
+;        After sending the acknowledgment, drop the unacceptable segment
+;        and return.
+;
+;        In the following it is assumed that the segment is the idealized
+;        segment that begins at RCV.NXT and does not exceed the window.
+;        One could tailor actual segments to fit this assumption by
+;        trimming off any portions that lie outside the window (including
+;        SYN and FIN), and only processing further if the segment then
+;        begins at RCV.NXT.  Segments with higher begining sequence
+;        numbers may be held for later processing.
+
+othr.1:	load.	t1,tc.seq,(p3)	;Get seg.seq.
+	skipg	t2,rcvwnd(w)	;Get rcv.wnd.
+	 jumpg	p4,seqbad	; zero window, and data. bad.
+	camn	t1,rcvnxt(w)	;is <rcv.nxt = seq.seq>?
+	 jrst	othr.2		; Yes, good, skip on.
+
+	;* need further checks.
+
+	jrst	givpd##		;Toss for now.
+
+seqbad:	trne	s,tf%rst	;Bad, bad segment. Is RST on?
+	 pushj	p,sndack	; No, send an ack,
+	jrst	givpd##		;Toss original.
+
+;    second check the RST bit,
+;
+;      SYN-RECEIVED STATE
+;
+;        If the RST bit is set
+;
+;          If this connection was initiated with a passive OPEN (i.e.,
+;          came from the LISTEN state), then return this connection to
+;          LISTEN state and return.  The user need not be informed.  If
+;          this connection was initiated with an active OPEN (i.e., came
+;          from SYN-SENT state) then the connection was refused, signal
+;          the user "connection refused".  In either case, all segments
+;          on the retransmission queue should be removed.  And in the
+;          active OPEN case, enter the CLOSED state and delete the TCB,
+;          and return.
+;
+;      ESTABLISHED
+;      FIN-WAIT-1
+;      FIN-WAIT-2
+;      CLOSE-WAIT
+;
+;        If the RST bit is set then, any outstanding RECEIVEs and SEND
+;        should receive "reset" responses.  All segment queues should be
+;        flushed.  Users should also receive an unsolicited general
+;        "connection reset" signal.  Enter the CLOSED state, delete the
+;        TCB, and return.
+;
+;      CLOSING STATE
+;      LAST-ACK STATE
+;      TIME-WAIT
+;
+;        If the RST bit is set then, enter the CLOSED state, delete the
+;        TCB, and return.
+
+othr.2:	trnn	s,tf%rst	;RST set?
+	 jrst	othr.3		; Nope, skip on.
+	move	t4,tcbsta(w)	;Get state.
+	caie	t4,s%synr	;SYN-RECEIVED?
+	 jrst	othr2b		; Nope.
+
+	;* check for came-from-listen-or-not here.
+
+othr2b:
+
+	;* if anyone is waiting for us, wake them.
+
+	movei	t1,s%clos	;Get new state.
+	movem	t1,tcbsta(w)	;New (temp) state.
+	pushj	p,tcpofl	;Give off-line & state change ints.
+	pushj	p,givtcb	;nuke tcb.
+	jrst	givpd##		;drop segment, return.
+
+
+;    third check security and precedence
+;
+;	(not done here)
+
+othr.3:
+
+;    fourth, check the SYN bit,
+;
+;      SYN-RECEIVED
+;      ESTABLISHED STATE
+;      FIN-WAIT STATE-1
+;      FIN-WAIT STATE-2
+;      CLOSE-WAIT STATE
+;      CLOSING STATE
+;      LAST-ACK STATE
+;      TIME-WAIT STATE
+;
+;        If the SYN is in the window it is an error, send a reset, any
+;        outstanding RECEIVEs and SEND should receive "reset" responses,
+;        all segment queues should be flushed, the user should also
+;        receive an unsolicited general "connection reset" signal, enter
+;        the CLOSED state, delete the TCB, and return.
+;
+;        If the SYN is not in the window this step would not be reached
+;        and an ack would have been sent in the first step (sequence
+;        number check).
+
+othr.4:	trnn	s,tf%syn	;SYN set?
+	 jrst	othr.5		; No, skip on.
+
+	;* should send a reset segment.
+
+        pushj   p,retseg        ;Yes, prepare to complain.
+        load.   t1,tc.ack,(p3)  ;<seq=seg.ack>
+        stor.   t1,tc.seq,(p3)
+        movei   t1,tf%rst       ;<ctl=rst>
+        stor.   t1,tc.flg,(p3)
+        jrst    foo.4           ;Go fixup segment, and send it.
+
+;    fifth check the ACK field,
+;
+;      if the ACK bit is off drop the segment and return
+;
+;      if the ACK bit is on
+;
+;        SYN-RECEIVED STATE
+;
+;          If SND.UNA =< SEG.ACK =< SND.NXT then enter ESTABLISHED state
+;          and continue processing.
+;
+;            If the segment acknowledgment is not acceptable, form a
+;            reset segment,
+;
+;              <SEQ=SEG.ACK><CTL=RST>
+;
+;            and send it.
+;
+;        ESTABLISHED STATE
+;
+;          If SND.UNA < SEG.ACK =< SND.NXT then, set SND.UNA <- SEG.ACK.
+;          Any segments on the retransmission queue which are thereby
+;          entirely acknowledged are removed.  Users should receive
+;          positive acknowledgments for buffers which have been SENT and
+;          fully acknowledged (i.e., SEND buffer should be returned with
+;          "ok" response).  If the ACK is a duplicate
+;          (SEG.ACK < SND.UNA), it can be ignored.  If the ACK acks
+;          something not yet sent (SEG.ACK > SND.NXT) then send an ACK,
+;          drop the segment, and return.
+;
+;          If SND.UNA < SEG.ACK =< SND.NXT, the send window should be
+;          updated.  If (SND.WL1 < SEG.SEQ or (SND.WL1 = SEG.SEQ and
+;          SND.WL2 =< SEG.ACK)), set SND.WND <- SEG.WND, set
+;          SND.WL1 <- SEG.SEQ, and set SND.WL2 <- SEG.ACK.
+;
+;          Note that SND.WND is an offset from SND.UNA, that SND.WL1
+;          records the sequence number of the last segment used to update
+;          SND.WND, and that SND.WL2 records the acknowledgment number of
+;          the last segment used to update SND.WND.  The check here
+;          prevents using old segments to update the window.
+;
+;        FIN-WAIT-1 STATE
+;
+;          In addition to the processing for the ESTABLISHED state, if
+;          our FIN is now acknowledged then enter FIN-WAIT-2 and continue
+;          processing in that state.
+;
+;        FIN-WAIT-2 STATE
+;
+;          In addition to the processing for the ESTABLISHED state, if
+;          the retransmission queue is empty, the user's CLOSE can be
+;          acknowledged ("ok") but do not delete the TCB.
+;
+;        CLOSE-WAIT STATE
+;
+;          Do the same processing as for the ESTABLISHED state.
+;
+;        CLOSING STATE
+;
+;          In addition to the processing for the ESTABLISHED state, if
+;          the ACK acknowledges our FIN then enter the TIME-WAIT state,
+;          otherwise ignore the segment.
+;
+;        LAST-ACK STATE
+;
+;          The only thing that can arrive in this state is an
+;          acknowledgment of our FIN.  If our FIN is now acknowledged,
+;          delete the TCB, enter the CLOSED state, and return.
+;
+;        TIME-WAIT STATE
+;
+;          The only thing that can arrive in this state is a
+;          retransmission of the remote FIN.  Acknowledge it, and restart
+;          the 2 MSL timeout.
+
+othr.5:	trnn	s,tf%ack	;ACK bit set?
+	 jrst	givpd##		; No, drop segment.
+	move	t4,tcbsta(w)	;Get state.
+	caie	t4,s%synr	;SYN-RECEIVED?
+	 jrst	othr5b		; Nope, skip on.
+
+	;* check <snd.una <= seg.ack <= snd.nxt> >>:
+	;* either go established or send reset.
+
+othr5b:	;* a lot of missing ack hacking.
+
+	load.	t1,tc.ack,(p3)	;Get ack field.
+	move	t2,snduna(w)	;Get snd.una.
+	sub	t2,t1
+	tlnn	t2,(1b3)	;Is snd.una .lt. seg.ack?
+	 jrst	othr.6		; No, duplicate. Ignore.
+	move	t2,t1		;Copy.
+	sub	t2,sndnxt(w)
+	tlnn	t2,(1b3)	;Is snd.nxt .ge. seg.ack?
+	 jrst	othr5c		; Yes, good ack.
+	pushj	p,sndack	;Ack is in the future, send ack -
+	jrst	givpd##		; and drop segment.
+
+othr5c:	movem	t1,snduna(w)	;Update snd.una.
+
+	;* XXX update the send window.
+
+	pushj	p,chkrxq	;Check rexmit queue.
+
+;    sixth, check the URG bit,
+;
+;      ESTABLISHED STATE
+;      FIN-WAIT-1 STATE
+;      FIN-WAIT-2 STATE
+;
+;        If the URG bit is set, RCV.UP <- max(RCV.UP,SEG.UP), and signal
+;        the user that the remote side has urgent data if the urgent
+;        pointer (RCV.UP) is in advance of the data consumed.  If the
+;        user has already been signaled (or is still in the "urgent
+;        mode") for this continuous sequence of urgent data, do not
+;        signal the user again.
+;
+;      CLOSE-WAIT STATE
+;      CLOSING STATE
+;      LAST-ACK STATE
+;      TIME-WAIT
+;
+;        This should not occur, since a FIN has been received from the
+;        remote side.  Ignore the URG.
+
+othr.6:	jfcl
+
+	;* does not seem urgent right now.
+
+;    seventh, process the segment text,
+;
+;      ESTABLISHED STATE
+;      FIN-WAIT-1 STATE
+;      FIN-WAIT-2 STATE
+;
+;        Once in the ESTABLISHED state, it is possible to deliver segment
+;        text to user RECEIVE buffers.  Text from segments can be moved
+;        into buffers until either the buffer is full or the segment is
+;        empty.  If the segment empties and carries an PUSH flag, then
+;        the user is informed, when the buffer is returned, that a PUSH
+;        has been received.
+;
+;        When the TCP takes responsibility for delivering the data to the
+;        user it must also acknowledge the receipt of the data.
+;
+;        Once the TCP takes responsibility for the data it advances
+;        RCV.NXT over the data accepted, and adjusts RCV.WND as
+;        apporopriate to the current buffer availability.  The total of
+;        RCV.NXT and RCV.WND should not be reduced.
+;
+;        Please note the window management suggestions in section 3.7.
+;
+;        Send an acknowledgment of the form:
+;
+;          <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>
+;
+;        This acknowledgment should be piggybacked on a segment being
+;        transmitted if possible without incurring undue delay.
+;
+;      CLOSE-WAIT STATE
+;      CLOSING STATE
+;      LAST-ACK STATE
+;      TIME-WAIT STATE
+;
+;        This should not occur, since a FIN has been received from the
+;        remote side.  Ignore the segment text.
+
+othr.7:	pushj	p,tcpoki	;OK to do input in this state?
+	 jrst	othr.8		; No, ignore the segment text.
+	jumpe	p4,othr.8	;No data, skip on.
+	load.	t1,tc.dof,(p3)	;Get data offset.
+	add	t1,p3		;Point to data itself.
+	move	t2,p4		;Get byte count.
+	pushj	p,store		;Store data to tcb.
+	 jrst	givpd##		; Sorry, keep shut up for now.
+	addm	p4,rcvnxt(w)	;Update rcv.nxt.
+	movsi	t1,740K
+	andcam	t1,rcvnxt(w)	; ... within 32 bits.
+
+	movei	t1,^D1024	;First hack of window:
+	camg	t1,tcbisz(w)	;Input queue larger than max window?
+	 tdza	t1,t1		; Yes, use zero.
+	  sub	t1,tcbisz(w)	;  No, use diff.
+	camg	t1,rcvwnd(w)	;Shrinking window?
+	 movem	t1,rcvwnd(w)	; No, set up new window.
+
+	movei	t1,f%dack	;Want to ack this sometime soon.
+	iorm	t1,tcbflg(w)
+
+	;* update rcvnxt(w) and possibly mess with the window.	
+
+;    eighth, check the FIN bit,
+;
+;      Do not process the FIN if the state is CLOSED, LISTEN or SYN-SENT
+;      since the SEG.SEQ cannot be validated; drop the segment and
+;      return.
+;
+;      If the FIN bit is set, signal the user "connection closing" and
+;      return any pending RECEIVEs with same message, advance RCV.NXT
+;      over the FIN, and send an acknowledgment for the FIN.  Note that
+;      FIN implies PUSH for any segment text not yet delivered to the
+;      user.
+;
+;        SYN-RECEIVED STATE
+;        ESTABLISHED STATE
+;
+;          Enter the CLOSE-WAIT state.
+;
+;        FIN-WAIT-1 STATE
+;
+;          If our FIN has been ACKed (perhaps in this segment), then
+;          enter TIME-WAIT, start the time-wait timer, turn off the other
+;          timers; otherwise enter the CLOSING state.
+;
+;        FIN-WAIT-2 STATE
+;
+;          Enter the TIME-WAIT state.  Start the time-wait timer, turn
+;          off the other timers.
+;
+;        CLOSE-WAIT STATE
+;
+;          Remain in the CLOSE-WAIT state.
+;
+;        CLOSING STATE
+;
+;          Remain in the CLOSING state.
+;
+;        LAST-ACK STATE
+;
+;          Remain in the LAST-ACK state.
+;
+;        TIME-WAIT STATE
+;
+;          Remain in the TIME-WAIT state.  Restart the 2 MSL time-wait
+;          timeout.
+;
+;    and return.
+
+othr.8:	trnn	s,tf%fin	;FIN set?
+	 jrst	givpd##		; no, done, drop packet.
+	aos	rcvnxt(w)	;Increment rcv.nxt over the fin.
+;;;	setzm	rcvwnd(w)	;No window any more.
+	movei	t1,f%dack!f%rfin
+	iorm	t1,tcbflg(w)	;We want to ack this sometime soon.
+	movei	t1,s%clsw	;New state, please.
+	pushj	p,tcpnst	;Tell user.
+
+	;* should do a lot more here.
+
+	jrst	givpd##		;Toss packet, and return.
+
+;**********************************************************************
+;*
+;* Routine to find a TCB.  Call with:
+;*
+;*   p2/ IP header pointer.
+;*   p3/ TCP header pointer.
+;*
+fndtcb:	skipn	w,tcblst	;Get first TCB, if any.
+	 popj	p,		; None, this is simple.
+	load.	t1,ih.src,(p2)	;Get source address.
+	load.	t2,ih.dst,(p2)	;Get destination address.
+	load.	t3,tc.src,(p3)	;Get source port.
+	load.	t4,tc.dst,(p3)	;Get destination port.
+fndt.2:	camn	t1,tcbrad(w)	;Is the source address our remote?
+	 came	t2,tcblad(w)	; Yes, is the destination address our local?
+	  jrst	fndt.4		;  No, fail this one.
+	camn	t3,tcbrpr(w)	;Is the source port our remote?
+	 came	t4,tcblpr(w)	; Yes, is the destination port our local?
+fndt.4: skipn	w,tcbnxt(w)	;  No, load next TCB, if any.
+	 popj	p,		;   Match or end of list.
+	jrst	fndt.2		;Go back and check this one too.
+
+end

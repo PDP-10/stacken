@@ -1,0 +1,1220 @@
+	UNIVERSAL SNUP
+
+;COPYRIGHT (C) 1979,1980 BY DIGITAL EQUIPMENT CORPORATION,
+;MAYNARD, MASS.
+;
+;
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+;ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+;INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+;COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+;OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+;TRANSFERRED.
+;
+;THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+;AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+;CORPORATION.
+;
+;DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+;SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+
+; Revision history:
+
+;24-Jun-86/WXD	Teach SNUP to use the %ac definitions for any monitor
+;		ACs.  This means that %R (17) is used for relocation.
+;24-Feb-86/WXD	Fix bug in handling extended symbol tables when the
+;		symbol table is the last thing in the core image.
+;1-Nov-85/WXD	Fix up for extended symbol vectors.
+;8-Oct-85/TL	Output symbols when an error is detected.
+;Edit #5
+;13/OCT/83/TARL	Add version number V.SNUP to help us keep track of SNUP
+;		programs which are loaded with which version of SNUP. We
+;		will need this in the beginning of 7.03 to track which programs
+;		are loaded with old and new sets of ACs.
+
+;  4/06/80/JCH	Do multiply defined symbols right.  Take the global
+;		definition over the local, watch for multiply
+;		defined locals or globals, and like that.
+;
+;		Have LOKSEG chuck any high page number returned in
+;		T1 so CNVADR will work if the snooper has a high
+;		segment.  (LOCK always returns pages of both segments
+;		even if only one is LOCKed).
+
+; 10/23/79/JCH	Fancy up DMN's stuff.  Also add the following entries:
+;		(All replacements for XCTSNP)
+;		XWRSNP - XCTSNP without reducing core
+;		REDEFP - Redefine and reinsert user's breakpoints
+;		REINSP - Reinsert user's breakpoints
+
+; 10/19/79/DMN	Add symbol offsets to BRKPNT macro.  Also find
+;		multiple occurences of a symbol in BRKPNT list.
+;		(Can happen when user invokes offset feature).
+
+; 09/28/79/JCH	Do the right thing with multiply-defined symbols.
+;		This fixes a number of bugs involving collections
+;		of symbols some of which were undefined and some
+;		of which were multiply-defined.
+
+;		In REDSYM use P3 to track symbol table location in
+;		the monitor .EXE file rather than T2, obeying the
+;		conventions about preserved/temporary ACs.
+
+;		Allow multiply-defined symbols if the values
+;		are equal.
+
+;		Also handle the obscure but possible case where
+;		a symbol is RADIX-50ed in the last word of a page
+;		so its value is in the next page, which wasn't
+;		in core when it was referenced.  This happens
+;		because the program expects INBUFF+1(T1) to be
+;		valid whenever INBUFF(T1) is.
+
+;		Fix error messages to use upper and lower case.
+
+;		Do GETTABs and appropriate stuff to find monitor
+;		even if it was loaded from an SFD.
+
+;		Fix the loop at CNVADR to use the correct value
+;		in P2, so as not to cream the user's code.
+
+;		Add monitor register names with "%" prefix.  Thus,
+;		F becomes %F, P is %P, etc.
+
+;		Fix up a number of comments.
+
+;		The net effect of this revision is to increase
+;		the size of the locked segment by at most one
+;		page.  It also prevents crashes that could have
+;		happened because this code wasn't sufficiently
+;		defensive.
+
+COMMENT &
+
+	---- KNOWN BUGS AND DEFICIENCIES ----
+
+1.  SNUP will not handle the case where one symbol exists in
+    several different modules, but is not gloabal; or when you
+    want to use a local symbol which conflicts with a global symbol
+    in a different module.  Module specification is not
+    yet supported.  It may never be.
+
+2.  Not all possible symbol errors are detected at once.  It may
+    require several runs before all errors are detected.
+
+    ---- Fixes are possible but not deemed worth the effort. ----
+&
+	SUBTTL SNUP -- Subroutines for using the SNOOP. UUO
+
+;	USING THIS PACKAGE
+;
+;    There are two general modes of operation which for lack of a better
+;vocabulary we can call:
+;	1. Fault
+;	2. Advanced
+;The fault mode is easiest to use but is restricted in that breakpoints
+;and monitor references are defined at compile-time by the MONREF and
+;BRKPNT macros. All you have to do is issue a MONREF for every monitor
+;symbol you want to reference and a BRKPNT for every breakpoint you
+;want to insert. Following are the instructions for this mode:
+;
+;	1. Calling program must search UUOSYM and SNUP
+;
+;	2. If your breakpoint code needs to look at monitor locations,
+;	use the MONREF macro for every desired reference other than
+;	breakpoint symbols. You may specify more than one symbol in
+;	a MONREF if you enclose them in angle-brackets.
+
+
+;		(THIS MUST BE DONE BEFORE USING THE BRKPNT MACRO)
+;		MONREF monitor symbol
+;
+;	example-MONREF <APRCK0,.CPDWD>	;LOOK AT APRCK0 AND .CPDWD
+;
+;	3. Tell SNUP where to breakpoint and where to find your code
+;		by using the BRKPNT macro.
+;		BRKPNT monitor symbol,address of your code
+;
+;	example-BRKPNT APRCK0,KAFTST ;KAFTST IS BREAKPOINT CODE
+;
+;
+;	4. Your breakpoint code can be inserted anywhere. If you want
+;		to reference the monitor locations you specified in
+;		MONREF or BRKPNT, you simply go indirect off the symbol.
+;		The breakpoint code must also index all
+;		memory references by %R (containing relocation value).
+;
+;	example-MOVE 17,@APRCK0(%R)	;GET CONTENTS OF APRCK0
+;
+;	5. Your program must set up P to a push down stack and it should
+;		do a RESET
+;
+;	6. You may then do PUSHJ P,GETINF## to let SNUP define your
+;		breakpoints.
+;
+;	7. Do PUSHJ P,XCTSNP## to insert the breakpoints
+;
+;	8. Execute the REMBRK macro to remove the breakpoints
+;
+;	9. Execute the UNDBRK macro to undefine the breakpoints
+;	EXAMPLE PROGRAM -- KEEP-ALIVE FAILED FAULT INSERTION
+;
+REPEAT 0,<
+
+TITLE KAF
+	SEARCH UUOSYM,SNUP
+	BRKPNT APRCK0,KAFTST
+PDL:	BLOCK 50
+START:	MOVE P,[-50,PDL]
+	TELL	KEEP-ALIVE TEST
+	PUSHJ	P,GETINF##		;DEFINE BREAKPOINTS
+	PUSHJ	P,XCTSNP##		;INSERT BREAKPOINTS
+	TELL	BREAKPOINTS INSERTED -- TYPE CR TO REMOVE
+	INCHWL	T1			;WAIT FOR USER TO REMOVE
+	REMBRK				;REMOVE THE BREAKPOINTS
+	UNDBRK				;AND UNDEFINE THEM
+	EXIT				;LEAVE
+
+;ACTUAL BREAKPOINT CODE
+
+KAFTST:	JRST	KAFTST(%R)		;JUMP TO SELF (%R HOLDS RELOCATION)
+	POPJ	%P,			;NEVER EXECUTED BUT FOLLOWS CONVENTION
+
+>;END REPEAT 0
+;Advanced mode is for those who want a more generalized method of
+;inserting breakpoints. In this mode, breakpoints and monitor references
+;are defined at run-time with calls to SETBRK (for setting breaks) and
+;GETADR (for finding monitor addresses). To use this mode:
+;
+;	1. Calling program must search UUOSYM and SNUP
+;
+;	2. The ADVANC macro must appear somewhere in the calling program.
+;	(ADVANC  # possible references, # possible breakpoints)
+;	You must not use MONREF or BRKPNT in this mode since either would
+;	multiply-define some symbols.
+;	Private symbols are BRKBEG,CHKSUM,BRKLST,REFCNT,REFLST.
+
+;	3. To get addresses of monitor locations, call GETADR with
+;	    T1 -- positive word count,,address of symbol list
+;	   GETADR returns list of addresses corresponding to
+;	   symbols (replaces all symbols with addresses).
+;
+;	4. To set breakpoints, call SETBRK with
+;	   T1 -- positive word count,,address of breakpoint list
+;	   (breakpoint list is a list of two-word entries)
+;		RADIX50 0,symbol
+;		Address of breakpoint code
+
+;
+;	    SETBRK returns with breaks inserted and caller's list
+;		unchanged (also locked in core).
+;EXAMPLE PROGRAM USING ADVANCED MODE
+
+REPEAT 0, <
+.REQUIRE SNUP
+SEARCH UUOSYM,SNUP
+
+	ADVANC 5,^D64		;MAX 5 REFERENCES, 64 BREAKPOINTS
+REFS:	RADIX50 0,.CPDWD		;LIST OF REFERENCES NEEDED
+	RADIX50 0,.CPCDB
+BRKS:	RADIX50 0,APRCK0		;BREAKPOINT LIST (SYMBOL)
+	KAFTST		;MY CODE
+	RADIX50 0,DIE
+	DIETST
+	RADIX50 0,PAT
+	PATTST
+
+PDL:	BLOCK 50
+
+START:	MOVE	P,[-50,,PDL]
+	MOVSI	T1,2			;WORD COUNT
+	HRRI	T1,REFS		;ADDRESS OF MY SYMBOLS
+	PUSHJ	P,GETADR##		;GO TRANSLATE SYMBOLS TO ADDRESSES
+	MOVSI	T1,6		;WORD COUNT
+	HRRI	T1,BRKS		;ADDRESS OF MY BREAKPOINT LIST
+	PUSHJ	P,SETBRK##	;INSERT MY BREAKPOINTS
+	HALT
+KAFTST:	JFCL			;MY BREAKPOINT CODE FOR BREAKPOINT 1
+	POPJ	%P,
+DIETST: JFCL			;FOR BREAKPOINT 2
+	POPJ	%P,
+PATTST:	JFCL			;FOR BREAKPOINT 3
+	POPJ	%P,
+	END	START
+>;END REPEAT 0
+;RULES FOR BREAKPOINT CODE
+;
+;All memory references must be relocated by %R. The breakpoint dispatch
+;routine in SNUP saves %R and puts the relocation value in it.
+;
+;All breakpoint routines must end in a POPJ %P, since the dispatch routine
+;must restore the original contents of %R
+;
+;Don't expect the pushdown stack to be exactly what it was at the time of
+;the breakpoint -- The breakpoint dispatch routine is called by a PUSHJ
+;and it uses the stack for saving certain things.
+;
+;Don't insert breakpoints where the monitor may be very deep in a stack
+;or doesn't have one set up or is depending on information deeper on
+;the stack than where it is.
+;
+;All monitor memory references must be indirect and indexed by %R
+;and must have been specified via the MONREF or BRKPNT macro.
+;
+;Don't use monitor AC symbols unless you define them in your calling
+;program since they are different from those in SNUP (P in monitor is AC1).
+;	INTERNAL DESCRIPTION
+;
+;This module has five entry points: GETADR, SETBRK, GETINF, XCTBRK,
+;and SNPFAL.
+;
+;GETADR accepts a list of monitor symbols and returns corresponding
+;monitor addresses. It does this by calling GETINF. This entry point is
+;for advanced mode (not needed for most fault insertion).
+;
+;SETBRK accepts a breakpoint list and inserts them by calling GETINF and
+;XCTBRK. It does not reduce core before locking. This is also an "advanced"
+;function.
+;
+;GETINF converts caller symbols into exec virtual addresses, stores
+;the checksum needed in the SNOOP. UUO argument list, and returns
+;to the caller. Any errors detected by this routine will result in
+;an EXIT.
+;
+;XCTBRK locks the job in core (low seg only), defines and inserts
+;breakpoints, and returns to the caller. Again, any errors 
+;result in an EXIT.
+;
+;SNPFAL is just a print-out routine for SNOOP. failures. It is
+;automatically called by the REMBRK and UNDBRK macros found
+;here in SNUP.
+;
+;Removing and undefining breakpoints are the responsibility of
+;the caller (using REMBRK and UNDBRK).
+;GETINF depends on information being in the following form:
+;
+;	INTERN BRKBEG,CHKSUM,BRKLST,REFCNT,REFLST
+;BRKBEG: n    -- where n is the number of breakpoints
+;CHKSUM: Z     -- will be filled in by GETINF (checksum of monitor symbols)
+;BRKLST: RADIX50 abc  -- where abc is the symbol where caller wants break
+;	routine     -- Address of user breakpoint code
+;	........
+;	........	(2 word entry for every breakpoint)
+;
+;Also needed, is the count and list of symbols needed for reference
+;purposes by the breakpoint code. This can be anywhere in the caller's
+;program.
+;
+;REFCNT: x   -- where x is count of reference symbols
+;REFLST: RADIX50 def -- where def is a reference symbol
+;	.........
+;	.........
+;
+;These things can be set up automatically by the caller using the
+;BRKPNT and MONREF macros.
+
+;When GETINF returns, all RADIX50 symbols will have been converted to
+;exec virtual addresses, BRKBEG will have become an argument count for
+;the SNOOP. UUO, and CHKSUM will contain the required monitor symbol
+;checksum for snooping.
+;
+;Now the caller need only call XCTSNP to define and insert the
+;breakpoints. Once inserted, the subroutine returns to the caller who
+;must then decide when to remove the breakpoints using the .SORBP
+;function of SNOOP. Bear in mind that upon return from XCTSNP the job
+;is locked in core.
+;	DEFINITIONS AND SEARCHES
+	SALL
+
+	SEARCH JOBDAT,MACTEN,SCNMAC,UUOSYM
+
+;VERSION DEFINITION
+V.SNUP==:7
+
+;AC DEFINITIONS
+F=0		;FLAG REGISTER
+T1=1
+T2=2
+T3=3
+T4=4
+P1=5
+P2=6
+P3=7	; Keeps track of where we are while reading symbols
+P4=10
+B=11				; Byte pointers
+C=12				; Accumulater
+ARG=16
+P=17
+
+
+; Monitor registers used -
+
+%S=0
+%P=1
+%T1=2
+%T2=3
+%T3=4
+%T4=5
+%W=6
+%M=7
+%U=10
+%P1=11
+%P2=12
+%P3=13
+%P4=14
+%J=15
+%F=16
+%R=17
+
+
+PLEN==100
+
+;	Definitions
+
+; Flags
+
+SYMBEG==400000		; Flag symbols start at odd or even loc
+RETRY==1		; Retry for LOCKUUO
+
+; Local maxima
+
+M.BRKN==^D64		; Max # breakpoints we can handle
+M.REFN==^D64		; Max # references we can handle
+
+; Other stuff (used in symbol translation)
+
+BP.DEF==1B0		; This symbol has been defined
+BP.MUL==1B1		; This symbol is multiply (differently) defined
+BP.GLB==1B2		; This value is for a global definition
+BP.ALL=17B3		; All flag bits
+R50GLB==1B3		; RADIX-50 version of global bit
+; Macros used by SNUP and calling program
+
+
+;	MONREF -- defines list of monitor references needed by caller in
+;fault mode. This macro generates storage for the count of references and
+;all the symbols requested by it. The funny IF2 is necessary because the
+;count of symbols changes during pass 1 and doesn't get reset in
+;the calling program.
+
+
+REPAS2==0		; Pass 2 flag for REFNUM
+REFNUM==0
+DEFINE MONREF (A),<
+  IRP A,<
+    IF2,<IFE REPAS2 <
+	REFNUM==0
+	REPAS2==1>>	;; This allows REFCNT to compile at beginning
+	IFE REFNUM,<
+		ZZ=.
+		REFCNT:: REFNUM
+		REFLST::
+	>
+	A:RADIX50 0,'A
+	REFNUM=REFNUM+1
+	RELOC ZZ
+	REFNUM
+	RELOC
+>>
+;	BRKPNT -- defines a list of breakpoints at compile-time for
+;fault mode. Allocates storage for the count of breakpoints, the checksum
+;word(required by SNOOP.), and the list of two-word breakpoint entries.
+;The funny IF2 is required for the same reason MONREF has it.
+
+
+BRPAS2==0		; This allows BRKCNT,CHKSUM to compile
+BRKCNT==0
+DEFINE BRKPNT(A,B,C),<
+    IF2 <IFE BRPAS2 <
+	 BRKCNT==0
+	 BRPAS2=1>>
+	IFE BRKCNT,<
+		IFE REFNUM,<	;; If no monitor references
+			REFCNT::Z ;;  define so no undefineds.
+			REFLST::Z
+			>
+		ZZ=.
+		BRKBEG:: BRKCNT
+		CHKSUM:: Z
+		BRKLST::
+	>
+    IFB <C>,<
+	A: RADIX50 0,'A
+	   BYTE(9)0(9)0(18)B
+	    >
+    IFNB <C>,<
+	IF2,<
+	ZZZ==C
+	IFL <ZZZ>,<ZZZ==-ZZZ>
+	IFG <ZZZ-777>,<PRINTX ? Offset too large for BRKPNT macro
+		      PRINTX ? -- with arguments A,B,C
+							>
+	    >
+	ZZZ==C&777
+	   RADIX50 0,A
+	   BYTE(9)0(9)ZZZ(18)B
+             >
+	BRKCNT=BRKCNT+1
+	RELOC ZZ
+	BRKCNT
+	RELOC
+>
+;	ADVANC -- Used instead of MONREF and BRKPNT when caller wants
+;to control breakpoint and reference functions at run-time. This macro
+;simply allocates storage for those functions to avoid undefined
+;globals and extra switches in the code.
+
+
+DEFINE ADVANC (A,B),<
+	REFCNT::A		;; Never used really
+	REFLST:: BLOCK A	;; Maximum number of references
+	BRKBEG:: B
+	CHKSUM:: Z
+	BRKLST:: BLOCK B	;; Maximum number of breakpoints
+>
+
+; Internally called macros
+
+;	Macro to generate table of error messages
+
+	DEFINE E (A), <
+		[ASCIZ/A/]
+		>
+
+
+;	Macro to generate error message and exit on fatal errors
+
+	DEFINE FATL (A,SYM), <
+		JRST	[OUTSTR [ASCIZ\? A\]
+IFNB /SYM/,<
+			MOVE T1,SYM
+			PUSHJ P,SYMOUT
+>
+			 EXIT]
+	>
+
+;	Macro to send message to TTY with CR/LF
+
+	DEFINE TELL (A), <
+		OUTSTR	[ASCIZ\A
+\]
+	>
+
+; Macros to easily remove breakpoints (called by main program)
+
+	DEFINE REMBRK <
+		MOVSI	T1,.SORBP
+		SNOOP.	T1,
+		  JRST	[OUTSTR [ASCIZ/? Couldn't remove breakpoints/]
+			 JRST SNPFAL##]
+	>
+	DEFINE UNDBRK <
+		MOVSI	T1,.SOUBP
+		SNOOP.	T1,
+		  JRST	[OUTSTR [ASCIZ/? Couldn't undefine breakpoints/]
+			 JRST SNPFAL##]
+	>
+
+;	Variable storage
+
+OPNBLK:	16		; Open block for disk copy of running monitor
+OPNDEV:	BLOCK 3
+
+FILNAM:	Z		; Lookup block for disk copy of monitor
+FILEXT:	Z
+FILNUL:	Z
+FILPPN:	Z
+FILPTH:	BLOCK	11
+
+BRKMAX:	Z		; Maximum breakpoints allowed (from GETTAB)
+
+SYMST:	Z		; Start of symbol table in disk copy of monitor
+SYMLEN:	Z		; Length of symbol table in disk copy of monitor
+
+BSYMOK:	Z		; Count of breakpoint symbols found in monitor
+RSYMOK:	Z		; Count of reference symbols found in monitor
+
+; Symbols required in main program are defined here.
+
+	EXTERN BRKBEG,CHKSUM,BRKLST,REFCNT,REFLST
+;	GETADR -- Finds addresses for monitor symbols. Use this if
+;you want to control breakpoint insertion at run-time (advanced mode)
+;rather than at compile-time(fault mode).
+;Symbols to be converted must be in RADIX50  format.
+
+;CALL WITH:
+;	T1 -- positive word count,,address of symbol list
+;RETURNS:
+;	Symbols in specified list converted to addresses
+
+GETADR::HLREM	T1,T3		; Save word count
+	JUMPL	T3,[FATL Called GETADR with negative count]
+	HRL	T2,T1		; Make BLT pointer
+	HRRI	T2,REFLST	; To REFLST
+	BLT	T2,REFLST-1(T3)	; Move list of symbols
+	MOVEM	T3,REFCNT	; Store count
+	SETZM	BRKBEG		; Indicate don't do breaks
+	SETZM	BSYMOK		; Bypass that test in GETINF
+	PUSH	P,T1		; Save symbol addresses
+	PUSHJ	P,GETINF	; Go convert symbols
+	POP	P,T1		; Get addresses back
+	ADDM	T1,REFCNT	; Make BLT back to caller's area
+	HRLI	T1,REFLST
+	HRRZ	T2,REFCNT
+	BLT	T1,-1(T2)	; Move addresses to caller
+	POPJ	P,		; Return to him
+;	SETBRK -- Called by main program to insert breakpoints from
+;arguments supplied by it. Like GETADR use this entry point only when you
+;must control breakpoint initiation at run-time rather than at compile-time.
+;
+;CALLED WITH:
+;	T1 -- positive word count,,address of breakpoint arguments
+;RETURNS:
+;	Breakpoints inserted
+
+SETBRK::HLREM	T1,T3		; Save word count
+	JUMPL	T3,[FATL Called SETBRK with negative word count]
+	HRL	T2,T1		; Make BLT pointer to BRKLST
+	HRRI	T2,BRKLST
+	BLT	T2,BRKLST-1(T3)
+	LSH	T3,-1		; Make T3 = # of breakpoints
+	MOVEM	T3,BRKBEG
+	SETZM	REFCNT		; Prohibit reference symbol finding
+	SETZM	RSYMOK		; Bypass that test in GETINF
+	PUSHJ	P,GETINF	; Set up SNOOP. UUO info
+	PJRST	XWRSNP		; Execute breakpoints without
+				; Reducing core.
+;	GETINF -- Reads monitor specified by GETTAB as being the
+;disk copy of the currently running monitor. Since SNOOP. requires
+;the checksum of the symbol table, we do the checksumming while
+;finding the virtual addresses for all the breakpoints.
+
+;CALL WITH:
+;	No arguments
+;RETURNS:
+;	Symbol table checksummed
+;	Symbols converted to exec virtual addresses
+;ERRORS:(ALL FATAL)
+;	Too many breakpoints requested
+;	Requested symbols not found
+;	Too many symbols found (used a local?)
+
+
+GETINF::PUSHJ	P,FNDFIL	; Read disk copy of mon
+	PUSHJ	P,SETSYM	; Get our own copy of BRKLST and REFLST
+	PUSHJ	P,REDSYM	; Read and checksum symbols
+	PUSHJ	P,FORMIT	; Form the dispatch vector
+	MOVE	T1,BRKBEG	; Then check for too many breaks
+	CAMLE	T1,BRKMAX
+	FATL	Too many breakpoints for this monitor
+	LSH	T1,1		; Multiply by 2 (words in entry)
+	AOS	T1		; Set to include checksum
+	EXCH	T1,BRKBEG	; And save it, get old value to
+	PUSHJ	P,INFCHK	; Validate symbols translated OK
+	RELEASE			; Don't need .EXE file anymore
+	POPJ	P,
+; Copy the symbols from user space to our space
+
+SETSYM:	MOVE	T1,BRKBEG	; How many breakpoints
+	CAILE	T1,M.BRKN	; Too many?
+	FATL	Too many breakpoints for SNUP subroutines
+	MOVNS	T1		; -How many breakpoints
+	HRLZS	T1		; -N,,0
+	SKIPN	T2,T1		; A copy for outputting
+	JRST	SETREF		; No breakpoints (unusual)
+SBLOOP:	MOVE	T3,BRKLST(T1)	; Get a symbol
+	TLZ	T3,(74B5)	; No Flags (we have our own)
+	MOVEM	T3,B.OURS(T2)	; Copy over
+	ADDI	T1,2		; Past subroutine to call (forget LH)
+	AOBJN	T2,SBLOOP	; Continue until done
+
+SETREF:	SKIPN	T1,REFCNT	; Get # of references
+	POPJ	P,
+	CAILE	T1,M.REFN	; Too many?
+	FATL	Too many reference symbols for SNUP subroutine
+	MOVNS	T1
+	HRLZS	T1
+SRLOOP:	MOVE	T2,REFLST(T1)	; Get a symbol
+	TLZ	T2,(74B5)	; No flags again
+	MOVEM	T2,R.OURS(T1)	; Ship it out
+	AOBJN	T1,SRLOOP	; Go thru the list
+	POPJ	P,		; Done
+
+; Check consistency of symbols.  All must be found and not
+;  multiply-defined.
+
+INFCHK:	JUMPE	T1,INFREF	; Jump if no breakpoints supplied
+				;  (for real)
+IBLOOP:	SKIPL	T2,B.OURS-1(T1)	; Is it defined?
+	FATL	<Undefined breakpoint symbol(s)>,T2
+	TXNE	T2,BP.MUL	; Multiply-defined?
+	FATL	<Multiply-defined breakpoint symbol(s)>,T2
+	SOJG	T1,IBLOOP	; Go thru them all
+
+; Same treatment for reference symbols
+
+INFREF:	SKIPN	T1,REFCNT	; Any references ?
+	POPJ	P,		; No references, no work for you
+IRLOOP:	SKIPL	T2,R.OURS-1(T1)	; This reference defined?
+	FATL	<Undefined MONREF symbol(s)>,T2
+	TXNE	T2,BP.MUL	; Multiply-defined?
+	FATL	<Multiply-defined MONREF symbols>,T2
+	SOJG	T1,IRLOOP	; Loop until done
+	POPJ	P,		; Then return
+;	SYMOUT -- Output a RADIX50 symbol for an error message
+;
+
+SYMOUT:	TLZ	T1,740K		; Clear any flags
+SYMOU1:	IDIVI	T1,50		; Get a digit
+	HRLM	T2,(P)		; Stack it
+	SKIPE	T1		; ...
+	 PUSHJ	P,SYMOU1	;
+	HLRZ	T1,(P)		; Get next digit
+	ADJBP	T1,[POINT 6,RDX50T]	; Point to translated value
+	ILDB	T1,T1		; Get SIXBIT
+	ADDI	T1," "-' '	; Make ASCII
+	OUTCHR	T1		; Output
+	POPJ	P,
+
+RDX50T:	SIXBIT	/ 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ.$%/
+;	XCTSNP -- Defines and inserts breakpoints according to BRKLST
+;		Called by main program with no arguments but with
+;		BRKLST set up by a previous call to GETINF.
+;		(Entered at XWRSNP in advanced mode)
+
+XCTSNP::MOVEI	T1,LOKEND	; Reduce core
+	CORE	T1,
+	  TELL	Unable to reduce core but continuing
+XWRSNP::PUSHJ	P,LOKSEG	; LOCK in core
+	PUSHJ	P,CNVADR	; Go relocate breakpoint code
+REDEFP::MOVE	T1,[.SODBP,,BRKBEG]
+	SNOOP.	T1,		; Define breakpoints
+	  JRST	SNPFAL
+REINSP::MOVSI	T1,.SOIBP	; Execute the fault
+	SNOOP.	T1,
+	  JRST	SNPFAL		; Failed
+	POPJ	P,		; Return to caller
+
+;Routine to print an error message corresponding to code in T1
+;Called after a SNOOP. error return.
+
+SNPFAL::OUTSTR	[ASCIZ/?SNOOP. failed -- /]
+	MOVE	T1,SNPERR(T1)
+	OUTSTR	@T1
+	EXIT
+
+SNPERR:	E Not an error
+	E Illegal argument
+	E Not privileged
+	E Someone else snooping
+	E Exceeded max breakpoints
+	E Function illegal when breaks already inserted
+	E No monitor free core
+	E Address check
+	E Illegal if not LOCKed
+	E Checksum of running monitor doesn't match disk copy
+;	FNDFIL -- Find disk copy of currently running monitor
+
+;CALL WITH:
+;	No arguments
+;RETURNS:
+;	Monitor .EXE file open and directory page in INBUFF
+;ERRORS:
+;	GETTAB failures (EXIT)
+;	Can't OPEN device
+;	Can't find file
+;	I/O errors
+
+FNDFIL:	MOVX	T1,%CNMBS	; Get structure
+	GETTAB	T1,
+	  JRST	GTBFAL
+	MOVEM	T1,OPNDEV	; Save in OPEN block
+	MOVX	T1,%CNMBF	; Get monitor file name
+	GETTAB	T1,
+	  JRST	GTBFAL
+	MOVEM	T1,FILNAM	; Save in LOOKUP block
+	MOVX	T1,%CNMBX	; Get file extension
+	GETTAB	T1,
+	  JRST	GTBFAL
+	MOVEM	T1,FILEXT			
+	MOVEI	T1,FILPTH
+	MOVEM	T1,FILPPN	
+	SETZM	FILPTH
+	SETZM	FILPTH+1
+	MOVX	T1,%CNMBD	; Get PPN
+	GETTAB	T1,
+	  JRST	GTBFAL
+	MOVEM	T1,FILPTH+2
+
+	DEFINE	GSFD(ARG)<IRPC ARG,< ;; Go thru all SFDs that the
+	MOVX	T1,%CNSF'ARG		;;  monitor may have come from
+	GETTAB	T1,
+	  SETZM	T1
+	MOVEM	T1,FILPTH+2+ARG>
+>
+	GSFD	<12345>
+	SETZM	FILPTH+2+6
+	MOVX	T1,%CNBPM	; Get maximum breakpoints
+	GETTAB	T1,
+	  JRST	GTBFAL
+	MOVEM	T1,BRKMAX	; Save for later
+	OPEN	OPNBLK		; See if we can OPEN device
+	  FATL	Can't open device where monitor lives
+	LOOKUP	FILNAM		; Now LOOKUP the file
+	  FATL	Can't find monitor on the disk
+        PJRST	REDDIR		; Go read directory and return
+
+GTBFAL:	FATL	GETTAB failed (trying to find disk copy of monitor)
+;	REDDIR  -- Reads EXE directory for selected monitor
+;		   Won't work if directory gets bigger than one block
+
+;CALL WITH:
+;	No arguments
+;	.EXE file open on channel zero
+;RETURNS:
+;	Directory in DIRECT
+;ERRORS:(ALL FATAL)
+;	I/O errors 
+;	Not an .EXE file
+;	Directory bigger than one disk block
+
+
+REDDIR:	USETI	1		; Set to block 1
+	IN	[IOWD ^D128,DIRECT
+		 0]
+	SKIPA	T1,DIRECT	; Success -- get header.
+	  FATL	Error reading directory of monitor
+	HLRZ	T2,T1		; Get directory header code
+	CAIE	T2,1776		; Is it good?
+	FATL	Bad .EXE file -- header code not good
+	HRRZS	T1		; Get rid of code
+	CAILE	T1,^D128	; Is directory too big for program?
+	FATL	.EXE directory too big for program
+	MOVEM	T1,DIRECT	; No, save it without code
+	POPJ	P,		;  and return
+;	REDSYM -- Reads entire symbol table from the disk and, while
+;checksumming it, searches for matching symbols.
+
+;CALL WITH:
+;	Directory in DIRECT
+;	File open
+;RETURNS:
+;	CHKSUM (should match monitor's computation)
+;	Symbolic breakpoints converted to virtual addresses
+
+
+REDSYM:	PUSHJ	P,GETSYM	; Get symbol table
+	SETZM	CHKSUM		; Clear checksum
+CHKTBL:	ANDI	T1,777		; Use offset for index
+	MOVEI	P3,^D512	; Set length of page
+	SUB	P3,T1
+	MOVNS	P3		; - # of words to read this page
+	CAMG	P3,SYMLEN	;  unless not full page of syms
+	MOVE	P3,SYMLEN
+	HRL	T1,P3		; Make an AOBJN pointer
+	PUSHJ	P,SUMSYM	; Checksum the table
+	MOVNS	P3		; How many done?
+	ADDM	P3,SYMLEN
+	SKIPL	SYMLEN		; Done?
+	POPJ	P,		; Yes. Return
+	PUSHJ	P,NXTSYM	; No.  Get another page
+	JRST	CHKTBL		;  and process it
+
+;	GETSYM -- reads the first symbol table page
+;CALL WITH:
+;	No arguments
+;RETURNS:
+;	First symbol table page in INBUFF
+;	odd/even start flag set (so we know which is symbol in pair)
+;	Start address of symbol table
+;	Length of symbol table
+
+GETSYM:	MOVEI	T1,.JBSYM	; Get pointer from file
+	PUSHJ	P,FNDVIR
+	JUMPLE	T2,[HLREM  T2,SYMLEN	; If old style symbol pointer then
+		    HRRZM  T2,SYMST	;  save length and start of table
+		    JRST   GOTSYM]	; Continue
+	PUSH	P,P1		; Save P1
+	PUSH	P,P2		; and P2
+	MOVE	P2,T2		; Save address of extended symbol vector
+	MOVE	T1,P2		; Get address of symbol vector
+	ADDI	T1,.SYCNT	; Fetch symbol vector count word
+	PUSHJ	P,FNDVIR	; ...
+	SUBI	T2,1		; Account for word just read
+	ADDI	P2,1		; ...
+	IDIVI	T2,.SYSTL	; Compute sub-entry count of symbol vector
+	SKIPA	P1,T2		; Save sub-entry count in P1 and enter loop
+GETSY1:	ADDI	P2,.SYSTL	; Adjust vector address to next sub-entry
+	SOJL	P1,GETSY2	; Quit at end of symbol vector
+	MOVE	T1,P2		; Get sub-entry address
+	ADDI	T1,.SYTYP	; Fetch sub-entry type word
+	PUSHJ	P,FNDVIR	; ...
+	LDB	T1,[POINTR (T2,SY.TYP)] ; Get sub-entry type code
+	CAIE	T1,.SYR5D	; Is this the RADIX-50 defined symbol table?
+	JRST	GETSY1		; No, loop back to check next sub-entry
+	LDB	T1,[POINTR (T2,SY.LEN)] ; Get length of symbol table
+	MOVNM	T1,SYMLEN	; Save negative length for later
+	MOVE	T1,P2		; Get sub-entry address
+	ADDI	T1,.SYADR	; Fetch sub-entry symbol table address word
+	PUSHJ	P,FNDVIR	; ...
+	MOVEM	T2,SYMST	; Save for later
+GETSY2:	POP	P,P2		; Restore P2
+	POP	P,P1		; And P1
+GOTSYM:	MOVE	T2,SYMST	; Get starting address of symbol table
+	TRNN	T2,1		; Starting at odd location?
+	TLZA	F,SYMBEG	; No.  Flag start at even
+	TLO	F,SYMBEG	; Yes.  Flag odd
+	MOVE	T1,SYMST
+	PJRST	FNDVIR		; Read first symbol table page
+;	NXTSYM -- reads next symbol table page
+;CALL WITH:
+;	SYMST pointing to last page read (virtual)
+;RETURNS:
+;	Next page in INBUFF
+;	Symst pointing to new page (virtual address)
+
+NXTSYM:	MOVE	T1,SYMST	; Get last page
+	ADDI	T1,1000		; Increment it
+	TRZ	T1,777		; Get rid of any offset
+	MOVEM	T1,SYMST	; Save for next time
+;;;     PJRST	FNDVIR		; Read it and return
+;	FNDVIR -- Find a word in an .EXE file
+
+;CALL WITH:
+;	T1 -- Virtual address you want the contents of
+;	   -- Channel 0 open to the disk file
+;	   -- Directory for file in DIRECT
+;RETURNS:
+;	T1 -- -1 if page was not read because it was allocated but zero
+;		or the virtual address if the page was read into INBUFF
+;	T2 -- Contains the contents of the desired virtual address
+;ERRORS:
+;	(ALL FATAL)
+;	1.  EOF while reading directory page
+;	2.  Bad .EXE file (directory wrong)
+;	3.  Desired address not in the directory
+;	4.  EOF reached before desired address found
+
+FNDVIR:	PUSH	P,T1		; Save virtual address desired
+	LSH	T1,-^D9		; Just look at page
+	MOVEI	T4,1		; Initialize buffer index
+	MOVE	C,DIRECT	; Get word count of directory
+FNDLUP:	SUBI	C,2		; Decrement directory count
+	SKIPG	C		; Still have entries?
+	FATL	Desired address not in .EXE file
+	AOS	T4		; Point to virtual page
+	LDB	T2,[POINT 9,DIRECT(T4),8]	; Get repeat count 
+	HRRZ	T3,DIRECT(T4)	;  and first page in group
+	ADD	T2,T3		; Make last page in range
+	CAMG	T1,T2		; Desired page in range?
+	CAMGE	T1,T3
+	AOJA	T4,FNDLUP	; No.  Keep trying.
+	SUB	T1,T3		; Yes.  Find offset from page 1
+	HRRZ	T2,DIRECT-1(T4)	; Now get file page #
+	JUMPE	T2,NOTALC	; Return zero if not allocated
+	ADD	T1,T2		; Find file page to read
+	PUSHJ	P,RDPAGE	; Go read it
+	  FATL	EOF before address found	;If directory is wrong
+	MOVE	T1,(P)		; Get desired address back
+	ANDI	T1,777		; Just the offset
+	SKIPA	T2,INBUFF(T1)	; Get desired word
+NOTALC:	SETOM	(P)		; Flag page not in file
+	POP	P,T1		; Get virtual address back
+	POPJ	P,		;  and go away
+;	RDPAGE -- Read a selected page from an .EXE file
+
+;CALL:
+;	T1 -- CONTAINS PAGE NUMBER TO READ
+;	     -- CHANNEL 0 OPEN TO AN EXE FILE
+;RETURNS:
+;	T1 -- FIRST BLOCK READ
+;	INBUFF -- THE PAGE READ FROM DISK
+;	NON-SKIP -- EOF WAS ENCOUNTERED
+;	SKIP -- PAGE WAS SUCCESSFULLY READ
+;ERRORS:
+;	FATAL -- ANY I/O ERROR DURING THE READ
+
+RDPAGE:	LSH	T1,2		;MAKE PAGE A BLOCK #
+	USETI	1(T1)		;SET TO FIRST BLOCK IN PAGE
+	IN	[IOWD ^D<512+128>,INBUFF
+		 0]
+	  JRST	RDPAG1		;SUCCESSFULLY READ A PAGE
+	STATO	IO.EOF		;GET AN EOF?
+	  FATL	I/O error reading .EXE file
+	USETI	1(T1)		;SET UP TO FIRST BLOCK IN PAGE AGAIN
+	IN	[IOWD ^D512,INBUFF
+		 0]		;TRY TO READ JUST THE SINGLE PAGE
+RDPAG1:	  AOSA	(P)		;SUCCESSFULLY READ A PAGE
+	STATZ	IO.EOF		;GET AN EOF?
+	  POPJ	P,		;YES, NON-SKIP RETURN
+	FATL	I/O error reading .EXE file
+;	SUMSYM -- Checksums monitor symbol table and calls CMPCHK to see
+;		  if each symbol may be one we're looking for.
+; Call with:
+;	Symbol table page in INBUFF
+;	T1 containing AOBJ pointer to symbols in INBUFF
+; Returns:
+;	Current page checksummed
+;	Symbols in BRKLST and REFLST converted to addresses
+
+SUMSYM:	MOVE	T3,INBUFF(T1)	; Get a symbol table word
+	EXCH	T3,CHKSUM	; Checksum it
+	ROT	T3,1
+	ADD	T3,CHKSUM
+	EXCH	T3,CHKSUM
+	PUSHJ	P,CMPCHK	; See if time to compare syms
+	AOBJN	T1,SUMSYM	; Loop thru page
+	POPJ	P,		; Then get out
+
+CMPCHK:	TRNE	T1,1		; Odd location?
+	JUMPL	F,COMSYM	; Yes. if odd first,compare sym
+	TRNN	T1,1		; Even location?
+	JUMPGE	F,COMSYM	; Yes. if even first, compare sym
+	POPJ	P,		; Not a symbol. no compare.
+
+COMSYM:	MOVE	C,INBUFF(T1)	; Save symbol for compare
+	MOVE	T2,C		;  in case of multiple defns.
+	TXZ	T2,BP.ALL	; This symbol is nothing (yet)
+	TXNE	C,R50GLB	; Is it global?
+	TXO	T2,BP.GLB	; Yes, light magic bit
+	MOVEM	T2,NEWSYM	; Save that symbol!
+	MOVE	P1,BRKBEG	; Prepare to check breaks
+COMLUP:	MOVE	P2,P1
+	LSH	P2,1
+	MOVE	T3,B.OURS-1(P1)	; Get the symbol
+	MOVEM	T3,OLDSYM	; Save as OLDSYM
+	XOR	T3,C		; Compare versus this one
+	TXZ	T3,BP.ALL	; Skip flag bits
+	JUMPN	T3,NOMTCH	; No match
+
+; Match !
+
+	MOVE	T2,INBUFF+1(T1)	; Get the value
+	MOVEM	T2,NEWVAL	; Call it NEWVAL
+	SKIPL	B.OURS-1(P1)	; Already defined?
+	JRST	SETNEW		; No, just set it up
+
+; Falls thru to next page ...
+; Falls in from last page ...
+
+; Symbol is already defined!  See about conflicts, etc.
+
+	MOVE	T2,BRKLST-2(P2)	; Get what will now be
+	MOVEM	T2,OLDVAL	;  OLDVAL, too
+	PUSHJ	P,MULTCH	; See about multiples
+SETNEW:	MOVE	T2,NEWVAL	; Get new value
+	MOVEM	T2,BRKLST-2(P2)	; Save it
+	MOVE	T2,NEWSYM	; Get new symbol
+	TXO	T2,BP.DEF	; It is now defined
+	MOVEM	T2,B.OURS-1(P1)	; Save it, too
+
+NOMTCH:	SOJG	P1,COMLUP	; Loop until done
+
+	SKIPN	P1,REFCNT	; Any references?
+	POPJ	P,		; No references, no work
+RXLOOP:	MOVE	T3,R.OURS-1(P1)	; Get a symbol
+	MOVEM	T3,OLDSYM	; Save as OLDSYM
+	XOR	T3,C		; Mix it up a little
+	TXZ	T3,BP.ALL	; Skip flag bits
+	JUMPN	T3,RXCONT	; Found a match?
+
+	MOVE	T3,INBUFF+1(T1)	; Yes -- get the value and
+	MOVEM	T3,NEWVAL	; Save it as NEWVAL for now
+	SKIPL	R.OURS-1(P1)	; Already defined?
+	JRST	REFNEW		; No, use this value
+
+; Symbol is already defined!  See about conflicts, etc.
+
+	MOVE	T2,REFLST-1(P1)	; Get the old value and
+	MOVEM	T2,OLDVAL	;  save for comparison
+	PUSHJ	P,MULTCH	; Set up [NEWSYM,NEWVAL]
+REFNEW:	MOVE	T2,NEWVAL	; Take returned stuff (even if
+	MOVEM	T2,REFLST-1(P1)	;  same value as before)
+	MOVE	T2,NEWSYM	; Get the symbol (NEW or OLD)
+	TXO	T2,BP.DEF	; Make it defined
+	MOVEM	T2,R.OURS-1(P1)	;  in our flag area
+RXCONT:	SOJG	P1,RXLOOP	; Loop thru our symbols
+	POPJ	P,		; Done scanning symbols, return
+
+; Special logic to see what to do with multiply-defined symbols.
+; Enter with [OLDSYM,OLDVAL] containing (our) symbol+flags, value
+;  pair and likewise for [NEWSYM,NEWVAL].  To be honest, this is
+;  an edit and rather than polish every machine cycle I'm just
+;  going to come up with a usable interface.  You other hackers
+;  out there can do it right yourselves.
+
+; Returns information to use in [NEWSYM,NEWVAL]
+
+MULTCH:	PUSH	P,T1		; T1 points to disk buffer (!)
+	PUSHJ	P,BMNOIL	; Go check it out
+	POP	P,T1		; Restore "preserved temporary"
+	POPJ	P,		;  and return
+
+BMNOIL:	MOVX	T2,BP.GLB	; A useful flag
+	MOVE	T1,OLDVAL	; Get OLDVAL
+	CAMN	T1,NEWVAL	; Are values same?
+	JRST	CHKGLB		; Yes, see if its now global
+	TDNN	T2,OLDSYM	; Different values.  Is old global?
+	JRST	OLDLOC		; Old is local.  Check new.
+	TDNE	T2,NEWSYM	; Old is global.  Is new too?
+	JRST	SETMUL		; Yep--some jerk has a muldefglb!
+	MOVEM	T1,NEWVAL	; Nope.  Use old value-its global
+	MOVE	T1,OLDSYM	; Return value (OLDSYM) in NEWSYM
+	MOVEM	T1,NEWSYM	;  ...
+	POPJ	P,		; And finally return
+
+OLDLOC:	TDNN	T2,NEWSYM	; Old is local.  Is new?
+	JRST	SETMUL		; Yep.  Multiply-defined locals
+	JRST	SETOKG		; New is global.  Use [NEWVAL,NEWSYM]
+
+CHKGLB:	TDNN	T2,OLDSYM	; Values equal.  Old one global?
+	POPJ	P,		; No-use [NEWSYM,NEWVAL]
+SETOKG:	MOVX	T2,BP.DEF!BP.GLB; Set new symbol to be global
+	IORM	T2,NEWSYM	;  and defined.
+	MOVX	T2,BP.MUL	;  and clear any multiples that
+	ANDCAM	T2,NEWSYM	;  happen to be around
+	POPJ	P,		;  happy, return
+
+SETMUL:	MOVX	T2,BP.DEF!BP.MUL; Make this multiply-defined
+	IORM	T2,NEWSYM	; in NEWSYM
+	POPJ	P,		; Unhappy, return
+;	FORMIT -- After symbols have been translated, come here
+; to convert breakpoint symbol to virtual address, and set up
+; breakpoint dispatch table.
+; Call with:
+;	BRKLST values set up
+; Returns:
+;	BRKLST dispatch instructions set up
+
+FORMIT:	SKIPN	P1,BRKBEG	; Number of breakpoints in P1
+	POPJ	P,		; ??? No breakpoints, no work
+FORMLP:	MOVE	P2,P1		; For indexing into BRKLST
+	LSH	P2,1		;  we count P2 = P1 pairs
+	HLRZ	C,BRKLST-1(P2)	; Get offset in bits 27-35
+	LSH	C,^D27		; Allow for negative offsets
+	ASH	C,-^D27		; There we go
+	ADDM	C,BRKLST-2(P2)	; Form monitor virtual address
+	HRRZ	C,BRKLST-1(P2)	; Get code to execute
+	MOVEM	C,BRKDSP(P1)	; Save it in dispatch list
+	MOVEI	C,DSPIDX(P1)	; Pick up dispatch address
+	HRLI	C,(PUSHJ %P,0)	; Form instruction
+	MOVEM	C,BRKLST-1(P2)	; And save it for SNOOP.
+	SOJG	P1,FORMLP	; Go do next one
+	POPJ	P,		; And return
+;	LOKSEG -- LOCKs low segment into contiguous EVM
+
+;Call: (no arguments)
+;Returns:
+;	-- Low segment LOCKed in core
+;Errors: (all fatal)
+
+
+LOKERR:	E LOCK not implemented
+	E no LOCK privilege
+	E If LOCKed couldn't run largest existing job
+	E If LOCKed couldn't guarantee cormin
+	E No room in EVM
+	E Illegal subfunction
+	E Page unavailable
+	E Tried to LOCK again in an illegal way
+
+LOKSEG:	TRZ	F,RETRY		; Init retry flag
+LOKSE1:	MOVEI	T1,LK.LNP+LK.LLS; Set up LOCK bits
+	LOCK	T1,		; Attempt to lock
+	  SKIPA	T2,LOKERR(T1)	; Failed. Get message
+	POPJ	P,		; Success. Exit.
+	CAIL	T1,2		; Possible to recover?
+	CAILE	T1,4
+	SKIPA			; No.
+	TRCE	F,RETRY			
+	JRST	[OUTSTR @T2	; Can't recover
+		 EXIT]
+	MOVEI	T1,5		; Try again after 5 seconds
+	SLEEP	T1,
+	JRST	LOKSE1
+;	CNVADR -- Relocates breakpoint dispatch code and addresses
+;This is necessary because when a breakpoint happens, mapping is through
+;the EBR and the code is still user virtual memory.
+;CALL WITH:
+;	T1 -- Exec virtual page of our program
+;Returns:
+;	All necessary locations relocated to exec virtual addresses
+
+CNVADR:	TLZ	T1,-1		; Ignore any high seg page number
+	LSH	T1,^D9		; Make page an address
+	MOVEM	T1,EVBASE	; Save it for breakpoint dispatch code
+	MOVEI	T2,<2*M.BRKN>	; Set to relocate tables
+CNVLUP:	ADDM	T1,DSPADR(T2)	; Relocate a table word
+	SOJGE	T2,CNVLUP	; Until done
+	ADDM	T1,IDXCHG	; Relocate reference instruction
+	ADDM	T1,EVGET	; Reloc get-EVA-base instruction
+	MOVE	P1,BRKBEG	; Now change breakpoint instructions
+	SUBI	P1,1		; Convert back from SNOOP. argument
+	LSH	P1,-1		;  length to number of breakpoints.
+CNVBRK:	MOVE	P2,P1		; Next breakpoint
+	LSH	P2,1		; Account for 2-word entry
+	ADDM	T1,BRKLST-1(P2)	; Relocate
+	SOJG	P1,CNVBRK	; Do all breakpoints
+	POPJ	P,		; and return
+;	BREAKPOINT DISPATCH AREA -- ALL BREAKPOINTS COME HERE FIRST
+
+EVBASE:	Z				;RELOCATION SAVED BY LOCK RETURN
+
+;The following list of PUSHJs are to tell GETREL where to go. 
+;Relocate DSPADR to end of DSPIDX plus IDXCHG and EVGET.
+DSPADR:	BRKDSP
+
+BRKDSP:	BLOCK M.BRKN			;BREAKPOINT CODE DISPATCH TABLE
+DSPIDX:	REPEAT M.BRKN,<
+	PUSHJ	%P,GETREL
+	>
+
+;	GETREL -- The breakpoint dispatch routine executed first by all
+;breakpoints. It saves %R and sets it to the relocation value
+;before going off to the user breakpoint code. When
+;the fault code returns, %R is restored and a skip-return from
+;the user code will be propagated back to the monitor.
+
+
+GETREL:	EXCH	%R,(%P)			;GET CALL. SAVE AC
+IDXCHG:	SUBI	%R,DSPIDX+1		;GET ADDRESS TABLE INDEX
+	HRLI	%R,20			;SET INDIRECT BIT
+EVGET:	PUSH	%P,EVBASE		;SAVE RELOCATION
+	EXCH	%R,(%P)			;GET RELOCATION. SAVE INDEX
+	PUSH	%P,DSPADR(%R)		;SAVE RELOCATED DISPATCH ADDRESS
+	EXCH	%R,(%P)			;SAVE BASE. GET DISPATCH
+	ADDM	%R,-1(%P)		;ADD RELOCATED DISPATCH TO INDEX
+	POP	%P,%R			;GET BASE FOR USER CODE
+	PUSHJ	%P,@(%P)		;GO TO USER CODE
+	CAIA				;NON-SKIP RETURN
+	AOS	-2(%P)			;PROPAGATE SKIP-RETURN
+	POP	%P,(%P)			;REMOVE DISPATCH
+	POP	%P,%R			;RESTORE ORIGINAL MONITOR AC
+	POPJ	%P,			;RETURN TO MONTIOR
+	XLIST
+	LIT
+	LIST
+LOKEND:	Z				;LAST LOCATION BEFORE CORE REDUCTION
+
+; Storage for symbols supplied by user (MONREF/BRKPNT).
+
+
+B.OURS:	BLOCK	M.BRKN	; Breakpoints
+R.OURS:	BLOCK	M.REFN	; References
+OLDSYM:	BLOCK	1
+OLDVAL:	BLOCK	1
+NEWSYM:	BLOCK	1
+NEWVAL:	BLOCK	1
+ENDCAM==.		; End of our symbol area
+
+;Page buffer and directory buffer for disk copy of monitor. This
+;portion is given up prior to locking the job in core since it is
+;only used to get the symbol table.
+;(In advanced mode, core not given up since caller may need it)
+
+
+DIRECT:	BLOCK	^D128		; Directory goes here
+INBUFF:	BLOCK	^D512		; EXE file pages go here
+	BLOCK	^D128		; What a crock.  See revision
+				;  history for the explanation.
+	END

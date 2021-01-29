@@ -1,0 +1,21 @@
+LISA {r en |vers{ttning till svenska av programmet DOCTOR och dess
+databas ELIZA. Allra ursprungligast skrevs DOCTOR av Joseph
+Weizenbaum i ett numera utd|tt programspr}k. DOCTOR-programmet har
+g}tt i generationer och |versatts till m}nga spr}k. Just den h{r
+versionen {r en |vers{ttning till MacLisp fr}n en version i Lisp
+1.6 skriven av Tony Lauck. Anpassningen till MacLisp och
+|vers{ttningen till svenska har utf|rts av Martin Nilsson.
+
+Programmet startas med kommandot:
+
+.R GAM:LISA
+
+Sedan kan man konsultera doktorn med dina problem. Tryck tv} g}nger
+p} RETURN-tangenten d} du svarat p} en fr}ga. F|r att avsluta
+konsultationen s} kan man trycka p} CONTROL-Z (h}ll ner knapp m{rkt
+CTRL och tryck sedan samtidigt p} Z-tangenten).
+
+Den engelskspr}kiga versionen av LISA finns p} GAM:ELIZA. G|r "DO
+GAM:ELIZA" f|r att starta den versionen.
+
+	<Slut p} GAM:LISA.HLP - 820319/SO/MN>

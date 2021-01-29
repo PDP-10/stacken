@@ -1,0 +1,73 @@
+	RX20 (un)support package for TOPS-10 7.03
+
+
+    Contents, Installation Instructions, and General Cautions
+
+
+
+RX20 (un)support allows TOPS-10 running on a KS20 (2020) system to (un)support
+up to 2 RX211 floppy disk controllers, with up to 2 RX02 drives on each
+controller.  The (un)support provided is that of a non-file-structured device.
+Some preliminary utilities are provided which may read DOS (or KLDCP or
+RXDP) and RT format floppys.  
+
+Installation instructions:
+__________________________
+
+To install RX20 (un)support, you will require the Field Image TOPS-10 7.03
+distribution.  
+The following files from the customer (un)supported tape are required:
+
+Monitor modules:
+	UNSUP.FIL	- Adds new modules to assembly and LINK templates
+	RX2SER.MAC	- Device service routine
+
+Documentation:
+	RX20.DOC	- Monitor Calls insert for RX20s
+	RX20.INS	- This file
+
+Actual installation is fairly straightforward.  Perform the following steps.
+	1. Use the MUNGEN dialog (in MONGEN) to INCLUDE the RX20 questions.
+	   Procede thru the HDWCNF dialog.
+	2. Ensure that the files from the customer supported tape are in
+	   your build area.  UNSUP.FIL will cause the distributed monitor
+	   build procedure to assemble ALL of the KS unsupported modules.
+	3. Finish building your monitor according to the 7.03 Software 
+	   Installation guide.
+
+Hardware Installation:
+______________________
+Installation of the RX211 subsystem is performed exactly according
+to the RX02 User's Guide and Technical Manuals.  Note that the NPG jumper
+must be cut on the SPC backplane.  A convenient slot for the M8256 module is
+in the tape RH11 backplane, which on all supported KS10s has 4 free SPC
+slots.
+
+Un(un)supported Un(un)supported Tools:
+______________________________________
+
+Format conversion utilities:
+	ASC210	- Converts PDP-11 ASCII files to PDP-10 format.
+	ASC211	- Performs the inverse
+
+	Command syntax: output.fil=input.fil
+
+
+Foreign media readers:
+	DOS210	- Extracts all files from a DOS format diskette
+		  Help provided when run.  Use ASC210 on ASCII output.
+	RTFLX	- RT11 Floppy PIP.  Also will format disks under TS.
+		  Use HELP command.  RTFLX.HLP.
+	WPS	- Reads WPS-8 diskettes and produces DEC Standard Runoff.
+		  Provide WPS document number, output is WPSnnn.RNO.
+		  Read document 1 (the WPS index) to locate documents.
+		  Don't specify a drive number.  .ASSIGN RXan: RX:
+
+Diagnostics:
+	RX02	- Diagnostic bootstrap.  Modified DDT11.  Command is
+		  (EXEC mode) /UBA:3/CORE:28K/PATCH/LA36/GO <CR> 2000$G
+		  Useful Diagnostics:
+		  ZRXC*,ZRXD*,ZRXE*,ZRXF*
+		  These may be obtained from your friendly Field Service Tech.
+		  * is a variable revision level.  Some may require the
+		  diagnostic supervisor.  Be patient--they are S L O W.

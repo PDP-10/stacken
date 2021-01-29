@@ -1,0 +1,253 @@
+		LINK symbol map of	FUR	version 2P(75)		page 1
+	Produced by LINK version 6(2420) on 20-Feb-103 at 13:00:53
+
+	Low  segment starts at	     0 ends at	  2112 length	  2113 = 3P
+	High segment starts at	640000 ends at	664050 length	 24051 = 21P
+	437 words free in Low segment, 471 words free in high segment
+	287 Global symbols loaded, therefore min. hash size is 319
+	Start address is 640010, located in program FUR
+
+		*************
+
+JOBDAT-INITIAL-SYMBOLS
+	%JOBDT      43300000457	Global	Absolute    Suppressed	.JB41                41	Global	Absolute    	
+	.JBAPR              125	Global	Absolute    		.JBBLT               45	Global	Absolute    	
+	.JBCHN              131	Global	Absolute    		.JBCNI              126	Global	Absolute    	
+	.JBCOR              133	Global	Absolute    		.JBCST              136	Global	Absolute    	
+	.JBDA               140	Global	Absolute    		.JBDDT               74	Global	Absolute    	
+	.JBEDV              112	Global	Absolute    		.JBERR               42	Global	Absolute    	
+	.JBFF               121	Global	Absolute    		.JBH41                1	Global	Absolute    Suppressed
+	.JBHCR                2	Global	Absolute    Suppressed	.JBHDA               10	Global	Absolute    Suppressed
+	.JBHGA                7	Global	Absolute    Suppressed	.JBHGH           400000	Global	Absolute    Suppressed
+	.JBHNM                5	Global	Absolute    Suppressed	.JBHRL              115	Global	Absolute    	
+	.JBHRN                3	Global	Absolute    Suppressed	.JBHSA                0	Global	Absolute    Suppressed
+	.JBHSM                6	Global	Absolute    Suppressed	.JBHVR                4	Global	Absolute    Suppressed
+	.JBINT              134	Global	Absolute    		.JBOPC              130	Global	Absolute    	
+	.JBOPS              135	Global	Absolute    		.JBOVL              131	Global	Absolute    	
+	.JBPFH              123	Global	Absolute    		.JBPFI               74	Global	Absolute    	
+	.JBREL               44	Global	Absolute    		.JBREN              124	Global	Absolute    	
+	.JBSA               120	Global	Absolute    		.JBSYM              116	Global	Absolute    	
+	.JBTPC              127	Global	Absolute    		.JBUSY              117	Global	Absolute    	
+	.JBUUO               40	Global	Absolute    		.JBVER              137	Global	Absolute    	
+
+		*************
+
+FUR	from DSK:FUR.REL[10,10,FUR]	created by MACRO on 20-Feb-103 at 12:48:00
+	Low  segment starts at	   140 ends at	   665 length	   526 (octal),   342. (decimal)
+	High segment starts at	640010 ends at	646722 length	  6713 (octal),  3531. (decimal)
+
+	GOBAK            643067	Global	Relocatable 		STKMEM           644022	Global	Relocatable 	
+	STQMEM           644044	Global	Relocatable 		TTYOUT           644556	Global	Relocatable 	
+	%%FUR         220000075	Global	Absolute    Suppressed
+		*************
+
+.HELPR	from REL:HELPER.REL[5,11]	created by MACRO on  4-Jan-90 at 21:57:00
+	High segment starts at	646723 ends at	647133 length	   211 (octal),   137. (decimal)
+
+	HELPER           646723	Entry	Relocatable 	
+	%HELPR        707000057	Global	Absolute    Suppressed	.HELPR           646724	Entry	Relocatable 	
+
+		*************
+
+.SCAN	from REL:SCAN.REL[5,11]	created by MACRO on  1-Sep-88 at 18:38:00
+	Low  segment starts at	   666 ends at	  1465 length	   600 (octal),   384. (decimal)
+	High segment starts at	647134 ends at	656602 length	  7447 (octal),  3879. (decimal)
+
+	E.DSI            652515	Global	Relocatable 		E.FMI            650264	Global	Relocatable 	
+		LINK symbol map of	FUR	version 2P(75)		page 2
+.SCAN
+	E.FMO            650262	Global	Relocatable 		E.ILSC           650267	Global	Relocatable 	
+	E.INCL           650266	Global	Relocatable 		E.SVNG           652527	Global	Relocatable 	
+	E.SVR            652531	Global	Relocatable 		E.SVTL           652525	Global	Relocatable 	
+	E.UKK            652505	Global	Relocatable 		F.NAM              1303	Global	Relocatable 	
+	N.CORE              755	Global	Relocatable 		N.EZER              754	Global	Relocatable Suppressed
+	N.OFFS              756	Global	Relocatable 		N.ZER               733	Global	Relocatable Suppressed
+	%%%SCN                7	Global	Absolute    Suppressed	%%SCAN        705000667	Global	Absolute    Suppressed
+	.ALDON           650241	Global	Relocatable 		.AS8QC           653740	Global	Relocatable 	
+	.AS8QW           653737	Global	Relocatable 		.ASCQC           653764	Global	Relocatable 	
+	.ASCQW           653763	Global	Relocatable 		.BLOKC           653550	Global	Relocatable 	
+	.BLOKW           653547	Global	Relocatable 		.CCLRB           655163	Global	Relocatable 	
+	.CHRQC           653721	Global	Relocatable 		.CHRQW           653720	Global	Relocatable 	
+	.CKNEG           653713	Global	Relocatable 		.CLRBF           655165	Global	Relocatable 	
+	.CLRFL           650546	Global	Relocatable 		.CLSNS           651050	Global	Relocatable 	
+	.COREC           653557	Global	Relocatable 		.COREW           653556	Global	Relocatable 	
+	.DATIC           652623	Global	Relocatable 		.DATIF           652601	Global	Relocatable 	
+	.DATIG           652602	Global	Relocatable 		.DATIM           652622	Global	Relocatable 	
+	.DATIP           652612	Global	Relocatable 		.DATIQ           652613	Global	Relocatable 	
+	.DECNC           653616	Global	Relocatable 		.DECNW           653615	Global	Relocatable 	
+	.FILIN           650460	Global	Relocatable 		.FMSG            655060	Global	Relocatable 	
+	.FMSGD           655072	Global	Relocatable 		.FMSGE           655130	Global	Relocatable 	
+	.FMSGF           655112	Global	Relocatable 		.FMSGN           655066	Global	Relocatable 	
+	.FMSGO           655076	Global	Relocatable 		.FMSGX           655137	Global	Relocatable 	
+	.GTIND           650316	Global	Relocatable 		.GTSPC           650715	Global	Relocatable 	
+	.ISCAN           647134	Entry	Relocatable 		.KEYWD           651063	Global	Relocatable 	
+	.KLIND           655012	Global	Relocatable 		.LASWD             1433	Global	Relocatable 	
+	.LEFTX           653536	Global	Relocatable 		.MKPJN           647266	Global	Relocatable 	
+	.MNRET           655225	Global	Relocatable 		.MONRT           655216	Global	Relocatable 	
+	.MYPPN              666	Global	Relocatable 		.NAME            653443	Global	Relocatable 	
+	.NAMEC           653331	Global	Relocatable 		.NAMEW           653330	Global	Relocatable 	
+	.NMUE              1432	Global	Relocatable Suppressed	.NMUL              1375	Global	Relocatable 	
+	.NOCTC           653316	Global	Relocatable 		.NOCTW           653315	Global	Relocatable 	
+	.NOQTE              730	Global	Relocatable 		.OCTNC           653652	Global	Relocatable 	
+	.OCTNW           653651	Global	Relocatable 		.OPTN              1372	Global	Relocatable 	
+	.OSCAN           647733	Global	Relocatable 		.OSDFS           651015	Global	Relocatable 	
+	.PSCAN           650125	Global	Relocatable 		.QSCAN           650144	Global	Relocatable 	
+	.QUOTE              731	Global	Relocatable 		.REEAT           654352	Global	Relocatable 	
+	.RUNCM           650371	Global	Relocatable 		.SCANL              600	Global	Absolute    Suppressed
+	.SCANZ              666	Global	Relocatable Suppressed	.SENEG           653707	Global	Relocatable 	
+	.SIXKC           654026	Global	Relocatable 		.SIXKW           654025	Global	Relocatable 	
+	.SIXMC           654046	Global	Relocatable 		.SIXMW           654045	Global	Relocatable 	
+	.SIXQC           654042	Global	Relocatable 		.SIXQW           654041	Global	Relocatable 	
+	.SIXSC           654012	Global	Relocatable 		.SIXSW           654011	Global	Relocatable 	
+	.STOPN           655055	Global	Relocatable 		.SWAS8           653737	Global	Relocatable Suppressed
+	.SWASQ           653763	Global	Relocatable Suppressed	.SWCHR           651350	Global	Relocatable 	
+	.SWCOR           651346	Global	Relocatable 		.SWDEC           651342	Global	Relocatable 	
+	.SWDON           660266	Global	Relocatable Suppressed	.SWDPB           652035	Global	Relocatable 	
+	.SWDTF           652601	Global	Relocatable Suppressed	.SWDTM           652622	Global	Relocatable Suppressed
+	.SWDTP           652612	Global	Relocatable Suppressed	.SWFIL           651352	Global	Relocatable 	
+	.SWHLP           651502	Global	Relocatable 		.SWMAX           652022	Global	Relocatable 	
+	.SWOCT           651344	Global	Relocatable 		.SWSIX           654011	Global	Relocatable Suppressed
+	.SWSXM           654045	Global	Relocatable Suppressed	.SWSXQ           654041	Global	Relocatable Suppressed
+	.TERRP           655235	Global	Relocatable 		.TIALT           654126	Global	Relocatable 	
+	.TIAUC           654112	Global	Relocatable 		.TICAD           654073	Global	Relocatable 	
+		LINK symbol map of	FUR	version 2P(75)		page 3
+.SCAN
+	.TICAN           654077	Global	Relocatable 		.TICHE           654406	Global	Relocatable 	
+	.TICHG           654130	Global	Relocatable 		.TICHR           654176	Global	Relocatable 	
+	.TICHT           654377	Global	Relocatable 		.TICQT           654120	Global	Relocatable 	
+	.TIGET           654443	Global	Relocatable 		.TIMUC           654113	Global	Relocatable 	
+	.TISQT           654123	Global	Relocatable 		.TSCAN           647376	Global	Relocatable 	
+	.TYPRE           654514	Global	Relocatable 		.VERSC           653446	Global	Relocatable 	
+	.VERSW           653445	Global	Relocatable 		.VQUOT              732	Global	Relocatable 	
+	.VSCAN           647642	Global	Relocatable 	
+		*************
+
+.VERBO	from REL:SCAN.REL[5,11]	created by MACRO on  1-Sep-88 at 18:38:00
+	Low  segment starts at	  1466 ends at	  1467 length	     2 (octal),     2. (decimal)
+	High segment starts at	656603 ends at	656672 length	    70 (octal),    56. (decimal)
+
+	.ERMSA           656604	Entry	Relocatable 	
+	.ERMSG           656603	Entry	Relocatable 		.FLCBF             1467	Global	Relocatable 	
+	.FLVRB             1466	Global	Relocatable 		.VERBO           656652	Entry	Relocatable 	
+	.VRBOL                2	Global	Absolute    Suppressed	.VRBOZ             1466	Global	Relocatable Suppressed
+
+		*************
+
+.TNEWL	from REL:SCAN.REL[5,11]	created by MACRO on  1-Sep-88 at 18:38:00
+	High segment starts at	656673 ends at	656702 length	    10 (octal),     8. (decimal)
+
+	.TNEWL           656673	Entry	Relocatable 	
+		*************
+
+.TOUTS	from REL:SCAN.REL[5,11]	created by MACRO on  1-Sep-88 at 18:38:00
+	Low  segment starts at	  1470 ends at	  1474 length	     5 (octal),     5. (decimal)
+	High segment starts at	656703 ends at	657640 length	   736 (octal),   478. (decimal)
+
+	GUIDL.               12	Global	Absolute    Suppressed
+	GUIDM.     777777777766	Global	Absolute    Suppressed	GUIDT.           657241	Global	Relocatable 	
+	.BYTPT             1473	Global	Relocatable 		.MKPTR           657474	Global	Relocatable 	
+	.T7STR           657455	Global	Relocatable 		.T8STR           657461	Global	Relocatable 	
+	.TASCW           657522	Global	Relocatable 		.TASTR           657553	Global	Relocatable 	
+	.TBLOK           657306	Global	Relocatable 		.TCHAR           657564	Global	Relocatable 	
+	.TCOLN           657555	Global	Relocatable 		.TCOMA           657557	Global	Relocatable 	
+	.TCORW           657312	Global	Relocatable 		.TCRLF           657327	Global	Relocatable 	
+	.TDASH           657545	Global	Relocatable 		.TDATE           657106	Global	Relocatable 	
+	.TDATN           657105	Global	Relocatable 		.TDATZ           657103	Global	Relocatable 	
+	.TDEC2           657154	Global	Relocatable 		.TDECJ           657405	Global	Relocatable 	
+	.TDECW           657365	Global	Relocatable 		.TDECZ           657441	Global	Relocatable 	
+	.TDEVN           657526	Global	Relocatable 		.TDIRB           656773	Global	Relocatable 	
+	.TDTTM           657064	Global	Relocatable 		.TDTTN           657063	Global	Relocatable 	
+	.TDTTZ           657061	Global	Relocatable 		.TFBLK           656753	Global	Relocatable 	
+	.TFCHR           657163	Global	Relocatable 		.TFRFS           656705	Global	Relocatable 	
+	.TLANG           657547	Global	Relocatable 		.TMOHW           657041	Global	Relocatable 	
+	.TOCTJ           657406	Global	Relocatable 		.TOCTW           657364	Global	Relocatable 	
+	.TOCTZ           657442	Global	Relocatable 		.TOFEB           656733	Global	Relocatable 	
+	.TOLEB           656735	Global	Relocatable 		.TOUTL                5	Global	Absolute    Suppressed
+	.TOUTZ             1470	Global	Relocatable Suppressed	.TPPNW           657336	Global	Relocatable 	
+	.TPROT           657530	Global	Relocatable 		.TRANG           657551	Global	Relocatable 	
+	.TRBRK           657345	Global	Relocatable 		.TRDXJ           657407	Global	Relocatable 	
+		LINK symbol map of	FUR	version 2P(75)		page 4
+.TOUTS
+	.TRDXW           657366	Global	Relocatable 		.TRDXZ           657443	Global	Relocatable 	
+	.TSIXJ           657446	Global	Relocatable 		.TSIXN           657347	Global	Relocatable 	
+	.TSIXS           657445	Global	Relocatable 		.TSPAC           657563	Global	Relocatable 	
+	.TSPAN           657536	Global	Relocatable 		.TSTRG           657507	Global	Relocatable 	
+	.TTABC           657561	Global	Relocatable 		.TTIME           657137	Global	Relocatable 	
+	.TTIMN           657136	Global	Relocatable 		.TTIMZ           657134	Global	Relocatable 	
+	.TVERW           657253	Global	Relocatable 		.TXWDW           657356	Global	Relocatable 	
+	.TXWWW           657032	Global	Relocatable 		.TYOCH           656703	Entry	Relocatable 	
+
+		*************
+
+.STOPB	from REL:SCAN.REL[5,11]	created by MACRO on  1-Sep-88 at 18:38:00
+	High segment starts at	657641 ends at	657774 length	   134 (octal),    92. (decimal)
+
+	.STOPB           657641	Entry	Relocatable 	
+		*************
+
+.CNTDT	from REL:SCAN.REL[5,11]	created by MACRO on  1-Sep-88 at 18:38:00
+	High segment starts at	657775 ends at	660136 length	   142 (octal),    98. (decimal)
+
+	.CNTDT           657775	Entry	Relocatable 	
+	.CNVDT           660054	Entry	Relocatable 		.GTNOW           660046	Entry	Relocatable 	
+
+		*************
+
+.GTPUT	from REL:SCAN.REL[5,11]	created by MACRO on  1-Sep-88 at 18:38:00
+	High segment starts at	660137 ends at	660230 length	    72 (octal),    58. (decimal)
+
+	.GTWRD           660175	Entry	Relocatable 		.ISLGI           660215	Entry	Relocatable 	
+	.LKNAM           660137	Entry	Relocatable 		.MKMSK           660206	Entry	Relocatable 	
+	.PTWRD           660202	Entry	Relocatable 	
+		*************
+
+.SAVE	from REL:SCAN.REL[5,11]	created by MACRO on  1-Sep-88 at 18:38:00
+	High segment starts at	660231 ends at	660305 length	    55 (octal),    45. (decimal)
+
+	.POP4T           660300	Entry	Relocatable 	
+	.POPJ            660267	Entry	Relocatable 		.POPJ1           660266	Entry	Relocatable 	
+	.PSH4T           660271	Entry	Relocatable 		.SAVE1           660231	Entry	Relocatable 	
+	.SAVE2           660236	Entry	Relocatable 		.SAVE3           660244	Entry	Relocatable 	
+	.SAVE4           660253	Entry	Relocatable 		.SAVX4           660261	Global	Relocatable 	
+
+		*************
+
+.WILD	from REL:WILD.REL[5,11]	created by MACRO on  5-Sep-88 at  9:40:00
+	Low  segment starts at	  1475 ends at	  2112 length	   416 (octal),   270. (decimal)
+	High segment starts at	660306 ends at	663712 length	  3405 (octal),  1797. (decimal)
+
+	B.DC               2102	Global	Relocatable 		E.DFL            662361	Global	Relocatable 	
+	E.DFO            662337	Global	Relocatable 		E.LKEN           662365	Global	Relocatable 	
+	E.SCL            662041	Global	Relocatable 		E.SCO            662031	Global	Relocatable 	
+	%%%WLD                7	Global	Absolute    Suppressed	%%WILD        704000347	Global	Absolute    Suppressed
+	.CHKTA           661247	Global	Relocatable 		.CHKTM           661243	Global	Relocatable 	
+	.FRCPP             1537	Global	Relocatable Suppressed	.INIST           662735	Entry	Relocatable 	
+		LINK symbol map of	FUR	version 2P(75)		page 5
+.WILD
+	.INSTR           662737	Entry	Relocatable 		.LKERR           662476	Global	Relocatable 	
+	.LKWLD           660306	Entry	Relocatable 		.NXDTW           662321	Global	Relocatable 	
+	.NXSTR           663066	Entry	Relocatable 		.SCWLD           661532	Entry	Relocatable 	
+	.TFILB           662564	Global	Relocatable 		.TFILE           662567	Global	Relocatable 	
+	.WIFIR             1557	Global	Relocatable 		.WILAS             1560	Global	Relocatable 	
+	.WILDL              416	Global	Absolute    Suppressed	.WILDZ             1475	Global	Relocatable Suppressed
+	.WLDBF             1627	Global	Relocatable 		.WLDFL             1547	Global	Relocatable 	
+
+		*************
+
+ENDECR	from REL:ENDECR.REL[5,11]	created by MACRO on 20-Feb-103 at 12:54:00
+	High segment starts at	663713 ends at	664050 length	   136 (octal),    94. (decimal)
+
+	CRASZ.           663713	Entry	Relocatable 		CRSIX.           663751	Entry	Relocatable 	
+	CRYPT.           663756	Entry	Relocatable 	
+		*************
+
+
+	Index to LINK symbol map of	FUR	version 2P(75)		page 6
+
+	Name	Page	Name	Page	Name	Page	Name	Page
+
+	ENDECR	 5	.GTPUT	 4	.SCAN	 1	.TOUTS	 3
+	FUR	 1	.HELPR	 1	.STOPB	 4	.VERBO	 3
+	.CNTDT	 4	.SAVE	 4	.TNEWL	 3	.WILD	 4
+
+	[End of LINK map of	FUR]

@@ -1,0 +1,56 @@
+UNIVERSAL WLDINT - Symbols used internally by WLDPAR and WLDSCN
+;
+;   Written by Sven Erik Enblom in December 1985
+;
+.DIRECTIVE .NOBINARY
+SEARCH	GLXMAC
+
+; AC names for local use
+;
+F==13					; Flag word
+WS==14					; Pointer to current WS
+FP==15					; PDL pointer for channel words
+
+; Flags used internally, always present in local AC F
+;
+F$DEV==1B0				; Device seen
+F$NAM==1B1				; File name seen
+F$EXT==1B2				; Extension seen
+F$PTH==1B3				; Path seen
+F$PRJ==1B4				; Explicit project number seen
+F$PRG==1B5				; Explicit programmer number seen
+F$SLT==7B8				; Search list type (from PATH.)
+F$AFW==1B9				; "**" seen
+F$WFIL==1B10				; Wild file name/extension
+F$FVER==1B11				; File has been verified
+F$LEV0==7B14				; First...
+F$LEV1==7B17				; ...and last "file return" level
+
+FPLSIZ==^D7				; Size of file PDL
+PDLSIZ==^D50				; Size of local PDL
+
+PHASE	0				; Define a wild FD
+FD$FD:!	BLOCK	FDXSIZ			;  Non-wild parts of the file spec
+FD$MSK:!BLOCK	FDXSIZ			;  Wildcard mask words
+  FD$FLG==FD$MSK+.FDSTR			;    Flag word
+FD$SIZ:!DEPHAS
+
+PHASE	0				; Define scanner data block
+WS$FLG:!BLOCK	1			;  Local contents of AC F
+WS$AFL:!BLOCK	1			;  Argument flags from W$NEW
+WS$LEV:!BLOCK	1			;  Current directory level
+WS$P:!	BLOCK	1			;  Local PDL pointer
+WS$FPP:!BLOCK	1			;  Channel word PDL pointer
+WS$OFD:!BLOCK	FDXSIZ			;  "Original" FD
+WS$MSK:!BLOCK	FDXSIZ			;  Mask words
+WS$CFD:!BLOCK	FDXSIZ			;  Current FD
+WS$FPL:!BLOCK	FPLSIZ			;  Channel word PDL
+WS$PDL:!BLOCK	PDLSIZ			;  Local stack
+WS$SIZ:!DEPHAS
+
+DEFINE	RETERR(STRING)<
+	MOVEI	S1,[ASCIZ/STRING/]
+	MOVE	P,ERRPDL
+	$RETF>
+
+END

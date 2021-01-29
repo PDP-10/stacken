@@ -1,0 +1,1156 @@
+	TITLE	SOSCMD - Command Decoder and Dispatcher
+;		--------------------------------------
+; 
+;  This file contains three modules:
+;	1. The Command Decoder and Dispatcher
+;	2. Range specifier routines
+;	3. Line number search
+;	4. The indirect command (@).
+; 
+ 
+	SEARCH	SOSTCS
+	$INIT
+ 
+	SUBTTL	Command Decoder and Dispatcher
+ 
+; Here is the command decoder and dispatcher
+
+; Note that errors during COPY and TRANSFER commands still come back
+; to here and are recovered from by checking the ISCOP flag and
+; branching to the COPY/TRANSFER error recovery routine.
+;
+; Also note that any errors that occur while the user tries to get
+; another filename cause a transfer back to SOSEND.
+
+COMND::	SKIPE	INTFLG##	;WHAT TO READ XSOS.INI
+	 PUSHJ	P,DOINI		;YES--DO IT NOW
+	SETZM	FRCPAG		; Clear assumed page word
+	TRZ	FL,CNTF		; This may still be set
+IFN CKPSW,<
+	PUSHJ	P,WRTBLK##	; Write checkpoint file now
+>
+	SETZM	ACCUM		; Make sure this is clear also
+	SETZM	DELCNT
+	TLO	FL2,BELLF	; Allow bells
+	SKIPE	SVCRLF		; Did this get left setup?  Error or ^C
+	PUSHJ	P,RSCRLF##	; Yes, go restore it now
+	MOVE	T1,TABINI	; Get initial tab setting
+	PUSHJ	P,SETTAB##	; Fix up TAB setting if needed
+	ONECHO			; Make sure this is on
+	SETZM	STOPGF
+	CLEARM	<LOLN,HILN>
+	SETZM	SAVCHR		; Scan should get reset at this point
+	MOVE	T1,LNZERO##
+	SKIPN	CLN		; Is current line zero?
+	MOVEM	T1,CLN		; Make it a real zero then
+	TRZ	FL2,ALLPDF	; Clear process dependent flags
+IFN	%UAHPQ,<
+	PUSHJ	P,HPQOFF##	;[UA WRS] Give the scheduler a break
+>
+	SKIPN	T1,TEMINC	; Temp incr?
+	MOVE	T1,INCR 	; No: use current one
+	MOVEM	T1,INCR 	; Yes: restore old one
+	SETZM	TEMINC		; Clear temp
+	TLNE	FL,SRCOP	; Doing a copy-search
+	JRST	INCOPY		; Yes
+	SKIPE	ISCOP
+	JRST	COPDON##	; Yes, do special clear out
+	SKIPA	P,[IOWD PDLSIZ,PDL]; Reset PDL (In case of errors)
+INCOPY: MOVE	P,COPDL 	; Pick up special search PDL pointer
+	PUSHJ	P,CHKCCI##	; Check for ^C^C
+	SKIPE	ENDFLG		; If trying to get another file
+	JRST	OFIU1##		; Go back and try again
+	SETZM	ERSW		; In case just starting an ER
+	MOVE	T1,SVJFF2	; Nominal .JBFF at command start
+	MOVEM	T1,.JBFF##	; Restore for all to see
+	TDO	T1,CAUNIT	; To next page boundary
+	CAME	T1,.JBREL##	; Growing?
+	CORE	T1,		; Yes, give it back now
+	  JFCL
+	TLZE	FL2,DOENDF	; Need end command?
+	JRST	CMDEND		; Yes: go do it
+; 
+	TLZ	FL2,NORENT!RENTF!L2.NAB	; Clear reenter flags
+	TRNN	FL,READOF	; Avoid auto-save if read-only or...
+	SKIPN	SSAVEN		; Not activated...
+	JRST	CMDA
+	SKIPG	SAVEN		; Ready for auto-save??
+	JRST	CMDSAV		; Yes, go do it
+CMDA:	TRNN	FL2,SUPN	; Suppress * after pretty print
+	SKIPE	COMFLF		; or if in command file
+	CAIA
+	PUSHJ	P,CPRMPT	; Go prompt the user
+	TRZ	FL2,SUPN	; Turn off some bits
+	PUSHJ	P,ENBINT##	; Make sure enabled correctly
+IFN	EXTEND,<
+	MOVEI	T1,LSNUM	; Reset line search strings
+	MOVEM	T1,LSBUFN
+>
+	SKIPN	COMFLF		; In a command file?
+	JRST	CMND1		; No
+	MOVE	T2,LN1##	; Increment command count
+	MOVE	T1,COMCNT
+	PUSHJ	P,ASCIAD##	; Ascii adder
+	MOVEM	T1,COMCNT	; Store
+CMND1:	PUSHJ	P,GNCH##	; Read a character
+	CAIE	C,15
+	JUMPE	CS,CMND1	; Ignore spaces etc
+	TLNE	CS,LETF_16	; Check to see if letter
+	TRZ	C,40		; And convert to upper case
+CMND2:	MOVSI	T1,-CMDLG	; Get length of command table
+; 
+CMND2A: HRRZ	T2,CMD1(T1)	; Get the command letter
+	TRZ	T2,XMODF	; Clear any flags before compare
+	CAIE	C,(T2)		; Compare
+	AOBJN	T1,CMND2A	; Look again if no match
+	JUMPG	T1,CMND3	; If not command, try line number
+	MOVS	T2,CMD1(T1)	; Fetch entry again and swap
+	TLNN	T2,XMODF	; Skip if command modifies file
+	JRST	(T2)		; No, dispatch to command
+	TRNE	FL,READOF	; Yes, are we in read-only mode?
+	NERROR	IRO		; Yep, then this command is an error
+	SOS	SAVEN		; Decrement save count and
+	JRST	(T2)		; Then go do command
+ 
+CMDSL:	PUSHJ	P,GNCH		; Get next character
+	MOVE	CS,CTBL(C)	;  and bits
+	MOVEM	C,SAVC		; Save character for rescan
+	TLNE	CS,LETF_16	; Is it a letter
+	PJRST	SET##		; Yes, treat as set command
+	SETZM	HILN		; Force top of page (line 00000)
+	TRZ	FL2,STARF	; Clear this, since may still be set
+	PUSHJ	P,GETPG		; Get a page number
+	JRST	CMND3A		; Finish unnamed command
+
+; Try to get just a line number
+ 
+CMND3:	MOVEM	C,SAVC		; Back up one character
+	PUSHJ	P,GET1S 	; Get a single line number
+CMND3A:	PUSHJ	P,CKTRMF	; Make sure command is complete
+	DMOVE	T1,HILN		; Line number/Page number parsed
+	DMOVEM	T1,CLN		; Store as new logical position
+	JRST	COMND		; Go back for more
+
+
+; Come here to do auto save
+ 
+CMDSAV:	PUSHJ	P,ASVCOD##	; Do the save
+	JRST	COMND		; Then next command
+ 
+; Here for the null command
+ 
+NULCMD: PUSHJ	P,GNCH		; Grntee LF after CR command
+	CAIE	C,12		; Is it?
+	NERROR	ILC		; No: lose
+	JRST	COMND		; Yes: win
+ 
+CMTCMD:	PUSHJ	P,GNCH		; Get next
+	CAIE	C,12		; Look for terminator
+	JRST	CMTCMD		; Until found
+	JRST	COMND		; Then return
+
+; Here for the form feed command
+FFCMD:	PUSHJ	P,DOFF		;PROCESS <FF>
+	JRST	COMND		;THEN RETURN
+
+DOFF::	SKIPE	COMFLF		;SEE IF IN COMMAND FILE?
+	 POPJ	P,		;YES--IGNORE
+	SKIPE	TMFCLR		;CAN WE CLEAR SCREEN?
+	 XCT	TMFCLR		;YES--CLEAR SCREEN
+	OUTCHR	[15]		;GIVE FREE <CR>
+	POPJ	P,		;AND RETURN
+
+; Here if we need an "E" command
+ 
+CMDEND: MOVEI	C,"E"		; Dummy cmd
+	TLZ	FL2,RENTF	; Clr flag
+	MOVEI	T1,12
+	TLNN	FL,SRCOP	; Need dummy LF if not copy
+	MOVEM	T1,LIMBO
+	JRST	CMND2		; Process
+ 
+
+; Here to tell users that the old quit command is gone
+
+OQUIT:	PUSHJ	P,SCAN##
+	TRNE	FL,TERMF	; Incorrectly terminated?
+	SKIPE	EXPFLG		; Or expert
+	NERROR  ILC		; Yes, say illegal command
+	OUTSTR	[ASCIZ/%Type EQ to quit, W to save the world/]
+	JRST	CRLFCM##
+
+; Routine to prompt the user
+ 
+CPRMPT::MOVE	T1,CMDPMT	; Get command prompt
+PROMPT::MOVEM	T1,PMTSTR	; Save prompt string
+RPRMPT::HRRZ	T1,PMTSTR	; Get string address
+	SKIPE	MACLVL##	;SEE IF IN A MACRO
+	 POPJ	P,		;YES--NEVER PROMPT
+	JUMPE	T1,CPOPJ	; If length is zero
+	SKPINC			;Clear ^O
+	 JFCL			;..
+	OUTSTR	(T1)		; Type it
+	POPJ	P,		; And return
+	SUBTTL	Table of Commands
+ 
+; Flags (in LH of dispatch word)
+ 
+XMODF== 400000			; Command modifies the file
+ 
+	DEFINE	CMNDS,<
+	X	"A",  ALTER,      ;; Alter mode
+	X	"B", BEGINN,	;; Go to beginning
+	X	"C",   COPY,      ;; Copy a range
+	X	"D",  DELET, XMODF;; Delete a range
+	X	"E",  ENDIT,	;; End the edit
+	X	"F", SEARCH,	;; Find a string
+	X	"G",   GEND,	;; Exit and go
+	X	"H",   HELP,	;; Type help message
+	X	"I", INSERT, XMODF;; Insert some lines
+	X	"J",   JUST, XMODF;; Join and justify
+	X	"K",   KILL, XMODF;; Kill a page mark
+	X	"L",   LIST,	;; List a range
+	X	"M",   MARK, XMODF;; Mark a page
+	X	"N", NUMBER, XMODF;; Resequence
+	X	"O", OCMD,	;; Output
+	X	"P",  PRINT,	;; Print
+	X	"Q", OQUIT,	;; Old quit
+	X	"R", REPLAC, XMODF;; Delete and insert
+	X	"S",  SUBST, XMODF;; Substitute
+	X	"T",  TRANS, XMODF;; Transfer a range
+	X	"V",  VCMD,  XMODF;; Convert case over a range
+	X	"W",  SVCOD, 	  ;; Save the world
+	X	"X",  XPAND, XMODF;; Expand a line
+	X	"@", COMFIL,	;; Do a command file
+	X	".", MOVE,	;; Go to a line
+	X	"_",	SET,	;; Set a parameter
+	X	"/",	CMDSL,	;; Set a parameter or a page
+	X	"=",   GIVE,	;; Print a parameter
+	X	12, NXTLIN,	;; Print next line (LF)
+	X	200, BAKLIN,	;; Print previous line ($)
+	X	15, NULCMD,	;; Null command (CR)
+	X	14, FFCMD	;; FORM FEED COMMAND
+	X	";", CMTCMD,	;; Comment line
+	X	"!", MACCMD##,	;; EVALUATE MACRO STRING
+>
+ 
+; Command table
+ 
+	DEFINE	X(A,B,C),<
+	IF2,<IFNDEF B,<EXTERN B>>
+	XWD	B,A!C
+>
+ 
+CMD1:	CMNDS
+CMDLG==.-CMD1
+ 
+	SUBTTL	Range Specifier Routines
+ 
+; Routine to get one line number from input stream. handles + and -
+
+GETL:	TRZ	FL,LINSN!ADDL!SUBL
+	TRZ	FL2,STARF
+	TLZ	FL2,UARWF
+	CAIN	C,"^"
+	JRST	DOFST
+	CAIN	C,"*"
+	JRST	DOLST
+	CAIE	C,"+"		; Check for implicit '.'
+	CAIN	C,"-"
+	PUSHJ	P,IMPDOT	; Go handle it
+IFN	EXTEND,<
+	CAIN	C,200		; Do we have to search for it
+	PUSHJ	P,LSRCH 	; Ok then here we go
+>
+	TRZN	FL,NUMF
+	POPJ	P,		; Scan did not see a number return
+				; (caller can giver err)
+	MOVEM	T1,HILN 	; Save the number here
+GETL1:	TRO	FL,LINSN	; Set a flag to say we saw the line
+	PUSHJ	P,SCAN		; Scan for + or -
+	CAIN	C,"+"
+	JRST	ADDNUM
+	CAIE	C,"-"
+	POPJ	P,		; Neither
+	TROA	FL,SUBL 	; Set subtract flag
+ADDNUM: TRO	FL,ADDL 	; Set add flag
+	PUSHJ	P,SCAN		; Scan another
+	TRZN	FL,NUMF 	; Was it a number
+	NERROR	ILC		; Anything else is illegal
+	MOVEM	T2,SVINC	; Save it
+	JRST	SCAN		; Return after scanning one more
+ 
+; Here for the '*' meaning last line on page
+ 
+DOLST:	TRO	FL2,STARF
+	JRST	GETL1
+ 
+; Here for the '^' meaning first line on page
+ 
+DOFST:	TLO	FL2,UARWF
+	JRST	GETL1
+
+ 
+; Routine to resolve the + and - in the line number. we must wait
+; Until the page has been defined before doing this
+
+ADDSUB: MOVE	SINDEX,HILN	; Get the number
+	MOVE	T1,HIPG 	; Get the required page
+	MOVEM	T1,DPG		; And set it as the desired one
+	TLNE	FL2,UARWF
+	JRST   [MOVE SINDEX,LNZERO##
+		PUSHJ P,FIND##
+		SKIPE T1	; Find any
+		CAMN T1,PGMK
+		 SKIPA T1,INCR	;ASSUMED START
+		MOVEM T1,HILN	 ;Setup HILN correctly for now
+		MOVE SINDEX,T1
+		JRST DOAS]
+	TRNN	FL2,STARF
+	JRST	DOAS
+	MOVE	SINDEX,[<ASCII /99999/>!1]; Find a big line
+	PUSHJ	P,FIND
+	CAME	T1,[<ASCII /99999/>!1]; If its there its last
+	PUSHJ	P,FINDB##	; Else back up
+	SKIPE	T1		; Check to see if empty page
+	CAMN	T1,PGMK
+	SKIPA
+	MOVE	SINDEX,T1	; Ok, use one found, else leave big
+	MOVEM	SINDEX,HILN	; Save for +, - line numbers
+DOAS:	TRZE	FL,ADDL 	; Did we want to add?
+	JRST	ADLIN		; Yes, go add
+	TRZN	FL,SUBL 	; Or subtract?
+CPOPJ:: POPJ	P,		; No, return
+	PUSHJ	P,FIND##	; Get the desired line
+SUBL1:	SOSGE	SVINC		; Do we want to go back still farther
+	POPJ	P,		; No, all done
+	PUSHJ	P,FINDB 	; Get the previous line
+	MOVE	SINDEX,LNZERO##	; Assume zero
+	SKIPE	T1
+	CAMN	T1,PGMK 	; Was it a page mark?
+	NERROR	NLN		;NO SUCH LINES GONE TOO FAR
+	MOVE	SINDEX,T1	; Set up SINDEX
+	JRST	SUBL1		; Go try for more
+	MOVE	SINDEX,LNZERO##
+	POPJ	P,
+
+ADLIN:	PUSHJ	P,FIND##	; Get desired line
+	CAME	T1,PGMK 	; Was it a page mark?
+	JUMPN	T1,ADLIN1	; Or 0 (i.e. end of file)
+	JRST	ADDTOP		; IF OFF THE PAGE
+ADLIN1: CAME	T1,HILN 	; See if an exact match
+	SOS	SVINC		; If no, already are +1
+	MOVE	SINDEX,T1	; Get the word we have found
+ADLIN2: SOSGE	SVINC		; Need to go further
+	POPJ	P,		; No, return results
+	PUSHJ	P,FINDN##	; Get the next line in sequence
+	CAME	T1,PGMK 	; Page mark?
+	SKIPN	T1		; Or EOF
+	JRST	ADDTOP		; If off the page
+	MOVE	SINDEX,T1	; Accept new number
+	JRST	ADLIN2		; And look for more
+ 
+ADDTOP:	TLZN	FL,L1.MCM	;SEE IF IN MARK COMMAND AND FLAG
+	 NERROR	NLN		;NO--NO SUCH LINES GONE TOO FAR
+	POPJ	P,		; and exit
+; Routine to handle implicit dot, i.e. +nn and -nn are treated
+; As if .+nn or .-nn had been typed.
+ 
+IMPDOT::MOVEM	C,SAVC		; Save current character for scan
+	MOVEI	C,"."		; Lets get a dot...
+	MOVEM	C,SAVCHR	; And fake out scan with it
+	PJRST	SCAN		; Call scan and return
+ 
+; Subroutine to verify that a command has been correctly terminated
+; Call with
+;	PUSHJ	P,CKTRMF
+;	<return here if okay>
+; Does not return if error but gives ILC error to user
+ 
+CKTRMF::TRNN	FL,TERMF
+	NERROR	ILC
+	POPJ	P,
+
+; Subroutine to check for command that are illegal in
+; BASIC mode.
+
+NOTBSC::SKIPN	BASICF		; Check flag
+	POPJ	P,		; If all is well
+	NERROR	IBM		; If basic mode
+ 
+; Routine gets a full seq number of form A/B
+
+GETLAS: PUSHJ	P,SCAN
+GETLA:	TRZ	FL,PGSN 	; No page seen yet
+	PUSHJ	P,GETL		; Get the line number part
+	SKIPE	T2,FRCPAG	; Did we get a forced page? %,. or #
+	MOVEM	T2,HIPG		; Yes, set it
+	MOVE	T2,CPGL 	; Assume LSRCH set the page
+	TRNE	FL,PGSN 	; Did LSRCH get page?
+	MOVEM	T2,HIPG 	; Yes, set it
+	SETZM	FRCPAG		; It's been used.  Clear it now.
+	CAIE	C,"/"		; Is this a page comming?
+	JRST	NOPG		; No, a line number at most
+GETPG:	PUSHJ	P,SCAN		; Yes, get the page number
+	CAIE	C,"+"		; Check for implicit '.'
+	CAIN	C,"-"
+	PUSHJ	P,IMPDOT	; Go handle implicit dot
+	CAIN	C,"*"
+	JRST	LASTPG		; Get last page #
+	CAIE	C,"^"		; Uparrow means
+	JRST	GETLPG		; Get page 1
+	MOVEI	T2,1
+	TRO	FL,NUMF 	; Make like number
+GETLPG: SKIPLE	T2		; Numbers .le. 0 lose
+	TRZN	FL,NUMF 	; Was it a number
+	NERROR	ILC		; Lose lose
+	TRO	FL,PGSN 	; Yep, we saw it
+	MOVEM	T2,HIPG 	; Save that number
+	PUSHJ	P,SCAN		; Check for + or -
+	CAIN	C,"+"
+	JRST	PGPLS
+	CAIE	C,"-"
+	JRST	NOPG		; No, go do adsub on line number
+ 
+; Here for -
+ 
+	PUSHJ	P,SCAN		; Get the number
+	TRZN	FL,NUMF 	; Must be a number
+	NERROR	ILC
+	MOVE	T1,HIPG
+	SUB	T1,T2
+	MOVEM	T1,HIPG 	; Fill in number
+NOPGA:	PUSHJ	P,SCAN		; Scan past number
+NOPG:	TRNN	FL,LINSN!PGSN	; Did we see a line or a page?
+	NERROR	ILC		; No, something is wrong
+	PUSH	P,T1		; Save (have already scanned)
+	PUSH	P,T2
+	PUSHJ	P,ADDSUB	; Take care of + and - for line
+	POP	P,T2
+	POP	P,T1
+	MOVEM	SINDEX,HILN	; Save result
+	POPJ	P,		; And return
+
+; Here for +
+ 
+PGPLS:	PUSHJ	P,SCAN		; Get number to add
+	TRZN	FL,NUMF 	; A number?
+	NERROR	ILC		; No, nerror
+	ADDM	T2,HIPG 	; Add it in
+	JRST	NOPGA		; And clean up
+ 
+; Here for * as the page number
+ 
+LASTPG: TRNE	FL,BGSN 	; Seen last
+	JRST	LSTPG1		; Yes: skip code
+	MOVSI	T1,1
+	MOVEM	T1,DPG		; Try for large
+	MOVEI	SINDEX,0
+	PUSHJ	P,FIND
+	TRNN	FL,BGSN 	; Should see it now
+	ERROR	ICN
+LSTPG1: MOVE	T2,BGPG
+	TRO	FL,NUMF 	; Number seen
+	JRST	GETLPG
+ 
+
+ 
+; Routine sets HIPG in case none seen by GETLA, then calls GETLA
+
+GET1S:: PUSHJ	P,SCAN
+GET1::	MOVE	T3,CPGL
+	MOVEM	T3,HIPG
+	JRST	GETLA
+ 
+
+ 
+; Get a pair of form A/B:C/D, LOLN is set by caller before call
+
+GET2SD::PUSHJ	P,SCAN##	; Scan
+GET2D::	MOVEI	T4,GET2		; Set non-null
+	JRST	GET2D1		; Join processing
+
+GET1SD::MOVEI	T4,GET1 	; Where to go if not null param
+	PUSHJ	P,SCAN##	; Here if null line nr. defaults to .
+GET2D1:	TRNE	FL,TERMF	; Was a terminator seen?
+	JRST	GETSD1		; Go fake a dot
+	CAIE	C,","		; Comma => null line number
+	CAIN	C,";"		; So does ;
+	JRST	GETSD1		; Fake a dot
+	CAIE	C,"_"		; Underscore => null line number
+	CAIN	C,"="		; So does =
+	JRST	GETSD1		; Fake a dot
+; 
+	CAIN	T4,GET2 	; Looking for 2 numbers
+	CAIE	C,":"		; Yes, do we have a colon?
+	JRST	(T4)		; Go do real scan
+ 
+GETSD1: MOVEM	C,SAVC		; Save scanned character
+; 
+	MOVEI	C,"."		; Fetch up a dot
+	MOVEM	C,SAVCHR	; Save character for scan
+; 
+	JRST	-1(T4)		; And finish scan
+ 
+GET2S:: PUSHJ	P,SCAN
+GET2::	TRZ	FL,CNTF 	; Not a ! command
+	CAIE	C,"+"		; Check for implicit dot
+	CAIN	C,"-"
+	PUSHJ	P,IMPDOT	; Go handle implicit dot
+	CAIN	C,"!"		; Also check for implicit dot here
+	PUSHJ	P,IMPDOT	; Do it
+;CODE FOR EF AND BF STOLEN FROM VERSION 23(220)
+	TRNE	FL,IDF		;TEST FOR AN IDENTIFIER
+	 JRST	GET2SY		;YES, POSSIBLE SYMBOLIC RANGE
+	PUSHJ	P,GET1		; Get a line and page number pair
+	MOVE	T3,HIPG 	; Now set lower page to the one seen
+	MOVEM	T3,LOPG
+	MOVE	T3,HILN 	; Reset low line is a number seen
+	TRNE	FL,LINSN
+	MOVEM	T3,LOLN
+GET2HF::MOVE	T3,[<ASCII /99999/>!1]; Set up a large number
+	TRNN	FL,LINSN	; If no line number seen
+	MOVEM	T3,HILN
+	TRZ	FL,PGSN 	; So delete can detect a second page spec
+	CAIN	C,"!"		; Is it a ! command?
+	JRST	GET2CT		; Go take care of it
+	CAIE	C,":"		; Check for second set
+	POPJ	P,		; Nope, return
+	SETZM	FRCPAG		; Clear this from first scan
+	MOVEM	T3,HILN 	; Set HILN anyway
+	PUSHJ	P,SCAN		; Scan next
+	TRNE	FL,IDF		;CHECK FOR IDENTIFIER
+	 JRST	GETEFC		;YES--CHECK FOR BF/EF
+	CAIE	C,","		; Switch delimiter?
+	TRNE	FL,TERMF	; Or command end?
+	PUSHJ	P,IMPDOT	; Fake a dot
+	CAIN	C,";"		; Semicolon (for R command)
+	PUSHJ	P,IMPDOT	; Yes, setup implied dot
+	JRST	GETLA		; Go get the rest
+
+GET2CT: TRO	FL,CNTF 	; Set the appropriate flag
+	PUSHJ	P,SCAN		; There should be a number here
+	TRNN	FL,NUMF
+	NERROR	ILC		; Lose
+	MOVEM	T2,SVCNT	; Hang on to it
+	JRST	SCAN		; Scan next and return
+
+;CODE FOR EF AND BF STOLEN FROM VERSION 23(220)
+
+GETEFC:	MOVS	T1,ACCUM	;GET THE IDENTIFIER, SWAPPED
+	CAIE	T1,'EF '	;TEST FOR "...:EF" RANGE
+	NERROR	ILC		;  NO, ERROR
+GET2AL:	MOVE	T3,[<ASCII /99999/>!1] ;GET LARGEST POSSIBLE LINE #
+	MOVEM	T3,HILN		; & STORE
+	MOVSI	T3,1		;GET EXTREMELY LARGE PAGE #
+	MOVEM	T3,HIPG		; & STORE
+	TRZ	FL,LINSN!ADDL!SUBL ;CLEAR LINE-TYPE FLAGS
+	TRO	FL,PGSN		;SHOW PAGE # SEEN
+	JRST	SCAN		;GO SCAN NEXT & RETURN
+
+GET2SY:	MOVS	T1,ACCUM	;GET THE IDENTIFIER, SWAPPED
+	CAIE	T1,'BF '	;TEST FOR "BF..." FORMAT
+	CAIN	T1,'EF '	;TEST FOR "EF" FORMAT
+	TDZA	T3,T3		;EITHER, GET 0 STARTING LINE
+	NERROR	ILC		; NEITHER, ERROR
+	MOVEM	T3,HILN		;SET AS ENDING LINE #
+	MOVEM	T3,LOLN		;SET AS STARTING LINE #
+	MOVEI	T3,1		;GET PAGE # 1
+	MOVEM	T3,HIPG		;SET AS ENDING PAGE #
+	MOVEM	T3,LOPG		;SET AS STARTING PAGE #
+	TRZ	FL,PGSN!ADDL!SUBL ;CLEAR FLAGS
+	TRO	FL,LINSN	;SHOW LINE # SEEN
+	CAIN	T1,'EF '	;TEST FOR "EF" RANGE
+	JRST	GET2AL		;  YES, JUMP
+	PUSHJ	P,SCAN		;GET NEXT ATOM IF "BF..."
+	CAIE	C,"!"		;TEST FOR RANGE SPECIFIER
+	CAIN	C,":"		;TEST FOR RANGE SPECIFIER
+	JRST	GET2HF		;  YES, GO READ THE RANGE
+	NERROR	ILC		;  NO, "BF" IS ILLEGAL
+	SUBTTL	Line Number Search
+ 
+IFN	EXTEND,<
+; Search for a line and use its number instead of .
+; Mostly plagiarized from search
+
+LSRCH:: PUSH	P,SVINC 	; Save previously gathered line numbers
+	PUSH	P,SVCNT
+	PUSH	P,HIPG
+	PUSH	P,LOLN
+	PUSH	P,LOPG
+	PUSH	P,FL		; Save flags in case called by search
+	PUSH	P,FL2
+	PUSH	P,FNDPMT	; Save prompt string
+	TLZ	FL,ASSMF	; Clear all flags
+	SETZM	LOLN		; Just like everyone else has to
+	SETZM	LSCNT		; Start with zero
+	MOVE	T1,[2,,[ASCIZ/L*/]]
+	MOVEM	T1,FNDPMT	; Save for next string prompt
+	TLO	FL2,L2.NAB
+	SOSGE	LSBUFN		; Get string buffer number
+	NERROR	TMS		; Nesting too deep
+	MOVE	T2,LSBUFN	; Index in string buffer tables
+	MOVE	T1,LSPTR(T2)	; Set up byte pointer
+	MOVE	T3,LSPTT(T2)	; And pointer to byte pointer table
+	PUSHJ	P,SSTRNG##	; Get a search string
+	  JRST [MOVE T2,LSBUFN ; Index to pointers
+		SKIPN @LSPTT(T2)	; Was string set?
+		NERROR NSG	; No, tell him
+		CAIN C,12
+		JRST ASLMD1	; Special continue mode
+		JRST .+1]	; Yes, use old one
+	TLZ	FL,NUMSRF!DECID!EXCTSR; Clear flags
+	SKIPE	EXACTF		; All searches to be exact?
+	TLO	FL,EXCTSR	; Yes, set the exact bit
+	PUSHJ	P,SCAN		; Check for what comes after
+	TRNN	FL,TERMF	; If terminator
+	CAIN	C,","		; Or ,
+	JRST	ASLMDT		; Set up limits specially
+	CAIE	C,"!"
+	CAIN	C,":"
+	JRST	ASLMDT		; Let him specify 2nd half of range
+	PUSHJ	P,GET2		; Else call usual limit routine
+LSC4:	MOVE	T1,HILN 	; Save end of range
+	MOVEM	T1,LSHILN
+	MOVE	T1,HIPG
+	MOVEM	T1,LSHIPG
+	CAIE	C,","		; Any more arguments?
+	JRST	LSC1		; No, check terminator and proceed
+	PUSHJ	P,SCAN		; Yes, see what it is
+	TRNN	FL,IDF		; Should be ident or number
+	JRST	LSC2		; Not ident, check for number of searches
+	MOVS	T1,ACCUM	; Get the ident
+	CAIN	T1,(<SIXBIT /N  />); And find out what it is
+	TLO	FL,NUMSRF!DECID
+	CAIN	T1,(<SIXBIT /D  />)
+	TLO	FL,DECID	; Wants to decide on line
+	TLNN	FL,NUMSRF!DECID ; Was it either?
+	JRST	LSC3		; No, check e
+	PUSHJ	P,SCAN		; Continue looking
+	CAIE	C,","
+	JRST	LSC1		; No more arguments
+	PUSHJ	P,SCAN		; Well what kind is this one?
+	TRNN	FL,IDF		; More idents?
+	JRST	LSC2		; No, must be number of searches
+	MOVS	T1,ACCUM
+LSC3:	CAIE	T1,(<SIXBIT /E  />)
+	NERROR	ILC		; No, he must have made a mistake
+	TLO	FL,EXCTSR	; Yes, remember it
+	PUSHJ	P,SCAN		; And check for more
+	CAIE	C,","
+	JRST	LSC1		; No more
+	PUSHJ	P,SCAN		; Only one thing it can be now
+LSC2:	TRNN	FL,NUMF
+	NERROR	ILC		; Nope, lose
+	MOVEM	T2,LSCNT	; Save as count of lines to find
+	PUSHJ	P,SCAN		; Get terminator (we hope)
+LSC1:	PUSHJ	P,CKTRMF	; Check that command is complete
+LSCH1A: MOVE	T1,LSBUFN
+	MOVE	T1,LSPTT(T1)	; Get pointer to strings
+	PUSHJ	P,CODSR##	; And generate code
+	MOVE	T1,LOPG 	; Get set to hunt it
+	MOVEM	T1,DPG
+	MOVEM	T1,LSPG 	; Flag to say if we should print page
+	MOVE	SINDEX,LOLN
+	PUSHJ	P,FIND
+	TRZ	FL,LINSN	; No lines yet
+ONLSC:	PUSHJ	P,ONMOV##	; Check range
+	  JRST	ENDLSC		; Done
+	TLZE	FL,ASSMF	; First time and want .+1?
+	JRST   [CAME T1,LOLN	; Is there exact match?
+		JRST .+1	; No, this is .+1
+		AOS SVCNT	; Pretend we didnt see it
+		JRST LSNXT]	; And take next
+	CAMN	T1,PGMK 	; Pages are special
+	JRST	LSNXT		; So take good care of them
+	MOVE	T2,LSBUFN
+	MOVE	T2,LSPTT(T2)	; Pointer to strings
+	PUSHJ	P,COMSRC##	; Go search this line
+	JRST	LSNXT		; Loser
+	MOVE	T2,CPG		; Get current page
+	CAME	T2,LSPG 	; And see if we should print it
+	PUSHJ	P,PGPRN##	; Yes
+	MOVE	T2,CPG		; Now set it as current
+	MOVEM	T2,CPGL
+	MOVEM	T2,LSPG 	; Also reset flag
+	MOVE	T2,(PNTR)	; Also set line
+	MOVEM	T2,CLN
+	TRO	FL,LINSN	; We saw one
+	TLNN	FL,DECID	; Does he want option?
+	JRST	LSNXTC		; No, go get next one or stop
+	TLNE	FL,NUMSRF	; Do we want only line numbers?
+	JRST	LSCNUM		; Yes
+	MOVE	T1,PNTR 	; Go print line
+	PUSHJ	P,OUTLIN##
+ 
+LSNXT1: PUSHJ	P,GETONE##
+	CAIN	T1,177		; Did he say rubout(do not use)?
+	JRST	REJECT		; Yes, go find another
+	CAIN	T1,15		; Did he say <CR>?
+	PUSHJ	P,GETONE##
+	CAIE	T1,12
+	CAIN	T1," "		; Space means use it
+	JRST	ACCEPT
+	ANDI	T1,137		; Force upper case
+	OCRLF			; Spit out a CR-LF here
+	CAIE	T1,"Q"
+	CAIN	T1,"E"		; Does he want out
+	JRST	COMND		; Yes: quit
+	OUTSTR	[BYTE (7) "?"," ",7,0,0]
+	CLRBFI			; Clear him out
+	JRST	LSNXT1		; Try again
+ 
+ACCEPT: 
+IFN XSARSW,<
+	SKIPN	EXPFLG		; Print correct accept message
+>
+	OUTSTR	[ASCIZ '[Accepted]
+']
+	JRST	LSOUT
+ 
+REJECT: 
+IFN XSARSW,<
+	SKIPN	EXPFLG		; Print correct reject message
+>
+	OUTSTR	[ASCIZ '[Rejected]
+']
+	TRZ	FL,LINSN	; Didn't count since he rejected it
+	JRST	LSNXT
+
+ 
+LSNXTC: SOSG	LSCNT		; Have we found enough
+	JRST	LSOUT		; Yes, give up 
+LSNXT:	PUSHJ	P,FINDN 	; Get next line to look a
+	JRST	ONLSC
+ 
+LSCNUM: MOVE	T1,(PNTR)	; Print sequence number
+	MOVEM	T1,PRNTO1
+	OUTSTR	PRNTO1
+	JRST	LSNXT1		; And decide
+ 
+ENDLSC: TRZN	FL,LINSN	; Did we see one?
+	NERROR	NLN		; Null range
+	JRST	LSOUT
+ 
+LSOUT:	POP	P,FNDPMT
+	POP	P,FL2		; Restore the flags we used
+	POP	P,T1
+	AND	T1,[XWD ASSMF!NUMSRF!EXCTSR!DECID,ADDL!SUBL!CNTF]
+	ANDCM	FL,[XWD ASSMF!NUMSRF!EXCTSR!DECID,ADDL!SUBL!CNTF]
+	IOR	FL,T1
+	POP	P,LOPG		; Restore previous line numbers
+	POP	P,LOLN
+	POP	P,HIPG
+	POP	P,SVCNT
+	POP	P,SVINC
+	DMOVE	T1,CLN		; Load current line/page which we found
+	TRO	FL,NUMF!PGSN	; And make like scan saw a number
+	AOS	LSBUFN		; Go back to previous level if any
+	POPJ	P,		; And exit victorious
+ASLMD1: TROA	FL,CNTF 	; Mark as keep end of range
+ASLMDT: TRZ	FL,CNTF 	; Just in case
+	TLO	FL,ASSMF	; We assume .+1
+	MOVE	T1,CLN		; Set things up for . to infinity
+	MOVEM	T1,LOLN
+	MOVEM	T1,HILN 	; As good as anything with the page we will
+	MOVE	T1,CPGL 	; Use
+	MOVEM	T1,LOPG
+	TRZE	FL,CNTF 	; Keep end?
+	JRST	LNOSPC		; Yes
+	CAIE	C,":"		; If a : or !
+	CAIN	C,"!"
+	JRST	HALFLS		; Get the second half (.+1 to given)
+	MOVSI	T1,377777	; Get a large page
+	MOVEM	T1,HIPG
+	JRST	LSC4		; Back into things
+
+HALFLS: MOVEM	T1,HIPG 	; Set top as /.
+	PUSHJ	P,GET2HF	; Get the second half
+	JRST	LSC4		; And go
+
+LNOSPC: MOVE	T1,LSHIPG
+	MOVEM	T1,HIPG 	; Put back end
+	MOVE	T1,LSHILN
+	MOVEM	T1,HILN
+	JRST	LSCH1A
+>
+SVLOLN::DMOVE	T1,LOLN		; Fetch low
+	JRST	SVLOL2		; Store and return
+
+SVHILN::DMOVE	T1,HILN		; Fetch from HILN
+SVLOL2::SKIPN	T1		; If zero line number
+	MOVE	T1,LNZERO##	; Convert to ASCID
+	DMOVEM	T1,LSLOLN	; Save value
+	POPJ	P,		; and return
+	SUBTTL	HELP  Type help text
+
+SEGMRK=="^"-100			; Use ^^ for segment mark
+HLPEOF==PDFL1			; EOF flag
+HLPSWT==PDFL2			; User typed H/switchname
+
+HELP:	PUSHJ	P,SCAN##	; Scan for argument
+	SETZ	T4,		; Anticipate no argument
+	TRNE	FL,TERMF	; Terminated?
+	JRST	HELP0		; Yes, just first part of text
+	CAIN	C,"/"		; Did we get H/...
+	JRST	[TRO	FL2,HLPSWT
+		 PUSHJ	P,SCAN##  ; Get name
+		 TRNN	FL,IDF	  ; Must be an ident
+		 NERROR ILC
+		 PUSHJ  P,XCODE## ; 
+		 SKIPE	ACCUM	; Find something
+		 JRST	HELP1
+		 JRST	XERR##]
+	CAIE	C,","		; Did we get a comma?
+	NERROR	ILC		; Nope, he typed it wrong
+	PUSHJ	P,SCAN##	; Get command name
+	TRNE	FL,TERMF	; Must be an argument
+	NERROR	ILC		; is an error
+	TRNN	FL,IDF		; Find an indentifier
+	SKIPA	T4,C		; No, save character
+HELP1:	MOVE	T4,ACCUM	; Yes, save identifier
+	PUSHJ	P,SCAN##	; Then scan the end
+	PUSHJ	P,CKTRMF	; and make sure that we terminated
+HELP0:	MOVSI	T1,'DOC'
+	JSP	T5,OPNHLP
+	MOVSI	T1,'HLP'
+	JSP	T5,OPNHLP
+	NERROR	FNF
+
+DOHLP:	TLO	FL2,NORENT	; Protect against wild reentering
+	PUSH	P,CHIN		; Save character input routine
+	JUMPE	T4,HTYPLP	; Go type first segment
+	MOVEI	T1,GHLPC	; So scan looks at help file
+	MOVEM	T1,CHIN		; Stash it
+DOHLP1:	PUSHJ	P,GHLPC		; Get a character
+	TRNE	FL2,HLPEOF	; End of file?
+	JRST	NOHELP		; Yes, text not found
+	CAIE	C,SEGMRK	; End of segment?
+	JRST	DOHLP1		; No, get next
+	TRNN	FL2,HLPSWT	; Looking for a switch?
+	JRST	DOHLP2		; No, skip check for /
+	PUSHJ	P,GHLPC		; Check next character
+	CAIE	C,"/"		; Must be a /
+	JRST	DOHLP1		; No, check next record
+DOHLP2:	SETZM	SAVCHR		; Clear scanner
+	PUSHJ	P,SCAN##	; Look for an ident or something
+	TRNN	FL,IDF		; Ident?
+	SKIPA	T1,C		; No, fetch special character
+	MOVE	T1,ACCUM	; Yes, get the identifier
+	CAME	T1,T4		; Is it the one we are looking for?
+	JRST	DOHLP1		; No, on to the next record
+	PUSHJ	P,SCAN##	;GET NEXT ATOM
+	CAIE	C,"/"		;SWITCH COMING?
+	 JRST	HTYLOP		;NO--MATCHES
+	PUSHJ	P,SCAN##	;YES--GET IT
+	TRNN	FL,IDF		;IDENT?
+	 JRST	HTYLOP		;NO--BAD FORMAT
+	MOVSI	T1,-SSTLEN	;GET SPECIAL SWITCH TABLE
+	MOVE	T2,ACCUM	;GET SWITCH WE SCANNED
+	CAME	T2,SSTTAB(T1)	;MATCH?
+	 AOBJN	T1,.-1		;NO--LOOP FOR ALL
+	JUMPGE	T1,HTYLOP	;TYPE IF NO MATCH
+	XCT	SSTXCT(T1)	;SEE IF ENABLED FOR THIS SWITCH
+	 JRST	DOHLP1		;NO--SKIP ON
+				;YES--TYPE IT
+HTYLOP:	PUSHJ	P,ICUR##	;FANCY CURSOR OUTPUT IF WE CAN
+HTYPLP:	PUSHJ	P,GHLPC		; Get a character
+	TRNE	FL2,HLPEOF	; End of file yet?
+	JRST	HLPDON
+	CAIN	C,"L"-100	; Page mark
+	MOVEI	C,12		; Make into line feed
+	CAIN	C,SEGMRK	; or segment mark
+	JRST	HLPDON
+	PUSHJ	P,OCHR##	; Type it
+	JRST	HTYPLP		; Loop over whole record
+
+GHLPC:	CHKREN	HLPABT
+	SOSGE	HLPBUF+.BFCTR	; Check buffer
+	JRST	GHLPCG		; Get more data
+	ILDB	C,HLPBUF+.BFPTR	; Get a character
+	MOVEI	T1,1		; Sequence bit
+	TDNN	T1,@HLPBUF+.BFPTR ; Is it on?
+	POPJ	P,		; Return the character
+	MOVNI	T1,5		; Skip next five
+	ADDM	T1,HLPBUF+.BFCTR; By incrementing count by 5
+	AOS	HLPBUF+.BFPTR	; And pointer by one whole word
+	JRST	GHLPC		; Go get something else
+
+GHLPCG:	INUUO	LPT,		; Read another buffer full
+	JRST	GHLPC		; And try again
+	TRO	FL2,HLPEOF	; Flag end of file
+	MOVEI	C,12		; Return something to avoid loops
+	POPJ	P,		; Non-skip return
+
+OPNHLP:	MOVEM	T1,LPDEVI+.OPDEV; Setup the device
+OPNHP0:	MOVEI	T1,4		; Length of block
+	MOVEM	T1,LSTBLK
+	HRROI	T1,.GTPRG	; Program name
+	GETTAB	T1,		; Read it
+	  MOVSI	T1,'SOS'	; No table, assume its called SOS.HLP
+	MOVSI	T2,'MAN'	;of the help file
+	DMOVEM	T1,LSTBLK+.RBNAM; into the lookup block
+	SETZM	LSTBLK+.RBPPN	; Clear the PPN
+	OPNDSK	LPT,LPDEVI	; Look for the file
+	  JRST	OPNHP1		; Try physical
+	XLOOKP	LPT,LSTBLK	; Look for the help file
+	  JRST	OPNHP1		; Try physical
+	  JRST	OPNHP1		; Try physical
+	HRRZS	LPDEVI+.OPMOD	; Clear physical only if set
+	JRST	DOHLP
+
+OPNHP1:	MOVE	T1,LPDEVI+.OPMOD
+	TLCE	T1,(UU.PHS)	; Physical only?
+	JRST	(T5)		; Yes, already tried that trick
+	MOVEM	T1,LPDEVI+.OPMOD
+	JRST	OPNHP0
+
+HLPABT:	ADJSP	P,-1		; Delete call to GHLPC
+	PUSHJ	P,CTTBFO##	; Clear TTY output buffer
+	JRST	HLPXIT		; Release LPT and return
+
+NOHELP:	POP	P,CHIN		; Restore input routine
+	OUTSTR	[ASCIZ/%No help for "/]
+	TRNE	FL2,HLPSWT	; Switch name?
+	OUTCHR	["/"]		; Yes, add /
+	TLNN	T4,770000
+	JRST	NOHLP1		; If not SIXBIT
+	MOVE	T1,T4		; Character
+	MOVEI	T3,FOCHR##	; Output character routine
+	PUSHJ	P,PRTSX##	; Yes, type it
+	JRST	NOHLP2
+
+NOHLP1:	MOVE	C,T4		; Get the character
+	PUSHJ	P,FOCHR##	; Print it
+NOHLP2:	OUTSTR	[ASCIZ/"
+/]
+	JRST	HLPXI1
+
+HLPDON:	PUSHJ	P,FORCE##
+	PUSHJ	P,FCUR##	;DONE WITH CURSOR PRINT
+HLPXIT:	POP	P,CHIN		; Restore input routine
+	SETZM	SAVCHR		; Clear scanner
+HLPXI1:	RELEAS	LPT,
+	JRST	COMND		; And fetch the next command
+
+DEFINE	SST,<
+	X	NEWCOMMAND,<SKIPN NEWCMD##>
+	X	OLDCOMMAND,<SKIPE NEWCMD##>
+	X	NEWALTER  ,<SKIPN NEWALT##>
+	X	OLDALTER  ,<SKIPE NEWALT##>
+>
+
+DEFINE X(SWT,TST),<EXP SIXBIT /SWT/>
+
+SSTTAB:	SST
+SSTLEN==.-SSTTAB
+
+DEFINE X(SWT,TST),<TST>
+
+SSTXCT:	SST
+	SUBTTL	The Indirect (@) Command
+ 
+; Input routine for command file
+ 
+RDCHAR::SOSG	INDBUF+2	; Check empty buffer
+	JRST	DOINP		; Read from file
+RDCHR1: ILDB	C,INDBUF+1	; Get a char
+	JUMPE	C,RDCHAR	; Skip nulls
+	MOVE	CS,@INDBUF+1	; Fetch word
+	TRNN	CS,1		; Seq bit
+	POPJ	P,		; No - return
+	MOVNI	C,5		; Skip 5 more chars (tab included)
+	ADDM	C,INDBUF+2
+	AOS	INDBUF+1	; Adjust byte pointer
+	JRST	RDCHAR		; Get the next character
+
+DOINP:	SKIPGE	CMFFLG		;READING FROM INTERNAL BUFFER?
+	  JRST	DOINP1		;YES--SPECIAL
+	INUUO	IND,0
+	JRST	RDCHR1		; Aok
+	GETSTS	IND,C
+	RELEAS	IND,		; Get status and close chl
+	TRNN	C,740000
+	  JRST	DOINP1		;JUST EOF
+	MOVE	T1,SVCCIN	; Retstore input routine
+	MOVEM	T1,CHIN
+	SETZM	COMFLF		; Error - clear command file flag
+	NERROR CMERR		; Lose 
+DOINP1:	SOSG	COMFRP		;MORE REPEATS TO GO?
+	  JRST	DOINP3		;EOF
+	SETOM	CMFFLG		;FLAG FILE READ
+	MOVEI	C,200*5		;RESET CHAR COUNT
+	MOVEM	C,INDBUF+2	;..
+	MOVE	C,[POINT 7,COMBUF+3];POINT TO BUFFER
+	MOVEM	C,INDBUF+1	;..
+	MOVE	C,LN1##		;RESET LINE COUNTER
+	MOVEM	C,COMCNT	;..
+	JRST	RDCHR1		;NOW, THATS BETTER THEN READING THE FILE
+
+DOINP3:	MOVE	T1,SVCCIN	;Retstore input routine
+	MOVEM	T1,CHIN
+	SETZM	COMFLF		;Error - clear command file flag
+	NERROR CMEND		;Lose 
+; Handle @ command - read commands from file.  we may link command
+; Files but not nest them.
+ 
+COMFIL: SETZM	COMFRP		;CLEAR REPEAT COUNT
+	MOVEI	T1,5		;Length of files spec
+	MOVEM	T1,INDFIL+.RBCNT; Set it up
+	MOVEI	T1,.IOASL	; ASCII line mode
+	MOVEM	T1,INDDVI+.OPMOD; Set up
+	MOVEI	T1,INDBUF	; Buffer header
+	MOVEM	T1,INDDVI+.OPBUF; Set it up too
+	PUSHJ	P,SCAN		; Read file name
+	MOVEI	T1,CMPATH	; Place to store the path
+	MOVEM	T1,INDFIL+.RBPPN; Set up the pointer
+	MOVEI	T3,INDFIL	; Place to put file name
+	PUSHJ	P,SETNM1##	; Fetch file spec
+	  CAIA			; MAY LOOK BAD--CHECK FOR REPEAT COUNT
+	JRST	CMF1		;ALL SET
+	CAIE	C,","		;NUMBER COMING?
+	  NERROR ILC		;NO--ERROR
+	PUSHJ	P,SCAN		;YES--READ IT
+	CAIN	C,"*"		;INFINATE?
+	  JRST	[HRLOI T2,377777;YES
+		 JRST  CMF2]	;AND STORE
+	TRNN	FL,NUMF		;NUMBER?
+	  NERROR ILC		;NO--ERROR
+CMF2:	MOVEM	T2,COMFRP	;STORE REPEAT COUNT
+	PUSHJ	P,SCAN		;FIND END
+	PUSHJ	P,CKTRMF	;CHECK TERMINATOR
+CMF1:				;
+	SKIPN	T1,TMPDEV	; Check for device
+	SKIPA	T4,[POINT 18,[SIXBIT/DSKTEDSYS   /]]
+	MOVE	T4,[POINT 36,GIFDEV]
+	MOVSM	T1,GIFDEV	; Given device
+	HLLZ	T1,INDFIL+.RBEXT
+	HLLOM	T1,GIFEXT	; Save extension in case typed
+	SKIPN	DFXSW##		; Default to be used?
+	SKIPA	T5,[POINT 18,GIFEXT]	; No, use the real one
+	MOVE	T5,[POINT 18,[SIXBIT/CCLCMD   ___/]]
+CMF3:	MOVE	T3,T5		; Reset extension list
+	ILDB	T1,T4		; Get a device
+	JUMPE	T1,[NERROR FNF]	; End of list
+	MOVSM	T1,INDDVI+.OPDEV
+	OPEN	IND,INDDVI	; Open file etc..
+	  JRST	CMF3		; Try another device
+CMF4:	ILDB	T1,T3		; Get an extension
+	CAIN	T1,'___'	; Check for end marker
+	JRST	CMF3		; Do next device
+	HRLZM	T1,INDFIL+.RBEXT
+	XLOOKP	IND,INDFIL
+	  JRST	COMND		; Serious error--message already typed
+	  JRST	CMF4		; Not this time, try another extension
+	MOVE	T1,INDFIL+.RBSIZ;GET SIZE
+	CAILE	T1,200		;UNDER 1 BLOCK?
+	 SKIPG	COMFRP		;AND NOT REPEAT COMMAND MODE?
+	  CAIA			;YES
+	NERROR	CFB		;NO--TOO BIG
+SETFIL:				;
+	MOVEI	T1,COMBUF	; Setup buffer
+	MOVEM	T1,.JBFF##	; Point to buffer (.JBFF will be reset
+				; by command dispatcher)
+	INBUF	IND,1		; ***
+	MOVE	T1,LNZERO##	; Set up cmd count
+	MOVEM	T1,COMCNT
+	SKIPE	COMFLF		; Are we already in a command file?
+	JRST	COMND		; Yes, do not nest
+	SETOM	COMFLF		; We are now reading from a command file
+	MOVEI	T1,RDCHAR	; Set up input routine
+	EXCH	T1,CHIN 	; And save current
+	MOVEM	T1,SVCCIN
+	SETZM	CMFFLG		;FLAG FILE NOT READ YET
+	JRST	COMND
+	SUBTTL	DOINI -- HANDLE XSOS.INI
+
+DOINI::	SETZM	COMFRP		;CLEAR REPEAT COUNT
+	SETZM	INTFLG##	;CLEAR INIT FLAG
+	OPEN	IND,INIDVI##	;OPEN DEVICE
+	 NERROR	FNF		;ERROR
+	SETZM	INIFIL+.RBPPN	;CLEAR PPN
+	LOOKUP	IND,INIFIL##	;READ FILE
+	 NERROR	FNF		;ERROR
+	PJRST	SETFIL		;AND SETUP FOR READER
+	SUBTTL	Move Command (.)
+
+MOVE::	PUSHJ	P,GET1SD	; Get a position, allow naked dot
+	PUSHJ	P,CKTRMF	; Verify correct termination
+	PUSHJ	P,FINDHI##	; Get HILN/HIPG
+	MOVE	T2,CPG		; Page we found
+	CAME	T2,HIPG		; Is it the one we wanted?
+	NERROR	NSP		; No, gronk user
+	MOVE	T1,HILN		; Get desired line
+	DMOVEM	T1,CLN		; Setup new current line/page
+	JRST	COMND		; Next command, please
+	SUBTTL	The B and BP commands.  Go to beginning of file or page
+
+BEGINN::PUSHJ	P,SCAN##	; Scan next character
+	MOVS	T1,ACCUM	; Get token
+	CAIN	T1,'F  '	;SEE IF 'F'
+	 JRST	[SETZM	ACCUM	;YES--SCAN ONE MORE CHASR
+		 PUSHJ	P,SCAN	;..
+		 JRST	BEGIN1]	;AND TREAT LIKE B
+	CAIE	T1,'P  '	; A 'P'?
+	JRST	BEGIN1		; No, assume B command
+	SETZM	ACCUM
+	PUSHJ	P,SCAN
+	SKIPA	T1,CPGL		; Fetch current logical page number
+BEGIN1:	MOVEI	T1,1		; Use page 1
+	PUSHJ	P,CKTRMF	; Was command terminated?
+	MOVEM	T1,CPGL		; Store logical page
+	MOVE	SINDEX,LNZERO##	; [ASCIZ/00000/!1]
+	MOVEM	T1,DPG
+	MOVEM	SINDEX,CLN
+	JRST	COMND
+	SUBTTL	 The V command -- change case of a range of line
+
+IFE VCMDSW,<VCMD:NERROR	ILC>
+
+IFN VCMDSW,<
+
+VCMD:	PUSHJ	P,GNCH##	; Get switch
+	MOVEI	T1,40		; Case bit
+	TRZ	C,40		; Convert switch to upper case
+	CAIN	C,"V"		; Complement?
+	TLO	T1,(TRC	C,)	; Setup complement instruction
+	CAIN	C,"L"		; Force to lower case?
+	TLO	T1,(TRO	C,)	; Set the case bit instruction
+	CAIN	C,"U"		; Force to upper case?
+	TLO	T1,(TRZ	C,)	; Clear the case bit instruction
+	TLNN	T1,-1		; Find a valid switch?
+	NERROR	ILC		; No, abort now
+	MOVEM	T1,INOCHR##	; As good a place as any
+	PUSHJ	P,GET2SD	; Full range, allow default dot
+	PUSHJ	P,CKTRMF	; Make sure no junk at end of line
+	PUSHJ	P,FINDLO##	; Find LOLN/LOPG
+				;REMOVE CALL TO SVLOLN (FINDLO DID IT)
+	TRZ	FL,LINSN	; None seen yet
+VCRNGE:	PUSHJ	P,ONMOV##	; In range
+	  JRST	VCDONE		; No, done
+	TRO	FL,LINSN	; We saw a line
+	PUSHJ	P,GETLTH##	; Length of the line
+	IMULI	T1,5		;  in characters
+	SUBI	T1,6		; Subtract out the sequence number size
+	MOVEI	T2,1(PNTR)	; First data word in line
+	HRLI	T2,(POINT 7,0,6) ; Point to the first data character
+VCLOOP:	ILDB	C,T2		; A character
+	MOVE	CS,CTBL(C)	; Get the character bits
+	TLNE	CS,LETF_16	; Is this a letter?
+	XCT	INOCHR		; Yes, fix it
+	DPB	C,T2		; Restore the converted character
+	SOJG	T1,VCLOOP	; Loop over the whole line
+	MOVE	T1,0(PNTR)	; Last line processed
+	MOVE	T2,CPG		; And page
+	DMOVEM	T1,CLN		; Store logical Line/Page
+	PUSHJ	P,FINDN##	; Find the next line
+	JRST	VCRNGE		; And over the whole range
+
+VCDONE:	TRNN	FL,LINSN	; Did we do something?
+	NERROR	NLN		; No, error
+	AOS	CHGCNT##	; Yes, we changed the file
+	JRST	COMND		; Get next command
+
+>; End of VCMDSW conditional
+
+	END

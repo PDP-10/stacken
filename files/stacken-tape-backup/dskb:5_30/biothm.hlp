@@ -1,0 +1,33 @@
+Programmet GAM:BIOTHM tillverkar individuella biorytmiska
+tabeller. Tabellerna skrivs p} filen CHARTS.DAT vilken kan
+tas ut t ex p} radskrivaren. Exempel p} k|rning:
+
+.r gam:biothm	;Starta programmet
+
+TYPE TODAYS MONTH  YEAR
+021979		;ange m}nad med 2 siffror f|ljt av }r med 4 siffror
+
+Biorhythm charting program
+
+Name of Subject: Karl Nilsson	;namn
+Birthday of Subject (MM DD YY): 11 28 37	;m}nad dag }r
+Starting date for chart (MM YY): 03 79		;m}nad }r
+  Ending date for chart (MM YY): 09 79		;m}nad }r
+Done
+
+Do you wish another chart (Y or N)? N		;obs versaler
+STOP  
+
+END OF EXECUTION
+CPU TIME: 2.78	ELAPSED TIME: 1:15.96
+EXIT
+
+.dir charts
+
+CHARTS	DAT    70  <057>   19-Feb-79	DSKD:	#1,2$
+
+
+.pri charts.dat/delete		;skriv ut resultat-tabellen p} radskrivaren
+Total of 70 blocks in 1 file in LPT request
+
+	<Slut p} GAM:BIOTHM.HLP - 790219>

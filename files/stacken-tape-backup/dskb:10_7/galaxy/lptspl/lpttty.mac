@@ -1,0 +1,537 @@
+TITLE	LPTTTY - Terminal driver (LP20 Emulation) for LPTSPL-10
+SUBTTL	D. Mastrovito/DPM/TL/DPM	13-DEC-85
+
+;
+;
+;	COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1984,1985,1986,1987.
+;			ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+;
+
+	SEARCH	GLXMAC			;SEARCH GALAXY PARAMETERS
+	SEARCH	QSRMAC			;SEARCH QUASAR PARAMETERS
+	SEARCH	ORNMAC			;SEARCH ORION/OPR PARAMETERS
+	SEARCH	LPTMAC			;SEARCH LPTSPL PARAMETERS
+	PROLOG	(LPTTTY)
+
+IF2,<PRINTX Assembling GALAXY-10 LPTTTY>
+
+
+	SALL				;FOR CLEAN LISTINGS
+	.DIRECT	FLBLST			;FOR CLEANER LISTINGS
+
+	ENTRY	LPTTTY			;LOAD IF LIBRARY SEARCH
+
+	%%.LPT==:%%.LPT			;VERSION
+IFDEF .MCRV.,<.VERSION <%%.LPT>>
+
+SUBTTL	LPTTTY - Dispatch table
+
+
+; This module will drive either an LA120 or LA180 hard copy
+; terminal as a printer.  It is by far, the most simple of
+; all the printer drivers for LPTSPL, and as such provides
+; the customer with a template for writing drivers for other
+; types of terminals (i.e. DIABLOs, etc.).
+
+LPTTTY::DEVDSP	(TTY,<Terminal>)
+
+; Table of LA120/LA180 compatible terminal types
+; Entries before LASANS definition are ANSI printers
+TTYTYP:	SIXBIT	/LA50/
+	SIXBIT	/LA120/
+	SIXBIT	/LA210/
+LASANS==<<.-1>-TTYTYP>			;LAST "ANSI" ENTRY
+	SIXBIT	/LA180/
+TTYLEN==.-TTYTYP			;LENGTH OF TABLE
+
+
+; Some drivers require storage on a per-stream basis.  There are several
+; words reserved for this purpose in the job data base.  The words may
+; be defined as follows:
+
+	 .ORG	J$DWDS			;DEFINE WORDS STARTING AT J$DWDS
+FOOWDS:	BLOCK	2			;OR WHATEVER YOU NEED, UP TO J$DWDS
+TTYANS:	BLOCK	1			;TERMINAL IS OF TYPE "ANSI"
+TTYSIZ:!				;END OF DRIVER SPECIFIC STORAGE
+	 .ORG
+
+IF2,<
+	IFL <DRVWDS-<TTYSIZ-J$DWDS>>,<
+	PRINTX ? Terminal driver definitions overflow storage
+	>
+> ;END IF2
+
+
+; Some drivers must maintain special status  information bits.  These
+; may be stored in AC 'S'.  The mask STSDRV defines those bits which
+; are reserved to the driver.
+SUBTTL	TTYINX - Terminal Initialization
+
+
+; Device initialization.  This routine is called by the
+; SETUP message processor to initialize device dependent
+; data in the job data base.
+;
+; Call:	MOVE	J, job data base address
+;	MOVE	M, Page containing SETUP message or 0 if LPTSPL startup
+;	PUSHJ	P,TTYINX
+;
+; TRUE return:	Initialization complete
+; FALSE return:	S1 contains -1 if must try a different driver, or
+;		S1 contains a standard response-to-setup code
+;		S2 contains any extra attributes (for RSU.FL)
+
+TTYINX:	JUMPE	M,.RETT			;RETURN IF LPTSPL INITIALIZATION
+	MOVE	S1,STREAM##		;GET STREAM NUMBER
+	MOVE	S1,JOBOBA##(S1)		;AND THE OBJECT BLOCK
+	MOVE	S1,OBJ.ND(S1)		;GET STATION NUMBER
+	PUSHJ	P,LPTANF##		;MUST BE ANF-10
+	SKIPN	J$LLAT(J)		; OR A LAT LINE
+	JUMPF	INIT.1			;NO: NOT OUR KIND OF DEVICE
+	MOVE	S1,SUP.ST(M)		;GET DEVICE NAME
+	PUSHJ	P,LPTLIN##		;GENERATE DEVICE NAME
+	JUMPF	INIT.1			;DEVICE NOT OUR TYPE
+	MOVE	T1,J$LDEV(J)		;GET DEVICE NAME
+	DEVCHR	T1,UU.PHY		;GET DEVICE CHARACTERISTICS
+	TXNE	T1,DV.TTY		;DEFEND AGAINST NUL
+	TXNE	T1,DV.DSK		; OR NOT A TTY
+	JRST	INIT.3			;  OR CONTROLLING A JOB
+	MOVE	T1,[2,,T2]		;SET UP UUO AC
+	MOVEI	T2,.TOTRM		;WANT TO READ TERMINAL TYPE
+	MOVE	T3,J$LION(J)		;GET I/O INDEX
+	TRMOP.	T1,			;READ TERMINAL TYPE
+	  JRST	INIT.3			;PREHISTORIC MONITOR
+	MOVSI	T2,-TTYLEN		;AOBJN POINTER
+	CAME	T1,TTYTYP(T2)		;KNOWN TERMINAL TYPE?
+	AOBJN	T2,.-1			;CHECK ENTIRE TABLE
+	JUMPGE	T2,INIT.3		;RETURN IF UNKNOWN
+	MOVEM	T1,J$LTYP(J)		;SAVE AS UNIT TYPE FOR QUASAR
+	HRRZS	T2			;SAVE OFFSET
+	SETZM	TTYANS			;ASSUME NOT ANSI PRINTER
+	CAIG	T2,LASANS		;IF BEFORE LAST ANSI PRINTER
+	 SETOM	TTYANS			;SO FLAG IT
+	MOVE	T1,[XWD 2,T2]		;UUO POINTER
+	MOVX	T2,.TOLCT		;LC
+	MOVE	T3,J$LION(J)		;GET UDX
+	TRMOP.	T1,			;SEE IF LOWER-CASE
+	 SETO	T1,			;ASSUME UPPER-CASE
+	SETZM	J$LLCL(J)		;DEFAULT TO UPPER CASE
+	TRNN	T1,1			;LOWER-CASE?
+	 SETOM	J$LLCL(J)		;YES, REMEMBER THAT
+	HRLZI	T1,LPTTTY		;POINT TO DISPATCH TABLE
+	HRRI	T1,J$$DEV(J)		;MAKE A BLT POINTER
+	BLT	T1,J$$DND(J)		;COPY INTO JOB STORAGE AREA
+	PUSHJ	P,VFUINX##		;CALL VFU INITIALIZATION AND RETURN
+	MOVX	TF,.OFLYE		;GET LP20 SIMULATION ON FLAG
+	SETZ	S2,
+	STORE	TF,S2,OF.LP2		;PUT IN CORRECT POSITION
+	$RETT
+
+INIT.1:	MOVNI	S1,1			;-1 MEANS DEVICE NOT FOR US
+	$RETF				;RETURN
+
+INIT.2:	SKIPA	S1,[%RSUNA]		;UNIT NOT AVAILABLE
+INIT.3:	MOVEI	S2,%RSUDE		;UNIT WILL NEVER BE AVAILABLE
+	$RETF				;RETURN
+SUBTTL	TTYIPC - Special IPCF message processing
+
+
+; This routine will process any special messages peculiar to
+; the device driver.
+;
+; Call:	MOVE	M, IPCF message address
+;	MOVE	S2, message type
+;	PUSHJ	P,TTYIPC
+;
+; TRUE return:	Message processed by this driver
+; FALSE return:	Message unknown to this driver
+;		S1 must contain -1, S2 must be preserved
+
+TTYIPC:	MOVNI	S1,1			;WE HAVE NO SPECIAL MESSAGE
+	$RETF				;RETURN
+SUBTTL	TTYSCD - Scheduler call
+
+
+; This routine is provided for drivers which must do special
+; things at LPTSPL job scheduler level.  For most drivers, it
+; is a no-op.
+;
+; Call:	MOVE	J,  job data base address
+;	MOVE	P1, stream number
+;	PUSHJ	P,TTYSCD
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+TTYSCD::$RETT				;RETURN
+SUBTTL	TTYWAK - WAKEUP TIME CHECK
+
+
+; This routine is provided for special devices that may have
+; critical time dependencies.  The driver is called buy the
+; CHKTIM routine to see if a premature wakeup is necessary.
+;
+; Call:	MOVE	J,  job data base address
+;	MOVE	S1, current UDT
+;	MOVE	S2, normal wakeup time
+;	PUSHJ	P,TTYWAK
+;
+; TRUE return:	OK to zero JOBWKT if needed
+; FALSE return:	Never zero JOBWKT under any circumstances
+;
+; On either return, S1 must be preserved and S2 may be altered to
+; contain the desired wakeup time.  Most drivers will always want
+; their JOBWKT entry zeroed unless their keeping track of several
+; wakeup times.
+
+TTYWAK:	$RETT				;RETURN
+SUBTTL	TTYOPX - OPEN device
+
+; This routine will setup device specific information for an OPEN.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYOPX
+;
+; TRUE return:	Appropriate response-to-setup code returned in S1
+; FALSE return:	ditto
+
+TTYOPX:	MOVEI	T1,.IOASC		;OPEN MODE
+	PUSHJ	P,LPTOPN##		;SETUP I/O, OPEN CHANNEL, ETC.
+	JUMPF	OPEN.1			;CAN'T HAVE IT RIGHT NOW
+	PUSHJ	P,VFUOPX##		;DO THE VFU OPEN TIME INTIALIZATION
+	PUSHJ	P,INTCNL##		;CONNECT TO INTERRUPT SYSTEM
+	JUMPF	OPEN.2			;GIVE UP
+	TXO	S,INTRPT		;INDICATE WE'RE CONNECTED
+	MOVEI	S1,%RSUOK		;LOAD THE CODE
+	$RETT				;RETURN
+
+OPEN.1:	SKIPA	S1,[%RSUNA]		;UNIT NOT AVAILABLE
+OPEN.2:	MOVEI	S2,%RSUDE		;UNIT WILL NEVER BE AVAILABLE
+	$RETF				;RETURN
+SUBTTL	TTYCLS - CLOSE device
+
+; This routine is called to CLOSE the channel.  In simple
+; drivers which use standard TOPS-10 I/O facilities, this
+; is accomplished with a CLOSE or RESDV. UUO.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYCLS
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+TTYCLS:	PJRST	LPTCLS##		;CALL COMMON CLOSE ROUTINE
+SUBTTL	TTYFLS - Flush a job
+
+; This routine is called whenever a job is to be flushed.
+; Most drivers don't need to do anything special and a
+; common routine in LPTSPL can be called.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYFLS
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+TTYFLS:	PJRST	LPTFLS##		;CALL COMMON FLUSH ROUTINE
+SUBTTL	TTYFVU - Load VFU
+
+; This routine is called to load the VFU for a printer.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYVFU
+;
+; TRUE return:	VFU loaded or no VFU needed
+; FALSE return:	VFU load failed
+
+TTYVFU:	CAIE	S1,1			;IS COMMAND "LOAD"?
+	 PJRST	VFUVFU##		;NO, DO NOTHING NOW
+
+	;HERE COMMAND IS "LOAD VFU".  VFUVFU WILL TELL US WHAT PITCH VFU
+	;IT GOT.  IF THE VFU SPECIFIED A PARTICULAR VERTICAL PITCH, HONOR IT
+	;IF THE PRINTER WE HAVE UNDERSTANDS ANSI (DEC PRIVATE) SEQUENCES.
+
+	PUSHJ	P,VFUVFU##		;LET THE VFU HANDLER DO IT ALL
+	 SKIPE	TTYANS(J)		;IF SIMPLE PRINTER, DON'T SELECT PITCH
+	CAIN	C,356			;SIMPLE START?
+	 PJRST	OUTDMP##		;YES, WE'RE DONE
+
+	SETZ	S1,			;ASSUME BAD VFU
+	CAIN	C,354			;6-LPI?
+	 MOVEI	S1,"1"			;YES, CODE FOR THAT
+	CAIN	C,355			;8-LPI?
+	 MOVEI	S1,"2"			;YES, CODE FOR THAT
+	JUMPE	S1,OUTDMP##		;I DON'T THINK THIS CAN HAPPEN
+	PUSH	P,S1			;SAVE THE SELECTION CHAR
+	MOVEI	C,.CHESC		;NOW, TELL THE PRINTER
+	PUSHJ	P,PHSOUT##
+	MOVEI	C,"["
+	PUSHJ	P,PHSOUT##
+	POP	P,C			;THE SELECTION CHAR
+	PUSHJ	P,PHSOUT##
+	MOVEI	C,"z"			;SET VERTICAL PITCH
+	PUSHJ	P,PHSOUT##		;SO
+
+	PJRST	OUTDMP##		;FORCE OUT THE BUFFERS
+SUBTTL	TTYRAM - Load RAM
+
+
+; This routine is called to load the character translation
+; RAM for a printer.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYRAM
+;
+; TRUE return:	RAM loaded or no RAM needed
+; FALSE return:	RAM load failed
+
+TTYRAM:	PJRST	VFURAM##		;LET THE VFU HANDLER DO IT
+SUBTTL	TTYLER - File LOOKUP error processing
+
+; This routine is provided for special devices which accumulate
+; LPTSPL run log data differently than most.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYLER
+;
+; TRUE return:	Never
+; FALSE return:	Always
+
+TTYLER:	PJRST	LPTLER##		;CALL COMMON ERROR ROUTINE
+SUBTTL	TTYIER - File input error processing
+
+; This routine is provided for special devices which accumulate
+; LPTSPL run log data differently than most.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYIER
+;
+; TRUE return:	Never
+; FALSE return:	Always
+
+TTYIER:	PJRST	LPTIER##		;CALL COMMON ERROR ROUTINE
+SUBTTL	TTYOUT - Output a buffer
+
+; This routine is provided for special devices that cannot
+; use the conventional output routine (LPTOUT) or must first
+; condition the data before doing the output.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYOUT
+;
+; TRUE return:
+; FALSE return:
+
+TTYOUT:	PJRST	LPTOUT##		;CALL COMMON OUTPUT ROUTINE
+SUBTTL	TTYOER - Output error processing
+
+
+; This routine provides for driver or device-specific I/O error
+; processing.  When called, both S1 and J$LIOS(J) will contain
+; the returned I/O error status bits (GETSTS information).  No
+; attempt will be made to determine the validity or severity of
+; any errors.  That is left for the driver.
+; Call:	MOVE	S1,J$LIOS(J)	;Justed updated with physical GETSTS
+;	MOVE	S2,J$XIOS(J)	;Just updated with physical DEVOP.
+;	PUSHJ	P,TTYOER
+;
+; TRUE return:	No output error or error recovery sucessful
+; FALSE return:	Unrecoverable output error
+
+TTYOER:	PUSHJ	P,VFUOER##		;LET THE VFU HANDLER FIDDLE WITH ERRORS
+	PJRST	LPTOER##		;CALL LPTSPL TO PROCESS
+SUBTTL	TTYEOX - Output EOF processing
+
+; This routine is called at the end of the job to do special
+; EOF processing for the device being used.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYEOX
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+TTYEOX:	$RETT				;NO SPECIAL PROCESSING
+SUBTTL	TTYBJB - Begining of job
+
+
+; This routine is called at the begining of job processing.
+; It is used to reset device dependent job parameters such
+; as switching back to a default font.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYBJB
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+TTYBJB:	MOVEI	C,.CHCRT		;MAKE SURE (AB)USER DIDN'T
+	PUSHJ	P,PHSOUT##		;LEAVE THE CARRIAGE SOMEPLACE STRANGE
+	$RETT				;RETURN
+SUBTTL	TTYEJB - End of job
+
+
+; This routine is called at the end of job processing.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYEJB
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+TTYEJB:	$RETT				;RETURN
+SUBTTL	TTYBFL - Begining of input file
+
+
+; This routine is called at the begining of input file
+; processing. It; is used to reset device dependent file
+; parameters such as non-sticky font specs and attributes.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYBFL
+;
+; TRUE return:	Print file
+; FALSE return:	Do not print file
+
+TTYBFL:	$RETT				;RETURN
+SUBTTL	TTYEFL - End of input file
+
+
+; This routine is called at the end of input file
+; processing.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYEFL
+;
+; TRUE return:	Continue file processing
+; FALSE return:	Do not print additional copies of file
+
+TTYEFL:	$RETT				;RETURN
+SUBTTL	TTYBAN - Banner initialization
+
+; This routine is called at the start of banner processing.
+; It is used to alter the appearance if a banner page.  For
+; example, a special font or page orientation could be selected
+; at this time and it would only affect the printing of the
+; banner page.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYBAN
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+TTYBAN:	$RETT				;RETURN
+SUBTTL	TTYHDR - Header initialization
+
+; This routine is called at the start of header processing.
+; It is used to alter the appearance if a header page.  For
+; example, a special font or page orientation could be selected
+; at this time and it would only affect the printing of the
+; header page.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYHDR
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+TTYHDR:	$RETT				;RETURN
+SUBTTL	TTYWID - Header width initialization
+
+; This routine is called to initialize the page width for
+; header processing.  It is needed because page orientation
+; (determined by LPTTTY) could affect the width of the page
+; hence, the number of characters that may be printed on a
+; single line.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYWID
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+TTYWID:	$RETT				;RETURN
+SUBTTL	TTYRUL - Ruler processing
+
+; This routine is called to output the ruler lines between jobs.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYRUL
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+TTYRUL:	PJRST	LPTRUL##		;LET COMMON CODE DO IT
+SUBTTL	TTYSHT - Stream shutdown
+
+
+; This routine is called when a stream is shutdown, just
+; prior to releasing the job data page.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,TTYSHT
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+TTYSHT:	PJRST	VFUSHT##		;LET THE VFU HANDLER DO IT
+SUBTTL	TTYSTS - Status message generation
+
+
+; This routine allows a driver to append device specific data to the
+; status update message text which is sent to QUASAR.  This text is
+; appears on queue listings and SHOW STATUS displays.  It appears as
+; the second line of request or unit status display.  LPTSPL will start
+; the text with "   Started at ...".  The driver may then append useful
+; information such as "printed 47 out of 56 pages".
+
+TTYSTS::PJRST	LPTSTS##		;CALL COMMON CODE
+SUBTTL	TTYCHR - File data intercept
+
+; This routine is called for file data only, if the character in C
+; is in the break mask pointed to by J$DBRK and the special interpretation
+; (graphics) flag is set. (J$FASC .LT. 0)  See FILCHR.
+;
+; Call:	MOVE	J, job data base address
+;	MOVE	C, break character
+;	PUSHJ	P,TTYCHR
+; TRUE return:	Break condition handled
+; FALSE return:	Abort job (eg, error in escape sequence)
+
+TTYCHR:	$RETT
+SUBTTL	TTYCHO - Character translator
+
+
+; This routine will handle character translation.  Called when a character
+; is about to be sent to what everyone else thinks is the physical device.
+; It simulates a hardware translation RAM.
+;
+; Call:	MOVE	J, job data base address
+;	MOVE	C, intercepted character
+;	PUSHJ	P,TTYCHO
+; TRUE return:	Character translated if necessary, caller to output
+; FALSE return:	Character processed here, nothing to output
+
+TTYCHO:	PJRST	VFUCHO##		;THE VFU HANDLER CAN DO IT
+SUBTTL	Literal pool
+
+
+TTYLIT:	LIT
+
+TTYEND::!END

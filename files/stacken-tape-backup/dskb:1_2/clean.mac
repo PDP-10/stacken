@@ -1,0 +1,17 @@
+title	clean -- clear arp cache and zap all tcbs.
+search jobdat, uuosym, macten
+
+.text "/symseg:low/locals"
+
+clean:: jfcl
+	reset
+	movei	1,[ab: exp 5, 0, 0]
+	call	1,[sixbit "arp."]
+	 jfcl
+	movei	1,[tb: exp 6, 0, 0, 0, 0, 0, 0, 0, 0]
+	call	1,[sixbit "tcp."]
+	 jfcl
+	monrt.
+	jrst	clean
+
+end	clean

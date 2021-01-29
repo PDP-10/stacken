@@ -1,0 +1,2496 @@
+	TITLE DCNSPY - Spy on DECnet-36
+
+	SEARCH D36PAR,SCNMAC,S,UUOSYM,DPYDEF,NETPRM,MACSYM
+
+DEFINE RETSKP,<JRST CPOPJ1>	;OVERRIDE UNIVERSAL'S DEFN
+
+	.REQUEST REL:SCAN
+	.REQUEST REL:HELPER
+	.REQUEST DSK:DPY	;GET THE DPY PACKAGE
+
+	.TEXT	"/LOCALS/SYMSEG:HIGH"
+
+	SALL
+
+	PRGID='DCNSPY'		;NAME OF THIS PROGRAM
+	PRGABR='SPY'		;3 CHR ABBREVIATION USED FOR PROG.
+
+	SPYWHO==0
+	SPYVER==4		;MAJOR VERSION
+	SPYMIN==0		;MINOR VERSION
+	SPYEDT==11		;EDIT NUMBER
+
+	%%SPY==BYTE (3)SPYWHO(9)SPYVER(6)SPYMIN(18)SPYEDT
+	LOC 137
+.JBVER::!EXP %%SPY
+	RELOC
+
+;This program uses SPY pages.
+
+	TWOSEG	400000
+	SUBTTL External Definitions
+
+	EXTERN .ISCAN		;INITIALIZE THE WHOLE SCAN ROUTINE
+	EXTERN .OSCAN		;READ SWITCH.INI
+	EXTERN .PSCAN		;PARTIAL SCAN INITIALIZER
+
+	EXTERN .TSPAC		;TYPE A SPACE
+	EXTERN .TTABC		;TYPE A TAB CHARACTER
+	EXTERN .TCOMA		;TYPE OUT A COMMA
+	EXTERN .TCRLF		;TYPE A CRLF
+	EXTERN .TSTRG		;TYPE A STRING FROM T1
+	EXTERN .TOCTW		;TYPE NUMBER IN T1 IN OCTAL
+	EXTERN .TDECW		;TYPE NUMBER IN T1 IN DECIMAL
+	EXTERN .TSIXN		;TYPE VALUE IN T1 IN SIXBIT
+	EXTERN .TCOLN		;TYPE A COLON
+	EXTERN .TRBRK		;TYPE A RIGHT BRACKET
+	EXTERN .TPPNW		;TYPE T1 AS A PPN
+	EXTERN .TXWDW		;TYPE T1 AS HALF-WORDS
+	EXTERN .TCHAR		;TYPE CHARACTER IN T1
+	EXTERN .TTIME		;TYPE T1 AS A MILLISECOND TIME
+
+	EXTERN .DECNW		;READ IN A DECIMAL NUMBER
+	EXTERN .SWDEC		;READ IN A DECIMAL SWITCH ARG
+	SUBTTL Build the SCAN switch tables
+
+; See SCNMAC.MAC for definition of macros used here.
+
+;Define the defaults for switches:
+;	First arg is 3-chr abbrieviation used for this switch.
+;	Second arg is maximum allowed value.
+;	Third arg is absent default (AD.xxx)
+;		(not used by SCAN, for application use only).
+;	Fourth arg is present default (PD.xxx)
+;		(used by SCAN unless FS.VRQ specified)
+
+	RADIX	10
+
+;	Name	Max	Absent	Present
+;	xxx	MX.xxx	AD.xxx	PD.xxx
+;	----	------	------	-------
+
+DM	DPY,	1,	1,	1	;/DPY
+DM	COM,	1,	0,	1	;/COM
+DM	JOB,	1024,	0,	0	;/JOB
+DM	CHN,	1024,	1,	1	;/CHANNEL
+DM	DLY,	1024,	5,	5	;/DELAY (SECONDS)
+DM	PAG,	512,	10,	15	;/PAGE
+DM	SJP,	0,	0,	0	;/SJBPTR:addr (FS.LRG)
+
+	RADIX	8
+
+
+;Remember to update HELP string at HLPSTR
+
+DEFINE	SWTCHS,<
+	XLIST
+SN	DPY,SCNDPY,FS.NCM!FS.NFS
+SP	PAGE,SCNPAG,.SWDEC,PAG,FS.NFS!FS.NCM!FS.VRQ
+SP	*JOB,SCNJOB,.SWDEC,JOB,FS.NFS!FS.NCM!FS.VRQ
+SP	*CHANNEL,SCNCHN,.SWDEC,CHN,FS.NFS!FS.NCM!FS.VRQ
+SN	COMMENT,SCNCOM,FS.NCM!FS.NFS
+SP	DELAY,SCNDLY,.SWDEC,DLY,FS.NFS!FS.NCM!FS.VRQ
+SP	*NRTSJB,0,SPYNRT
+SP	*SJB,0,SPYSJB
+SP	*SLB,0,SPYSLB
+SP	*ELB,0,SPYELB
+SP	*RCB,0,SPYRCB
+SP	*AJB,0,SPYAJB
+SP	*DLB,0,SPYDLB
+SP	*LNB,0,SPYLNB
+SP	*MEM,0,SPYMEM
+SP	SJBPTR,SCNSJP,.SWOCT##,SJP,FS.NFS!FS.NCM!FS.VRQ!FS.LRG
+SP	KDP,0,SPYKDP
+SP	CIRCUIT,,.SWCKT,,FS.NFS!FS.NCM!FS.VRQ
+SP	NODE,NODID,.SWNOD,,FS.NFS!FS.NCM!FS.VRQ
+SP	DAYTIME,0,SPYTIM
+	LIST
+>;END OF SWTCHS
+;Now build the tables.
+
+	DOSCAN (SWT)
+	SUBTTL HLPSTR -- The HELP string
+
+HLPSTR:	ASCIZ ~
+
+DCNSPY uses verb-mode SCAN.  The commands are:
+
+JOB n		Job number to spy on, no default
+		Ignored if SJBPTR is non-zero, see below.
+CHANNEL	n	DECnet channel number for that job, default 1
+CIRCUIT ckt-id	Set ckt-id for examining circuit blocks.
+		(Circuit-ids are of the form DEV-CNT-UNT, ex. DTE-0-1)
+NODE n		Node number for adjacency block, default first AJB
+[NO]COMMENT	Type out comments for each field displayed
+[NO]DPY		Use DPY mode
+PAGE		Length by which DPY mode + and - commands shift page
+DELAY		Seconds to sleep in DPY mode
+SJBPTR n	Address of SJB to use.
+		While SJBPTR is non-zero, Job is ignored.
+
+SJB		Action command, type out SCTL's SJB
+NRTSJB		Action command, type out NRTSER's SJB
+SLB		Action command, type out SCTL's SLB
+ELB		Action command, type out NSP's ELB
+RCB		Action command, type out RTR's RCB for given circuit-id
+AJB		Action command, type out RTR's AJB for given adjacency
+DLB		Action command, type out DLL's DLB for given circuit-id
+LNB		Action command, type out DLL's LNB for given circuit-id
+MEM		Action command, type out memory utilization
+KDP		Action command, type out KMC/DUP data base
+DAYTIME		Action command, type out current time
+
+In DPY mode, the immediate commands are:
+
+escape		Escape to command mode
+^Z		Escape to monitor mode, CONTINUE to return
+^C		Escape to monitor mode, CONTINUE to return
+R		Refresh the screen
+space		Recalculate the screen now
++		Move window forward by PAGE lines
+-		Move window backward by PAGE lines
+~
+	SUBTTL Accumulator Assignments
+
+;Must be after DOSCAN call, for SL is redefined herein
+
+	T1=1
+	T2=2
+	T3=3
+	T4=4
+
+	P1=5
+	P2=6
+
+	NUM=7			;NUMBER TO PRINT FOR "OUTNUM"
+	N=7			;SCAN CALLS IT THIS
+	BAS=10			;BASE FOR "OUTNUM" TO PRINT NUMBER IN
+	C=10			;AGAIN FOR SCAN
+	WDT=11			;WIDTH OF FIELD FOR OUTNUM. ZERO = ANY,
+				;  MINUS MEANS LEFT JUSTIFY.
+	FIL=12			;CHAR TO USE FOR FILLER.
+
+;The following ACs are redefined for each display processor's use
+
+	KDL=13			;POINTER TO THE "KDL PAGE" (ALA NETPRM)
+
+	SJ=13			;POINTER TO SCTL JOB BLOCK IN SPY PAGE
+	EL=14			;POINTER TO NSP PORT BLOCK IN SPY PAGE
+	SL=15			;POINTER TO SCTL LINK BLOCK IN SPY PAGE
+	RC=13			;POINTER TO ROUTER'S CIRCUIT BLOCK
+	AJ=14			;POINTER TO ROUTER'S ADJACENCY BLOCK
+	DL=14			;POINTER TO DNADLL'S DATA LINK BLOCK
+	LN=15			;POINTER TO DNADLL'S LINE BLOCK
+	MC=13			;SIZE OF DECNET BIT MAP (IN BITS)
+	MP=14			;POINTER TO DECNET BIT MAP
+
+;End of redefined ACs
+
+	CX=16			;SUPER-TEMP FOR MACROS
+	.SAC==CX		;SOME MACROS USE THIS NAME
+
+	P=17
+
+
+	OPDEF CALL [PUSHJ P,]
+	OPDEF RET  [POPJ  P,]
+
+DEFINE USRSAV,<>		;DON'T LET SAVEAC GET CARRIED AWAY
+
+	$TTY==2			;TTY'S I/O CHANNEL
+	TYOBSZ==400		;TTY'S OUTPUT BUFFER SIZE
+	subttl macros
+
+	$sp==40			;a space
+	$zr==60			;a zero
+
+define text(string)< str$ [asciz |string|] >
+
+define crlf<
+	chi$ ^o15		;;cr
+	chi$ ^o12		;;lf
+>
+
+define number(qnum,qbas,qwid,qfil)<
+    ifnb <qnum>,<move num,qnum>	;;use number only if specified
+    ifb  <qbas>,<movei bas,10>	;;default base to 10 (decimal)
+    ifnb <qbas>,<movei bas,qbas>
+    ifb  <qwid>,<movei wdt,0>	;;default width to "any"
+    ifnb <qwid>,<movei wdt,qwid>
+    ifb  <qfil>,<movei fil,$sp>	;;default filler to "spaces"
+    ifnb <qfil>,<movei fil,qfil>
+	pushj p,outnum		;;call outnum with args set up
+>
+
+define goto(pos)<		;;go to line position "pos"
+	movei	t1,pos-1	;;get position to "go to" (1 origined)
+	pushj	p,pgoto		;;call "goto" routine to get there
+>
+
+define err(text),<
+	jrst	[movei	t1,[asciz |text
+|]
+		 jrst	errstr]
+>
+	SUBTTL Storage Definitions
+
+;Compile in the storage locations each DECnet-36 will be mapped
+;through.
+
+DEFINE ALCPAG(nam),<
+	nam'PAG==...PAG		;;ALLOCATE NEXT PAGE AS FIRST OF TWO
+	nam'ADR==...PAG * 1000	;;MAKE A SYMBOL FOR ADDRESS TOO
+	nam'PG1==...PAG+1
+	...PAG==...PAG+2
+>;END OF ALCPAG
+
+	...PAG==340		;START ALLOCATING SPY PAGES HERE
+
+	ALCPAG PDB		;TOPS-10 PDB
+	ALCPAG SJB		;SCTL JOB BLOCK
+	ALCPAG SLB		;SCTL LINK BLOCK
+	ALCPAG ELB		;NSP LINK BLOCK
+	ALCPAG RCB		;ROUTER CIRCUIT BLOCK
+	ALCPAG AJB		;ROUTER ADJACENCY BLOCK
+	ALCPAG DLB		;DNADLL DATA LINK BLOCK
+	ALCPAG LNB		;DNADLL LINE BLOCK
+	ALCPAG MEM		;DECNET MEMORY BIT MAP
+	ALCPAG TMP		;USE THIS PAIR FOR TEMP MAPPING
+
+IFG <...PAG-400>,<PRINTX ?PAGE NUMBER OVERFLOW
+		PASS2>
+	SUBTTL General Storage
+
+	RELOC	0
+
+	LN$PDL==100
+PDL:	BLOCK	LN$PDL+1
+
+TTYOBF:	BLOCK	3		;TTY OUTPUT BUFFER CONTROL BLOCK
+OBF1:	BLOCK	TYOBSZ+3	;TTY OUTPUT BUFFER
+
+CCLF1:	BLOCK 1			;NON-ZERO IF CCL STARTED
+
+KDLPAG:	BLOCK	KDLEST+1	;LONG ENOUGH TO HOLD KDP STATUS
+
+SPYFCN:	EXP 0			;PUT FUNCTION ADDRESS HERE FOR SPYGO
+TYPDPY:	EXP 0			;NON-ZERO TO TYPE IN DPY MODE
+BIGOUT:	BLOCK 1			;NON-ZERO TO USE TTY OUTPUT BUFFERS
+
+LINGOL:	EXP 0			;USED BY SPYINT'S + AND - COMMANDS
+LINCNT:	EXP 0			; DITTO
+
+CKTID: EXP 0			;PLACE TO STORE CIRCUIT ID
+NODID: EXP 0			;PLACE TO STORE NODE ADDRESS
+NRTSJB:	EXP 0			;POINTER TO NRTSER'S SJB
+
+TOTFRE:	EXP	0		;TOTAL FREE CORE
+BIGHOL:	EXP	0		;LARGEST HOLE
+FREBLK:	BLOCK	^D36		;UTILIZATION TABLE
+
+	;SCAN storage
+
+BEGSCN:!			;START OF REGION TO BE SET TO -1
+SCNCHN:	BLOCK 1			;ZERO-RELATIVE CHANNEL NUMBER WE'RE TO SPY ON
+SCNJOB:	BLOCK 1			;JOB NUMBER WE'RE TO SPY ON
+SCNDPY:	BLOCK 1			;NON-ZERO TO GO INTO DPY MODE
+SCNPAG:	BLOCK 1			;SIZE OF A PAGE, FOR "+" SCROLLING
+SCNDLY:	BLOCK 1			;DEFAULT DPY TIMER
+SCNCOM:	BLOCK 1			;TYPE OUT COMMENTS IF NON-ZERO
+SCNSJP:	BLOCK 1			;POINTER TO SJP WE'RE TO EXAMINE
+ENDSCN==.-1			;END OF REGION TO BE SET TO -1
+
+	RELOC
+	SUBTTL Block Description Tables -- SJB
+
+;Session Control Job Block
+
+DEFINE SJBMAC,<
+ENTRY. SJ,NXT,(SJ),.TADDR,TAB,0, <Next job block in system>
+ENTRY. SJ,CHT,(SJ),.TADDR,TAB,0, <PTR to SLB table (indexed by channel)>
+ENTRY. SJ,CHC,(SJ),.TDECD,CRLF,1,<Count of spaces allocated in SLB table>
+ENTRY. SJ,PSJ,(SJ),.TADDR,TAB,0, <Pointer to system's pointer to the SJB>
+ENTRY. SJ,PRV,(SJ),.TBOOL,TAB,1, <User is PRVJ privileged>
+ENTRY. SJ,RST,(SJ),.TBOOL,CRLF,1,<Reset in progress>
+ENTRY. SJ,JOB,(SJ),.TDECD,TAB,1, <Job number>
+ENTRY. SJ,CTA,(SJ),.TDECD,TAB,1, <Number of CI timers active for job>
+ENTRY. SJ,TXQ,(SJ),.TQUE ,CRLF,1,<Transaction queue of NSPSER calls>
+ENTRY. SJ,PSQ,(SJ),.TQUE ,TAB,0, <Queue of SLBs with PSIs outstanding>
+ENTRY. SJ,GOL,(SJ),.TDECD,TAB,1, <Input data request goal>
+ENTRY. SJ,INQ,(SJ),.TDECD,CRLF,1,<Job input quota>
+ENTRY. SJ,OTQ,(SJ),.TDECD,TAB,1, <Job output quota>
+ENTRY. SJ,INU,(SJ),.TDECD,TAB,1, <Buffers used toward input job quota>
+ENTRY. SJ,OTU,(SJ),.TDECD,CRLF,1,<Buffers used toward output job quota>
+ENTRY. SJ,SAB,(SJ),.TADDR,TAB,0, <SA block pointer>
+ENTRY. SJ,MUU,(SJ),.TMUUO,CRLF,2,<Save MUUO word here for STOTAC, etc>
+>;END OF SJBMAC
+DEFINE SLBMAC,<
+ENTRY. SL,ASQ,(SL),.TADDR,TAB,0, <Pointer to next SL in system>
+ENTRY. SL,NXP,(SL),.TADDR,TAB,0, <Pointer to next SL with active PSI>
+ENTRY. SL,JFQ,(SL),.TADDR,CRLF,1,<Pointer to next SL requesting jiffy service>
+ENTRY. SL,SLB,(SL),.TADDR,TAB,0, <Pointer to ourselves>
+ENTRY. SL,SJB,(SL),.TADDR,TAB,0, <Pointer to job block>
+ENTRY. SL,CHN,(SL),.TDECD,CRLF,1,<Channel number>
+ENTRY. SL,DOB,(SL),.TDECD,TAB,1, <Destination object type>
+ENTRY. SL,SOB,(SL),.TDECD,TAB,1, <Source object type>
+ENTRY. SL,CCB,(SL),.TBOOL,CRLF,1,<Check connect block>
+ENTRY. SL,KCB,(SL),.TBOOL,TAB,1, <Keep connect block for life of link>
+ENTRY. SL,PSI,(SL),.TBOOL,TAB,1, <PSI pending flag>
+ENTRY. SL,PH2,(SL),.TBOOL,CRLF,1,<Phase II has no resend capability>
+ENTRY. SL,ABO,(SL),.TBOOL,TAB,1, <Close port after abort & release>
+ENTRY. SL,FSL,(SL),.TBOOL,TAB,1, <Free SLB when done with all processing>
+ENTRY. SL,BSY,(SL),.TBOOL,CRLF,1,<SLB is busy (cannot be freed)>
+ENTRY. SL,LBC,(SL),.TBOOL,TAB,1, <Link is being closed by NSP>
+ENTRY. SL,JFR,(SL),.TBOOL,TAB,1, <Jiffy service requested flag>
+ENTRY. SL,EOM,(SL),.TBOOL,CRLF,1,<Last segment output was end of message>
+ENTRY. SL,STA,(SL),.TSTAS,TAB,1, <Session control state>
+ENTRY. SL,XFL,(SL),.TOCTW,TAB,1, <Transmit flow control option>
+ENTRY. SL,RFL,(SL),.TOCTW,CRLF,1,<Receive flow control option>
+ENTRY. SL,GOL,(SL),.TDECD,TAB,1, <Receive data request goal>
+ENTRY. SL,INQ,(SL),.TDECD,TAB,1, <Input quota for link>
+ENTRY. SL,OTQ,(SL),.TDECD,CRLF,1,<Output quota for link>
+ENTRY. SL,INU,(SL),.TDECD,TAB,1, <Input buffers in use>
+ENTRY. SL,OTU,(SL),.TDECD,TAB,1, <Output buffers in use>
+ENTRY. SL,SST,(SL),.TOCTW,CRLF,1,<Link status word>
+ENTRY. SL,PSM,(SL),.TOCTW,TAB,1, <The PSI mask>
+ENTRY. SL,DRR,(SL),.TDECD,TAB,1, <Normal data requests to resend>
+ENTRY. SL,RSN,(SL),.TDECD,CRLF,1,<Reason code of disconnect or reject>
+ENTRY. SL,PID,(SL),.TADDR,TAB,0, <NSPpid of port>
+ENTRY. SL,DNA,(SL),.TNODE,TAB,1, <Destination node address>
+ENTRY. SL,SIZ,(SL),.TDECD,CRLF,1,<Segment size in bytes>
+ENTRY. SL,CTM,(SL),.TTIME,TAB,0, <Connect initiate timer>
+ENTRY. SL,WKA,(SL),.TADDR,TAB,0, <Address of wakeup routine>
+ENTRY. SL,CDM,(SL),.TADDR,CRLF,1,<Pointer to dis/connect message block>
+ENTRY. SL,CBP,(SL),.TADDR,TAB,0, <Pointer to passive connect block>
+ENTRY. SL,OTM,(SL),.TADDR,TAB,0, <Pointer to partial output message>
+ENTRY. SL,UID,(SL),.TDECD,CRLF,1,<Serial number>
+ENTRY. SL,BYS,(SL),.TDECD,TAB,1, <Bytes sent>
+ENTRY. SL,BYR,(SL),.TDECD,TAB,1, <Bytes received>
+ENTRY. SL,PKS,(SL),.TDECD,CRLF,1,<Packets sent>
+ENTRY. SL,PKR,(SL),.TDECD,CRLF,2,<Packets received
+>
+
+ENTRY. SS,OTH,+SL.NSL(SL),.TBOOL,TAB,1, <Indicates this is "normal" sub-link>
+ENTRY. SS,XDO,+SL.NSL(SL),.TDECD,TAB,1, <Sublink transmit DRQs outstanding>
+ENTRY. SS,RDO,+SL.NSL(SL),.TDECD,CRLF,1,<Sublink receive DRQs outstanding>
+ENTRY. SS,INQ,+SL.NSL(SL),.TQUE ,CRLF,2,<Sublink input queue
+>
+
+ENTRY. SS,OTH,+SL.OSL(SL),.TBOOL,TAB,1, <Indicates this is "other" sub-link>
+ENTRY. SS,XDO,+SL.OSL(SL),.TDECD,TAB,1, <Sublink transmit DRQs outstanding>
+ENTRY. SS,RDO,+SL.OSL(SL),.TDECD,CRLF,1,<Sublink receive DRQs outstanding>
+ENTRY. SS,INQ,+SL.OSL(SL),.TQUE ,CRLF,2,<Sublink input queue>
+>;END OF SLBMAC
+DEFINE ELBMAC,<
+ENTRY. EL,APQ,(EL),.TADDR,TAB,0, <Next in queue of all link blocks>
+ENTRY. EL,HBQ,(EL),.TADDR,TAB,0, <Next in queue of links in a hash bucket>
+ENTRY. EL,JFQ,(EL),.TADDR,CRLF,1,<Next in queue of links needing jiffy service>
+ENTRY. EL,OJQ,(EL),.TBOOL,TAB,1, <Link is on the jiffy-request queue>
+ENTRY. EL,SNC,(EL),.TBOOL,TAB,1, <Set if not yet told SC about no conf>
+ENTRY. EL,CNF,(EL),.TBOOL,CRLF,1,<Set if we have confidence in link>
+ENTRY. EL,SCM,(EL),.TBOOL,TAB,1, <Send connect message next jiffy>
+ENTRY. EL,SDM,(EL),.TBOOL,TAB,1, <Send connect ACK message next jiffy>
+ENTRY. EL,ABO,(EL),.TBOOL,CRLF,1,<Aborting this logical link>
+ENTRY. EL,DTO,(EL),.TBOOL,TAB,1, <Delay timer is for other sublink>
+ENTRY. EL,STA,(EL),.TSTAN,TAB,1, <NSP state of this link>
+ENTRY. EL,SIZ,(EL),.TDECD,CRLF,1,<Max size of a segment on this link>
+ENTRY. EL,LLA,(EL),.TOCTW,TAB,1, <Local link address>
+ENTRY. EL,RLA,(EL),.TOCTW,TAB,1, <Remote link address>
+ENTRY. EL,CLC,(EL),.TDECD,CRLF,1,<Count of retries left with ORQ messages>
+ENTRY. EL,ORC,(EL),.TDECD,TAB,1, <Count of msgs out in router>
+ENTRY. EL,VER,(EL),.TDECD,TAB,1, <Version of remote NSP, see ver3.1,ver3.2>
+ENTRY. EL,DSG,(EL),.TOCTW,CRLF,1,<Msg segment being timed for delay calc>
+ENTRY. EL,DTM,(EL),.TTIME,TAB,0, <And time it was first sent>
+ENTRY. EL,NNM,(EL),.TNODE,TAB,1, <The remote's node number>
+ENTRY. EL,NDB,(EL),.TADDR,CRLF,1,<PTR to NSP node block>
+ENTRY. EL,TMA,(EL),.TTIME,TAB,0, <Inactivity timer>
+ENTRY. EL,SCV,(EL),.TADDR,TAB,0, <Session control call vector base address>
+ENTRY. EL,SCB,(EL),.TADDR,CRLF,1,<Session control block id>
+ENTRY. EL,DIM,(EL),.TADDR,TAB,0, <PTR to DI message>
+ENTRY. EL,CIR,(EL),.TCKT,TAB,1,  <Output circuit id>
+ENTRY. EL,CHK,(EL),.TADDR,CRLF,2,<Address of this EL, for addr check
+>
+
+ENTRY. ES,OTH,+EL.NSL(EL),.TBOOL,TAB,1, <False since this is the "normal" sublink>
+ENTRY. ES,ACK,+EL.NSL(EL),.TBOOL,TAB,1, <Send ACK for this sublink next jiffy>
+ENTRY. ES,NAK,+EL.NSL(EL),.TBOOL,CRLF,1,<Send NAK to phase 2 NSP>
+ENTRY. ES,ROF,+EL.NSL(EL),.TBOOL,TAB,1, <Receive is off>
+ENTRY. ES,ROC,+EL.NSL(EL),.TBOOL,TAB,1, <Receive off has changed>
+ENTRY. ES,XOF,+EL.NSL(EL),.TBOOL,CRLF,1,<Transmit is off>
+ENTRY. ES,BFR,+EL.NSL(EL),.TBOOL,TAB,1, <Remote is "buffer-rich" on this link>
+ENTRY. ES,DLY,+EL.NSL(EL),.TBOOL,TAB,1, <ACK delaying allowed>
+ENTRY. ES,RFL,+EL.NSL(EL),.TOCTW,CRLF,1,<Receive flow control type>
+ENTRY. ES,XFL,+EL.NSL(EL),.TOCTW,TAB,1, <Transmit flow control type>
+ENTRY. ES,GOL,+EL.NSL(EL),.TDECD,TAB,1, <Data request goal>
+ENTRY. ES,CGL,+EL.NSL(EL),.TDECD,CRLF,1,<After-congestion recovery goal>
+ENTRY. ES,XLD,+EL.NSL(EL),.TDECD,TAB,1, <Transmit DRQs outstanding to local SC>
+ENTRY. ES,XRD,+EL.NSL(EL),.TDECD,TAB,1, <Transmit DRQs outstanding to remote NSP>
+ENTRY. ES,XSD,+EL.NSL(EL),.TDECD,CRLF,1,<Transmit DRQs need to send to SC>
+ENTRY. ES,RLD,+EL.NSL(EL),.TDECD,TAB,1, <Receive DRQs outstanding to local SC>
+ENTRY. ES,RRD,+EL.NSL(EL),.TDECD,TAB,1, <Receive DRQs outstanding to remote NSP>
+ENTRY. ES,RSD,+EL.NSL(EL),.TDECD,CRLF,1,<Receive DRQs need to send to SC>
+ENTRY. ES,LMA,+EL.NSL(EL),.TOCTW,TAB,1, <Last message number assigned>
+ENTRY. ES,LAR,+EL.NSL(EL),.TOCTW,TAB,1, <Last ACK received (and processed)>
+ENTRY. ES,LMR,+EL.NSL(EL),.TOCTW,CRLF,1,<Last message received>
+ENTRY. ES,AKQ,+EL.NSL(EL),.TQUE ,TAB,0, <Queue header for the to-be-acked queue>
+ENTRY. ES,RCQ,+EL.NSL(EL),.TQUE ,TAB,0, <Queue header for the receive queue>
+ENTRY. ES,XMQ,+EL.NSL(EL),.TQUE ,CRLF,1,<Queue header for the xmit queue>
+ENTRY. ES,CWS,+EL.NSL(EL),.TDECD,TAB,1, <Current window size>
+ENTRY. ES,CDA,+EL.NSL(EL),.TDECD,TAB,1, <Number of ACKs since last window change>
+ENTRY. ES,DLT,+EL.NSL(EL),.TDECD,CRLF,2,<ACK delay timer
+>
+
+ENTRY. ES,OTH,+EL.OSL(EL),.TBOOL,TAB,1, <True since this is the "other" sublink>
+ENTRY. ES,ACK,+EL.OSL(EL),.TBOOL,TAB,1, <Send ACK for this sublink next jiffy>
+ENTRY. ES,NAK,+EL.OSL(EL),.TBOOL,CRLF,1,<Send NAK to phase 2 NSP>
+ENTRY. ES,ROF,+EL.OSL(EL),.TBOOL,TAB,1, <Receive is off>
+ENTRY. ES,ROC,+EL.OSL(EL),.TBOOL,TAB,1, <Receive off has changed>
+ENTRY. ES,XOF,+EL.OSL(EL),.TBOOL,CRLF,1,<Transmit is off>
+ENTRY. ES,BFR,+EL.OSL(EL),.TBOOL,TAB,1, <Remote is "buffer-rich" on this link>
+ENTRY. ES,DLY,+EL.OSL(EL),.TBOOL,TAB,1, <ACK delaying allowed>
+ENTRY. ES,RFL,+EL.OSL(EL),.TOCTW,CRLF,1,<Receive flow control type>
+ENTRY. ES,XFL,+EL.OSL(EL),.TOCTW,TAB,1, <Transmit flow control type>
+ENTRY. ES,GOL,+EL.OSL(EL),.TDECD,TAB,1, <Data request goal>
+ENTRY. ES,CGL,+EL.OSL(EL),.TDECD,CRLF,1,<After-congestion recovery goal>
+ENTRY. ES,XLD,+EL.OSL(EL),.TDECD,TAB,1, <Transmit DRQs outstanding to local SC>
+ENTRY. ES,XRD,+EL.OSL(EL),.TDECD,TAB,1, <Transmit DRQs outstanding to remote NSP>
+ENTRY. ES,XSD,+EL.OSL(EL),.TDECD,CRLF,1,<Transmit DRQs need to send to SC>
+ENTRY. ES,RLD,+EL.OSL(EL),.TDECD,TAB,1, <Receive DRQs outstanding to local SC>
+ENTRY. ES,RRD,+EL.OSL(EL),.TDECD,TAB,1, <Receive DRQs outstanding to remote NSP>
+ENTRY. ES,RSD,+EL.OSL(EL),.TDECD,CRLF,1,<Receive DRQs need to send to SC>
+ENTRY. ES,LMA,+EL.OSL(EL),.TOCTW,TAB,1, <Last message number assigned>
+ENTRY. ES,LAR,+EL.OSL(EL),.TOCTW,TAB,1, <Last ACK received (and processed)>
+ENTRY. ES,LMR,+EL.OSL(EL),.TOCTW,CRLF,1,<Last message received>
+ENTRY. ES,AKQ,+EL.OSL(EL),.TQUE ,TAB,0, <Queue header for the to-be-acked queue>
+ENTRY. ES,RCQ,+EL.OSL(EL),.TQUE ,TAB,0, <Queue header for the receive queue>
+ENTRY. ES,XMQ,+EL.OSL(EL),.TQUE ,CRLF,1,<Queue header for the xmit queue>
+ENTRY. ES,CWS,+EL.OSL(EL),.TDECD,TAB,1, <Current window size>
+ENTRY. ES,CDA,+EL.OSL(EL),.TDECD,TAB,1, <Number of ACKs since last window change>
+ENTRY. ES,DLT,+EL.OSL(EL),.TDECD,CRLF,2,<ACK delay timer
+>
+>;END OF ELBMAC
+	SUBTTL Block Description Tables -- RCB (Router Circuit Block)
+
+DEFINE RCBMAC,<
+ENTRY. RC,NXT,(RC),.TADDR,TAB,0, <Pointer to next circuit block>
+ENTRY. RC,LID,(RC),.TCKT,TAB,1,  <Circuit id>
+ENTRY. RC,DLB,(RC),.TADDR,CRLF,1,<Data link block address>
+ENTRY. RC,AJQ,(RC),.TQUE,TAB,0,  <Queue header for adjacency queue>
+ENTRY. RC,BCT,(RC),.TBOOL,TAB,1, <Broadcast circuit>
+ENTRY. RC,SRM,(RC),.TBOOL,CRLF,1,<Send routing message flag>
+ENTRY. RC,EBU,(RC),.TBOOL,TAB,1, <Emergency buffer in use>
+ENTRY. RC,SHM,(RC),.TBOOL,TAB,1, <Send hello message>
+ENTRY. RC,DSR,(RC),.TBOOL,CRLF,1,<We are he designated router>
+ENTRY. RC,OPN,(RC),.TBOOL,TAB,1, <Call data link function DF.OPN>
+ENTRY. RC,CLS,(RC),.TBOOL,TAB,1, <Call data link function DF.CLS>
+ENTRY. RC,STA,(RC),.TSTAR,CRLF,1,<Circuit state>
+ENTRY. RC,CST,(RC),.TDECD,TAB,1, <Circuit cost>
+ENTRY. RC,DRT,(RC),.TDECD,TAB,1, <Time before we assume DSR role>
+ENTRY. RC,TLS,(RC),.TTIME,CRLF,1,<Time last message of any type was sent>
+ENTRY. RC,TLR,(RC),.TTIME,TAB,0, <Time last routing message was sent>
+ENTRY. RC,TLH,(RC),.TTIME,TAB,0, <Time of last hello message (ethernet)>
+ENTRY. RC,TIN,(RC),.TTIME,CRLF,1,<Time we got protocol up from controller>
+ENTRY. RC,TM3,(RC),.TDECD,TAB,1, <Hello message timer>
+ENTRY. RC,BSZ,(RC),.TDECD,TAB,1, <Maximum block size>
+ENTRY. RC,RBS,(RC),.TDECD,CRLF,1,<Receive block size>
+ENTRY. RC,MXR,(RC),.TDECD,TAB,1, <Maximum routers allowed on this circuit>
+ENTRY. RC,NRO,(RC),.TDECD,CRLF,1,<Number of routers online>
+ENTRY. RC,PRI,(RC),.TDECD,TAB,1, <Priority to be designated router (ethernet)>
+ENTRY. RC,DSH,(RC),.TEADD,CRLF,1, <Ethernet address of DSR>
+ENTRY. RC,JSQ,(RC),.TQUE,TAB,0,  <Queue header for jiffy resend queue>
+ENTRY. RC,CMQ,(RC),.TDECD,TAB,1, <Messages queued>
+ENTRY. RC,CLC,(RC),.TDECD,CRLF,1,<Local messages>
+ENTRY. RC,SLZ,(RC),.TTIME,TAB,0, <(000) Seconds since last zeroed>
+ENTRY. RC,CAP,(RC),.TDECD,TAB,1, <(800) Arriving packets recieved (to NSP)>
+ENTRY. RC,CDP,(RC),.TDECD,CRLF,1,<(801) Departing packets sent (from NSP)>
+ENTRY. RC,CAL,(RC),.TDECD,TAB,1, <(802) Arriving congestion loss (to NSP)>
+ENTRY. RC,CTR,(RC),.TDECD,TAB,1, <(810) Transit packets recieved>
+ENTRY. RC,CTS,(RC),.TDECD,CRLF,1,<(811) Transit packets sent>
+ENTRY. RC,CTL,(RC),.TDECD,TAB,1, <(812) Transit congestion loss>
+ENTRY. RC,CCD,(RC),.TDECD,TAB,1, <(820) Circuit down events>
+ENTRY. RC,AJD,(RC),.TDECD,CRLF,1,<      Adjacency down events>
+ENTRY. RC,CIF,(RC),.TDECD,TAB,1, <(821) Initialization failures>
+ENTRY. RC,BSX,(RC),.TDECD,CRLF,2,<(xxx) Adjacency block size exceeded
+>
+>
+	SUBTTL	Block Description Tables -- AJB (Router Adjacency Block)
+
+DEFINE AJBMAC,<
+ENTRY. AJ,NXT,(AJ),.TADDR,TAB,0, <Pointer to next adjacency block>
+ENTRY. AJ,STA,(AJ),.TSTAA,TAB,1, <Adjacency state>
+ENTRY. AJ,NTY,(AJ),.TANTY,CRLF,1,<Neighbor node type>
+ENTRY. AJ,PH4,(AJ),.TBOOL,TAB,1, <Phase 4 adjacency>
+ENTRY. AJ,VRQ,(AJ),.TBOOL,TAB,1, <Verification requested>
+ENTRY. AJ,BLO,(AJ),.TBOOL,CRLF,1,<Blocking is requested>
+ENTRY. AJ,RJF,(AJ),.TBOOL,TAB,1, <Reject flag>
+ENTRY. AJ,MTA,(AJ),.TBOOL,TAB,1, <No multi-cast traffic>
+ENTRY. AJ,VER,(AJ),.TDECD,CRLF,1,<Neighbor's router version>
+ENTRY. AJ,ECO,(AJ),.TDECD,TAB,1, <Neighbor's router ECO level>
+ENTRY. AJ,CUS,(AJ),.TDECD,TAB,1, <Neighbor's router customer version>
+ENTRY. AJ,NAH,(AJ),.TEADD,CRLF,1,<Neighbor's ethernet address>
+ENTRY. AJ,NAA,(AJ),.TDECD,TAB,1, <Neighbor's area number>
+ENTRY. AJ,NAN,(AJ),.TDECD,TAB,1, <Neighbor's node number>
+ENTRY. AJ,RTV,(AJ),.TADDR,CRLF,1,<Pointer to routing vector>
+ENTRY. AJ,CBP,(AJ),.TADDR,TAB,0, <Pointer to router's circuit block>
+ENTRY. AJ,BSZ,(AJ),.TDECD,TAB,1, <Block size>
+ENTRY. AJ,NHT,(AJ),.TDECD,CRLF,1,<Hello timer>
+ENTRY. AJ,TLR,(AJ),.TTIME,TAB,0, <Time of last received message>
+ENTRY. AJ,PRI,(AJ),.TDECD,TAB,1, <Priority to be designated router>
+ENTRY. AJ,ARE,(AJ),.TDECD,CRLF,1,<Router's area number>
+ENTRY. AJ,MPD,(AJ),.TDECD,CRLF,2,<MPD (Reserved)>
+>
+	SUBTTL	Block Description Tables -- DLB (Data link layer circuit block)
+
+DEFINE DLBMAC,<
+ENTRY. DL,NXT,(DL),.TADDR,TAB,0, <Pointer to next DLB block>
+ENTRY. DL,UID,(DL),.TADDR,TAB,0, <Pointer to router circuit block>
+ENTRY. DL,DID,(DL),.TCKT,CRLF,1, <Circuit id>
+ENTRY. DL,RUN,(DL),.TBOOL,TAB,1, <Data link is running>
+ENTRY. DL,EBU,(DL),.TBOOL,TAB,1, <Emergency buffer is in use>
+ENTRY. DL,LIU,(DL),.TBOOL,CRLF,1,<Line is in use by circuit>
+ENTRY. DL,LNB,(DL),.TADDR,CRLF,1,<Pointer to LNB block>
+ENTRY. DL,SLZ,(DL),.TDECD,TAB,1, <(0000) Seconds since counters last zeroed>
+ENTRY. DL,BYR,(DL),.TDECD,TAB,1, <(1000) Total bytes received>
+ENTRY. DL,BYS,(DL),.TDECD,CRLF,1,<(1001) Total bytes sent>
+ENTRY. DL,DBR,(DL),.TDECD,TAB,1, <(1010) Total data blocks received>
+ENTRY. DL,DBS,(DL),.TDECD,TAB,1, <(1011) Total data blocks sent>
+ENTRY. DL,UBU,(DL),.TDECD,CRLF,2,<(1065) Count of user buffer unavailable errors>
+>
+	SUBTTL	Block Description Tables -- LNB (Data link layer line block)
+
+;Line data block structure
+
+BEGSTR LN
+	WORD NXT		; Address of next LN block
+	WORD LID		; Line ID
+	WORD PID		; Line's portal id
+	WORD FLG,0		; Flags
+	 FIELD CAD,1		; Channel address is DECnet (Ethernet only)
+	 FIELD STA,1		; State of line
+	 FIELD CON,2		; Controller (normal/loopback)
+	 FIELD PRO,6		; Protocol type
+	 FIELD CTY,6		; Circuit type
+	 FIELD DBF,6		; Default number of buffers
+	 FIELD BSZ,12		; Maximum receive buffer size on this line
+	HWORD BNO		; Number of buffers to post
+	HWORD NBP		; Number of buffers posted
+ENDSTR
+
+DEFINE LNBMAC,<
+ENTRY. LN,NXT,(LN),.TADDR,TAB,0, <Pointer to next line block>
+ENTRY. LN,LID,(LN),.TCKT,TAB,1,  <Line id>
+ENTRY. LN,PID,(LN),.TADDR,CRLF,1,<Portal id>
+ENTRY. LN,CAD,(LN),.TBOOL,TAB,1, <Channel address is DECnet>
+ENTRY. LN,STA,(LN),.TDECD,TAB,1, <Line state>
+ENTRY. LN,CON,(LN),.TDECD,CRLF,1,<Controller type>
+ENTRY. LN,PRO,(LN),.TDECD,TAB,1, <Protocol type>
+ENTRY. LN,CTY,(LN),.TDECD,TAB,1, <Circuit type>
+ENTRY. LN,DBF,(LN),.TDECD,CRLF,1,<Default number of buffers>
+ENTRY. LN,BSZ,(LN),.TDECD,TAB,1, <Maximum receive buffer size>
+ENTRY. LN,BNO,(LN),.TDECD,TAB,1, <Number of buffers to post>
+ENTRY. LN,NBP,(LN),.TDECD,CRLF,2,<Number of buffers posted>
+>
+	SUBTTL Expand the Block Description Macros
+
+;The tables set on this page are used by the TYPBLK routine
+
+;Define the offsets into the first-level tables, these offsets
+;correspond to the ordering of the ENTRY. calls in the DOBLK macro.
+
+	DO.NAM==0
+	DO.PTR==1
+	DO.RTN==2
+	DO.TXT==3
+	DO.STX==4
+
+DEFINE DOBLK1(aa),<
+DEFINE ENTRY.(pfx,name,offset,routine,stxt,count,ltxt),<EXP <SIXBIT /pfx'name/>>
+	Z [aa'MAC](P2)
+DEFINE ENTRY.(pfx,name,offset,routine,stxt,count,ltxt),<POINTR(pfx'.'name'offset,pfx'name)>
+	Z [aa'MAC](P2)
+DEFINE ENTRY.(pfx,name,offset,routine,stxt,count,ltxt),<EXP routine>
+	Z @[aa'MAC](P2)
+DEFINE ENTRY.(pfx,name,offset,routine,stxt,count,ltxt),<LTXMAC(<ltxt>,count)>
+	Z [aa'MAC](P2)
+DEFINE ENTRY.(pfx,name,offset,routine,stxt,count,ltxt),<STXMAC(<stxt>,count)>
+	Z [aa'MAC](P2)
+DEFINE ENTRY.(pfx,name,offset,routine,stxt,count,ltxt),<aa'LEN==aa'LEN+1>
+	aa'LEN==0
+	aa'MAC
+>;END OF DEFINE DOBLK1
+
+DEFINE STXMAC(stxt,count),<
+IFE count,<[EXP 0]>
+IFG count,<EXP stxt'count>
+>
+
+DEFINE LTXMAC(ltxt,count),<
+IFE count,<[ASCIZ ~ltxt
+~]>
+IFG count,<[ASCIZ ~	ltxt
+~]>
+>
+
+SPC1:	BYTE (7) 40,0
+SPC2:	BYTE (7) 40,40,0
+SPC3:	BYTE (7) 40,40,40,0
+TAB1:	BYTE (7) 11,0
+TAB2:	BYTE (7) 11,11,0
+TAB3:	BYTE (7) 11,11,11,0
+CRLF1:	BYTE (7) 15,12,0
+CRLF2:	BYTE (7) 15,12,12,0
+CRLF3:	BYTE (7) 15,12,12,12,0
+
+DEFINE DOBLK(aa),<
+aa'TBL:	DOBLK1(aa)
+aa'PTR: XWD -aa'LEN,aa'TBL
+>
+	DOBLK SJB
+	DOBLK SLB
+	DOBLK ELB
+	DOBLK RCB
+	DOBLK AJB
+	DOBLK DLB
+	DOBLK LNB
+	SUBTTL Start Here
+
+DCNSPY::TDZA T1,T1
+	MOVEI T1,1
+	MOVEM T1,CCLF1		;SET CCL FLAG FOR SCAN
+	OUTSTR [ASCIZ /Type HELP for HELP
+
+/]
+	MOVE	T1,[PUSHJ P,DPYUUO##]	;GET CALLING INSTRUCTION
+	MOVEM	T1,.JB41		;AND SET UP LUUO DISATCH
+	MOVE P,[IOWD LN$PDL,PDL]	;STACK
+
+RESTART:RESET
+	MOVE P,[IOWD LN$PDL,PDL]	;STACK
+
+	SETOM	BEGSCN			;SET SCAN SWITCHES TO -1
+	MOVE	T1,[BEGSCN,,BEGSCN+1]	;SMEAR THE -1
+	BLT	T1,ENDSCN
+	CALL	TTYINI			;GET READY FOR TTY OUTPUT
+
+;Fall through to next page
+	SUBTTL	Call .ISCAN
+
+;From previous page
+
+;The comment from SCN7B.MAC about call to .ISCAN
+;.ISCAN--SUBROUTINE TO INITIALIZE COMMAND SCANNER
+;CALL	AC1=XWD LENGTH,BLOCK
+;	BLOCK+0=0 OR IOWD PTR TO A LIST OF LEGAL MONITOR COMMANDS
+;		IF 0, NO RESCAN IS DONE
+;	BLOCK+1=RH 0 OR SIXBIT CCL NAME
+;		  IF 0, NO CCL MODE
+;		LH 0 OR ADDRESS OF STARTING OFFSET
+;	BLOCK+2=RH 0 OR ADDRESS OF CHARACTER TYPEOUT ROUTINE
+;		  IF 0, OUTCHR WILL BE DONE FROM T1
+;		LH 0 OR ADDRESS OF CHARACTER INPUT ROUTINE
+;			MUST SAVE ALL ACS, CHAR IN P4
+;	BLOCK+3=0 OR POINTER (XWD LEN,BLOCK) TO INDIRECT FILE BLOCK
+;		  A.DEV NE 0 TO USE BLOCK
+;	BLOCK+4=RH 0 OR ADDRESS OF MONRET ROUTINE
+;		LH 0 OR ADDRESS OF PROMPT ROUTINE
+;			CALLED WITH CHAR IN RH(T1), LH(T1) HAS
+;			    0 FOR FIRST LINE, -1 FOR CONTINUATION LINES
+;	BLOCK+5=LH FLAGS
+;		RH (FUTURE)
+;VALUE	AC1=INDEX IN TABLE OF COMMANDS IF FOUND(0,1,...), ELSE -1
+
+
+	MOVE T1,[3,,[ IOWD 2,[EXP PRGID, SIXBIT "SPY"]
+		      CCLF1,,PRGABR
+		      0,,SCNOUC]]
+	CALL .ISCAN##
+
+;Fall through to next page
+	SUBTTL	Call .OSCAN
+
+
+;.OSCAN -- SUBROUTINE TO SCAN OPTIONS FILE (DSK:SWITCH.INI[,])
+;	RETURNS CPOPJ AFTER UPDATING GLOBAL SWITCHES FROM FILE
+;	THIS ROUTINE SHOULD BE CALLED AFTER TSCAN OR PSCAN
+;		BUT BEFORE DEFAULTING.
+;	CALL THIS ONLY AT END OF LINE.
+;	IT SHOULD BE CALLED BETWEEN ISCAN AND VSCAN FOR VERBS.
+;ARGS:	AC1=XWD LENGTH,BLOCK
+;	BLOCK+0=IOWD POINTER TO LIST OF SWITCH NAMES (IOWD XXXXXL,XXXXXN)
+;	BLOCK+1=LH ADDRESS OF DEFAULT SWITCH TABLE (XXXXXD)
+;		RH ADDRESS OF PROCESSOR SWITCH TABLE (XXXXXM)
+;	BLOCK+2=LH ADDRESS OF (FUTURE)
+;		RH ADDRESS OF SWITCH POINTERS FOR STORING (XXXXXP)
+;	BLOCK+3=LH TYPE OF HELP (0=NONE, 1=STRING, 2=SUBROUTINE)
+;		  IF GT 77, NAME OF PROGRAM IN WHOLE WORD
+;		  IF -1 IN WORD, USE JOB TABLE
+;		RH LOCATION OF HELP
+;	BLOCK+4=NAME OF OPTIONS TO SELECT IN FILE (0 IF NAME OF PROGRAM)
+;			OR LENGTH,,LIST OF OPTION NAMES
+;IF CALL FROM VSCAN, C(T3)= SAME AS BLOCK+4 ABOVE
+
+	MOVE	T1, [4,,[	IOWD SWTL,SWTN ;SHORT LIST OF SWITCHES
+				SWTD,,SWTM
+				0,,SWTP
+				1,,HLPSTR]]	;HELP STRING
+
+	CALL	.OSCAN##	;OPTION (SWITCH.INI) SCANNER
+
+;Now fill in from internal defaults set up with DM macro
+
+DEFINE DFT,(name),<
+	MOVX	T1,AD.'name
+	SKIPGE	SCN'name
+	  MOVEM	T1,SCN'name
+>
+
+	DFT DPY			;/DPY mode
+	DFT PAG			;/PAGE length
+	DFT DLY			;/DELAY seconds
+	DFT COM			;/COMMENTS
+	DFT CHN			;/CHANNEL number
+	DFT SJP			;/SJBPTR pointer
+
+;Fall through to next page
+	SUBTTL Find out what user wants to see
+
+;.VSCAN --SUBROUTINE FOR VERB ARGS FORM OF COMMAND SCANNER
+;	RETURNS CPOPJ IF EOF DURING COMMAND OR CCL AT TOP LEVEL
+;ARGS	AC1=XWD LENGTH,BLOCK
+;	BLOCK+0=IOWD POINTER TO LIST OF SWITCH NAMES
+;			(IOWD XXXXXL,XXXXXN)
+;	BLOCK+1=LH ADDRESS OF DEFAULT SWITCH TABLE (XXXXXD)
+;		RH ADDRESS OF PROCESSOR SWITCH TABLE (XXXXXM)
+;	BLOCK+2=LH ADDRESS OF (FUTURE)
+;		RH ADDRESS OF SWITCH POINTERS FOR STORING (XXXXXP)
+;	BLOCK+3=LH TYPE OF HELP (0=NONE, 1=STRING, 2=SUBROUTINE)
+;		  IF GT 77, NAME OF PROGRAM IN WHOLE WORD
+;		  IF -1 IN WORD, USE JOB TABLE
+;		RH LOCATION OF HELP
+;	BLOCK+4=LH LENGTH OF FXXX AND PXXX AREAS
+;		RH START OF FXXX (PER FILE SWITCHES)
+;	BLOCK+5=LH (FUTURE)
+;		RH START OF PXXX (STICKY FORM OF FXXX)
+;	BLOCK+6=NAME OF OPTION LINES (0 IF THIS PROGRAM'S NAME)
+
+
+;From previous page
+
+	MOVE	T1, [4,,[	IOWD SWTL,SWTN ;SHORT LIST OF SWITCHES
+				SWTD,,SWTM
+				0,,SWTP
+				1,,HLPSTR]]	;HELP STRING
+
+	CALL	.VSCAN##	;VERB SCANNER
+	JRST	RESTART
+	SUBTTL Action Commands
+
+SPYSJB:	MOVEI T1,TYPSJB		;TYPE OUT THE SJB
+	CALLRET SPYGO
+
+SPYSLB:	MOVEI T1,TYPSLB		;TYPE OUT THE SLB
+	CALLRET SPYGO
+
+SPYELB:	MOVEI T1,TYPELB		;TYPE OUT THE ELB
+	CALLRET SPYGO
+
+SPYRCB:	MOVEI T1,TYPRCB		;TYPE OUT ROUTER CIRCUIT BLOCK
+	CALLRET SPYGO
+
+SPYAJB:	MOVEI T1,TYPAJB		;TYPE OUT ROUTER ADJACENCY BLOCK
+	CALLRET SPYGO
+
+SPYDLB:	MOVEI T1,TYPDLB		;TYPE OUT DNADLL DATA LINK BLOCK
+	CALLRET SPYGO
+
+SPYLNB:	MOVEI T1,TYPLNB		;TYPE OUT DNADLL LINE BLOCK
+	CALLRET SPYGO
+
+SPYMEM:	MOVEI T1,TYPMEM		;TYPE OUT MEMORY UTILIZATION
+	CALLRET SPYGO
+
+SPYKDP:	MOVEI T1,TYPKDP		;TYPE OUT KDPE (FOR DPY DEBUG)
+	CALLRET SPYGO
+
+SPYTIM:	MOVEI T1,TYPTIM		;TYPE OUT TIME (FOR DPY DEBUG)
+	CALLRET SPYGO
+
+SPYNRT:	MOVX T1,%DNNSJ		;GETTAB TO GET NRT SJP POINTER
+	GETTAB T1,		;DO IT
+	ERR ?GETTAB for NRT SJB failed
+	HRRZS T1
+
+	PEEK T1,		;GET THE VALUE
+	SKIPN T1		;DID WE GET SOMETHING?
+	ERR ?PEEK UUO failed
+	MOVEM T1,NRTSJB		;SAVE THE POINTER TO THE NRTSJB
+
+	SETOM SCNJOB		;NRT INVALIDATED JOB NUMBER
+	SETOM SCNSJP		; AND SPB POINTER
+	CALLRET SPYSJB		;HANDLE LIKE SJB THING
+	SUBTTL SPYGO - Called by Action Commands
+
+;Call:
+;	CALL SPYGO
+;	Only Return
+
+SPYGO:	MOVEM T1,SPYFCN		;ADDRESS OF OUTPUT ROUTINE
+	SKIPLE	SCNDPY		;IN DPY MODE?
+	  CALLRET SPYDPY	;YES, GO LOOP FOR A WHILE
+
+;Here for non-DPY mode
+
+	SETZM TYPDPY		;TELL SCNOUC NOT TO USE DPY MODE
+	CALL	@SPYFCN		;TYPE OUT THE DATA ONCE
+	  JFCL			;IGNORE ERROR RETURN
+	RET			;RETURN TO VSCAN
+
+
+;Here to loop for DPY mode
+
+SPYDPY:	RELEASE	$TTY,		;CLOSE ASCII MODE TTY
+	SETZM	LINGOL		;START AT TOP OF LOGICAL SCREEN
+	SETOM	TYPDPY		;TELL SCNOUC TO USE DPY MODE
+	SETOM	BIGOUT		;USE BUFFERS INSTEAD OF OUTCHRS
+	SETZM	TTYOBF+.BFPTR	;PREPARE FOR 8-BIT BYTES AFTER OPEN
+	OPEN	$TTY,[.IOPIM	;PACKED IMAGE MODE FOR DPYPAK
+		      SIXBIT /TTY/
+		      XWD TTYOBF,0]
+	  ERR	? OPEN OF TTY FAILED.
+
+	CALL	SPYRFH		;DO THE DPY DISPLAY LOOP
+
+	SKIPE	TYPDPY		;STILL IN DPY MODE?
+	  TTY$	$TTCLR		;YES, HOME UP AND CLEAR SCREEN
+	CALL	TTYFRC		;FORCE OUT LAST OF PIM MODE DATA
+	RELEASE	$TTY,		;CLOSE OFF PACKED IMAGE MODE
+	SETZM	TYPDPY		;REFRAIN FROM DPY DISPLAYS NOW
+	SETZM	BIGOUT		;NOW USE OUTCHRS INSTEAD OF BUFFERS
+	SETZM	TTYOBF+.BFPTR	;PREPARE FOR 7-BIT BYTES AFTER OPEN
+	OPEN	$TTY,[.IOASC	;ASCII MODE FOR SCAN
+		      SIXBIT /TTY/
+		      XWD TTYOBF,0]
+	  ERR	? OPEN OF TTY FAILED.
+	RET			;RETURN TO VSCAN
+	SUBTTL	DPY Driver
+
+SPYRFH:	INI$			;INITIALIZE AND BLANK THE SCREEN
+	SET$	[XWD $SECHR,TTYOUC] ;USE OUR CHARACTER OUTPUT ROUTINE
+SPYDPL:	SETZM	LINCNT		;TELL SCNOUC WE'RE STARTING ANEW
+	CALL	@SPYFCN		;CAUSE SOME TTY OUTPUT
+	  RET			;RETURN NOW IF ERROR ENCOUNTERED
+	DPY$			;SUCCESS, UPDATE THE SCREEN
+	CALL	TTYFRC		;FORCE OUT REMAINDER OF BUFFER
+	INCHRS	T1		;USER TRYING TO TELL ME SOMETHING?
+	 TRNA			;NO, HIBER FOR A WHILE
+	  JRST	SPYINT		;YES, INTERPRET THE COMMAND
+	MOVE	T1,SCNDLY	;PICK UP USER'S IDEA OF A GOOD WAIT TIME
+	IMULI	T1,^D1000	;MAKE SECONDS INTO MILLISECONDS
+	TXO	T1,HB.RTC	;WAKE UP ON CHARACTER TYPED TOO
+	HIBER	T1,		;SLEEP FOR SCNDLY MILLISECONDS
+	  JFCL			;HIBERS NEVER FAIL, HAHA
+	JRST	SPYDPL		;TIME TO GO CHECK THINGS AGAIN
+
+
+SPYINT:	CAIL	T1,"A"+40	;LOWER CASE?
+	 CAILE	T1,"Z"+40	;...
+	  CAIA			;NO
+	   SUBI	T1,40		;YES, MAKE UPPER CASE
+	CAIN	T1,33		;ESCAPE?
+	  RET			;BACK TO VSCAN
+	CAIN	T1,"R"		;REFRESH?
+	  JRST	SPYRFH		;YES
+	CAIN	T1," "		;RECALC SCREEN?
+	  JRST	SPYDPL		;YES
+	CAIE	T1,"C"-100	;CONTROL-C
+	 CAIN	T1,"Z"-100	; OR CONTROL Z
+	  JRST	[TTY$	1	;HOME UP & CLEAR SCREEN
+		 CALL	TTYFRC	;FORCE OUT REST OF TTY BUFFER
+		 EXIT	1,	;MONRT
+		 GETSTS $TTY,T1	;REPLACE PIM MODE ON TTY
+		 TXO T1,.IOPIM
+		 SETSTS $TTY,(T1)
+		 JRST	SPYRFH]	;REFRESH SCREEN ON CONTINUE
+	CAIE	T1,"="		;LOWER CASE VERSION OF "+"
+	 CAIN	T1,"+"		;GO TO NEXT PART OF SCREEN
+	  JRST	[MOVE T2,SCNPAG
+		 ADDM  T2,LINGOL
+		 JRST  SPYRFH]
+	CAIN	T1,"-"		;GO TO PREVIOUS PAGE
+	  JRST	[MOVN T2,SCNPAG
+		 ADDB  T2,LINGOL
+		 SKIPGE T2
+		   SETZM LINGOL	;DON'T LET GOAL GO NEGATIVE
+		 JRST  SPYRFH]
+
+	ERR	?Unknown DPY command
+	SUBTTL	TYPTIM - Type out current time
+
+;For debugging the DPY driver
+;
+;Call:
+;	CALL TYPTIM		;NO ARGS IN ACS
+;	  Error Return to stop DPY loop
+;	Normal Return
+
+TYPTIM:	CALL .TTIMN##		;TYPE OUT CURRENT TIME
+	CALL .TCRLF##		;CARRIAGE RETURN
+	RETSKP			;SUCCESS RETURN
+	SUBTTL	TYPSJB - Type out contents of an SJB
+
+;Call:
+;	CALL TYPSJB		;NO ARGS IN ACS
+;	  Error Return to stop DPY loop
+;	Normal Return
+
+TYPSJB:	CALL SETSJB		;SET UP POINTERS TO DECNET BLOCKS
+	JUMPE SJ,CPOPJ		;LEAVE IF NO SJB (ERROR ALREADY GIVEN)
+	CALL .TCRLF		;CRLF
+	SKIPE NRTSJB		;DID WE GET A NRT SJB POINTER?
+	JRST [MOVEI T1,[ASCIZ/SJB for NRTSER/]
+	      CALL .TSTRG	;YES, OUTPUT A DIFFERENT HEADER
+	      JRST TYPSJ1]	; AND MREGE WITH OTHER CODE
+	MOVEI T1,[ASCIZ /SJB for job /]
+	CALL .TSTRG
+	MOVE T1,SCNJOB
+	CALL .TDECD		;TYPE IN DECIMAL, WITH DECIMAL POINT
+TYPSJ1:	CALL .TCRLF		;CRLF
+	CALL .TCRLF		;AND YET ANOTHER
+
+	MOVE T1,SJBPTR		;GET AOBJN POINTER TO SJBTBL
+	CALL TYPBLK		;YES, TYPE OUT THE SJB
+	  JFCL			;IGNORE ERROR FOR NOW
+	RETSKP			;SUCCESS RETURN
+	SUBTTL TYPSLB - Type out an SLB
+
+;Call:
+;	CALL TYPSLB		;NO ARGS IN ACS
+;	  Error Return to stop DPY loop
+;	Normal Return
+
+TYPSLB:	CALL SETSJB		;SET UP POINTERS TO DECNET BLOCKS
+	JUMPE SJ,CPOPJ		;NO CHANNEL, NO TYPEOUT
+	CALL SETSLB		;SETUP POINTER TO SLB
+	JUMPE SL,CPOPJ		;NO CHANNEL, NO TYPEOUT
+
+	CALL .TCRLF		;CRLF
+	MOVEI T1,[ASCIZ /SLB for channel /]
+	CALL .TSTRG
+	MOVE T1,SCNCHN
+	CALL .TDECD		;TYPE IN DECIMAL, WITH DECIMAL POINT
+	CALL .TCRLF		;CRLF
+	CALL .TCRLF		;AND YET ANOTHER
+
+	MOVE T1,SLBPTR		;GET AOBJN POINTER TO SLBTBL
+	CALL TYPBLK		;TYPE OUT THE SLB
+	  JFCL			;IGNORE ERROR FOR NOW
+	RETSKP			;SUCCESS RETURN
+	SUBTTL TYPELB - Type out the ELB
+
+;Call:
+;	CALL TYPELB		;NO ARGS IN ACS
+;	  Error Return to stop DPY loop
+;	Normal Return
+
+TYPELB:	CALL SETSJB		;SET UP POINTERS TO DECNET BLOCKS
+	JUMPE SJ,CPOPJ		;NO SJB, NO ELB FOR TYPEOUT
+	CALL SETSLB		;SETUP POINTER TO SLB
+	JUMPE SL,CPOPJ		;NO CHANNEL, NO TYPEOUT
+	CALL SETELB		;GET PTR TO ELB
+	JUMPE EL,CPOPJ		;NO USE IF NO BLOCK
+
+	CALL .TCRLF		;CRLF
+	MOVEI T1,[ASCIZ /NSP's ELB for channel /]
+	CALL .TSTRG
+	MOVE T1,SCNCHN
+	CALL .TDECD		;TYPE IN DECIMAL, WITH DECIMAL POINT
+	CALL .TCRLF		;CRLF
+	CALL .TCRLF		;AND YET ANOTHER
+
+	MOVE T1,ELBPTR		;GET AOBJN POINTER TO ELBTBL
+	CALL TYPBLK		;TYPE OUT THE ELB
+	  JFCL			;IGNORE ERROR FOR NOW
+	RETSKP			;SUCCESS RETURN
+	SUBTTL TYPRCB - Type out the Router Circuit Block
+
+;Call:
+;	CALL TYPRCB		;NO ARGS IN ACS
+;	  Error Return to stop DPY loop
+;	Normal Return
+
+TYPRCB:	CALL SETRCB		;GET PTR TO RCB
+	JUMPE RC,NORCB		;NO USE IF NO BLOCK
+
+	MOVEI T1,[ASCIZ /Router's circuit block for circuit /]
+	CALL .TSTRG
+	MOVE T1,CKTID
+	CALL .TCKT		;TYPE IN OCTAL
+	CALL .TCOLN		;TYPE THE ":"
+	CALL .TCRLF		;CRLF
+	CALL .TCRLF		;CRLF
+	CALL ENMADJ		;ENUMERATE ADJACENCIES
+	CALL .TCRLF		;END WITH CRLF
+	CALL .TCRLF		;CRLF
+
+	MOVE T1,RCBPTR		;GET AOBJN POINTER TO RCBTBL
+	CALL TYPBLK		;TYPE OUT THE RCB
+	  JFCL			;IGNORE ERROR FOR NOW
+
+	CALL SETDLB		;GET PTR TO DL BLOCK (IF ANY)
+	JUMPE DL,RSKP		;RETURN NOW IF NONE
+	CALL .TCRLF		;SPACE OUT
+	CALL TYPDLX		;AND TYPE OUT DL BLOCK
+	  JFCL			;IGNORE ERROR FOR NOW
+
+	CALL SETLNB		;GET PTR TO LN BLOCK (IF ANY)
+	JUMPE LN,RSKP		;RETURN NOW IF NONE
+	CALL .TCRLF		;SPACE OUT
+	CALL TYPLNX		;AND TYPE OUT LN BLOCK
+	  JFCL			;IGNORE ERROR FOR NOW
+
+	RETSKP			;SUCCESS RETURN
+	SUBTTL TYPAJB - Type out the Router Adjacency Block
+
+;Call:
+;	CALL TYPAJB		;NO ARGS IN ACS
+;	  Error Return to stop DPY loop
+;	Normal Return
+
+TYPAJB:	CALL SETAJB		;GET PTR TO AJB
+	JUMPE AJ,NOAJB		;NO USE IF NO BLOCK
+
+	MOVEI T1,[ASCIZ /Router's adjacency block for node /]
+	CALL .TSTRG
+	MOVE T1,NODID
+	CALL .TNODE		;TYPE NODE ADDRESS
+	MOVEI T1,[ASCIZ / on circuit /]
+	CALL .TSTRG
+	MOVE T1,CKTID
+	CALL .TCKT		;TYPE CIRCUIT NAME
+	CALL .TCOLN		;TYPE THE ":"
+	CALL .TCRLF		;CRLF
+	CALL .TCRLF		;CRLF
+	CALL ENMADJ		;ENUMERATE ADJACENCIES
+	CALL .TCRLF		;END WITH CRLF
+	CALL .TCRLF		;CRLF
+
+	MOVE T1,AJBPTR		;GET AOBJN POINTER TO AJBTBL
+	CALL TYPBLK		;TYPE OUT THE AJB
+	  JFCL			;IGNORE ERROR FOR NOW
+	RETSKP			;SUCCESS RETURN
+	SUBTTL TYPDLB - Type out DNADLL's data link circuit block
+
+;Call:
+;	CALL TYPDLB		;NO ARGS IN ACS
+;	  Error Return to stop DPY loop
+;	Normal Return
+
+TYPDLB:	CALL SETDLB		;GET PTR TO DLB
+	JUMPE DL,NODLB		;NO USE IF NO BLOCK
+
+TYPDLX:	MOVEI T1,[ASCIZ /DNADLL's circuit block for circuit /]
+	CALL .TSTRG
+	MOVE T1,CKTID
+	CALL .TCKT		;TYPE IN OCTAL
+	CALL .TCOLN		;TYPE THE ":"
+	CALL .TCRLF		;CRLF
+	CALL .TCRLF		;CRLF
+
+	MOVE T1,DLBPTR		;GET AOBJN POINTER TO DLBTBL
+	CALL TYPBLK		;TYPE OUT THE DLB
+	  JFCL			;IGNORE ERROR FOR NOW
+	RETSKP			;SUCCESS RETURN
+	SUBTTL TYPLNB - Type out DNADLL's Line Block
+
+;Call:
+;	CALL TYPLNB		;NO ARGS IN ACS
+;	  Error Return to stop DPY loop
+;	Normal Return
+
+TYPLNB:	CALL SETLNB		;GET PTR TO LNB
+	JUMPE LN,NOLNB		;NO USE IF NO BLOCK
+
+TYPLNX:	MOVEI T1,[ASCIZ /DNADLL's line block for circuit /]
+	CALL .TSTRG
+	MOVE T1,CKTID
+	CALL .TCKT		;TYPE IN OCTAL
+	CALL .TCOLN		;TYPE THE ":"
+	CALL .TCRLF		;CRLF
+	CALL .TCRLF		;CRLF
+
+	MOVE T1,LNBPTR		;GET AOBJN POINTER TO LNBTBL
+	CALL TYPBLK		;TYPE OUT THE LNB
+	  JFCL			;IGNORE ERROR FOR NOW
+	RETSKP			;SUCCESS RETURN
+	SUBTTL TYPMEM - Type out memory utilization
+
+;Call:
+;	CALL TYPMEM		;NO ARGS IN ACS
+;	  Error Return to stop DPY loop
+;	Normal Return
+
+TYPMEM:	CALL	SETMEM		;MAP MEMORY BIT MAP
+	JUMPE	MC,NOMEM	;CAN'T DO ANYTHING IF CAN'T MAP IT
+	SETZM	TOTFRE		;CLEAR COUNTERS
+	SETZM	BIGHOL		;...
+	SETZM	FREBLK		;...
+	MOVE	T1,[FREBLK,,FREBLK+1] ;...
+	BLT	T1,FREBLK+^D36-1 ;...
+
+TYPME1:	SETZ	T3,		;INITIALIZE HOLE SIZE
+TYPME2:	ILDB	T1,MP		;GET NEXT BIT FROM BIT MAP
+	JUMPE	T1,TYPME4	;JUMP IF FOUND NEXT HOLE
+	SOJG	MC,TYPME2	;LOOP BACK UNTIL END OF MAP
+	JRST	TYPMEX		;GO PRINT OUT MAP INFOR
+
+TYPME3:	ILDB	T1,MP		;GET NEXT BIT FROM BIT MAP
+	JUMPN	T1,TYPME5	;JUMP AT START OF ALLOCATED BLOCK
+TYPME4:	ADDI	T3,4		;UPDATE HOLE SIZE
+	SOJG	MC,TYPME3	;LOOP BACK UNTIL END OF MAP
+
+TYPME5:	ADDM	T3,TOTFRE	;UPDATE TOTAL FREE COUNT
+	CAMLE	T3,BIGHOL	;BIGGEST HOLE?
+	MOVEM	T3,BIGHOL	;YES, UPDATE
+	JFFO	T3,TYPME6	;JUMP AND FIND BLOCK SIZE SLOT
+	JRST	TYPME1		;IF ZERO, CONTINUE
+TYPME6:	MOVNS	T4		;COMPUTE TABLE INDEX
+	ADDI	T4,^D35		;...
+	AOS	FREBLK(T4)	;UPDATE COUNT
+	JRST	TYPME1		;AND START OVER
+
+TYPMEX:	MOVEI	T1,[ASCIZ /DECnet memory utilization/]
+	PUSHJ	P,.TSTRG##	;...
+	PUSHJ	P,.TCRLF##	;SKIP A FEW LINES
+	PUSHJ	P,.TCRLF##	;...
+
+	MOVEI	T1,[ASCIZ /Total words free:   /]
+	PUSHJ	P,.TSTRG##	;...
+	MOVE	T1,TOTFRE	;GET FREE WORD COUNT
+	PUSHJ	P,.TDECW##	;TYPE IT OUT
+	PUSHJ	P,.TCRLF##	;...
+	MOVEI	T1,[ASCIZ /Largest hole size:  /]
+	PUSHJ	P,.TSTRG##	;...
+	MOVE	T1,BIGHOL	;GET SIZE
+	PUSHJ	P,.TDECW##	;TYPE IT OUT
+	PUSHJ	P,.TCRLF##	;...
+
+	MOVEI	T1,[ASCIZ /Block size distribution table/]
+	PUSHJ	P,.TSTRG##	;...
+	PUSHJ	P,.TCRLF##	;...
+	PUSHJ	P,.TCRLF##	;...
+
+	MOVSI	MC,-^D7		;INDEX INTO TABLE
+TYPMX1:	MOVEI	T1,1		;CALCULATE LOWER BOUND
+	LSH	T1,(MC)		;...
+	PUSHJ	P,.TDECW##	;...
+	MOVEI	T1,"-"		;SEPERATOR
+	PUSHJ	P,.TCHAR##	;...
+	MOVEI	T1,2		;CALCULATE UPPER BOUND
+	LSH	T1,(MC)		;...
+	SUBI	T1,1		;...
+	PUSHJ	P,.TDECW##	;...
+	PUSHJ	P,.TCOLN##	;SEPERATOR
+	PUSHJ	P,.TTABC##	;TAB OVER
+	PUSHJ	P,.TTABC##	;...
+	MOVE	T1,FREBLK(MC)	;GET COUNT
+	PUSHJ	P,.TDECW##	;PRINT OUT
+	PUSHJ	P,.TTABC##	;TAB OVER
+	PUSHJ	P,.TTABC##	;...
+	MOVEI	T1,1		;CALCULATE LOWER BOUND
+	LSH	T1,^D7(MC)	;...
+	PUSHJ	P,.TDECW##	;...
+	MOVEI	T1,"-"		;SEPERATOR
+	PUSHJ	P,.TCHAR##	;...
+	MOVEI	T1,2		;CALCULATE UPPER BOUND
+	LSH	T1,^D7(MC)	;...
+	SUBI	T1,1		;...
+	PUSHJ	P,.TDECW##	;...
+	PUSHJ	P,.TCOLN##	;SEPERATOR
+	PUSHJ	P,.TTABC##	;TAB OVER
+	MOVE	T1,FREBLK+^D7(MC) ;GET COUNT
+	PUSHJ	P,.TDECW##	;PRINT OUT
+	PUSHJ	P,.TCRLF##	;NEW LINE
+	AOBJN	MC,TYPMX1	;LOOP BACK FOR ENTIRE TABLE
+
+	RETSKP
+	SUBTTL SETSJB - Set up SJB pointers
+
+;Call:
+;	CALL SETSJB
+;	Normal Return with SJ setup as appropriate
+;		           AC is zero if no block to point to
+
+SETSJB:	SETZM	SJ		;ASSUME ALL BLOCKS HAVE ERRORS
+	SETZB	SL,EL		;JUST FOR GOOD MEASURE
+
+	SKIPG SCNSJP		;DID USER SPEC A SJB?
+	SKIPLE SCNJOB		;OR DID HE SPEC A JOB?
+	SETZM NRTSJB		;YES, DON'T USE THE NRT SJB ANY MORE
+
+	SKIPN T1,NRTSJB		;DID WE GET THE NRT COMMAND?
+	SKIPLE T1,SCNSJP	;OR DID USER SPECIFY AN SJB POINTER?
+	JRST SETSJ1		;YES, USE IT DIRECTLY
+
+	SKIPG	SCNJOB		;ANY JOB SPEC'D?
+	  ERR ?Job number must be specified
+
+	HRL T1,SCNJOB		;GET TARGET JOB NUMBER
+	HRRI T1,.GTPDB		;GET PTR TO PDB
+	GETTAB T1,
+	  CALLRET NOPDB
+
+;T1 now holds XWD <number of funny pages>,<PDB address>
+
+	HRRZS T1		;ISOLATE THE PDB ADDRESS
+	MOVEI T2,PDBADR		;LOAD UP TARGET PDB ADDRESS
+	CALL SPYPAG		;MAP SPY PAGES
+	  CALLRET NOSPY		;OOPS
+				;T1 NOW HOLDS UVA OF PDB
+
+	HRL T1,SCNJOB		;GET TARGET JOB NUMBER
+	HRRI T1,.GTSJB		;GET PTR TO SJB
+	GETTAB T1,
+	  CALLRET NOPDB
+
+SETSJ1:	JUMPE T1,NOSJB		;ERROR IF SJB PTR IS ZERO
+	MOVEI T2,SJBADR		;LOAD UP TARGET SJB ADDRESS
+	CALL SPYPAG		;MAP SPY PAGES
+	  CALLRET NOSPY		;OOPS
+	MOVE SJ,T1		;SJ NOW POINTS TO SJB
+
+;Now tell the user which channels this job has open
+
+	LOAD T1,SJCHT,(SJ)	;GET POINTER TO CHANNEL TABLE
+	JUMPE T1,NOCHT
+	MOVEI T2,TMPADR		;MAP THE CHANNEL TABLE INTO THE TEMP PAGES
+	CALL SPYPAG		;...
+	  CALLRET NOSPY		;OOPS
+	PUSH P,T1		;T1 NOW HOLDS THE UVA OF OUR CHT ENTRY
+	LOAD T2,SJCHC,(SJ)	;GET NUMBER OF CHANNEL SLOTS IN USE AGAIN
+	CALL ENMCHN		;ENUMERATE OPEN CHANNELS FOR USER
+	POP P,T1
+	RET			;DONE
+	SUBTTL	SETSLB - Set up Pointer to SLB
+
+;Called after SETSJB
+;Call:
+;	CALL SETSJB
+;	Normal Return with SJ,SL and EL setup as appropriate
+;		           AC is zero if no block to point to
+;Also types out list of open channels while it has that info
+
+SETSLB:	SETZM SL		;ASSUME NO SLB
+	JUMPE SJ,CPOPJ		;NO SLB IF NO SJB
+
+	SKIPG SCNCHN		;USER SPECIFY LEGAL CHN NUMBER?
+	CALLRET ILLCHN		;NO, BOO
+	LOAD T2,SJCHC,(SJ)	;GET NUMBER OF OPEN CHANNELS
+	JUMPLE T2,NOCHN
+	CAMGE T2,SCNCHN		;LEGAL CHANNEL NUMBER?
+	CALLRET NOCHN		;NO, SAY ITS CLOSED
+				;YES, LETS LOOK AT IT
+	ADD T1,SCNCHN		;POINT AT OUR SLB POINTER
+	SKIPN T1,-1(T1)		;GET POINTER TO SLB FOR THIS CHANNEL
+	CALLRET NOCHN		;OOPS, ITS CLOSED
+	MOVEI T2,SLBADR		;POINT AT THE UVA I'D LIKE TO MAP IT AT
+	CALL SPYPAG		;MAP SLB INTO MY UVA
+	  CALLRET NOSPY		;CAN'T
+	MOVE SL,T1		;SL NOW POINTS AT INDICATED SLB
+	RET			;END
+	SUBTTL	SETELB - Set up Pointer to ELB
+
+;Called after SETSLB
+;Call:
+;	CALL SETSJB
+;	Normal Return with SJ,SL and EL setup as appropriate
+;		           AC is zero if no block to point to
+;Also types out list of open channels while it has that info
+
+SETELB:	SETZM EL		;ASSUME NO ELB
+	JUMPE SL,CPOPJ		;NO ELB IF NO SLB
+
+	SKIPN T1,SL.PID(SL)	;GET POINTER TO NSP LINK BLOCK
+	CALLRET NOELB		;OOPS, ITS CLOSED
+	MOVEI T2,ELBADR		;POINT AT THE UVA I'D LIKE TO MAP IT AT
+	CALL SPYPAG		;MAP ELB INTO MY UVA
+	  CALLRET NOSPY		;CAN'T
+	MOVE EL,T1		;EL NOW POINTS AT INDICATED ELB
+	RET			;END
+	SUBTTL	SETRCB - Set up Pointer to RCB
+
+;Call:
+;	CALL SETRCB
+;	Normal Return with RC setup
+;		           AC is zero if no block to point to
+
+SETRCB:	SAVEAC P1		;SAVE AC P1
+	SETZM RC		;ASSUME NO RCB
+	SKIPG T1,CKTID
+	ERR ?Bad Circuit ID
+
+	MOVE P1,T1		;SAVE THE CIRCUIT ID
+	MOVX T1,%DNRCH		;GETTAB TO GET RTR QUEUE HEADER
+	GETTAB T1,		;GET THE PTR TO HEAD OF CIRCUIT LIST
+	ERR ?GETTAB UUO failed
+	HRRZS T1
+
+	PEEK T1,		;POINT TO FIRST RCB
+	SKIPN T1		;DID UUO FAIL?
+	ERR ?PEEK UUO failed
+
+SETRC1:	MOVEI T2,RCBADR
+	CALL SPYPAG		;MAP RCB INTO TEMP UVA
+	 CALLRET NOSPY		;CAN'T
+
+	CAMN P1,RC.LID(T1)	;DOES IT MATCH THE CIRCUIT-ID GIVEN?
+	JRST SETRC2		;YES, CONTINUE
+
+	SKIPN T1,RC.NXT(T1)	;LOOK AT THE NEXT CIRCUIT-ID
+	RET			;NOT THERE, PUNT WITH RC ZERO
+	JRST SETRC1		;CHECK OUT THE NEXT CIRCUIT BLOCK
+
+SETRC2:	MOVE RC,T1		;SET UP RC
+	SKIPE NODID		;SELECTED AN ADJACENCY?
+	  RET			;YES, SKIP THIS
+	MOVE AJ,RC.AJQ(RC)	;GET FIRST ENTRY IN ADJACENCY QUEUE
+	JUMPE AJ,CPOPJ		;RETURN IF NO ADJACENCIES
+	MOVE T1,AJ		;GET ADJACENCY BLOCK ADDRESS
+	MOVEI T2,AJBADR		;ADDRESS TO MAP INTO
+	CALL SPYPAG		;MAP AJB
+	 CALLRET NOSPY		;CAN'T
+	MOVE AJ,T1		;SAVE VIRTUAL ADDRESS OF AJB
+	LDB T1,[POINTR (AJ.NAN(AJ),AJNAN)] ;GET ADJACENCY'S NODE ADDRESS
+	LDB T2,[POINTR (AJ.NAA(AJ),AJNAA)] ;AND NODE AREA
+	DPB T2,[POINTR (T1,RN%ARE)] ;BUILD COMPLETE NODE ADDRESS
+	MOVEM T1,NODID		;AND SAVE
+	RET			;RETURN
+	SUBTTL	SETAJB - Set up Pointer to AJB
+
+;Call:
+;	CALL SETAJB
+;	Normal Return with AJ setup
+;		           AC is zero if no block to point to
+
+SETAJB:	SAVEAC P1		;SAVE AC P1
+	CALL SETRCB		;FIRST SET UP CIRCUIT BLOCK
+	JUMPE RC,NORCB		;NONE?
+	SETZM AJ		;ASSUME NO AJB
+
+	SKIPA T1,RC.AJQ(RC)	;GET FIRST ENTRY IN ADJACENCY QUEUE
+SETAJ1:	MOVE T1,AJ.NXT(T1)	;GET NEXT ENTRY IN ADJACENCY QUEUE
+	JUMPE T1,CPOPJ		;RETURN IF NO ADJACENCY TO MATCH NODE ADDRESS
+	MOVEI T2,AJBADR		;ADDRESS TO MAP INTO
+	CALL SPYPAG		;MAP AJB
+	 CALLRET NOSPY		;CAN'T
+	LDB T2,[POINTR (AJ.NAN(T1),AJNAN)] ;GET ADJACENCY'S NODE ADDRESS
+	LDB T3,[POINTR (AJ.NAA(T1),AJNAA)] ;AND NODE AREA
+	DPB T3,[POINTR (T2,RN%ARE)] ;BUILD COMPLETE NODE ADDRESS
+	CAME T2,NODID		;MATCH THE REQUESTED NODE?
+	 JRST SETAJ1		;NO, LOOP BACK FOR NEXT AJB
+
+	MOVE AJ,T1		;SET UP AJ TO POINT AT AJB
+	RET			;AND RETURN
+	SUBTTL	SETDLB - Set up Pointer to DLB
+
+;Call:
+;	CALL SETDLB
+;	Normal Return with DL setup
+;		           AC is zero if no block to point to
+
+SETDLB:	SAVEAC P1		;SAVE AC P1
+	CALL SETRCB		;FIRST SET UP CIRCUIT BLOCK
+	JUMPE RC,NORCB		;NONE?
+	SETZM DL		;ASSUME NO DLB
+
+	MOVE T1,RC.DLB(RC)	;GET ADDRESS OF DLB
+	JUMPE T1,NODLB		;NONE?
+	MOVEI T2,DLBADR		;ADDRESS TO MAP INTO
+	CALL SPYPAG		;MAP DLB
+	 CALLRET NOSPY		;CAN'T
+	MOVE DL,T1		;SET UP DL TO POINT AT DLB
+	RET			;AND RETURN
+	SUBTTL	SETLNB - Set up Pointer to LNB
+
+;Call:
+;	CALL SETLNB
+;	Normal Return with LN setup
+;		           AC is zero if no block to point to
+
+SETLNB:	SAVEAC P1		;SAVE AC P1
+	CALL SETRCB		;FIRST SET UP CIRCUIT BLOCK
+	JUMPE RC,NORCB		;NONE?
+	CALL SETDLB		;NEXT SET UP DATA LINK CIRCUIT BLOCK
+	JUMPE DL,NODLB		;NONE?
+	SETZM LN		;ASSUME NO LNB
+
+	MOVE T1,DL.LNB(DL)	;GET ADDRESS OF LNB
+	JUMPE T1,NOLNB		;NONE?
+	MOVEI T2,LNBADR		;ADDRESS TO MAP INTO
+	CALL SPYPAG		;MAP LNB
+	 CALLRET NOSPY		;CAN'T
+	MOVE LN,T1		;SET UP LN TO POINT AT LNB
+	RET			;AND RETURN
+	SUBTTL	SETMEM - Set up Pointer to Memory Bit map
+
+
+;Call:
+;	CALL SETMEM
+;	Normal Return with MC and MP setup
+;		           AC is zero if no block to point to
+
+SETMEM:	SETZB	MC,MP		;CLEAR ACS
+	MOVX	T1,%DNPTR	;GET ADDRESS OF AOBJN POINTER
+	GETTAB	T1,		;...
+	  RET
+	PEEK	T1,		;GET AOBJN POINTER
+	JUMPE	T1,.POPJ##	;...
+	HLRO	MC,T1		;GET COUNT
+	MOVNS	MC		;...
+	IMULI	MC,^D36		;COMPUTE BIT COUNT
+	HRRZS	T1		;GET MONITOR ADDRESS OF BIT MAP
+	MOVEI	T2,MEMADR	;AND OUR ADDRESS FOR SPY
+	PUSHJ	P,SPYPAG	;SPY
+	  JRST	NOSPY		;CAN'T?
+	MOVE	MP,T1		;GET MAPPED ADDRESS
+	HRLI	MP,(POINT 1)	;CREATE BYTE POINTER
+	RETSKP			;AND RETURN
+	SUBTTL Error Message Routines
+
+NOSPY:	ERR	?Spy pages UUO failed
+
+NOSJB:	ERR	?Job has no SJB
+
+NOPDB:	ERR	?Job has no PDB
+
+NOMEM:	ERR	?No DECnet memory pointer
+
+ILLCHN:	MOVEI T1,[ASCIZ /?Channel /]
+	CALL ERRSTR
+	MOVE T1,SCNCHN			;GET CHANNEL USER REQUESTED
+	CALL .TDECD			;TYPE IN DECIMAL
+	MOVEI T1,[ASCIZ / is illegal
+/]
+	CALLRET .TSTRG##
+
+
+NOCHT:	MOVEI T1,[ASCIZ /?Channel /]
+	CALL ERRSTR
+	MOVE T1,SCNCHN			;GET CHANNEL USER REQUESTED
+	CALL .TDECD			;TYPE IN DECIMAL
+	MOVEI T1,[ASCIZ /'s SJB has no channel table
+/]
+	CALLRET .TSTRG##
+
+NOELB:	MOVEI T1,[ASCIZ /?Channel /]
+	CALL ERRSTR
+	MOVE T1,SCNCHN			;GET CHANNEL USER REQUESTED
+	CALL .TDECD			;TYPE IN DECIMAL
+	MOVEI T1,[ASCIZ / has no NSP Link Block (ELB)
+/]
+	CALLRET .TSTRG##
+
+NOCHN:	MOVEI T1,[ASCIZ /?Channel /]
+	CALL ERRSTR
+	MOVE T1,SCNCHN			;GET CHANNEL USER REQUESTED
+	CALL .TDECD			;TYPE IN DECIMAL
+	MOVEI T1,[ASCIZ / is not open
+/]
+	CALLRET .TSTRG##
+
+NORCB:	ERR ?No circuit-id found to match /CIRCUIT switch
+NODLB:	ERR ?No data link circuit block found to match /CIRCUIT switch
+NOLNB:	ERR ?No data link line block found to match /CIRCUIT switch
+NOAJB:	ERR ?No adjacency found to match /NODE switch
+	SUBTTL ERRSTR - Type out an error string
+
+;	T1/ pointer to error string (asciz)
+
+ERRSTR:	CLRBFI			;IGNORE REST OF ERRONEOUS TYPIN
+	SKIPE	TYPDPY		;IN DPY MODE?
+	  TTY$	$TTCLR		;HOME UP AND CLEAR SCREEN
+	SETZM	TYPDPY		;LEAVE DPY MODE
+	CALLRET .TSTRG##	;TELL SCAN TO TYPE IT OUT NOW
+	SUBTTL SPYPAG - Subroutine to Set up a SPY Page
+
+;Call:	T1/ Monitor address of Block to be mapped
+;	T2/ User address of page on which to map it
+;	CALL SPYPAG
+;	  Error Return
+;	Normal Return with UVA of block in T1
+;
+
+SPYPAG:	SAVEAC <P1>
+	LDB P1,[POINT 9,T1,35]	;SAVE OFFSET INTO PAGE
+	IOR P1,T2		;POINT TO OUR SPY PAGE
+	LSH T2,-^D9		;MAKE UVA INTO A PAGE NUMBER
+	TXO T2,1B0		;DESTROY THE PAGE FIRST
+	PUSH P,T1		;SAVE VIRTUAL ADDRESS
+	MOVNI T1,2		;NUMBER OF PAGES TO DO
+	MOVE T4,[.PAGCD,,T1]	;CREATE/DESTROY PAGES FUNCTION
+	PAGE. T4,		;FIRST, CLEAN OUT PREVIOUS ATTEMPTS
+	  JFCL			;DON'T CARE IF DESTROY FAILED
+
+	POP P,T1		;RESTORE EXEC ADDRESS
+	LDB T3,[POINT 13,T1,26]	;GET EVA PAGE NUMBER PDB STARTS IN
+	HRL T2,T3		;MONITOR'S PAGE NUMBER FOR PDB
+	TXZ T2,1B0		;NOW CREATE THE PAGE
+	MOVNI T1,2		;NUMBER OF PAGES TO DO
+	MOVE T4,[.PAGSP,,T1]	;SPY PAGES FUNCTION
+	PAGE. T4,		;MAP MONITOR'S PAGE INTO MY UVA
+	  RET			;ERROR RETURN
+
+	MOVE T1,P1		;RETURN UVA IN T1
+RSKP:
+CPOPJ1:	AOS (P)			;SUCCESS RETURN
+CPOPJ:	RET
+	SUBTTL ENMCHN - Type out list of job's channels
+
+;Call:	T1/ Pointer to the job block's channel table
+;	T2/ Number of channel slots in use
+;	CALL ENMCHN
+;	  Error Return
+;	Normal Return, no value
+
+ENMCHN:	SAVEAC <P1,P2>
+	MOVE P1,T1		;POINTER TO CHANNEL TABLE
+	MOVNS T2		;NEGATE THE SLOT COUNT
+	HRL P1,T2		;MAKE AN AOBJN POINTER
+
+	SKIPLE NRTSJB		;IS NRTSJB OVERRIDING JOB?
+	JRST [	MOVEI T1,[ASCIZ /NRTSER/]
+		CALL .TSTRG
+		JRST ENMBL1]	;MERGE WITH THE REST
+	SKIPLE SCNSJP		;IS SJBPTR OVERRIDING JOB?
+	JRST [	MOVEI T1,[ASCIZ /SJB at /]
+		CALL .TSTRG
+		MOVE T1,SCNSJP	;TYPE OUT SJB ADDRESS
+		CALL .TADDR	; IN OCTAL
+		JRST ENMBL1]	;BACK TO MAINSTREAM
+	MOVEI T1,[ASCIZ /Job /]
+	CALL .TSTRG
+	MOVE T1,SCNJOB		;NO, USE JOB #
+	CALL .TDECD
+ENMBL1:
+	MOVEI T1,[ASCIZ / has the following channels open: /]
+	CALL .TSTRG
+	MOVEI P2,0		;FIRST CHANNEL NUMBER IS 1
+ENMBL2:	AOS T1,P2		;INCREMENT USER'S CHANNEL NUMBER
+	SKIPN (P1)		;IS THIS SLOT IN USE?
+	JRST ENMBL3		;NO
+	CALL .TDECW		;YES, TYPE OUT ITS NUMBER FROM T1
+	CALL .TSPAC		;SEPARATE WITH SPACES
+ENMBL3:	AOBJN P1,ENMBL2		;TRY THE NEXT
+	CALLRET .TCRLF		;THAT'S ALL
+	SUBTTL ENMADJ - Type out circuit's adjacencies
+
+;Call:	RC/ Address of circuit block
+;	CALL ENMADJ
+;	Normal return
+
+ENMADJ:	SAVEAC AJ
+
+	MOVEI T1,[ASCIZ /Circuit's adjacencies: /]
+	CALL .TSTRG
+
+	SKIPA AJ,RC.AJQ(RC)	;GET FIRST ENTRY IN ADJACENCY QUEUE
+ENMAJ1:	MOVE AJ,AJ.NXT(AJ)	;GET NEXT ENTRY IN ADJACENCY QUEUE
+	JUMPE AJ,.TCRLF		;RETURN AT END OF QUEUE
+	MOVE T1,AJ		;GET ADJACENCY BLOCK ADDRESS
+	MOVEI T2,AJBADR		;ADDRESS TO MAP INTO
+	CALL SPYPAG		;MAP AJB
+	 CALLRET NOSPY		;CAN'T
+	MOVE AJ,T1		;SAVE VIRTUAL ADDRESS OF AJB
+	LDB T1,[POINTR (AJ.NAN(AJ),AJNAN)] ;GET ADJACENCY'S NODE ADDRESS
+	LDB T2,[POINTR (AJ.NAA(AJ),AJNAA)] ;AND NODE AREA
+	DPB T2,[POINTR (T1,RN%ARE)] ;BUILD COMPLETE NODE ADDRESS
+	CALL .TNODE		;TYPE OUT NODE ADDRESS
+	CALL .TSPAC		;SEPERATE WITH A SPACE
+	JRST ENMAJ1		;LOOP BACK FOR ALL ADJACENCIES
+	SUBTTL TYPBLK - Type out a data block
+
+;Call:	T1/ AOBJN Pointer to the DOBLK table for this block type
+;	SJ,SL,EL/ Points to the block to be typed
+;	CALL TYPBLK
+;	  Error Return
+;	Normal Return, no value
+
+TYPBLK:	SAVEAC <P1,P2>
+	HRRZ P1,T1		;POINTER TO DESCRIPTOR TABLES TABLE
+	HLLZ P2,T1		;AOBJN POINTER TO INDEX THRU TABLES
+
+;Note that the DOBLK macro (above) depends on P2 being set up here
+
+TYPBL1:	MOVE T1,@DO.NAM(P1)	;GET THE SIXBIT NAME OF ENTRY
+	CALL .TSIXN		;TYPE IT OUT
+	CALL .TCOLN		;TYPE A COLON
+	CALL .TTABC		;TYPE OUT A TAB
+	MOVE T2,@DO.PTR(P1)	;PASS THE BYTE POINTER IN T2
+	HRRI T2,@T2		;RESOLVE INDIRECTION AND EXTRA INDEXING
+	TLZ T2,37		;WE RESOLVED IT, LEAVE BYTE PTRS P & S FIELDS
+	LDB T1,T2		;THE VALUE IN T1
+
+;Call the typeout routine with
+;	T1/ Value in Location, most typeout routines will type this
+;	T2/ UVA Byte Ptr to Location, indexing and indirection resolved
+
+	CALL @DO.RTN(P1)	;CALL TYPEOUT ROUTINE
+	CALL .TTABC		;TYPE OUT A TAB
+	MOVE T1,@DO.TXT(P1)	;GET PTR TO THE TEXT STRING (COMMENT)
+	SKIPG SCNCOM		;USER WANT THE COMMENTS?
+	  MOVE T1,@DO.STX(P1)	;NO, GET THE SHORT TEXT
+	CALL .TSTRG		;TYPE IT OUT, CRLF INCLUDED IN TEXT
+
+	AOBJN P2,TYPBL1		;DO THE REST
+	RETSKP			;ALL DONE
+	SUBTTL .Txxx - Local Typeout Routines
+
+;Call:	T2/ UVA of queue header
+;	CALL .TQUE
+;	Normal return
+
+.TQUE:	PUSH	P,T2
+	HRRZ	T1,2(T2)
+	PUSHJ	P,.TDECW
+	MOVEI	T1,[ASCIZ /:[/]
+	CALL	.TSTRG
+	POP	P,T2
+	MOVE	T1,1(T2)
+	CALL	.TADDR
+	CALLRET	.TRBRK
+
+
+;Call:	T1/ value
+;	CALL .TDECD
+;	Normal Return
+
+.TDECD:	CALL .TDECW		;TYPE T1 IN DECIMAL
+	MOVEI T1,"."		;LOAD UP A DECIMAL POINT
+	CALLRET .TCHAR		;FOLLOWED BY A DECIMAL POINT
+
+
+;Call:	T1/ value
+;	CALL .TBOOL
+;	Normal Return
+
+.TBOOL:	TRNN T1,1		;TRUE?
+	 SKIPA T1,[[ASCIZ /false/]] ;NO
+	  MOVEI T1,[ASCIZ /true/]   ;YES
+	CALLRET .TSTRG
+;Call:	T1/ Session Control State code
+;	CALL .TSTAS
+;	Normal Return
+
+.TSTAS:	PUSH P,T1		;SAVE STATE CODE
+	CALL .TDECW		;TYPE STATE IN DECIMAL
+	MOVEI T1,"("
+	CALL .TCHAR
+	POP P,T1
+	CAILE T1,STASLN		;WE UNDERSTAND THE STATE?
+	MOVEI T1,0		;NO, USE ILLEGAL STATE
+	MOVEI T1,STASBL(T1)	;GET POINTER TO ASCIZ STRING
+	CALL .TSTRG		;TYPE IT OUT
+	MOVEI T1,")"
+	CALLRET .TCHAR
+
+DEFINE STACOD(code),<
+  IFN .NSS'code-.+STASBL,<PRINTX ?STASBL table defined wrong>
+	EXP ASCIZ /code/
+>
+
+
+STASBL:	ASCIZ /??/
+	STACOD CW		;CONNECT WAIT
+	STACOD CR		;CONNECT RECEIVED
+	STACOD CS		;CONNECT SENT
+	STACOD RJ		;REMOTE REJECTED CONNECT INIT
+	STACOD RN		;LINK IS UP AND RUNNING
+	STACOD DR		;DISCONNECT RECEIVED
+	STACOD DS		;DISCONNECT SENT
+	STACOD DC		;DISCONNECT CONFIRMED
+	STACOD CF		;NO CONFIDENCE
+	STACOD LK		;NO LINK
+	STACOD CM		;NO COMMUNICATION
+	STACOD NR		;NO RESOURCES
+STASLN==.-STASBL-1
+;Call:	T1/ NSP State code
+;	CALL .TSTAN
+;	Normal Return
+
+.TSTAN:	PUSH P,T1		;SAVE STATE CODE
+	CALL .TDECD		;TYPE STATE IN DECIMAL
+	MOVEI T1,"("
+	CALL .TCHAR
+	POP P,T1
+	CAILE T1,STANLN		;WE UNDERSTAND THE STATE?
+	MOVEI T1,0		;NO, USE ILLEGAL STATE
+	MOVEI T1,STANBL(T1)	;GET POINTER TO ASCIZ STRING
+	CALL .TSTRG		;TYPE IT OUT
+	MOVEI T1,")"
+	CALLRET .TCHAR
+
+DEFINE STACOD(code),<
+  IFN NPS.'code-.+STANBL,<PRINTX ?STANBL table defined wrong>
+	EXP ASCIZ /code/
+>
+
+
+STANBL:	ASCIZ /??/
+	STACOD	OP	;OPEN, WAITING FOR ENTER ACTIVE FROM SC
+	STACOD	CI	;CONNECT INITIATE SENT
+	STACOD	CD	;CONNECT DELIVERED
+	STACOD	CR	;CONNECT RECEIVED
+	STACOD	CC	;CONNECT CONFIRM
+	STACOD	DR	;DISCONNECT REJECT
+	STACOD	RC	;DISCONNECT REJECT COMPLETE (DRC)
+	STACOD	RN	;RUN
+	STACOD	RJ	;REJECT
+	STACOD	DI	;DISCONNECT INITIATE
+	STACOD	IC	;DISCONNECT INITIATE COMPLETE (DIC)
+	STACOD	DN	;DISCONNECT NOTIFICATION
+	STACOD	CN	;CLOSE NOTIFICATION
+	STACOD	NR	;NO RESOURCES
+	STACOD	NC	;NO COMMUNICATION
+	STACOD	CL	;CLOSED
+	STACOD	DP	;DESTROY PORT
+STANLN==.-STANBL-1
+;Call:	T1/ Circuit state code
+;	CALL .TSTAR
+;	Normal Return
+
+.TSTAR:	PUSH P,T1		;SAVE STATE CODE
+	CALL .TDECW		;TYPE STATE IN DECIMAL
+	MOVEI T1,"("
+	CALL .TCHAR
+	POP P,T1
+	CAILE T1,STARLN		;WE UNDERSTAND THE STATE?
+	MOVEI T1,0		;NO, USE ILLEGAL STATE
+	MOVEI T1,STARBL(T1)	;GET POINTER TO ASCIZ STRING
+	CALL .TSTRG		;TYPE IT OUT
+	MOVEI T1,")"
+	CALLRET .TCHAR
+
+DEFINE STACOD(code),<
+  IFN RCS.'code-.+STARBL,<PRINTX ?STARBL table defined wrong>
+	EXP ASCIZ /code/
+>
+
+STARBL:	STACOD OF		;OFF
+	STACOD RJ		;REJECTED
+	STACOD FA		;FAILED
+	STACOD WT		;WAITING FOR PROTOCOL UP
+	STACOD TI		;WAITING FOR TI
+	STACOD TV		;WAITING FOR TV
+	STACOD TT		;TESTING
+	STACOD RN		;RUNNING
+STARLN==.-STARBL-1
+;Call:	T1/ Adjacency state code
+;	CALL .TSTAA
+;	Normal Return
+
+.TSTAA:	PUSH P,T1		;SAVE STATE CODE
+	CALL .TDECW		;TYPE STATE IN DECIMAL
+	MOVEI T1,"("
+	CALL .TCHAR
+	POP P,T1
+	CAILE T1,STAALN		;WE UNDERSTAND THE STATE?
+	MOVEI T1,0		;NO, USE ILLEGAL STATE
+	MOVEI T1,STAABL(T1)	;GET POINTER TO ASCIZ STRING
+	CALL .TSTRG		;TYPE IT OUT
+	MOVEI T1,")"
+	CALLRET .TCHAR
+
+DEFINE STACOD(code),<
+  IFN ADJ.'code-.+STAABL,<PRINTX ?STAABL table defined wrong>
+	EXP ASCIZ /code/
+>
+
+STAABL:	STACOD UN		;UNUSED
+	STACOD IN		;CURRENTLY INITIALIZING
+	STACOD UP		;UP
+STAALN==.-STAABL-1
+;Call:	T1/ Node address
+;	CALL .TNODE
+;	Normal Return
+
+.TNODE:	SAVEAC P1
+	MOVE P1,T1		;SAVE NODE ADDRESS
+	LDB T1,[POINTR (P1,RN%ARE)] ;GET AREA NUMBER
+	SKIPE T1		;SKIP IF NO AREA NUMBER
+	CALL .TDECD		;TYPE IN DECIMAL
+	LDB T1,[POINTR (P1,RN%NOD)] ;GET NODE ADDRESS
+	CALLRET .TDECW##	;TYPE IN DECIMAL AND RETURN
+;Call:	T1/ Circuit ID
+;	CALL .TCKT
+;	Normal Return
+
+.TCKT:	JUMPE T1,[MOVEI T1,[ASCIZ/(none)/]
+		  PJRST .TSTRG##]
+	SAVEAC P1
+	MOVE P1,T1		;PRESERVE CIRCUIT-ID
+	LDB T1,[POINTR (P1,LIDEV)] ;GET THE DEVICE TYPE
+	CAIL T1,0		;RANGE CHECK
+	CAILE T1,DEVTLN		; THE DEVICE TYPE
+	RET			;OOPS, DON'T PRINT ANYTHING
+	MOVE T1,DEVTAB(T1)	;GET THE NAME OF THE DEVICE
+	TRZ T1,DF.XXX		;CLEAR FLAG BITS
+	CALL .TSIXN##		;TYPE IT OUT
+
+	MOVEI T1,"-"		;TYPE THE "-"
+	CALL .TCHAR##
+
+	LDB T1,[POINTR (P1,LIKON)] ;NOW GET THE CONTROLLER (CPU) NUMBER
+	CALL .TOCTW##		;TYPE IT OUT
+
+	LDB T1,[POINTR (P1,LIDEV)] ;GET THE DEVICE TYPE
+	MOVE T1,DEVTAB(T1)	;GET THE FLAGS
+	TRNN T1,DF.UNI		;TYPE UNIT NUMBER?
+	 RET			;NO, RETURN
+
+	MOVEI T1,"-"		;TYPE THE "-"
+	CALL .TCHAR##
+
+	LDB T1,[POINTR (P1,LIUNI)] ;NOW GET THE UNIT NUMBER
+	CALL .TOCTW##		;TYPE IT
+
+	LDB T1,[POINTR (P1,LIDEV)] ;GET THE DEVICE TYPE
+	MOVE T1,DEVTAB(T1)	;GET THE FLAGS
+	TRNN T1,DF.DRP		;TYPE DROP NUMBER?
+	 RET			;NO, RETURN
+
+	LDB T1,[POINTR (P1,LIDRP)] ;GET DROP NUMBER
+	CALL .TDECW##		;TYPE IT
+	RET			; AND RETURN
+;Call:	T1/ Node type
+;	CALL .TANTY
+;	Normal Return
+
+.TANTY:	PUSH P,T1		;SAVE NODE TYPE
+	CALL .TDECW		;TYPE NOTE TYPE IN DECIMAL
+	MOVEI T1,"("
+	CALL .TCHAR
+	POP P,T1
+	CAILE T1,ANTYLN		;WE UNDERSTAND THE TYPE?
+	SKIPA T1,[[ASCIZ /??/]]	;NO, USE ILLEGAL NODE TYPE
+	MOVEI T1,ANTYBL(T1)	;GET POINTER TO ASCIZ STRING
+	CALL .TSTRG		;TYPE IT OUT
+	MOVEI T1,")"
+	CALLRET .TCHAR
+
+DEFINE NTYCOD(code),<
+  IFN ADJ.'code-.+ANTYBL,<PRINTX ?ANTYBL table defined wrong>
+	EXP ASCIZ /code/
+>
+
+ANTYBL:	NTYCOD 3F		;PHASE III ROUTING NODE
+	NTYCOD 3S		;PHASE III NON-ROUTING NODE
+	ASCIZ /??/		;UNUSED
+	NTYCOD L2		;PHASE IV LEVEL II ROUTING NODE
+	NTYCOD L1		;PHASE IV LEVEL I ROUTING NODE
+	NTYCOD LN		;PHASE IV NON-ROUTING NODE
+ANTYLN==.-ANTYBL-1
+;Call:	T1/ Physical address
+;	CALL .TADDR
+;	Normal Return
+
+.TADDR:	SAVEAC <P1,P2,P3>	;SAVE P1-P3
+	MOVE P2,T1		;SAVE ADDRESS
+	HLRZS T1		;GET SECTION NUMBER
+	CALL .TOCTW		;TYPE OUT
+	CALL .TCOMA		;COMMA
+	CALL .TCOMA		;COMMA
+	HRLZS P2		;GET ADDRESS WITHIN SECTION
+	MOVEI P3,6		;AND COUNT
+TADDR1:	SETZ P1,		;GET NEXT OUTPUT BYTE
+	LSHC P1,3		;...
+	MOVEI T1,"0"(P1)	;CONVERT TO ASCII
+	CALL .TCHAR		;OUTPUT
+	SOJG P3,TADDR1		;LOOP TO OUTPUT ALL BYTES
+	POPJ P,			;AND RETURN
+;Call:	T1/ MUUO
+;	CALL .TMUUO
+;	Normal Return
+
+.TMUUO:	SAVEAC P1		;SAVE P1
+	MOVE P1,T1		;SAVE MUUO
+	LDB T1,[POINT 9,P1,8]	;GET OPCODE
+	CALL .TOCTW		;TYPE
+	CALL .TSPAC		;SPACE
+	LDB T1,[POINT 4,P1,12]	;GET AC
+	CALL .TOCTW		;TYPE
+	CALL .TCOMA		;COMMA
+	LDB T1,[POINT 22,P1,35]	;GET ADDRESS
+	CALLRET .TOCTW		;TYPE AND RETURN
+;.TEADD - Type ethernet address
+
+.TEADD:	PUSH	P,[5]
+	HRLI	T2,(POINT 8,)
+	PUSH	P,T2
+THWA1:	ILDB	T1,(P)
+	PUSHJ	P,.THEXB
+	MOVEI	T1,"-"
+	PUSHJ	P,.TCHAR
+	SOSLE	-1(P)
+	JRST	THWA1
+	ILDB	T1,(P)
+	ADJSP	P,-2
+;	JRST	.THEXB
+
+.THEXB:	IDIVI	T1,^D16
+	PUSH	P,T2
+	PUSHJ	P,TH1DIG
+	POP	P,T1
+TH1DIG:	ADDI	T1,"0"
+	CAILE	T1,"9"
+	ADDI	T1,"A"-"9"-1
+	CALLRET	.TCHAR
+	SUBTTL .SWxxx - Local Switch Value Processors
+
+;Call:	CALL .SWLIN
+;	Normal return
+;Returns with Circuit block pointer in T1.
+
+.SWCKT:	SAVEAC <P1,N>
+	CALL .SIXSW##		;GET THE DEVICE NAME
+	MOVE T3,[XWD -DEVTLN,DEVTAB] ;SET UP FOR DEVICE NAME SEARCH
+SWCKT1:	MOVE T2,(T3)		;GET A DEVICE NAME
+	TRZ T2,DF.XXX		;MASK OFF FLAGS
+	CAMN N,T2		;HAVE WE GOT IT?
+	JRST SWCKT2		;YES, GO DO THE REST
+	AOBJN T3,SWCKT1		;NO, CHECK THE NEXT ONE
+SWCKTE:	SETZ T1,		;RETURN SILLY NUMBER
+	OUTSTR	[ASCIZ /? Invalid circuit name/]
+	POPJ P,			; TO CALLER
+
+SWCKT2:	SETZ P1,		;START WITH ZERO LINE ID
+	HRRZ T1,T3		;GET THE POINTER TO DEV NAME
+	SUBI T1,DEVTAB		;CALCULATE THE NUMBER VALUE
+	DPB T1,[POINTR (P1,LIDEV)] ;PUT THE DEVICE TYPE IN THE RIGHT FIELD
+
+	CAIE C,"-"		;WAS IT A LEGAL SEPERATOR?
+	JRST SWCKTE		;NO, GIVE THE ERROR RETURN
+
+	CALL .OCTNW##		;GET THE CONTROLLER (CPU) NUMBER
+	DPB N,[POINTR (P1,LIKON)] ;PUT IT IN THE CORRECT FIELD
+
+	LDB T1,[POINTR (P1,LIDEV)] ;GET DEVICE TYPE
+	MOVE T1,DEVTAB(T1)	;GET FLAGS
+	TRNN T1,DF.UNI		;DEVICE INCLUDES UNIT NUMBER?
+	JRST SWCKT3		;NO, RETURN
+
+	CAIE C,"-"		;WAS IT THE SEPERATOR?
+	JRST SWCKTE		;GIVE THE ERROR RETURN
+
+	CALL .OCTNW		;GET THE UNIT NUMBER
+	DPB N,[POINTR (P1,LIUNI)] ;STORE THE UNIT NUMBER
+
+	LDB T1,[POINTR (P1,LIDEV)] ;GET DEVICE TYPE
+	MOVE T1,DEVTAB(T1)	;GET FLAGS
+	TRNN T1,DF.DRP		;DEVICE INCLUDES DROP NUMBER?
+	JRST SWCKT3		;NO, RETURN
+
+;$	CAIE C,"."		;SPECIFYING DROP NUMBER
+	JUMPLE C,SWCKTE		;NO, GIVE ERROR RETURN
+
+	CALL .OCTNW		;GET THE DROP NUMBER
+	DPB N,[POINTR (P1,LIDRP)] ;STORE THE DROP NUMBER
+
+SWCKT3:	MOVE T1,P1		;ALSO RETURN IN T1
+	MOVEM T1,CKTID		;SAVE THE CIRCUIT-ID
+	SETZM NODID		;CLEAR ADJACENCT NODE ADDRESS
+	POPJ P,			; AND RETURN
+
+DEFINE DEVTYP(TYPE,FLAGS<0>),<
+	<SIXBIT/TYPE/> ! FLAGS
+>
+DF.UNI==1			;DEVICE INCLUDES UNIT NUMBER
+DF.DRP==2			;DEVICE INCLUDES DROP NUMBER
+DF.XXX==DF.UNI!DF.DRP		;MASK OF ALL FLAGS
+
+DEVTAB:	DEVTYP TST
+	DEVTYP DTE,DF.UNI
+	DEVTYP KDP,DF.UNI
+	DEVTYP DDP,DF.UNI
+	DEVTYP CI,DF.UNI!DF.DRP
+	DEVTYP ETH
+	DEVTYP DMR,DF.UNI
+DEVTLN==.-DEVTAB
+
+;Call:	CALL .SWNOD
+;	Normal Return
+;Returns with node address in N.
+
+.SWNOD:	CALL .DECNW##		;READ DECIMAL NODE NUMBER
+	JUMPLE C,CPOPJ		;DONE IF JUST NODE NUMBER
+	PUSH P,N		;SAVE AREA NUMBER
+	CALL .DECNC##		;GET NODE NUMBER
+	POP P,T1		;GET BACK NODE AREA
+	DPB T1,[POINTR (N,RN%ARE)] ;BUILD COMPLETE ADDRESS
+	RET			;AND RETURN
+;Routine to allocate output spec area
+SCNAOT:	OUTSTR	[ASCIZ /?SCAN called for output space???
+/]
+	RET			;RETURN
+
+;Routine to allocate input spec area
+SCNAIN:	OUTSTR	[ASCIZ /?SCAN called for input spec space???
+/]
+	RET			;RETURN
+	SUBTTL KDP Display
+
+	radix	10		;the kdp display is in radix 10
+
+;byte pointers into the kdl block
+
+;xbyte takes the macro for a field from NETPRM and changes the
+;index field from F to KDL
+
+define xbyte(bp)<		;;routine to translate the index field
+kdl'bp:	exp <<^-<15_18>>&kd%'bp>+<kdl_18>
+>
+	xbyte	sta		;line state
+	xbyte	tim		;line timer (rep & start/stack)
+	xbyte	xnk		;last nak sent
+	xbyte	rpc		;rep counter
+	xbyte	rmn		;receive message number
+	xbyte	lmx		;last message xmitted (assigned)
+	xbyte	lma		;last message ack'ed
+	subttl KDP Display -  screen layout
+
+                           Comment @
+
+         1111111111222222222233333333334444444444555555555566666666667777777777
+1234567890123456789012345678901234567890123456789012345678901234567890123456789
+===============================================================================
+1Line #9, State = INITED, Last Zeroed - HH:MM:SS
+2                                                             KMC CONTROL OUTS
+3         MESSAGES  RCVD   SENT      NAKS    RCVD  SENT    ABORT    (06) 99999
+4LMX 777   START  9999999 9999999  HDR BCC  99999 99999    BAD HDR  (10) 99999
+5LMA 777   STACK  9999999 9999999  DATA BCC 99999 99999    BAD CRC  (12) 99999
+6RMN 777   ACK    9999999 9999999  REP RESP 99999 99999    NO RBUF  (14) 99999
+7          NAK    9999999 9999999  NO RCVBF 99999 99999    DSR CHNG (16) 99999
+8RPC 999   REP    9999999 9999999  RCV OVER 99999 99999    KMC NXM  (20) 99999
+9TIM 999   DATA   9999999 9999999  MSG2LONG 99999 99999    XMT UNDR (22) 99999
+0          MAINT  9999999 9999999  BAD HDR  99999 99999    RCV OVER (24) 99999
+1                                  RANDOM   99999 99999    BFR KILL (26) 99999
+2------------------------------------------------------------------------------
+3Line #9, State = INITED, Last Zeroed - HH:MM:SS
+4                                                             KMC CONTROL OUTS
+5         MESSAGES  RCVD   SENT      NAKS    RCVD  SENT    ABORT    (06) 99999
+6LMX 777   START  9999999 9999999  HDR BCC  99999 99999    BAD HDR  (10) 99999
+7LMA 777   STACK  9999999 9999999  DATA BCC 99999 99999    BAD CRC  (12) 99999
+8RMN 777   ACK    9999999 9999999  REP RESP 99999 99999    NO RBUF  (14) 99999
+9          NAK    9999999 9999999  NO RCVBF 99999 99999    DSR CHNG (16) 99999
+0RPC 999   REP    9999999 9999999  RCV OVER 99999 99999    KMC NXM  (20) 99999
+1TIM 999   DATA   9999999 9999999  MSG2LONG 99999 99999    XMT UNDR (22) 99999
+2          MAINT  9999999 9999999  BAD HDR  99999 99999    RCV OVER (24) 99999
+3                                  RANDOM   99999 99999    BFR KILL (26) 99999
+4
+
+                         End Comment @
+
+
+	msgcol==12		;column to start message counts in
+	nakcol==36		;column to start nak counts in
+	ctocol==60		;column to start control out info in
+	subttl KDP Display - 	initialization
+
+typkdp:	skipn	typdpy		;in DPY mode?
+	  err	?KDP display only supported in DPY mode for now
+	movei	kdl,kdlpag	;get address of the kdl page
+	movei	t1,0		;get line #0
+	movem	t1,kdline(kdl)	;set the line for kdldpy
+	pushj	p,kdldpy	;go output the first line
+	  err ? KDL. Read status failed for line #0.
+	movei	t1,79		;output a dividing line of 79 dashes
+	sojge	t1,[chi$ "-"	;output a dash
+		    jrst .]	;do all 79 of them
+	crlf			;go to next line
+	aos	kdline(kdl)	;increment the line number
+	pushj	p,kdldpy	;output the next dup's data
+	  text	No line #1.
+	retskp			;success return to DPY loop
+	subttl KDP Display - kdldpy -- output 11 lines of kdl info
+
+;kdldpy
+;call	kdl := pointer to block with line number filled in
+;	screen at upper left hand corner of region to fill
+;return	cpopj	if no such line.
+;	cpopj1	with 11 lines of kdl data output
+
+kdldpy:	movei	t1,1(p)		;address of uuo arguments
+	hrli	t1,4		;there are 4 args to status function
+	push	p,[exp .kdlrs]	;fcn: get dup-11's status
+	push	p,[exp 0]	;arg1: kdp #0 (others aren't supported)
+	push	p,kdline(kdl)	;arg2: kdl line number
+	push	p,[xwd <kdlest-kdlsts>+1,kdlpag+kdlsts] ;leng,addr of rtn area
+	kdp.	t1,		;get the status
+	  jrst	[adjsp p,-4	;if no DMC-11, fixup the stack
+		 popj p,]	;  and give an error return
+	adjsp	p,-4		;pop off the 4 arguments
+
+	movei	t1,1(p)		;address of uuo arguments
+	hrli	t1,4		;there are 4 args to status function
+	push	p,[exp .kdlru]	;fcn: read dup-11's sixbit user name
+	push	p,[exp 0]	;arg1: kdp #0 (others aren't supported)
+	push	p,kdline(kdl)	;arg2: kdl line number
+	push	p,[exp 0]	;uuo returns user name here
+	kdp.	t1,		;get the status
+	  setzm (p)		;error, we don't know user name
+	pop	p,kdlpag+kdlusr ;store name for display later
+	adjsp	p,-3		;pop off the 4 arguments
+	subttl KDP Display - 	line 1.
+
+					;line
+line1:	text	<Line #>
+	number	kdline(kdl)		;output the line number
+					;state
+	text	<,  State = >
+	ldb	t1,kdlsta		;get the state
+	setz	t2,			;get a "zero"
+	cain	t1,kd%dwn		;if it's down
+	movei	t2,[asciz |Down|]	;  then get that "state"
+	cain	t1,kd%ini
+	movei	t2,[asciz |Initial|]
+	cain	t1,kd%fls
+	movei	t2,[asciz |Flushing|]
+	cain	t1,kd%mai
+	movei	t2,[asciz |Maint|]
+	cain	t1,kd%str
+	movei	t2,[asciz |Starts|]
+	cain	t1,kd%stk
+	movei	t2,[asciz |Stacks|]
+	cain	t1,kd%run
+	movei	t2,[asciz |Running|]
+	skipn	t2			;make sure we got a valid state
+	movei	t2,[asciz |?????|]
+	hrli	t2,(str$)		;make it a "str$ uuo)
+	xct	t2			;output the string
+					;up-time
+	text	<,  Last zeroed - >
+	move	t1,kdlztm(kdl)		;get uptime
+	idivi	t1,3600			;get "hours"
+	number	t1,10,2,$zr		;2 digits long, fill with zero's
+	chi$	":"			;output the colon
+	move	t1,t2			;get the remainder
+	idivi	t1,60			;get "minutes"
+	number	t1,10,2,$zr		;output the minutes
+	chi$	":"			;output the colon
+	number	t2,10,2,$zr		;output the seconds
+
+	text	<,   User - >
+	skipn t1,kdlusr(kdl)		;get sixbit user name
+	  movsi t1,'?  '		;don't know it yet
+	call outsix			;tell DPY about sixbit word
+	crlf				;end of the first line.
+
+	subttl KDP Display - 	Line 2.
+
+line2:	goto	ctocol+2		;go to the 62nd column
+	text	<KMC Control Outs>	;write header
+	crlf				;end of line 2
+	subttl KDP Display - 	Line 3.
+
+line3:	goto	msgcol-2		;message column
+	text	<Messages   Rcvd    Sent>
+	goto	nakcol+2
+	text	<Naks    Rcvd  Sent>
+	goto	ctocol			;go to control out column
+	text	<Abort    (06) >	;abort message counts
+	number	kdlcto+0(kdl),10,5	;5 char number right justify
+	crlf				;end of line 3
+
+
+	subttl KDP Display - 	Line 4.
+
+line4:	text	<LMX >			;last message assigned
+	ldb	t1,kdllmx		;get the byte
+	number	t1,8,3,$zr	;output in octal for debugging
+
+	goto	msgcol			;messages counts next
+	text	<Start  >		;first is "start count"
+	number	kdlctr+5(kdl),10,7	;seven digit field.  left justified
+	chi$	$sp			;one space
+	number	kdlctx+5(kdl),10,7	;get the xmit field too.
+
+	goto	nakcol			;nak counts now
+	text	<Random   >		;first type is "random"
+	number	kdlnkr+0(kdl),10,5	;5 digit field left justified
+	chi$	$sp			;output the space
+	number	kdlnkx+0(kdl),10,5	;output the xmit field too
+
+	goto	ctocol			;control out's now.
+	text	<Bad Hdr  (10) >	;illegal header is next
+	number	kdlcto+1(kdl),10,5	;5 digits
+	crlf
+	subttl KDP Display - 	line 5.
+
+line5:	text	<LMA >			;last message assigned
+	ldb	t1,kdllma		;get the value
+	number	t1,8,3,$zr		;three digit octal
+
+	goto	msgcol			;message counts next
+	text	<Stack  >		;stack counts
+	number	kdlctr+6(kdl),10,7	;7 digit number (received)
+	chi$	$sp			;space
+	number	kdlctx+6(kdl),10,7	;xmitted
+
+	goto	nakcol			;nak counts
+	text	<Hdr BCC  >
+	number	kdlnkr+1(kdl),10,5	;received header bcc naks
+	chi$	$sp			;space
+	number	kdlnkx+1(kdl),10,5	;xmitted header bcc naks
+
+	goto	ctocol			;control out column
+	text	<Bad CRC  (12) >	;data or header crc error
+	number	kdlcto+2(kdl),10,5	;count of crc control outs
+	crlf				;end of line 5
+	subttl KDP Display - 	line 6.
+
+line6:	text	<RMN >			;last message received
+	ldb	t1,kdlrmn		;get the byte
+	number	t1,8,3,$zr		;octal 3 chars zero filled
+
+	goto	msgcol			;messages next
+	text	<Ack    >		;ack message count
+	number	kdlctr+0(kdl),10,7	;output received ack count
+	chi$	$sp			;space
+	number	kdlctx+0(kdl),10,7	;output xmitted ack count
+
+	goto	nakcol			;nak counts next
+	text	<Data BCC >		;data crc error
+	number	kdlnkr+2(kdl),10,5	;output receive counts
+	chi$	$sp			;space
+	number	kdlnkx+2(kdl),10,5	;output xmit count
+
+	goto	ctocol			;control outs next
+	text	<No Rbuf  (14) >	;no receive buffer
+	number	kdlcto+3(kdl),10,5	;output control out count
+	crlf				;end of line 6
+	subttl KDP Display - 	Line 7.
+
+line7:	goto	msgcol			;start with message column this time
+	text	<Nak    >
+	number	kdlctr+1(kdl),10,7	;received naks
+	chi$	$sp			;space
+	number	kdlctx+1(kdl),10,7	;sent naks
+
+	goto	nakcol			;specific nak counts
+	text	<Rep resp >		;rep response nak
+	number	kdlnkr+3(kdl),10,5	;received rep naks
+	chi$	$sp			;space
+	number	kdlnkx+3(kdl),10,5	;sent naks
+
+	goto	ctocol			;control outs
+	text	<DSR chng (16) >	;dataset ready changed
+	number	kdlcto+4(kdl),10,5	;output transition count
+	crlf				;end of line 7
+	subttl KDP Display -  line 8.
+
+line8:	text	<RPC >			;rep counter
+	ldb	t1,kdlrpc		;get the count
+	number	t1			;output it
+
+	goto	msgcol			;messages next
+	text	<Rep    >		;rep counts
+	number	kdlctr+2(kdl),10,7	;received reps
+	chi$	$sp			;space
+	number	kdlctx+2(kdl),10,7	;xmitted reps
+
+	goto	nakcol			;nak's next
+	text	<No Rcvbf >		;no receive buffer nak
+	number	kdlnkr+4(kdl),10,5	;received
+	chi$	$sp			;space
+	number	kdlnkx+4(kdl),10,5	;sent
+
+	goto	ctocol			;control out's last
+	text	<Kmc NXM  (20) >	;we screwed the kmc?
+	number	kdlcto+5(kdl),10,5	;output nxm count
+	crlf				;end of line 8
+	subttl KDP Display - 	Line 9.
+
+line9:	text	<TIM >			;the line's timer
+	ldb	t1,kdltim		;get the time
+	number	t1			;decimal
+
+	goto	msgcol			;message counts
+	text	<Data   >		;data messages
+	number	kdldtr(kdl),10,7	;received
+	chi$	$sp			;space
+	number	kdldtx(kdl),10,7	;sent
+
+	goto	nakcol			;nak count
+	text	<Rcv over >		;receiver over run
+	number	kdlnkr+5(kdl),10,5	;received
+	chi$	$sp			;space
+	number	kdlnkx+5(kdl),10,5	;and sent
+
+	goto	ctocol			;control outs last
+	text	<Xmt undr (22) >	;transmitter under-run
+	number	kdlcto+6(kdl),10,5	;output that
+	crlf				;end of line 9
+	subttl KDP Display - 	Line 10.
+
+line10:	goto	msgcol			;start with messages
+	text	<Maint  >		;maintenance messages
+	number	kdlmar(kdl),10,7	;received
+	chi$	$sp			;space
+	number	kdlmax(kdl),10,7	;and sent
+
+	goto	nakcol			;nak counts next
+	text	<Msg2long >		;message too long naks
+	number	kdlnkr+6(kdl),10,5	;received
+	chi$	$sp			;space
+	number	kdlnkx+6(kdl),10,5	;and sent
+
+	goto	ctocol			;control out
+	text	<Rcv over (24) >	;receiver over runs
+	number	kdlcto+7(kdl),10,5	;output that
+	crlf				;end of line 10
+	subttl KDP Display - 	Line 11.
+
+line11:	goto	nakcol			;no messages. start with nak's
+	text	<Bad hdr  >		;header naks
+	number	kdlnkr+7(kdl),10,5	;received
+	chi$	$sp			;space
+	number	kdlnkx+7(kdl),10,5	;and sent
+
+	goto	ctocol			;control out column
+	text	<Bfr kill (26) >	;buffer kill
+	number	kdlcto+8(kdl),10,5	;output that
+	crlf				;end of line 11
+	retskp				;success return to typkdp
+
+
+	radix	8		;end of KDP display processor
+	SUBTTL UTILITY ROUTINES
+
+;PGOTO	MOVES FORWARD TO APPROIATE HORIZONTAL POSITION.
+;CALL	T1 := POSITION TO GO TO
+;RETURN	CPOPJ
+PGOTO:	LOC$	T2		;GET OUR CURRENT "XWD LINE,POS"
+	SUBI	T1,(T2)		;GET NUMBER OF CHARACTERS TO GO
+	SKIPLE	T1		;ALWAYS PRINT AT LEAST ONE SPACE
+PGOTO1:	SOJL	T1,CPOPJ	;EXIT IF WE'VE GOT THERE
+	CHI$	$SP		;PRINT A SPACE
+	JRST	PGOTO1		;LOOP TILL ALL CHARACTERS ARE OUT
+
+
+;OUTSIX	OUTPUT THE WORD IN T1 AS SIXBIT
+;RETURN CPOPJ
+
+OUTSIX:	PUSH P,T2
+	PUSH P,T3
+	MOVEI T3,6
+	MOVE T2,T1		;PREPARE FOR LSHC
+OUTSI1:	SETZ T1,
+	LSHC T1,6		;GET NEXT CHR FROM T2
+	ADDI T1,$SP		;MAKE SIXBIT INTO ASCII
+	CHR$ T1			;OUTPUT CHR TO DPY PACKAGE
+	SOJG T3,OUTSI1		;OUTPUT ALL SIX CHRS (EVEN IF BLANK)
+	POP P,T3
+	POP P,T2
+	POPJ P,
+;OUTNUM	PRINTS A NUMBER.  CALLED BY THE "NUMBER" MACRO
+;CALL	NUM := NUMBER TO PRINT
+;	BAS := BASE TO PRINT NUMBER IN
+;	WDT := WIDTH OF FIELD. (- MEANS LEFT JUSTIFY, 0 MEANS ANY WIDTH)
+;	FIL := CHAR TO USE TO FILL OUT THE FIELD
+
+OUTNUM:	PUSH	P,T1		;SAVE THE T'S
+	PUSH	P,T2
+	PUSH	P,T3
+	MOVE	T1,NUM		;COPY THE NUMBER
+	MOVEI	T3,1		;INITIALIZE THE COUNT OF DIGITS IN NUMBER
+OUTNU1:	IDIVI	T1,(BAS)	;GET THE NEXT DIGIT IN T1+1
+	ADDI	T1+1,$ZR	;MAKE REMAINDER A DIGIT
+	PUSH	P,T1+1		;SAVE THE NEXT DIGIT
+	SKIPE	T1		;SKIP IF ALL DIGITS PRINTED
+	AOJA	T3,OUTNU1	;LOOP TAKING NUMBER APART. EXIT WITH T3 = COUNT
+	JUMPLE	WDT,OUTNU2	;IF NOT RIGHT JUSTIFIED, DON'T PAD BEGINNING
+
+	MOVEI	T2,(WDT)	;GET THE "WIDTH"
+	SUBI	T2,(T3)		;SUBTRACT THE "SIZE"
+	SOJGE	T2,[CHR$ FIL	;LOOP OUTPUTTING "FILL"
+		    JRST .]	;  UNTIL T2 COUNTED DOWN
+
+OUTNU2:	MOVEI	T2,(T3)		;GET THE "LENGTH" OF THE NUMBER
+	SOJGE	T2,[POP P,T1	;GET THE NEXT DIGIT TO OUTPUT
+		    CHR$ T1	;OUTPUT IT
+		    JRST .]	;LOOP OVER ALL DIGITS
+	JUMPGE	WDT,CPOPJ3	;EXIT IF NOT LEFT JUSTIFIED
+
+	ADD	T3,WDT		;GET MINUS THE NUMBER OF FILL CHARS
+	AOJGE	T3,[CHR$ FIL	;OUTPUT THE FILL
+		    JRST .]	;OUTPUT ALL THE FILL
+CPOPJ3:	POP	P,T3		;RESTORE CALLERS T'S
+	POP	P,T2
+	POP	P,T1
+	POPJ	P,		;ALL DONE.
+	SUBTTL	Terminal Handling Routines
+
+;TTYINI - Init our TTY
+
+TTYINI:	OPEN	$TTY,[EXP .IOASC
+		      SIXBIT /TTY/
+		      XWD TTYOBF,0]
+	  ERR	? OPEN OF TTY FAILED.
+	MOVE	T1,[XWD ^O400000,OBF1+1] ;GET THE "MAGIC" TO SET
+	MOVEM	T1,TTYOBF+0	;  AND SET UP THE FIRST WORD OF THE HEADER
+	MOVE	T1,[POINT 7,0,35] ;GET THE PATTERN BYTE POINTER
+	MOVEM	T1,TTYOBF+.BFPTR  ;  AND SET UP THE POINTER
+	SETZM	TTYOBF+.BFCNT	;CLEAR THE COUNT
+
+
+	SETZM	OBF1		;CLEAR FIRST WORD OF THE OUTPUT BUFFER
+	MOVE	T1,[XWD OBF1,OBF1+1] ;GET BLT POINTER TO THE REST
+	BLT	T1,OBF1+TYOBSZ+2;CLEAR THE BUFFER
+	MOVE	T1,[XWD TYOBSZ+1,OBF1+1]
+	MOVEM	T1,OBF1+1	;SET UP THE RING BUFFER POINTER
+	POPJ	P,		;ALL DONE
+
+
+;TTYOUC - Output a character to TTY
+
+TTYOUC:	EXCH	T1,(P)		;GET THE CHAR, SAVE T1
+				;JUMP IF SIGNAL FOR LAST
+	JUMPL	T1,TTYOU2	;IGNORE SIGNAL & RETURN
+TTYOU1:	SOSGE	TTYOBF+.BFCTR	;COUNT OUT THE NEXT CHARACTER
+	JRST	[PUSHJ P,TTYFRC	;IF NO ROOM, FORCE OUT CURRENT BUFFER
+		 JRST TTYOU1]	;  AND TRY AGAIN
+	IDPB	T1,TTYOBF+.BFPTR;STORE THE CHARACTER
+TTYOU2:	POP	P,T1		;RESTORE DPY'S AC
+	POPJ	P,		;  AND RETURN
+
+
+;TTYFRC - Force out the current TTY buffer
+
+TTYFRC:	OUT	$TTY,		;DO THE OUTPUT
+	  POPJ	P,		;RETURN IF SUCCESSFUL
+	ERR	? TTY output I/O error.
+;TTY output routine called from SCAN's .TCHAR
+
+SCNOUC:	SKIPN	BIGOUT		;USE BIG BUFFER OUTPUT?
+	JRST	[OUTCHR	T1	;NO, PUSH SCAN'S MSGS OUT NOW
+		 RET]
+	SKIPN	TYPDPY		;USER WANT DPY MODE?
+	JRST	SCNOU1		;NO, OUTPUT STRAIGHT TO TTY
+
+;Here to output a character to DPY package
+
+	PUSH	P,T2		;CALLERS EXPECT ALL ACS TO BE SAVED
+	MOVE	T2,LINCNT	;GET CURRENT LINE COUNT
+	CAML	T2,LINGOL	;UP TO BEGINNING OF LOGICAL SCREEN YET?
+	  CHR$	T1		;YES, TELL DPY
+	POP	P,T2		;RESTORE CALLER'S T2
+	CAIN	T1,12		;A LINE FEED?
+	  AOS	LINCNT		;YES, ONE MORE LINE FEED OVER DAM
+	RET			;RETURN TO SCAN
+
+SCNOU1:	SOSGE	TTYOBF+.BFCTR	;COUNT OUT NEXT CHARACTER
+	JRST	[PUSHJ P,TTYFRC	;IF NO ROOM, FORCE OUT CURRENT BUFFER
+		 JRST SCNOU1]	;  AND TRY AGAIN
+	IDPB	T1,TTYOBF+.BFPTR;STORE CHARACTER
+	POPJ	P,		;  AND RETURN
+	SUBTTL	End of Program
+
+	END DCNSPY

@@ -1,0 +1,218 @@
+			EMPIRE
+			------
+ 
+ 
+ 
+		(The wargame of the century)
+ 
+ 
+ Empire is a simulation of a full-scale war between two emperors,
+the computer and you. Naturally, there is only room for 1 so the
+object of the game is to destroy the other. The computer plays by
+the same rules that you do.
+ 
+ The map is a rectangle 600*1000 miles on a side. The resolution
+is 10, so the map you see is 60*100. The map consists of '.': sea,
+'+': land, '*': uncontrolled cities, 'X': computer-controlled cities,
+'O': your dominated cities. Each emperor gets 1 move per round (1
+round=1 day), moves are done sequentially.
+ 
+ The pieces are as follows:
+ 
+ 
+PIECE		YOURS	ENEMY	MOVES	HITS	PHASE	MAXMUM NUMBER
+ 
+ARMY		  A	1	1	1	5	500
+FIGHTER		  F	2	4	1	10	200
+DESTROYER	  D	3	2	3	20	200
+SUBMARINE	  S	4	2	2	25	200
+TROOP TRANSPORT	  T	5	2	3	30	100
+CRUISER		  R	6	2	8	50	100
+AIRCRAFT CARRIER  C	7	2	8	60	100
+BATTLESHIP	  B	8	2	12	75	100
+ 
+ 
+ The second column gives the representations for your units, the
+third gives the representations of enemy units. Hits is the amount
+of damage a unit can take before it is destroyed.  Phase is the number
+of turns necessary to produce that unit.  Moves is the number of
+squares that unit can move in a single turn.  The last column is
+the maximum number of that unit that you can have.
+ 
+ 
+ARMY: armies move only on land. Only armies can capture cities.
+      They have a 50% probability of doing so. Attacking one's
+      own cities results in the army's destruction. Armies can
+      be carried by troop transports. Just move the army
+      on the transport and when the transport moves the army
+      moves with it. You cannot attack any ships while on board
+      a transport. You cannot move back on a city with an army.
+      This is true even if you are on a troop transport.
+ 
+FIGHTER: fighters move on sea or land. They move 4 times per day.
+	They are refueled at controlled cities and carriers. They
+	are shot down over uncontrolled cities. They have a max.
+	Range of 20 spaces.
+ 
+DESTROYER: like all ships, destroyers can move only on the sea,
+	unless they dock in a controlled city, in which case damage
+	is repaired at the rate of 1 hit per day.
+ 
+SUBMARINE: submarines fire torpedoes. Thus, when a submarine
+	scores a hit, 3 hits are exacted instead of the usual 1
+	from the enemy unit.
+ 
+TROOP TRANSPORT: troop transports can carry a maximum of 2* the
+	number of hits left of armies.
+ 
+CRUISERS: typical ship
+ 
+AIRCRAFT CARRIERS: carriers can carry a maximum of 1*
+	the number of hits left of fighters.
+ 
+BATTLESHIP: typical ship
+ 
+ 
+Attacking something is accomplished by moving onto the square of
+the unit you wish to attack. Hits are traded off at 50% probability
+of a hit landing on one or the other units until one unit is totally
+destroyed. There is only 1 possible winner.
+ 
+[YOUR ORDERS?]
+ 
+Commands are the following:
+ 
+M:  begin movement
+O:  same as 'M'
+T:  request a block printout of the entire map. Use TTYnnn in
+    response to the request for a tty number. Default is your own
+    TTY number.
+V:  save game
+P:  request sector printout. There are 10 sectors, each
+    representing a 20*70 area of the map, arranged as follows:
+ 
+    0 5
+    1 6
+    2 7
+    3 8
+    4 9
+ 
+    The sectors overlap by 10 vertically, and 40 horizontally.
+    Note that the sectors for updating
+    are slightly different, but this is unimportant.
+J:  Put you in editing mode, where you can examine and/or change the
+    functions associated with your pieces and cities (explained later).
+C:  Give the computer a free move. The game gets more interesting if
+    you give the computer a headstart of 100 rounds or so!
+N:  Give the computer a bunch of free moves (50 to 150 is good
+    at the start of the game).
+R:  Display the round number.
+H:  Help!
+ 
+ 
+Functions to which you can assign your pieces:
+ 
+AWAKE:  no function (you will be asked to move the piece every turn).
+SENTRY: stay put. Do not ask the user to move the piece. Wake up if
+     an enemy piece comes within sensor range.
+RANDOM: (for armies only) move at random subject to the following conditions:
+     if an uncontrolled city is adjacent, attack it.
+     If an enemy unit is adjacent, attack it.
+     If an unfilled troop transport of yours is adjacent, get on it and
+     wake up.
+     Move if possible without attacking any of your own units.
+     It will not destroy itself unless it is in a city surrounded by 
+     your units.
+     An easy way to give it this function is type 'R' when a move
+     is requested.
+MOVE: move towards location assigned to the piece (in editing mode).
+     wake up if enemy piece is encountered. Wake up temporarily if obstacle is
+     in path of movement.
+DIRECTION: move in specified direction, wake up if enemy piece is
+     encountered. Wake up temporarily if obstacle is in path of movement.
+FILL: (troop transports and aircraft carriers only) go on sentry duty
+     until full of armies or fighters.
+ 
+-------------
+ 
+Sensor probes are done before and after every move. Sensor probes
+show only The 8 squares adjacent to your unit. The map displays all
+the most recent information.
+ 
+Coordinates are 4-digit numbers. The first 2 are the row, the
+second 2 are the column.
+ 
+Moving onto the edge of the map is a fatal error.
+ 
+MOVEMENT
+--------
+Commands are:
+ 
+QWE
+A D
+ZXC
+ 
+Move in The direction of The key from s. The terminal is set
+no echo and only 1 character is accepted, so no need for <cr><lf>.
+Hit the space bar if you want the piece to stay put.
+ 
+The following commands have the same effect as in [YOUR ORDERS?]
+P,J,H,T,V
+ 
+Other commands are:
+R: if it's an army, set it to moving at random
+S: put on sentry duty.
+I: set unit to moving in a direction specified by the next character
+   typed in, i.e. QWE
+       	 	  A D
+		  ZXC
+G: put the troop transport (or aircraft carrier) to sleep until it
+   accumulates 6 armies (or 8 fighters), then wake it up. This is equivalent
+   to putting it in function fill. If the ship is damaged, the ship will
+   wake up when it has all it can take.
+K: wake up all armies (or fighters) on the troop transport (or aircraft
+   carrier).
+?: request the number of hits left on a craft. It also displays the
+   number of armies (or fighters) aboard.
+H: help! (After this is printed, the computer will wait for you
+   to finish reading it. When you do, type any character, after which the
+   screen will be refreshed.)
+ 
+Garbagey commands will be ignored.
+ 
+ 
+EDITING MODE
+------------
+ 
+QWE
+A D
+ZXC
+ 
+    This moves the cursor around.
+O: exit from editing mode.
+P: print new sector.
+R: display round number.
+I: give piece (or city) the function 'DIRECTION', enter the key
+   specifying the direction following the 'I'.
+K: wake up piece (or city).
+S: put piece (or city) to sleep.
+?: request info on piece or city. Irrelevant for fighters or armies.
+Y: change phase of city that cursor is on top of. When program asks for
+   production demands, key in the letter corresponding to what you want
+   produced.
+L: put army in 'RANDOM'.
+M: put piece (or city) in 'MOVE' function.
+   Then move the cursor to where you want it to go, and type 'H'.
+ 
+ You can give cities functions. This doesn't affect the city any, but any
+fighter landing in that city will pick up the specified function. This is
+useful for setting up automatic fighter movements.
+ 
+ Note that you cannot affect anything inside a city with the editor. This
+also holds for anything on board a troop transport or an aircraft carrier.
+ 
+ Fighters moving under the command of a function will drop out when they have
+10 rounds of fuel left. This is to enable you to decide whether you want to
+make it kamikaze or send it back to a city for refueling.
+
+	<End of GAM:EMPIRE.HLP - 810216/SO>

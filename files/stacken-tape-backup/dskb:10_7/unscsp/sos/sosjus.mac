@@ -1,0 +1,458 @@
+	TITLE	SOSJUS - Justify and Join commands
+;		-----------------------------
+; 
+; This file contains the J commands as follows:
+;	1. Test for the various J commands
+;	2. The justify command
+;	3. The join (J) command
+; 
+ 
+	SEARCH	SOSTCS
+	$INIT
+ 
+; Flag definitions for this module
+ 
+JFFLG==PDFL1			; Do fill only
+JRFLG==PDFL2			; Justify right
+JCFLG==PDFL3			; Justify center
+JBLF==PDFL4			; Justify sees a blank
+JLFLG==PDFL5			; Justify left
+JPER==PDFL6			; Saw a period (or something like it)
+JWFLG==PDFL7			; Justfiy words only (Ragged right)
+ 
+	SUBTTL	TEST FOR THE VARIOUS J COMMANDS
+ 
+IFN	JUSTSW,<
+JUST::
+	PUSHJ	P,GNCH##	; Get a character
+	PUSH	P,C		; Save character
+	TRZ	C,40		; Convert to upper case
+	CAIN	C,"R"
+	TRO	FL2,JRFLG	; R for right
+	CAIN	C,"L"
+	TRO	FL2,JLFLG	; L for left
+	CAIN	C,"C"
+	TRO	FL2,JCFLG	; C for center
+	CAIN	C,"U"		; U for justify
+	TRO	FL2,JFFLG	; Which is the only thing which fills
+	CAIN	C,"W"		; W for words
+	TRO	FL2,JWFLG!JFFLG
+	POP	P,C		; Restore c
+	TRNN	FL2,JRFLG!JLFLG!JCFLG!JFFLG!JWFLG
+	JRST	JOIN		; Must be line number for join
+	SUBTTL	THE JUSTIFY COMMAND
+ 
+; Here when we verify we have a JU, JC, JW, or JR command
+ 
+	MOVE	T1,RMAR 	; Check that this guy is largest
+	CAMLE	T1,LMAR
+	CAMG	T1,PMAR
+	NERROR	MAR
+	PUSHJ	P,GET2SD##	; Get range
+	PUSHJ	P,CKTRMF##	; Make sure it terminates correctly
+	MOVE	T1,LOLN		; First line number of range
+	MOVEM	T1,LIBUF	; Also set new first line to same
+	TLO	FL2,NORENT	; Protect this region from interruption
+	PUSHJ	P,FINDLO##	; Find it
+	PUSHJ	P,INITOL	; Set it up
+	MOVEM	T1,LIBUF	; Set new line number same as old
+	PUSHJ	P,INITNL	; And set up the new one
+	SETZM	TPNT		; Tell JGET there is nothing in LIBUF2
+	MOVE	T1,LMAR 	; Set left margin
+	TRNE	FL2,JFFLG	; If filling
+	MOVE	T1,PMAR 	; Make this start of paragraph
+	SOS	T1
+	MOVEM	T1,INDNT	; For indentation
+	MOVEM	T1,LINL 	; And line length
+; This is the part that gets a character from the old line
+
+JGET:	SKIPN	TPNT		; Is there any unprocessed tail?
+	JRST	JGET1		; No, get a character
+	MOVE	T1,ELIN 	; Are we at end of line?
+	CAMN	T1,TPNT
+	JRST	JGET2		; Yes, start getting from old line
+	ILDB	T1,TPNT 	; No, get a character
+	JRST	JPUT		; And put.
+JGET2:	SETZM	TPNT		; End of tail
+
+JGET1:	AOS	OCNT1		; Step character count
+JGET1A: ILDB	T1,PNTR 	; Load a character
+	CAIE	T1,15		; Is this a CR?
+	JRST	JGET3		; No,test for end of line
+	TRNN	FL2,JFFLG	; Are we filling?
+	JRST	JGET1A		; No, we're through after the LF
+	MOVEI	T1," "		; Yes, make it a blank
+	JRST	JPUT		; And go put
+JGET3:	CAIE	T1,12		; End of line?
+	JRST	JPUT		; Not yet, so go put
+JGET4:				; End of line
+	HRRZ	T1,PNTR 	; Current word in buffer for deletion
+	SUB	T1,OPTR 	; - start of old line
+	AOS	T1		; +1 = word count of old line
+	MOVEM	T1,OCNT 	; For insed
+	TRNN	FL2,JFFLG	; If we are not filling
+	JRST	JGETE		; Do what we have to do
+	SETZM	NCNT		; Otherwise we delete old line
+	MOVE	PNTR,OPTR	; Which starts  here
+	PUSHJ	P,INSED##	; Using INSED
+	PUSHJ	P,INITOL	; Do setup on it and check range
+JGETF:	ILDB	T1,PNTR 	; Get first character
+	AOS	OCNT1		; Step character count
+	CAIE	T1,11		; Is it a tab
+	CAIN	T1,15		; Or CR?
+	JRST	PARA		; Yes, start a new paragraph
+	TRNE	FL2,JWFLG	; If we are doing a "jw"
+	CAIE	T1," "		; And a line starts with a space
+	JRST	JPUT
+	JRST	JGETF		; Then ignore it
+JGETE:	MOVE	T1,LINL 	; Line length
+	MOVEM	T1,WRDL 	; Because CR as blank was deleted
+	MOVEM	ALTP,LWRD	; Also store pointer to end of line
+	CAMLE	T1,MAXL 	; If line was too long,
+	RERROR	LTL		; Tell him so
+	PUSHJ	P,JSUB		; Clean up new line and put it out
+	PUSHJ	P,INITOL	; Set up next line
+	MOVEM	T1,LIBUF	; Set new line number same as old
+	SETZM	TPNT		; Nothing in LIBUF2
+	JRST	JGET2		; Start munching
+; This is the part that puts a character into the new line
+
+
+JPUT:	CAIE	T1," "		; Is this a blank?
+	JRST	JPUTN		; No, check some other stuff
+	TRNN	FL2,JPER	; Have we seen a period or something?
+	JRST	JPUTB1		; No, process as usual
+	TRZ	FL2,JPER	; Yes, turn off flag
+	AOS	WCNT		; Increment word count
+	MOVE	T2,LINL 	; Get current length
+	MOVEM	T2,WRDL 	; Save it for JSUB
+	MOVEM	ALTP,LWRD	; Also save the current pointer
+	IDPB	T1,ALTP 	; Deposit a blank
+	TRO	FL2,JBLF	; Say we saw a blank
+	AOJA	T2,JPUT1	; Increment count, deposit second blank
+JPUTB1: TROE	FL2,JBLF	; A blank, was there one before it?
+	JRST	JGET		; Yes, we don't want it
+	TRNN	FL2,JFFLG	; Are we filling?
+	TRZ	FL2,JBLF	; No, permit an extra blank
+	AOS	WCNT		; Step wordcount
+	MOVE	T2,LINL 	; Get length so far
+	MOVEM	T2,WRDL 	; And save it for jsub
+	MOVEM	ALTP,LWRD	; And store pointer to end of word
+	JRST	JPUT1		; Then put blank in buffer
+JPUTN:	TRZ	FL2,JBLF!JPER	; Not a blank
+	CAIE	T1,":"		; Is it a colon?
+	CAIN	T1,"."		; Is it a period
+	TRO	FL2,JPER
+	CAIE	T1,"!"		; Or exclamation?
+	CAIN	T1,"?"		; Or question mark
+	TRO	FL2,JPER
+JPUTN1: MOVE	T2,LINL 	; Length so far
+JPUT1:	IDPB	T1,ALTP 	; Deposit character
+	ADD	T2,@WTBL	; Width of character
+	CAIN	T1,10		; Adjust back-spaces
+	SUBI	T2,2		; By subtracting 2
+	CAILE	T1,37		; A non-spacing character?
+	JRST	.+3		; Nope
+	CAIL	T1,30		; Characters 30 - 37 have zero width
+	SUBI	T2,1		; Adjust line width for them
+	CAIE	T1,11		; Was that a tab?
+	JRST	JPUT2		; No
+	TRZE	T2,7		; Yes, if last 3 bits are nonzero
+	ADDI	T2,10		; We wern't at tab position
+	SETZM	WCNT		; Reset wordcount
+	SETZM	LWRD		; Last word location
+	MOVEM	ALTP,BLIN	; And logical beginning of line for jsub
+	TRNE	FL2,JFFLG	; If filling
+	TRO	FL2,JBLF	; Delete a following blank
+JPUT2:	MOVEM	T2,LINL 	; Store new length
+	CAMLE	T2,MAXL 	; Are we over the end?
+	JRST	JPUTEL		; Yes, end line we are now on
+	CAME	ALTP,[POINT 7,LIBUF2+MXWPL,34]; No.  Filled buffer?
+	JRST	JGET		; Not yet, get another
+JPUTEL: SKIPE	LWRD		; Any words yet?
+	JRST	JPUTE		; Yes, put out line
+	RERROR	LTL		; No, tell him line too long
+	MOVE	T2,MAXL 	; Say line is long enough
+	MOVEM	T2,WRDL
+JPUTE:	TRNE	FL2,JFFLG	; Unless we're not filling
+	PUSHJ	P,JSUB		; Move out a new line, after justifying 
+	JRST	JGET		; Then get another character
+; This puts out a new line
+
+NLOUT:	MOVEI	T1,15		; Add a CR
+	IDPB	T1,ALTP
+	MOVEI	T1,12		; And a LF
+	IDPB	T1,ALTP
+	HRRZ	T1,ALTP 	; Last word of line
+	SUBI	T1,LIBUF	; -first
+	AOS	T1		; +1=wordcount
+	MOVEM	T1,NCNT 	; For insertion into buffer
+	TRNE	FL2,JFFLG	; If filling
+	SETZM	OCNT		; Insert before
+	MOVE	PNTR,OPTR	; Else replace, the old line
+	PUSHJ	P,INSED 	; Done by insed
+	SETZM	OLDLIN		; Prevent order messages here
+	PUSHJ	P,FINDN##	; Find old line
+	TRNN	FL2,JFFLG	; If not filling
+	JRST	INITNL		; Set up new line on the way back
+	MOVE	T2,INCR 	; Incr for line numbers
+	MOVE	T1,LIBUF	; Old line number
+	PUSHJ	P,ASCIAD##	; Add to make new one
+ 
+; Insure new line number does not bump into next line
+ 
+	CAMGE	T1,CLN		; New line # greater or equal to next one?
+	JRST	NLOK		; Nope, we're ok
+	MOVE	T1,CLN		; Yes it is
+	MOVE	T2,LIBUF	; Load up the line numbers
+	PUSHJ	P,ASCAV##	; And try the average of the two
+	MOVE	T1,T2		; Move resulting line number into t1
+	CAMLE	T1,LIBUF	; Did we go backwards?
+	JRST	NLOK		; Nope, all is well
+	MOVE	T1,LIBUF	; Things don't look good...
+	MOVE	T2,LN1##	; So lets just use incr of 1
+	PUSHJ	P,ASCIAD	; Add small increment onto line number
+ 
+; Here for the new line insertion
+ 
+NLOK:	MOVEM	T1,LIBUF	; And store it away
+	CAMG	T1,MAXLN	; Too high?
+	JRST	NLO2		; No, exit
+	AOS	T1,CPG		; Yes, will soon be on next page
+	MOVEM	T1,CPGL 	; And logical page
+	AOS	HIPG
+	PUSHJ	P,INSPMK##	; Insert a page mark
+	MOVE	T2,INCR 	; Incr again
+	MOVEM	T2,LIBUF	; To make first line number
+	OUTSTR	[ASCIZ /%Page mark inserted
+/]
+NLO2:	MOVE	T1,OCNT1	; Characters processed so far
+	MOVEM	PNTR,OPTR	; Remember where we are
+	AOS	PNTR		; Skip line number
+	HRLI	PNTR,(<POINT 7,0>); Make byte pointer
+NLO1:	IBP	PNTR		; To move pntr back
+	SOJGE	T1,NLO1 	; To where we found it
+	JRST	INITNL		; Then set up new line on way back
+; This sets up a new old line for get
+
+INITOL: PUSHJ	P,GETLTH##	; Make sure all of it is in core
+	PUSHJ	P,FINDN1##	; Get number back again.
+INITO1: HRRZM	PNTR,OPTR	; Save pointer to start of line
+	PUSHJ	P,ONMOV##	; Check range
+	JRST	JSTEND		; Finished
+	CAMN	T1,PGMK 	; Is it a pagemark?
+	JRST	INITOP		; Yes
+	MOVE	T2,CPG		; And page
+	DMOVEM	T1,CLN		; Save current page/line
+	SETZM	OCNT1		; No characters yet
+	SETZM	TCHR		; Not known to be start of paragraph
+	AOS	PNTR		; Skip line number
+	HRLI	PNTR,(<POINT 7,0>); Make byte pointer
+	IBP	PNTR		; Skip initial tab
+	POPJ	P,		; Exit
+INITOP: 			; Found a pagemark
+	TRNE	FL2,JFFLG	; Are we filling?
+	JRST	INITOD		; Yes, delete it
+	AOS	T2,CPG		; No, we are on new page
+	MOVEM	T2,CPGL
+	PUSHJ	P,FINDN 	; Find next line
+	JRST	INITOL		; And see what's there
+INITOD:	PUSHJ	P,DLTPAG##	; Delete the page mark
+	SOS	BGPG		; Now have one less page
+	SOS	HIPG
+	JRST	INITOL		; Look at next line
+
+INITNL: SETZM	LIBUF+1 	; Code to zero the line buffer
+	MOVE	T1,[XWD LIBUF+1,LIBUF+2]
+	BLT	T1,LIBUF+MXWPL+1
+	MOVE	ALTP,[POINT 7,LIBUF2]; Point altp at start of libuf2
+	MOVEI	T1,11		; Tab to start line
+	IDPB	T1,ALTP 	; So insert it
+	MOVEM	ALTP,BLIN	; And save logical beginning of line
+	TRO	FL2,JBLF	; Keep from inserting leading blanks
+	TRZ	FL2,JPER
+	MOVE	T1,LMAR 	; Set left margin
+	SOS	T1		; Margin -1 = extra blanks
+	MOVEM	T1,LINL 	; For extra line length
+	MOVEM	T1,INDNT	; And indentation
+	SETZB	T1,WCNT 	; And there are no words yet
+	SETZM	WRDL		; Nor characters, for that matter
+	EXCH	T1,LWRD 	; Reset pointer to last word
+	MOVEM	T1,TPNT 	; But save it to get tail
+	POPJ	P,		; Return
+; This starts a new paragraph
+
+PARA:	MOVEM	T1,TCHR 	; Store terminating character
+	SKIPE	LWRD		; Any words yet?
+	PUSHJ	P,JSUB		; Yes, get rid of old line
+	MOVE	T1,TCHR 	; Get terminator back
+	SETZM	TCHR		; Don't confuse people
+	SETZM	TPNT		; Tell jget nothing remains in libuf2
+	SETZM	INDNT		; If tab, no special indentation
+	SETZM	LINL
+	CAIN	T1,11		; Is it a tab?
+	JRST	JPUT		; Yes, put it in new line
+	PUSHJ	P,JSUB		; Must have been blank line
+	MOVE	T1,PMAR 	; Set paragraph margin
+	SOS	T1
+	MOVEM	T1,INDNT
+	MOVEM	T1,LINL
+	JRST	JGET		; So get new character
+
+; This finishes everything up
+
+JSTEND: SETOM	TCHR		; Fake end of paragraph
+	SKIPE	LWRD		; Anything left?
+	PUSHJ	P,JSUB		; Yes, get rid of it
+	MOVE	PNTR,OPTR	; Get back old pointer
+	MOVE	T1,(PNTR)	; Get line number
+	MOVEM	T1,LIBUF	; Save number of next line
+	PUSHJ	P,FINDB##	; Get line last filled
+	MOVEM	T1,CLN		; Set it as current line
+	EXCH	T1,LIBUF
+	SKIPE	T1		; End of file?
+	CAMN	T1,PGMK 	; Page mark next?
+	JRST	COMND## 	; Don't worry about order
+	CAMG	T1,LIBUF	; Order trouble?
+	NERROR	ORDER		; Yes
+	JRST	COMND		; No, we're through.
+; At last!  the justification of all this stuff!
+
+JSUB:	MOVEM	ALTP,ELIN	; Save end of line for get
+	MOVE	ALTP,[POINT 7,LIBUF+1]; Where to deposit
+	MOVE	T4,[POINT 7,LIBUF2]; Where to load
+	MOVNS	JFLOP		; Put blanks in other side this time
+JSUB1:	ILDB	T1,T4		; Get a character
+	IDPB	T1,ALTP 	; And move it
+	CAME	T4,BLIN 	; Was that the last tab?
+	JRST	JSUB1		; No, move another
+	SKIPN	T5,LWRD 	; If no words there
+	MOVE	T5,ELIN 	; This is where to stop
+	SKIPN	WRDL		; If nothing is there at all
+	JRST	NLOUT		; Put out blank line
+; Now we compute number of blanks to insert, if any
+	SETZM	T2
+	SETZM	BPW
+	SETZM	REM
+	MOVEI	T1," "		; We fill with blanks
+	TRNE	FL2,JLFLG	; If left justifying,
+	JRST	JSUBM1		; We may start filling to move the line right
+	MOVE	T2,MAXL 	; Desired length
+	SUB	T2,WRDL 	; -length we have = what we want
+	JUMPE	T2,JSUBM1	; If zero, go move rest of line
+	IDIV	T2,@WTBL	; /width of blank = blanks we need
+	TRNE	FL2,JCFLG	; If centering
+	ASH	T2,-1		; We only want half as many
+	TRNE	FL2,JRFLG!JCFLG ; If not justifying both margins
+	JRST	JSUBM1		; Go put in some blanks
+	SOSLE	WCNT		; If less than 2 words
+	SKIPE	TCHR		; Or end of paragraph
+	JRST	JSUBM		; Don't bother
+	IDIV	T2,WCNT 	; Blanks/words
+	MOVEM	T2,BPW		; = blanks per word
+	MOVEM	T3,REM		; And remainder
+	SKIPL	JFLOP
+	JRST	JSUBM
+	AOS	BPW		; Every other line
+	SUB	T3,WCNT 	; We add extra blanks
+	MOVNM	T3,REM		; On the other side
+JSUBM:	SETZM	T2
+; Move line, inserting blanks
+JSUBM1: ADD	T2,INDNT	; Do indentation
+JSUBM3: SOJL	T2,JSUBM2	; Quit if none
+	IDPB	T1,ALTP 	; Else deposit
+	SOJGE	T2,.-1		; And try again
+JSUBM2: CAMN	T4,T5		; Was it the last?
+	JRST	NLOUT		; Yes, put out new line
+	ILDB	T1,T4		; Get another character
+	IDPB	T1,ALTP 	; Deposit it
+	TRNE	FL2,JWFLG	; Loop if no blank fill
+	JRST	JSUBM2
+	SKIPN	TCHR		; At end of paragraph we do not look for banks
+	TRNN	FL2,JFFLG	; Are we looking for blanks?
+	JRST	JSUBM2		; No, move another
+JSUBB:	CAIE	T1," "		; Yes, is it a blank?
+	JRST	JSUBBN		; No
+	TROE	FL2,JBLF	; Yes, did we just see one?
+	JRST	JSUBM2		; Yes, move another
+	MOVE	T2,BPW		; No, get blanks per word
+	SOSL	REM		; If remainder still .gt. 0
+	ADD	T2,JFLOP	; Add another on alternate lines
+	JRST	JSUBM3		; And put them in
+JSUBBN: TRZ	FL2,JBLF	; Not a blank
+	JRST	JSUBM2		; Get another
+>			; End of justification code
+	SUBTTL	THE JOIN (J) COMMAND
+ 
+; Here to join a line
+ 
+IFN	JUSTSW,<
+JOIN::	MOVEM	C,SAVC		; Back up scanner one character
+>
+IFE	JUSTSW,<
+JUST::
+JOIN::
+>
+	PUSHJ	P,GET1SD##	; Get line number
+	PUSHJ	P,CKTRMF##	; Make sure it terminates correctly
+	PUSHJ	P,FINDHI##	; Find line
+	MOVE	T2,CPG
+	MOVE	T1,(PNTR)
+	CAMN	T2,HIPG
+	CAME	T1,HILN
+	NERROR	NLN
+	MOVEM	T2,CPGL
+	MOVEM	T1,CLN
+	SETZM	LIBUF		; To eliminate garbage at end of line
+	MOVE	T1,[XWD LIBUF,LIBUF+1]
+	BLT	T1,LIBUF+MXWPL+1
+	MOVE	T2,PNTR 	; Get the pointer to the line
+	MOVE	T3,(T2) 	; Pick up the first word
+	MOVEI	T4,LIBUF	; The place to put it
+	JRST	JSALT3		; Transfer
+JSALT2: SKIPE	T3,(T2)
+	TRNE	T3,1		; Is it the end of the line
+	JRST	JSALT1
+JSALT3: MOVEM	T3,(T4) 	; Put it away
+	ADDI	T4,1
+	AOJA	T2,JSALT2
+ 
+JSALT1: MOVEI	T1,(T4) 	; Movei t1,-libuf(t4)
+	SUBI	T1,LIBUF
+	MOVEM	T1,OCNT
+	IMULI	T1,5		; Get count of chrs
+	SUBI	T1,6		; We will have to find the true end
+	SUBI	T4,2
+	HRLI	T4,(<POINT 7,0,27>); Set up pointer
+FEND1:	ILDB	T2,T4
+	CAIE	T2,15
+	AOJA	T1,FEND1
+	PUSH	P,T1
+	PUSHJ	P,FINDN 	; Get the line to join it to
+	CAME	T1,PGMK
+	SKIPN	T1
+	NERROR	NNN		; No line there to connect to
+	POP	P,T2		; Count
+	MOVEI	T1,1(PNTR)
+	HRLI	T1,(<POINT 7,0,6>); Set to point there
+	ADD	T4,[XWD 70000,0]
+TRN1:	ILDB	T3,T1
+	IDPB	T3,T4
+	ADDI	T2,1
+	CAIL	T2,MXWPL*5+6
+	NERROR	LTL
+	CAIE	T3,12
+	JRST	TRN1
+	SUBI	T1,-1(PNTR)
+	PUSH	P,OCNT
+	HRRZM	T1,OCNT 	; Size of old second line
+	SETZM	NCNT
+	PUSHJ	P,INSED
+	PUSHJ	P,FINDB 	; Back up
+	POP	P,OCNT		; Get its size
+	SUBI	T4,LIBUF-1
+	HRRZM	T4,NCNT
+	PUSHJ	P,INSED
+	JRST	COMND
+ 
+	END

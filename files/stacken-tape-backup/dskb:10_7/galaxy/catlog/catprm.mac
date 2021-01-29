@@ -1,0 +1,538 @@
+UNIVERSAL CATPRM - Parameter file for the DECsystem-10 Catalog Daemon
+SUBTTL	D. Mastrovito /DPM/JAD/JJF	23-Jan-86
+
+
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY ONLY BE USED
+;  OR COPIED IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE.
+;
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1986, 1987, 1988.
+;ALL RIGHTS RESERVED.
+;
+	SEARCH	GLXMAC, QSRMAC
+	PROLOG	(CATTAB)
+
+	CATVER==2			;MAJOR VERSION
+	CATMIN==1			;MINOR VERSION
+	CATWHO==0			;WHO LAST PATCHED
+	CATEDT==0036			;EDIT LEVEL
+
+	%%CAT==:<VRSN.(CAT)>		;ASSEMBLE VERSION NUMBER
+
+	SALL				;FOR CLEAN LISTINGS
+	.DIREC	FLBLST			;FOR CLEANER LISTINGS
+SUBTTL	Table of Contents
+
+
+SUBTTL	Revision history
+
+
+COMMENT	\
+
+Edit	Module	Explanation
+----	------	-----------
+
+0001		1-Aug-84 /DPM
+	CATPRM	Parameter file.
+	CATLOG	Catalog driver module.
+	CATDEV	Device specific routines.
+	CATTAB	OPR command application tables.
+
+0002		7-Aug-84 /DPM
+	CATLOG	Take advantage of new OPRPAR features to allow
+	CATDEV	the parsing of 8-bit data.
+	CATTAB
+
+0003		14-Aug-84 /DPM
+	CATTAB	Avoid operator confusion by using the new $SUBCM
+		which allows prompting in sub-command mode.
+
+0004		27-Aug-84 /DPM
+	CATLOG	Make sure all requests for catalog info coming from MDA
+		gets replies sent to MDA.
+
+0005		26-Oct-84 /DPM
+	CATLOG	Request a 'til reset PID instead of a job wide PID.
+
+
+0006		 8-Mar-85 /DPM
+	CATPRM	Reduce device code field from 9 to 3 bits.  Store device
+	CATTAB	code in entry at insert time.  Set device code when
+	CATLOG	convering file formats (CATSTR).  Return a one-word reelid
+	CATDEV	block for DECtape volume-sets.  Implement /LABEL-TYPE switch
+		on the INSERT/MODIFY command for magtapes.  All this done
+		for MDA's benefit so QUASAR's catalog cache has a chance of
+		working for devices other than structures.
+
+0007		21-Mar-85 /DPM
+	CATLOG	Fix spurious ill mem refs prior to receiving the queue
+		structure from QUASAR.  Re-work QUASAR/CATLOG initialization
+		code so CATLOG doesn't have to wait for [SYSTEM]MDA to start.
+
+0010		22-Mar-85 /DPM
+	CATLOG	Don't allow abbreviated matches on requests for catalog info
+		coming from [SYSTEM]MDA.
+
+0011		23-Apr-85 /DPM
+	CATLOG	Process messages from [SYSTEM]GOPHER.  The implementation is
+		simple; it allows a job to request catalog information on a
+		given volume-set using the .QBVSN and .QBMFG blocks.  Only
+		retrieving VSN data is allowed.  To handle insertions, etc.
+		requires a much more elaborate interface.
+
+0012		25-Apr-85 /DPM
+	CATTAB	Fix QUIACT action routine to correctly type the command name.
+
+0013		 8-May-85 /DPM
+	CATLOG	Add new message type .CFMOD which allows QUASAR to modify
+		(extend) a volume-set.
+
+0014	CATDEV	13-May-85 /DPM
+	CATDEV	Enhance DECtape listing to include volume-set name.
+
+0015	CATTAB	21-May-85 /DPM
+		Use new action routine P$XSBC to signal OPRPAR that
+		we are about to exit sub-command mode.
+
+0017	CATPRM	Avoid unnecessary wakeups.  Change ZZTIME to be zero
+		seconds.
+
+0020	CATPRM	Fix miscellaneous problems with QUEUE. UUO processing
+	CATLOG	and IPCF/OPR/QUEUE. UUO priviledge checking.
+
+0021	CATLOG	Fix ?Ill mem ref at PC 777777 when receiving unknown
+		IPCF messages.
+
+Start of version 2
+
+0030		6-Aug-86  /JAD
+		Convert 3 system catalogs (DTALST, MTALST, and STRLST)
+		into a single catalog (CATLOG.SYS).  Add a new module
+		CATRMS which uses RMS-10 to maintain the catalog file.
+		Massive changes to all modules, no external interface
+		changes.
+
+0031		20-Aug-86  /JAD
+	CATRMS	Add two new keys (PPN and user name) which might be
+		used for future enhancements.
+
+0032		2-Oct-86  /RCB
+	CATRMS	Allow changes of the non-VSN keys so that MODIFY commands can
+		change the owner fields.
+
+0033		30-Dec-86  /JAD
+	CATLOG	Fix DEVINI to close catalog file before opening it on a
+		QUASAR restart.
+
+0034		20-Jan-87  /JJF
+	CATLOG	Be a little paranoid about making sure that the contents
+		of E are right at RCAT.  Also fix bug in TXTLS1
+		where S2 doesn't get popped correctly on an error return.
+		SPR:35616, GCO:10487
+
+0035		02-Mar-88  /RCB
+	CATLOG	Fix so QUEUE. UUO request for volume information always
+		correctly, even if the volume-set is not cataloged.
+		QAR:704-ALPHA-0056, GCO:10606
+
+0036		23-Mar-88  /RCB
+	CATLOG	Fix edit 35 so we can mount random disks again.  *Sigh*.
+		GCO:10610
+\ ;END REVISION HISTORY
+SUBTTL	Module initialization macro
+
+
+DEFINE	CATDEF	(MODULE),<
+
+	SEARCH	GLXMAC		;;GENERAL GALACTIC DEFINITIONS
+	SEARCH	ORNMAC		;;ORION DEFINITIONS
+
+	%%CAT==:%%CAT		;;PUT VERSION IN SYMBOL TABLE
+
+	PROLOG	(MODULE)	;;SETUP
+
+	SALL			;;FOR CLEAN LISTINGS
+	.DIREC	FLBLST		;;FOR CLEANER LISTINGS
+>
+SUBTTL	Parameters
+
+
+; ACCUMULATOR DEFINITIONS
+	C==13			;CATALOG DATA BASE
+	E==14			;PRIMARY CATALOG ENTRY
+	M==16			;IPCF MESSAGE
+
+
+; ASSEMBLY PARAMETERS
+	ND	PDLSIZ,100	;PUSH DOWN LIST SIZE
+	ND	ZZTIME,0	;MAIN LOOP SLEEP TIME
+	ND	ERRLEN,^D30	;ERROR BUFFER LENGTH IN WORDS
+	ND	LINPPG,^D55	;LISTING LINES PER PAGE
+	ND	TBLLEN,100	;INITIAL ENTRY TABLE LENGTH
+	XP	VSNLEN,VSNLEN	;VOLUME-SET NAME LENGTH (7-BIT, FROM QSRMAC)
+	XP	VSNSIZ,<<<<VSNLEN*5>-1>+3>/4> ;VOLUME-SET NAME LENGTH (9-BIT)
+	XP	VSNSZC,<VSNSIZ*4> ;LENGTH IN CHARACTERS (9-BIT)
+	ND	NAMSIZ,12	;NAME STORAGE (8-BIT ASCIZ)
+	XP	NAMSZC,<NAMSIZ*4> ;LENGTH IN CHARACTERS
+	ND	LOCSIZ,5	;LOCATION STORAGE (8-BIT ASCIZ)
+	ND	ATRSIZ,<^D60/5>+1 ;ATTRIBUTE BUFFER SIZE (FOR LISTINGS)
+
+
+; MISCELLANEOUS
+	DEVLNK==1		;LINK CODE FOR DISPATCH VECTOR CHAINING
+	.SXFMT==1		;FORMAT OF CATALOG ENTRIES
+SUBTTL	[SYSTEM]CATALOG IPCF message definitions
+
+
+; FUNCTION CODES
+	.CFOFF==100000		;OFFSET TO FIRST CATALOG MESSAGE
+	.CFRCT==100001		;REQUEST FOR CATALOG INFORMATION
+	.CFACT==100002		;ANSWER TO REQUEST FOR CATALOG INFO
+	.CFRQS==100003		;REQUEST FOR QUEUE STRUCTURE
+	.CFAQS==100004		;ANSWER TO REQUEST FOR QUEUE STRUCTURE
+	.CFDEL==100005		;DELETE VOLUME-SET
+	.CFDIS==100006		;DISABLE CATALOG UPDATES BY MDA
+	.CFENA==100007		;ENABLE CATALOG UPDATES BY MDA
+	.CFINS==100010		;INSERT VOLUME-SET
+	.CFMOD==100011		;MODIFY VOLUME-SET
+
+
+; CATALOG DEVICE TYPES
+	.CTUNK==0		;UNKNOWN
+	.CTDTA==1		;DECTAPE
+	.CTMTA==2		;MAGTAPE
+	.CTSTR==3		;STRUCTURE
+
+
+; CATALOG MESSAGE FUNCTIONS
+	.CTDEL==1		;DELETE
+	.CTDIS==2		;DISABLE
+	.CTENA==3		;ENABLE
+	.CTHLP==4		;HELP
+	.CTINS==5		;INSERT
+	.CTLIS==6		;LIST
+	.CTMOD==7		;MODIFY ENTRY
+	.CTSHO==10		;SHOW STATUS
+
+
+; CATALOG MESSAGE SUB-FUNCTIONS
+	.CTADD==1		;ADD
+	.CTDON==2		;DONE
+	.CTQUI==3		;QUIT
+	.CTREM==4		;REMOVE
+
+
+; CATALOG MESSAGE FUNCTION MODIFIERS
+	.CTDEN==1		;DENSITY
+	.CTEXP==2		;EXPIRATION DATE
+	.CTLAB==3		;LABEL TYPE
+	.CTLOC==4		;LOCATION
+	.CTNAM==5		;NAME
+	.CTTRK==6		;TRACKS
+	.CTRID==7		;REELID
+	.CTUSR==10		;USER
+
+
+; DENSITY CODES
+	.CT200==1		;200 BPI
+	.CT556==2		;556 BPI
+	.CT800==3		;800 BPI
+	.CT160==4		;1600 BPI
+	.CT625==5		;6250 BPI
+	.CTDMX==.CT625		;HIGHEST LEGAL DENSITY
+
+
+; TRACK CODES
+	.CT7TK==1		;7 TRACK
+	.CT9TK==2		;9 TRACK
+SUBTTL	Catalog data storage formats
+
+
+; The following describes the formats in which data is stored in the
+; catalog files.  These definitions are also used in the request for
+; catalog info message (function .CFRCT) and the answer to catalog
+; request message (function .CFACT).  A request for VSN information
+; message need only contain a volume set name.  If .CTVST contains
+; zero, a search of all device tables will be made.  A search for a
+; specific device type requires filling in .CTVST with the proper code.
+;
+; The reply to the request will return with .CTVST containing appropriate
+; device type.  If no volume set was found, the type field of .CTVST will
+; be zero.  Volume specific information will be returned in the sub-blocks
+; of type  .CTVLS, in a format meaningful to that device type.
+;
+; Note: The sub-block type .CTVLS does not contain data in a generic form.
+;	This is  to accomodate the different characteristics of the devices
+;	processed by [SYSTEM]CATALOG.
+
+
+	.CTVSB==1		;VOLUME SET DATA BLOCK
+
+	...LOC==.
+	 PHASE	0
+
+				;*** DO NOT SEPARATE ***
+.CTVFL:! BLOCK	1		;FLAGS
+   CT.XXX==77B5			   ;RESERVED FOR DEC
+   CT.VSN==7B8			   ;VERSION OF ENTRY
+   CT.TYP==777B17		   ;VOLUME-SET TYPE
+				   ;(SEE CATALOG DEVICE TYPES)
+				   ;*** MUST BE 9 BITS FOR RMS INTERFACE ***
+   CT.NVL==777B26		   ;NUMBER OF VOLUMES IN VOLUME-SET
+   CT.FEL==777B35		   ;FILE ENTRY LENGTH
+.CTVSN:! BLOCK	VSNLEN		;VOLUME-SET NAME
+				;*** END OF DO NOT SEPARATE ***
+.CTVED:! BLOCK	1		;VOLUME-SET EXPIRATION DATE
+.CTVUS:! BLOCK	1		;OWNER PPN (USER)
+.CTVNM:! BLOCK	NAMSIZ		;8-BIT 39 CHARACTER ASCIZ NAME
+.CTVLO:! BLOCK	LOCSIZ		;8-BIT 19 CHARACTER ASCIZ LOCATION TEXT
+.CTVSC:! BLOCK	1		;VOLUME-SET CHARACTERISTICS
+				;(TIMESHARED BY EACH DEVICE)
+   CT.LTS==1B26			   ;MAGTAPE LABEL TYPE SET
+   CT.LAB==17B30		   ;MAGTAPE LABEL TYPE
+   CT.DEN==7B33			   ;MAGTAPE DENSITY
+   CT.TRK==3B35			   ;MAGTAPE TRACKS
+.CTCST:! BLOCK	1		;CUSTOMER WORD
+.CTVSL:!			;VSN BLOCK LENGTH
+	 DEPHASE
+	 LOC	...LOC
+VSNWDS==.OHDRS+ARG.SZ+.CTVSL	;TOTAL WORDS FOR VOLUME-SET DATA
+
+
+	.CTVLB==2		;VOLUME BLOCK
+
+; DECtape volume block
+	 ...LOC==.
+	 PHASE	0
+.DTRID:! BLOCK	1		;SIXBIT REELID
+.DTLEN:!			;LENGTH OF BLOCK
+	 DEPHASE
+	 LOC	...LOC
+DTAWDS==ARG.SZ+.DTLEN		;TOTAL WORDS FOR REEL STORAGE
+DTAMNV==<PAGSIZ-VSNWDS>/DTAWDS	;MAXIUMUM NUMBER OF REELS
+
+
+; Magtape volume block
+	 ...LOC==.
+	 PHASE	0
+.MTRID:! BLOCK	2		;6 CHARACTER 8-BIT ASCII REELID
+.MTLEN:!			;LENGTH OF BLOCK
+	 DEPHASE
+	 LOC	...LOC
+MTAWDS==ARG.SZ+.MTLEN		;TOTAL WORDS FOR REEL STORAGE
+MTAMNV==<PAGSIZ-VSNWDS>/MTAWDS	;MAXIUMUM NUMBER OF REELS
+
+
+; Structure volume block
+	 ...LOC==.
+	 PHASE	0
+.STUID:! BLOCK	1		;UNIT-ID
+.STUCH:! BLOCK	1		;UNIT CHARACTERISTICS WORD
+  ST.UKT==077000		   ;KONTROLLER TYPE
+  ST.UTY==000770		   ;UNIT TYPE
+  ST.UCL==000007		   ;CLASS
+.STLEN:!			;LENGTH OF BLOCK
+	 DEPHASE
+	 LOC	...LOC
+STRWDS==ARG.SZ+.STLEN		;TOTAL WORDS FOR UNIT STORAGE
+STRMNV==<PAGSIZ-VSNWDS>/STRWDS	;MAXIUMUM NUMBER OF UNITS
+
+
+; DEFINE .CTVLM AS THE MAXIMUM VOLUME BLOCK LENGTH
+	MAX	(<.DTLEN,.MTLEN,.STLEN>,.CTVLM)
+
+; DEFINE MINIMUM/MAXIMUM CATALOG ENTRY LENGTHS
+
+	.CTMIN==.CTVSL+.CTVLM	;MINIMUM
+	.CTMAX==PAGSIZ-.OHDRS-ARG.SZ	;ABSOLUTE MAXIMUM
+SUBTTL	Disk unit definitions
+
+
+DEFINE	DSKUNI,<
+
+	XLIST
+X	(RA60,.DCCRA ,.DCU60)
+X	(RA80,.DCCRA ,.DCU80)
+X	(RA81,.DCCRA ,.DCU81)
+X	(RD10,.DCCFH ,.DCUFD)
+X	(RM03,.DCCRP ,.DCUR3)
+X	(RM10B,.DCCFH ,.DCUFM)
+X	(RP02,.DCCDP ,.DCUD2)
+X	(RP03,.DCCDP ,.DCUD3)
+X	(RP04,.DCCRP ,.DCUR4)
+X	(RP06,.DCCRP ,.DCUR6)
+X	(RP07,.DCCRP ,.DCUR7)
+X	(RP20,.DCCRN ,.DCUN0)
+X	(RS04,.DCCFS ,.DCUS4)
+	LIST
+
+>
+
+	ZZ==0
+DEFINE	X	(NAME,KONT,TYPE),<ZZ==ZZ+1>
+	DSKUNI
+	.CTUMX==ZZ
+SUBTTL	Device dispatch vector offsets
+
+
+	...LOC==.
+	 PHASE	0
+
+.CVLNK:! BLOCK	1		;LINK TO NEXT DISPATCH
+.CVTYP:! BLOCK	1		;CATALOG DEVICE TYPE
+.CVDAT:! BLOCK	1		;DATA BASE ADDRESS
+.CVTXT:! BLOCK	1		;ADDRESS OF NAME FOR THIS DATA BLOCK
+.CVWVS:! BLOCK	1		;WORDS PER VOLUME STORAGE
+.CVMNV:! BLOCK	1		;MAXIMUM NUMBER OF VOLUMES ALLOWED
+.CVLHD:! BLOCK	1		;LIST HEADER
+.CVCHK:! BLOCK	1		;CHECK FOR LEGAL ENTRY
+.CVINS:! BLOCK	1		;INSERT ENTRY
+.CVLST:! BLOCK	1		;LIST ENTRY
+.CVSHW:! BLOCK	1		;SHOW ENTRY
+.CVRSW:! BLOCK	1		;PROCESS /REELID
+.CVLEN:!			;LENGTH OF VECTOR
+
+	 DEPHASE
+	 LOC	...LOC
+SUBTTL	Device data base offsets
+
+
+	 ...LOC==.
+	 PHASE	0
+
+.CDVEC:! BLOCK	.CVLEN		;DISPATCH VECTOR
+.CDUPD:! BLOCK	1		;NON-ZERO IF UPDATES ALLOWED
+.CDFIN:! BLOCK	1		;NON-ZERO IF INSERT FINISHED
+.CDMOD:! BLOCK	1		;NON-ZERO IF MODIFYING ENTRY
+.CDNVA:! BLOCK	1		;NEW VSN ADDRESS FOR INSERT FOO=BAR
+.CDACK:! BLOCK	1		;ACK CODE
+.CDMST:! BLOCK	1		;MESSAGE PROCESSING STORAGE (TEMP)
+
+.CDLFB:! BLOCK	FOB.SZ		;LISTING FILE FOB
+.CDLFD:! BLOCK	FDXSIZ		;LISTING FILE FD
+.CDLIF:! BLOCK	1		;LISTING FILE IFN
+.CDLPN:! BLOCK	1		;LISTING PAGE NUMBER
+.CDLLN:! BLOCK	1		;LISTING LINE NUMBER
+.CDLDN:! BLOCK	1		;LISTING DATA NUMBER
+
+.CDTXA:! BLOCK	ATRSIZ		;TEXT ATTRIBUTE BUFFER
+.CDTXF:! BLOCK	1		;TEXT FLAG FOR LISTING GENERATION
+.CDTXB:! BLOCK	1		;TEXT BLOCK ADDRESS
+.CDTXP:! BLOCK	1		;TEXT BYTE POINTER
+.CDTXC:! BLOCK	1		;TEXT BYTE COUNT
+
+.CDLEN:!			;LENGTH OF DATA BASE
+
+	 DEPHASE
+	 LOC	...LOC
+SUBTTL	Text table macro
+
+
+DEFINE	TXTGEN	(WID,SUB,TXT,INS),<
+	EXP	WID
+	PUSHJ	P,SUB
+	[ASCIZ	|TXT|]
+	<INS>
+>
+SUBTTL	ACK message definitions
+
+
+; FLAGS
+	AM.ACK==400000		;NORMAL ACK
+	AM.LOG==200000		;LOG TEXT
+	AM.WTO==100000		;WTO TEXT
+	AM.FLG==777000		;MASK OF ALL FLAGS
+
+
+DEFINE	ACKCLS,<
+
+	XLIST
+
+X	(TXT,<>)
+X	(CAT,<^I/@G$APLT/>)
+X	(STR,<^I/@G$APLV/ starting>)
+X	(RMD,<^I/@G$GLXN/MDA restart detected by ^I/@G$APLT/>)
+X	(ROP,<^I/@G$GLXN/OPERATOR restart detected by ^I/@G$APLT/>)
+X	(CTE,<^I/@G$APLT/ error>)
+X	(MDA,<^I/@G$GLXN/MDA error detected by ^I/@G$APLT/>)
+X	(OPR,<^I/@G$GLXN/OPERATOR error detected by ^I/@G$APLT/>)
+X	(MON,<Monitor error detected by ^I/@G$APLT/>)
+X	(USR,<User error detected by ^I/@G$APLT/>)
+X	(CAT,<^T/@.CVTXT(C)/ catalog>)
+
+	LIST
+>
+
+DEFINE	X	(NAM,TXT),<.AM'NAM==<ZZ==ZZ+1>>
+	ZZ==0
+	ACKCLS
+
+
+DEFINE	ACKTXT,<
+
+;; [SYSTEM]CATALOG
+;;	 ABV FLG CLS TXT
+;;	 --- --- --- ---
+X	(STR,LOG,STR,<Application code = ^O/APLCOD/>)
+X	(RST,LOG,CAT,<New application code = ^O/APLCOD/>)
+X	(LOP,WTO,TXT,<Open error on ^F/.CDLFD(C)/; ^E/[-1]/>)
+X	(LOE,WTO,CTE,<Output error writing ^F/.CDLFD(C)/; ^E/[-1]/>)
+X	(COR,WTO,CTE,<^T/@.CVTXT(C)/ core allocation failed; ^E/[-1]/>)
+X	(TSE,WTO,CTE,<^T/@.CVTXT(C)/ table search error; ^E/[-1]/>)
+X	(UIM,WTO,CTE,<^I/UNKTXT/>)
+X	(UPA,WTO,CTE,<Unexpected process ACK, ACK code = ^O12R0/.MSCOD(M)/>)
+X	(UTA,WTO,CTE,<Unexpected text ACK: ^T/.OHDRS+ARG.DA(M)/>)
+X	(CNA,ACK,TXT,<^T/@.CVTXT(C)/ catalog is not available>)
+X	(DEL,ACK,TXT,<^T/@.CVTXT(C)/ ^T/(T3)/ deleted>)
+X	(DIS,ACK,TXT,<^T/@.CVTXT(C)/ catalog updates disabled>)
+X	(ENA,ACK,TXT,<^T/@.CVTXT(C)/ catalog updates enabled>)
+X	(INS,ACK,TXT,<^T/@.CVTXT(C)/ ^T/.CTVSN(E)/ inserted>)
+X	(MOD,ACK,TXT,<^T/@.CVTXT(C)/ ^T/.CTVSN(E)/ modified>)
+X	(LIS,ACK,TXT,<^T/@.CVTXT(C)/s listed to file ^F/.CDLFD(C)/>)
+
+;; [SYSTEM]MDA
+;;	 ABV FLG CLS TXT
+;;	 --- --- --- ---
+X	(CUD,WTO,TXT,<Catalog updates by MDA are disabled>)
+X	(MDA,WTO,MDA,<Illegally formatted MDA message>)
+X	(VNF,ACK,TXT,<Volume set ^T/(T3)/ is not in the catalog>)
+X	(RMI,WTO,RMD,<Re-initializing catalog>)
+X	(RMN,WTO,RMD,<Catalog does not need re-initializing>)
+
+;; [SYSTEM]OPERATOR
+;;	 ABV FLG CLS TXT
+;;	 --- --- --- ---
+X	(ROP,WTO,ROP,<>)
+X	(APL,WTO,OPR,<Illegal application message>)
+X	(OPR,WTO,OPR,<Operator command message error>)
+X	(AEV,ACK,TXT,<Already existing volume ^T/(T3)/>)
+X	(ANL,ACK,TXT,<Abbreviations are illegal on DELETE and MODIFY commands>)
+X	(NEV,ACK,TXT,<Non-existant volume ^T/(T3)/>)
+X	(NVN,ACK,TXT,<No ^T/@.CVTXT(C)/ name given>)
+X	(UNK,ACK,TXT,<^T/@.CVTXT(C)/ ^T/(T3)/ is not in the catalog>)
+X	(AMB,ACK,TXT,<^T/(T3)/ is not a unique ^T/@.CVTXT(C)/ name>)
+X	(AIC,ACK,TXT,<^T/@.CVTXT(C)/ ^T/.CTVSN(E)/ already exists in catalog>)
+X	(PWI,ACK,TXT,<Partial PPN wildcarding is illegal>)
+X	(NRV,ACK,TXT,<No reels inserted in magtape volume set>)
+X	(DNS,ACK,TXT,<INSERT MAGTAPE command requires /DENSITY>)
+X	(TNS,ACK,TXT,<INSERT MAGTAPE command requires /TRACKS>)
+X	(DNT,ACK,TXT,<Density doesn't match track type>)
+X	(ARV,ACK,TXT,<Attempt to remove last reel in magtape volume set>)
+X	(NUS,ACK,TXT,<No units inserted in structure>)
+X	(ARU,ACK,TXT,<Attempt to remove last unit in structure>)
+X	(NPV,ACK,TXT,<No privileges to use the catalog facilities>)
+
+;; MONITOR
+;;	 ABV FLG CLS TXT
+;;	 --- --- --- ---
+X	(GFR,WTO,MON,<Illegally formatted GOPHER message>)
+
+;; USER
+;;	 ABV FLG CLS TXT
+;;	 --- --- --- ---
+X	(IVV,ACK,TXT,<Invalid volume ^T/(T3)/>)
+X	(NVO,ACK,TXT,<No volumes owned>)
+X	(QFE,ACK,TXT,<QUEUE. UUO format error>)
+
+>
+
+	END

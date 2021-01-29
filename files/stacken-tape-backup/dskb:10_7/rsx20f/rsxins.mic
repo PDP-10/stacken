@@ -1,0 +1,493 @@
+'<SILENCE>
+!
+!
+!	RSXINS -- RSX-20F Front-End File System Installation Procedure
+!
+!	    Installation started at '<time> on '<Day>, '<Date>
+!
+!
+;
+; COPYRIGHT (c) 1988 DIGITAL EQUIPMENT CORPORATION.  ALL RIGHTS RESERVED.
+;
+;
+.error ?
+.ON CANCEL:GOTO CCTRAP
+.MIC SET NO LC
+!This procedure will create, populate, and make bootable an RSX-20F front-end
+!file system on any TOPS-10 structure.
+!
+!In the following dialogue, default answers are enclosed within square
+!brackets.  If you would like further information about any question,
+!answer it with a question mark (?).  If you wish to return
+!to the previous question asked, answer with a left-hand angle bracket (<).
+!
+;
+;First, see if we can do Super USETI/O.  If Not, punt.
+;
+.if ($PPN = "[1,2]") .goto begin
+.noerror
+!
+!?You are not logged in as [1,2]
+.error
+!
+!The procedure cannot continue.  You must be logged into [1,2] to be
+!able to create a front-end file system.
+!
+.goto done
+begin::
+;
+;Here to set up all initial defaults.
+;
+.let w = $micfil, h="DSKB"			;Default for target structure
+.let I=$w.[1,":"].[1,4]+":["+$w.["[",""]	;Define default RSX20F area
+.let J=$I.[1,","]+","+$I.[",",","]+",FELOAD]"	;Define default FELOAD area
+.let K=$I.[1,","]+","+$I.[",",","]+",F11]"	;Define default F11 area
+.let L="D",M="2000",N="Y",O="0"  ;FE type, FE size, RSX20f using it, CFE to reload
+.let P="N"			;F11/FELOAD files on SYS answer default
+GETA::
+.if ($A # "").if ($A # "<") .if ($A # "?") .let h=$A
+.MIC INPUT A, "* Which structure or unit do you wish to put the FE.SYS area on ['h]? "
+.LET A=$A.[1,":"].[1,4]		;truncate either after colon or 4 chars
+.if ($A.[1] = "<") .backto GETA
+.if ($A.[1] = "?") .GOTO HELPA
+.IF ($A = "") .let a=$H
+.GOTO GETB
+HELPA::
+.let a=""
+!
+!The FE.SYS file is an area of a TOPS-10 pack that is used by the
+!console front-end for the RSX-20F file system.  To be usable, this 
+!file must reside on a pack mounted in an RP06 drive ported to the
+!console PDP-11.  However, you can create an FE.SYS file on any RP06
+!drive visible to TOPS-10 by using this procedure, thus allowing you
+!to build your front end file system on a different pack from the one
+!currently in use by RSX-20F.  
+!
+!Please specify a 1- to 4-character structure or unit name, without a colon.
+!
+.BACKTO GETA
+;
+;here to find out where the front-end files live...
+;
+GETB::
+.IF ($B # "").if ($b # "<") .if ($b # "?") .LET I=$b
+!* Where is the distribution area of the front-end files located
+.MIC INPUT B, "   ['I]? "
+.if ($B.[1] = "<") .backto GETA
+.if ($B.[1] = "?") .goto HELPB::
+.if ($B = "") .let b = $I
+.GOTO GETV
+HELPB::
+.LET B=""
+!
+! Please specify the disk and directory path where the RSX-20F files reside
+!on disk after being restored from the CUSP tape.
+!
+!The initial default area is 'I.  Please do NOT
+!specify the name of either of the two SFDs in this area (DECTAP or
+!FLOPPY).  The proper name will be appended later on in the procedure.
+!
+.BACKTO GETB
+;
+;here to see if FELOAD and F11 are supposed to be on SYS: or not.
+;
+GETV::
+.if ($V # "").if ($V # "<") .if ($V # "?") .let P=$V
+.mic input V,"* Are the FELOAD.BIN and F11.EXE files on SYS: ['P]? "
+.let v=$v.[1]
+.if ($V = "<") .backto GETB
+.IF ($V = "?") .GOTO HELPV
+.IF ($V = "") .LET V = $P
+.IF ($V = "Y") .GOTO gotvY
+.if ($V = "N") .goto gotvn
+!%Please answer Y or N, or type ? for help or < to go back a question.
+.backto getv
+gotvY::
+.let c="SYS:", j=$C
+.let f="SYS:", k=$F
+.goto GETD
+gotvN::
+.let x=$micfil.[1,":"].[1,4]+":["+$micfil.["[",""]
+.let J=$x.[1,","]+","+$x.[",",","]+",FELOAD]"	;Define default FELOAD area
+.let K=$x.[1,","]+","+$x.[",",","]+",F11]"	;Define default F11 area
+.let c="",f=""
+.goto getC
+helpv::
+.let v = ""
+!
+! The RSXINS procedure needs to know the locations of two programs that 
+!it uses to install RSX-20F on your front-end disk.
+!
+! F11 is a TOPS-10 program that manipulates front-end file system
+!files. It is used to create, initialize, and populate the FE.SYS file
+!on the target structure.  It is also used to write the FELOAD bootstrap
+!program onto the boot area (physical blocks 1 and 4 through 7) of the disk.
+!
+! FELOAD.BIN is the image of the FELOAD boostrap that F11 reads when it
+!is writing the boot blocks.
+!
+! If you answer Y to this question, RSXINS will look for F11 and FELOAD on
+!SYS:.  If you answer N, RSXINS wil ask you for the locations of each
+!of these files.
+!
+! The default answer is N.
+!
+.backto GETV
+;
+;here to find out where FELOAD is residing
+;
+GETC::
+.IF ($C # "").if ($C # "<") .if ($C # "?") .LET J=$C
+!* Where is the distribution of 
+.MIC INPUT C, "    FELOAD located ['J]? "
+.if ($C.[1] = "<") .backto GETV
+.if ($C.[1] = "?") .goto HELPC
+.if ($C = "") .let c = $J
+.GOTO GETF
+HELPC::
+.LET C=""
+!
+! Please specify the disk and directory path where the FELOAD PDP-11
+!bootstrap tool resides on disk after being restored from the CUSP tape.
+!
+! This tool is needed to make the front-end file system that RSXINS is
+!creating bootable.  FELOAD will be written into the boot blocks of the
+!specified structure as the last step before reloading the front-end,
+!if needed.
+!
+! The default area is 'J.
+!
+.backto getc
+;
+;here to find where F11 is living...
+;
+GETF::
+.if ($F # "").if ($F # "<") .if ($F # "?") .let K=$F
+!* Where is the F11 program distribution
+.MIC INPUT F, "   area located ['k]? "
+.if ($F.[1] = "<") .backto GETC
+.if ($F.[1] = "?") .goto HELPF
+.if ($F = "") .let F = $K"
+.goto GETD
+HELPF::
+.LET F=""
+!
+! Please specify the disk and directory path where the F11 front-end file
+!manipulation program resides on disk after being restored from the CUSP tape.
+!
+! This tool is used to create, initialize, and populate the FE.SYS file
+!on the target structure.  It is also used to write the FELOAD bootstrap
+!program onto the boot area (physical blocks 1 and 4 through 7) of the disk.
+!
+! The default area is 'K.
+!
+.backto GETF
+;
+;here to find out if it is floppy or DECtape
+;
+GETD::
+.if ($D # "").if ($D # "<") .if ($D # "?") .let L=$d
+.MIC INPUT D, "* Is this for a Floppy (F) or DECtape (D) based system ['L]? "
+.let d = $D.[1]		;truncate to 1 letter
+.if ($D = "<") .backto GETF
+.if ($D = "?") .goto helpd
+.if ($D = "") .let d = $L
+.if ($D = "D") .goto getq
+.if ($D = "F") .goto getq
+!%Invalid response 'D -- Please answer F or D (or type ? for help)
+.backto getd
+helpd::
+.let d=""
+!
+!This question determines which variant of RSX-20F is installed on the
+!specified structure.  A response of D results in the installation of a
+!DECtape-based system, while a response of F results in a floppy-based
+!one.
+!
+!Please answer either D or F.
+!
+.backto getd
+;
+; here to find out the size of the FE.SYS file to create...
+;
+getq::
+.if ($Q # "").if ($Q # "<") .if ($Q # "?") .let M=$Q
+.mic input q, "* How many blocks should be reserved for the new FE.SYS file ['M]? "
+.if ($q.[1] = "<") .backto GETD
+.if ($q.[1] = "?") .goto helpq
+.if ($q = "") .let Q=$M
+.goto gety
+helpq::
+.let q=""
+!
+! This question is asking about how large you wish the new FE.SYS file
+!to be.  The initial default size is 2000 disk blocks.  Please specify a
+!different size or press RETURN to use the default.  The minimum
+!supported size is the default; there is no maximum.
+!
+.backto getq
+;
+;here to find out if the structure is in use...
+;
+gety::
+.if ($Y # "").if ($Y # "<") .if ($Y # "?") .let N=$Y
+.MIC INPUT Y, "* Is the target structure currently in use by RSX-20F ['N]? "
+.let Y = $Y.[1]		;truncate
+.if ($Y = "<") .backto GETQ
+.if ($Y = "?") .goto helpY
+.if ($Y = "") .let Y=$N
+.if ($Y = "Y") .goto getr
+.let r = "None"
+.if ($Y = "N") .goto GETZ
+!%Please answer Y or N or type ? for help.
+.backto gety
+helpY::
+.let y=""
+!
+! Answering Y to this question directs RSXINS to run DTELDR after
+!installing the new software.  DTELDR will reload the front-end
+!specified as an answer to the next question.
+!
+.backto gety
+;
+;Here to test Y and ask about the front-end number to reload.
+;
+getr::
+.if ($Z = "Y").goto getrr	;dont replay if already seen once
+!
+! ** Note ** It is important that the console FE running on the
+!target structure ('a:) not access the FE.SYS area during the course of
+!the installation, otherwise the front-end system could crash.  This in
+!itself is not a problem, because RSXINS will reload the FE after the
+!new file system is built. However, if the KL10 CPU were to crash
+!during the installation procedure before the update process was
+!completed, then the front end would not be rebootable from the RP06
+!disk.  It would be necessary to boot the front end from console media 
+!(floppies or DECtapes), after which you could then reload the monitor.
+!
+!While the likelihood of this happening is quite minimal, it is
+!possible.  There are steps that you can take to minimize this risk
+!further, such as:
+!
+.mic input X, "* Press RETURN to continue: "
+!
+!	* Use the SHUTDOWN or STOP commands in OPR to stop any unit-record 
+!	  devices (card readers and line printers) connected to the
+!	  front end during the update.
+!
+!	* Do not run this procedure if the time is within 15 minutes of
+!	  midnight. This prevents the possibility of
+!	  RSX-20F attempting to run the MIDNIT task during the update.
+!	  If it is close to midnight, refrain from answering the final
+!	  question in this procedure until after 12.01 AM (by the system
+!	  clock).
+!
+!	* Avoid running this procedure if the monitor is unstable
+!	  or there is a high incidence of hardware failures.  A
+!	  system crash in the middle of the procedure would leave the 
+!	  FE.SYS file in a partially-updated state. The front end
+!	  would then have to be reloaded from console media.  
+!
+getry::
+.let u="N"
+.mic input T, "* Do you wish to see this text again ['u]? "
+.if ($T = "") .let T = $U
+.let T = $T.[1]
+.if ($T = "<") .backto GETR
+.if ($T = "Y") .backto getR
+.if ($T = "N") .goto getrr
+!%Invalid response -- please type Y or N
+.backto getry
+getrr::
+.let z="Y"			;Dont print message more than once per run
+.let R = ""
+getrl::
+.LET X = $GETTAB(%11,%134,DEC) ;Get CPUs in system
+.if (X = 1) .let R = "0"\.goto GETZ
+.let X = $X - 1			; CPU numbers go from 0 to N-1; in a string
+.if ($R # "").if ($R # "<") .if ($R # "?") .let o=$r
+.MIC INPUT R, "* Which CPU''s console front-end do you wish to reload ['o]? "
+.LET R = $R.[1]			;Truncate to one character
+.if ($R = "<") .backto GETR
+.if ($R = "?") .goto helpr
+.if ($R = "") .let R = $O
+.if ($R >= "0").if ($R <= $X) .goto getz
+badr::
+!%Invalid response - please enter a value between 0 and 5
+.let r = "" \ .backto getrl
+helpr::
+.let R = ""
+!
+!Please specify which CPU''s console front end you wish to reload.  If you
+!are on a single-CPU system, just press RETURN.  If you are on a multiple
+!CPU system and you wish to reload the console front end on a CPU other than 
+!CPU0, enter the number of the CPU to be reloaded, from 1 to 5.
+!
+.backto getrl
+getz::
+;
+;Check for FE.SYS on structure specified in A.  Non-existence of the
+;file only is a problem if the user wants to reuse an FE.SYS file.
+;Put result of this existence test in X.
+;
+.error %
+.directory/noopti/FAST 'a:FE.SYS[1,4]
+.if(error).goto nofe
+.error ?
+.let x="Y"		;yes, Virginia, the file exists
+.goto askok
+nofe::
+.let X="N"		;No file found - create a new one
+.goto askok		;Go around next bit
+;
+;Display all selected parameters and get final user OK
+;
+askok::
+.if ($D="D") .LET S=$B.[1,"]"]+",DECTAP]",T="DECTAP.SFD"
+.if ($D="F") .LET S=$B.[1,"]"]+",FLOPPY]",T="FLOPPY.SFD"
+!
+!Here is a summary of the options you have selected for this installation.
+!
+!Target disk structure for installation:		'A
+!Location of RSX20F distribution area:		'B
+!Location of FELOAD distribution area:		'C
+!Location of F11 distribution area:		'F
+!Installation type (D=DECtape, F=Floppy):	'D
+!Size of FE.SYS file to be created:		'Q
+!Structure currently in use by RSX20F:		'Y
+!Console front end to be reloaded on CPU:	'R
+!FE.SYS currently exists on 'A:		'X
+!
+!Please indicate if these choices are in error.  If you answer the following
+!question with a NO, the entire RSXINS dialogue will be restarted.
+!
+ASKOL::
+.MIC INPUT G,"* Are the above correct (Y or N) [No default] ? "
+.LET G = $G.[1]		;TRUNCATE TO 1 CHARACTER
+.if ($G = "<") .backto GETRL
+.if ($G = "?") .goto hlpok
+.if ($G = "Y") .goto chkfl
+.if ($G = "N") .backto geta	;Go reask all questions
+!%Invalid response - please type Y, N, ? for help, or < to back up
+.backto askol
+hlpok::
+!
+!If you answer YES, RSXINS will proceed to execute the installation using
+!the answers you have provided to each of the previous questions.
+!
+!If you answer NO, the dialogue will be restarted so that you can correct
+!any answers which were in error.
+!
+.backto askol
+chkfl::
+!
+!All questions have been asked.  The procedure will now verify that 
+!required SFDs and files exist.
+!
+;
+;Build the full SFD name for the RSX20F files.  Uses B, creates S.
+;
+.error %
+.if ($D="D") .LET S=$B.[1,"]"]+",DECTAP]",T="DECTAP.SFD"
+.if ($D="F") .LET S=$B.[1,"]"]+",FLOPPY]",T="FLOPPY.SFD"
+.directory/noopti/FAST 'S
+.if(noerror).goto chkf1		;No error - files exist
+norsx::
+!
+!The directory 'S does not exist.  Aborting execution of procedure.
+!
+.goto abort
+chkf1::
+;
+;Now look for F11.  Directory area is in F.
+;
+.directory/noopti/FAST 'fF11.EXE
+.if(noerror).goto chkf2
+nof11::
+!
+!The F11 program does not exist on 'F.  Aborting execution of procedure.
+!
+.goto abort
+chkf2::
+.R PATH
+*F11RUN:='F	;Define a logical name to run F11
+*^Z
+;
+;Now look for FELOAD.  Directory area is in C.
+.directory/noopti/FAST 'CFELOAD.BIN
+.if(noerror).goto begin
+nofl::
+!
+!The FELOAD.BIN file does not exist on 'C.  Aborting execution of procedure.
+!
+.goto abort
+begin::
+.error ?
+!
+!All files have been located.  Commencing actual installation procedure.
+!
+.if ($x = "Y") .goto dstfe
+.goto crefe
+dstfe::
+!
+!Deleting existing 'A:FE.SYS[1,4] file...
+!
+.RUN F11RUN:f11
+*DEST 'A:
+*YES
+*EXIT
+.if(error).goto abort
+![OK]
+crefe::
+!
+!Creating new front-end file on 'a...
+.RUN F11RUN:F11
+*INI 'A:/SIZE:'Q
+!Defining a new [5,5] UFD on the area...
+*UFD 'a:[5,5]
+!Placing RSX-20F system image on the area...
+*DEL 'a:[0,0]CORIMG.SYS
+*PUT 'a:[0,0]/FILE:5='SCORIMG.SYS
+!Placing RSX-20F files on the [5,5] UFD in the area...
+*PUT 'a:[5,5]='S*.*
+*DEL 'a:[5,5]CORIMG.SYS
+!Writing FELOAD.BIN into the disk boot blocks...
+*BOOT 'a:='CFELOAD.BIN
+*EXIT
+.if(error) .goto abort
+![OK]
+REBOOT::
+.if ($Y # "Y") .GOTO DONE
+!
+!Now reloading front end 'R using newly-installed RSX-20F...
+!
+.R DTELDR
+*/RELOAD:'R0/SWITCH:000205/NODUMP
+*/EXIT
+.if (error).goto abort
+!Front end 'R started
+!
+DONE::
+.R PATH
+*F11RUN:=/EXIT
+.IF(ERROR)
+!
+!	RSXINS procedure finished at '<time> on '<Day>, '<Date>
+!
+!
+'<return>
+CCTRAP::'<SILENCE>
+!
+!Installation aborted by user typing Control-C.
+!
+.backto done
+ABORT::'<SILENCE>
+%FIN::
+%ERR::
+%TERR::
+%CERR::
+!
+!Installation aborted due to error encountered by RSXINS procedure.
+!
+!
+.backto done

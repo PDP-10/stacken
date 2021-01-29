@@ -1,0 +1,1059 @@
+	TITLE	SOSLST - Printing and listing
+;		---------------------------
+; 
+;  This file contains:
+;	1. The print command
+;	2. The list command
+;	3. The Altmode and Line Feed commands
+; 
+ 
+	SEARCH	SOSTCS
+	$INIT
+ 
+; Flag definitions for this module
+ 
+EJECT==PDFL1			; Eject at bottom of page
+WAIT==PDFL2			; Wait for a CR before continuing on next page
+PGNOS==PDFL3			; Place page number at bottom of each page
+ 
+ 
+	SUBTTL	THE PRINT COMMAND
+ 
+PRINT::
+	MOVEI	T2,1
+	MOVEM	T2,LSTCNT
+	SETZM	LOGPG		; Clear counters and things
+	PUSHJ	P,SCAN##
+	CAIE	C,","		; Is there a switch?
+	JRST	PRNT5		; No
+	PUSHJ	P,PRNSCN	; Scan for switches
+PRNT5:	TRNN	FL,TERMF
+	JRST	PRNT5A
+	PUSHJ	P,FINDCL##	; Find current logical line
+	CAMN	T1,CLN		; See if we found it
+PRNT5C:	PUSHJ	P,FINDN		; Find next line
+	JUMPE	T1,[NERROR NLN]
+	CAME	T1,PGMK		; Page mark?
+	JRST	PRNT5B
+	AOS	T2,CPGL		; Advance to next page
+	PUSHJ	P,PGPRN		; Print page header
+	SKIPE	TMFCUP		;CAN TERMINA GO UP?
+	OUTCHR	[" "]		; In case he has TTY NO BLANKS set
+	OCRLF			; Prevent overprint
+	JRST	PRNT5C		; And look again.
+
+PRNT5B:	MOVEM	T1,LOLN
+	MOVE	T1,CPGL
+	MOVEM	T1,LOPG
+	MOVE	T1,PLINES
+	MOVEM	T1,SVCNT
+	TRO	FL,CNTF
+	PUSHJ	P,SVLOLN##
+	SETOM	STOPGF		; Stop on page boundary
+	MOVEI	T1,1		; Length of P command
+	PUSHJ	P,LFPCLR	; Clear prompt and command
+	JRST	PRCNT
+
+PRNT5A:	PUSHJ	P,GET2D##	; Get a double string
+	CAIE	C,","		; Is there a switch?
+	JRST	PRNT6		; No
+	PUSHJ	P,PRNSCN	; Yes, look at them
+PRNT6:	PUSHJ	P,CKTRMF##	; Make sure it terminates correctly
+PRCNT:	TRZ	FL,LINSN	; No lines seen yet
+	TLO	FL2,NORENT	; Protect our critical regions from ^C
+	TRNE	FL2,EJECT!WAIT
+	PUSHJ	P,PGWT		; Wait for user!
+	PUSHJ	P,FINDLO##	; Find LOLN/LOPG
+	SKIPE	LOLN		; Did we want to print an entire page
+	JRST	PRNT1		; No, go check bounds
+	MOVE	T2,CPG		; Which one are we on
+	MOVEM	T2,CPGL
+	TRNN	FL2,SUPN	; Line numbers suppressed by switch
+	PUSHJ	P,PGPRN 	; Print the page header
+	TRO	FL,LINSN	; This can count as a line
+PRNT1:	PUSHJ	P,ONMOV 	; Check to see if still in range
+	  JRST	EPRNT		; No, end
+	TRO	FL,LINSN	; We have seen one
+	CAMN	T1,PGMK 	; Is it a page mark?
+	JRST	PRNT3		; Yes, do something special
+	MOVEM	T1,CLN
+	MOVEM	T2,CPGL 	; Save page too
+	PUSHJ	P,OUTLIN	; And print
+	AOSN	LSTCNT
+	PUSHJ	P,PAGEND	; End of page
+PRNT4:	PUSHJ	P,FINDN##	; Get the next line
+	JRST	PRNT1		; And continue
+PRNT3:	MOVEM	T2,CPGL
+	SOS	LSTCNT		; Adjust for page mark
+	PUSHJ	P,PAGEND	; Do end of page routine
+	SETZM	LOGPG		; Reset logical page counter
+	TRNN	FL2,SUPN	; Unless printing a clean copy,
+	PUSHJ	P,PGPRN 	; Go print a page header
+	MOVE	T2,LNZERO##
+	MOVEM	T2,CLN		; Set line to first on that page
+	JRST	PRNT4		; And continue
+EPRNT:	TRZN	FL,LINSN	; Did we print something
+	NERROR	NLN		; No, error
+	PUSHJ	P,PAGEJT	; Eject page
+	JRST	COMND## 	; Yes, return for command
+; Check to see if out of limits skip return if OK
+
+ONMOV:: JUMPE	T1,CPOPJ##	; 0, must be eof so all done
+	CHKREN	CPOPJ##
+ONMOV1: MOVE	T2,CPG		; Get the current page
+	CAMN	T1,PGMK 	; Are we at a page mark?
+	ADDI	T2,1		; Yes, treat as next page
+	TRNE	FL,CNTF 	; Is this a ! type command?
+	JRST	ONCNT
+	CAMLE	T2,HIPG 	; How does it compage with upper limit
+	POPJ	P,		; Higher, all done
+	CAME	T1,PGMK 	; If page mark, do not compare line
+	CAME	T2,HIPG 	; Or if not on last page
+	SKIPA
+	CAMG	T1,HILN 	; Are we out of lines?
+	AOS	(P)		; Skip return all ok
+	POPJ	P,		; Go
+
+ONCNT:: CAMN	T1,PGMK 	; Do not count page marks
+	JRST	ONCNT1		; At page mark
+	SOSL	SVCNT		; Are we out
+	AOS	(P)		; Skip return for ok
+	POPJ	P,
+ 
+ONCNT1: SKIPN	STOPGF		; If stop on page boundary
+	SKIPG	SVCNT		; Stop if count expired?
+	POPJ	P,		; Done
+	JRST	CPOPJ1##
+; Here to eject page
+ 
+PAGEJT: TRNN	FL2,EJECT	; Ejecting?
+	POPJ	P,		; No: just return
+	MOVE	T5,LSTCNT
+	ADD	T5,PAGESZ	; Get count left
+	SUBI	T5,FULLPG	; Eject to top of page
+	TRNN	FL2,WAIT	; If not waiting
+	SUBI	T5,1		; One more line
+	SUBI	T5,1		; Handle zero case
+	MOVEI	C,15		; Put out cr
+	PUSHJ	P,OCHR
+	JRST	PUTLN1
+ 
+PUTLN:	MOVEI	C,12
+	PUSHJ	P,OCHR		; Output lf's
+PUTLN1: CAMN	T5,[-11]	; A bit weird
+	PUSHJ	P,PUTPG
+	AOJL	T5,PUTLN
+	AOS	LOGPG		; Incr logical page
+	PUSHJ	P,FORCE 	; Output
+	POPJ	P,
+ 
+; Here to wait for bottom of page
+ 
+PAGEWT: TRNN	FL2,WAIT	; Waiting?
+	JRST	NOWAIT		; Nope!
+PGWT:
+	PUSH	P,T1		;SAVE T1
+	SKIPN	T1,BACCHR##	;GET BACKSPACE CHAR
+	  MOVEI	T1,10		;NONE--ASSUME ^H
+REPEAT 4,<OUTCHR T1>		;OUTPUT THEM
+	POP	P,T1		;RESTORE T1
+READ1:	PUSHJ	P,GNCH##	; Get next char
+	CAIE	C,"G"
+	CAIN	C,"g"
+	TRZ	FL2,WAIT
+	CAIE	C,"Q"
+	CAIN	C,"q"
+	JRST	QPRINT
+	CAIE	C,12		; Lf?
+	JRST	READ1
+NOWAIT: MOVN	T5,PAGESZ	; Reset line count
+	MOVEM	T5,LSTCNT
+	POPJ	P,
+ 
+QPRINT: PUSHJ	P,GNCH
+	CAIE	C,12		; Skip to lf
+	JRST	QPRINT
+	JRST	COMND
+; Here on end of page
+ 
+PAGEND: PUSHJ	P,PAGEJT	; Eject a page
+	JRST	PAGEWT		; And go wait
+ 
+; Routine to output funny page numbers
+ 
+PUTPG:	TRNN	FL2,PGNOS	; Are we?
+	POPJ	P,
+	MOVE	T1,RMAR
+	ADD	T1,LMAR
+	ASH	T1,-1		; Put out (r+l)/2 blanks
+PUTPG1:
+	OUTCHR	[" "]
+	SOJG	T1,PUTPG1
+	OUTCHR	["-"]
+	MOVE	T2,CPG		; Current page
+	PUSHJ	P,DPRNT
+	MOVE	T2,LOGPG	; Logical page
+	JUMPE	T2,PUTPG2
+	OUTCHR	["."]
+	PUSHJ	P,DPRNT 	; Sub-page
+PUTPG2:
+	OUTSTR	[BYTE (7)"-",15]
+	POPJ	P,
+; Print switch scanner
+ 
+PRNSCN: PUSHJ	P,SCAN		; Get next char
+	TRNE	FL,TERMF	; Terminator can't happen here
+	JRST	SCNERR		; If it does, its an err
+	SETZ	T2,		; Accumulate hits here
+	MOVS	T1,ACCUM	; Get switch
+	CAIN	T1,('N     ')
+	TRO	T2,PGNOS
+	CAIE	T1,('U     ')	; No sequence numbers
+	CAIN	T1,('S     ')	; Old name (for compatibility)
+	TRO	T2,SUPN
+	CAIN	T1,('W     ')
+	TRO	T2,WAIT
+	CAIN	T1,('E     ')
+	TRO	T2,EJECT
+	CAIN	T1,('F     ')
+	TRO	T2,EJECT!WAIT!SUPN
+	SKIPN	T2		; Did we find a good switch?
+	JRST	SCNERR		; Nope
+	TRO	FL2,(T2)	; Yea, turn on the real flag
+	PUSHJ	P,SCAN		; Scan past it
+	TRNE	FL,TERMF	; Terminator?
+	POPJ	P,
+	CAIN	C,","		; More?
+	JRST	PRNSCN		; Yes - get em
+ 
+SCNERR: TRZ	FL2,EJECT!WAIT!SUPN!PGNOS; He blew it, clear any good bits
+	NERROR	ILC		; Tell him about his goof
+PGPRN:: OCRLF
+PGPRN1::OUTSTR	[ASCIZ/Page /]
+	PUSHJ	P,DPRNT 	; Print the number in t2
+	OCRLF
+	AOS	LSTCNT
+	AOS	LSTCNT		; Page n - takes 2 lines
+	POPJ	P,
+
+; The usual number printer; prints number in T2, uses T2-T3,C, and CS
+
+DPRNT:: PUSH	P,T1		; save T1
+	MOVEI	T3,OCHR 	; terminal output routine
+	MOVE	T1,T2		; put number in T1
+	PUSHJ	P,DECPR##	; print it
+	PUSHJ	P,FORCE 	; force output
+	JRST	T1POPJ		; restore T1 and return
+ 
+; Line Output
+ 
+TYPSTR::JUMPE	T1,CPOPJ	; Here to type ASCIZ string
+	HRLI	T1,(POINT 7,0)	; Set up byte pointer in T1
+TYPST1: ILDB	C,T1		; Get a character
+	JUMPE	C,FORCE 	; Return on zero byte
+	PUSHJ	P,OCHRD		; Output the character
+	JRST	TYPST1		; Loop for more
+ 
+ 
+; Here to output a CR-LF, and force any waiting output
+ 
+FOCRLF::MOVEI	C,15		; Carriage return
+	PUSHJ	P,OCHR		;  out it goes
+	MOVEI	C,12		; Now a linefeed
+;	JRST	FOCHR		; Output it and force everything
+ 
+; Character output
+ 
+
+FOCHRD::PUSHJ	P,OCHRD
+	PJRST	FORCE
+
+; Here to output a character and FORCE it
+ 
+FOCHR:: PUSHJ	P,OCHR
+	JRST	FORCE		; Force it out
+ 
+; Here to prepare a character for output to the terminal
+; Characters are sent when FORCE is called or the buffer becomes full.
+ 
+
+OCHR::	JUMPE	C,CPOPJ 	; Ignore nulls
+	MOVE	CS,CTBL(C)	; Get the majic bits
+	TLNE	CS,LETF_16	; Check for letter
+	TDC	C,CASEBT	; And change case as necessary
+	SKIPN	QMDFLG		; Any conversion in effect
+	JRST	OCHRD		; Do ^ thing only
+	PUSH	P,C		; Save the real character
+	TRNE	FL2,SUPN	; Is this a pretty print?
+	JRST	OCH2		; Yes, no ' conversion
+	PUSH	P,C		; Save the character
+	LDB	C,[POINT 7,CTBL(C),10]; Get print equiv.
+	JUMPE	C,OCH1		; None, print original
+	TDNE	CS,[XWD LETF_16,M37]; Is this a letter or special
+	SKIPG	QMDFLG		; And quoting only specials?
+	SKIPA
+	JRST	OCH1		; Then print normally
+	MOVEM	C,(P)		; Save in stack
+	MOVEI	C,"'"
+	SOSG	TTOCNT		; See if room
+	PUSHJ	P,FORCE 	; No - dump buffer
+	IDPB	C,TTOPNT	; Deposit char
+OCH1:	POP	P,C		; Get char to print
+OCH2:	TRNE	FL,CURPRT		;SPECIAL PRINT?
+	  JRST	DCHR			;YES
+	SOSG	TTOCNT
+	PUSHJ	P,FORCE
+	IDPB	C,TTOPNT
+CHPOPJ::POP	P,C		; Restore the real character
+	POPJ	P,		; And return
+ 
+OCHRD::	PUSH	P,C		; Save character
+	CAME	C,BACCHR##	;THIS THE BACKSPACE CHAR?
+	CAIL	C,40		; Will it print okay?
+TRICKY: JRST	OCH2		; Yes - Just do it
+	CAIGE	C,"G"-100	; A bell?
+	JRST	OCHRD1		;^ notation needed
+	CAIE	C,15		; Carriage return just prints
+	CAIGE	C,"K"-100	;^K and above need ^ too
+	JRST	OCH2		; But the rest just print
+OCHRD1: CAIN	C,33		; Is it altmode?
+	JRST	[MOVEI	C,"$"
+		 JRST	OCH2]
+	ADDI	C,100		; Make it visible
+	PUSH	P,TRICKY	; Lay trap on stack to print next char
+	PUSH	P,C		; Save a moment
+	MOVEI	C,"^"		; Arrow indicator
+	JRST	OCH2		; Print it
+ 
+ 
+OUTLIN::PUSHJ	P,GETLTH##	; Get the length
+	HRRI	T2,(PNTR)	; Point to the line
+OUTLN1::IMULI	T1,5		; Convert to characters
+	HRLI	T2,(<POINT 7,0>); Get set to print a line
+	PUSHJ	P,ICUR		;SETUP FOR CURSOR PRINT IF WE CAN
+	TRNN	FL2,SUPN	; Suppressing line numbers?
+	TLNN	FL2,LNUMF	; By global flag?
+	JRST	[AOS  T2	; Skip line number
+		 IBP  T2	; and tab that follows
+		 SUBI T1,6	; Decrease count of remaining characters
+		 ILDB C,T2	; Get first character
+		 CAIE C,15	; Skip if null line
+		 JRST OUTL2	; No, output a char
+		 MOVEI C," "	; Space over the start
+		 PUSHJ P,OCHR	; Wipe it out
+		 PUSHJ	P,FCUR	;DONE WITH SPECIAL CURSOR PRINT
+		 JRST FOCRLF]
+OUTL1:	ILDB	C,T2		; Get a chr
+OUTL2:	PUSHJ	P,OCHR		; And print it
+	SOJG	T1,OUTL1	; If not to end yet
+	PUSHJ	P,FCUR		;DONE WITH SPECIAL CURSOR PRINT
+;	JRST FORCE		; Fall thru to FORCE
+ 
+; Routine to dump tty buffer and set up for next
+ 
+FORCE:: PUSH	P,C		; Save current char
+	MOVEI	C,0		; Grntee null
+	IDPB	C,TTOPNT	; At end of string
+	OUTSTR	TTOBUF		; Dump it
+	POP	P,C		; Restore c
+;	JRST	CTTBFO		; Fall thru to CTTBFO
+ 
+ 
+; Routine to clear the tty output buffer and reset byte count
+ 
+CTTBFO::PUSH	P,ALTP		; Save a register
+	MOVEI	ALTP,LINSIZ	; A new count
+	MOVEM	ALTP,TTOCNT
+	MOVE	ALTP,[POINT 7,TTOBUF]; New pointer
+	MOVEM	ALTP,TTOPNT
+	JRST	APOPJ##
+	SUBTTL	DCHR -- HANDLE SPACES AND TABS
+
+DCHR:	CAIN	C," "		;SPACE?
+	  JRST	DCHR.S		;YES
+	CAIN	C,"	"	;TAB?
+	  JRST	DCHR.T		;YES
+	CAIN	C,15		;CR?
+	  PUSHJ	P,DCHR.C	;YES
+	SKIPE	PFLG		;SOMETHING WAITING?
+	  PUSHJ	P,DOTAB		;YES
+	SOSG	TTOCNT		;SEE IF ROOM IN BUFFER
+	  PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	C,TTOPNT	;YES--STORE
+	CAIGE	C," "		;PRINTABLE?
+	 JRST	DCHR.E		;NO--FINISH OFF
+	AOS	C,PPOS		;COUNT PRINTED POSITION
+	CAML	C,LINEW		;SEE IF OVERFLOW
+	 JRST	[SUB	C,LINEW	;YES--GET WHATS LEFT
+		 MOVEM	C,PPOS	;STORE
+		 JRST	.+1]	;AND CONTINUE
+	AOS	C,HPOS		;AND HORIZONTAL POSITION
+	CAML	C,LINEW		;SEE IF OVERFLOW LINE
+	 JRST	[SUB   C,LINEW	;YES--GET WHATS LEFT
+		 MOVEM C,HPOS	;SAVE
+		 JRST  .+1]	;AND CONTINUE
+DCHR.E:	POP	P,C		;RESTORE CHAR
+	POPJ	P,		;AND RETUR
+
+;HERE IF CHAR IS A SPACE
+
+DCHR.S:	AOS	HPOS		;ADVANCE POSITION
+	SETOM	PFLG		;FLAG WAITING
+	POP	P,C		;RESTORE C
+	POPJ	P,		;AND RETURN
+
+;HERE IF CHAR IS A CARRIDGE RETURN
+
+DCHR.C:	SETZM	HPOS		;CLEAR HOSI
+	SETZM	PPOS		;AND PRINTED POSITION
+	SETZM	PFLG		;AND NOTHING WAITING
+	POPJ	P,		;AND RETURN
+
+;HERE IF CHAR IS A TAB
+
+DCHR.T:	MOVE	C,HPOS		;GET CURRENT POSITION
+	ADDI	C,10		;GO TO NEXT TAB STOP
+	TRZ	C,7		;ROUND DOWN
+	MOVEM	C,HPOS		;STORE
+	SETOM	PFLG		;FLAG WAITING
+	POP	P,C		;RESTORE C
+	POPJ	P,		;AND RETURN
+
+;HERE TO TAB TO COLUMN HPOS
+
+DOTAB:	SETZM	PFLG		;NOTHING WAITING
+	PUSH	P,C		;SAVE CHAR
+	PUSH	P,T1		;SAVE CHAR
+	PUSH	P,T2		;SAVE AC
+	SKIPG	TABINI		;SEE IF TERMINAL HAS TABS
+	 JRST	DOTABA		;NO
+	MOVE	T1,PPOS		;YES--ROUND PPOS UP TO TAB
+	ADDI	T1,10		;..
+	TRZ	T1,7		;..
+	SUB	T1,HPOS		;SEE IF PAST HPOS
+	JUMPG	T1,DOTABA	;YES--JUST USE SPACES
+	MOVNS	T1		;NO--GET POSITIVE
+	LSH	T1,-3		;COMPUTE TABS
+	MOVE	T2,HPOS		;GET SPACES
+	ANDI	T2,7		;..
+	AOJA	T1,DOTABC	;INCR AND TEST
+DOTABA:	MOVEI	T1,0		;NO--CLEAR TAB COUNT
+	MOVE	T2,HPOS		;GET DESTINATION
+	SUB	T2,PPOS		;COMPUTE NUMBER OF SPACES
+;
+;HERE WITH T1=NUMBER OF TABS, T2=NUMBER OF SPACES
+;
+DOTABC:	MOVE	C,HPOS		;GET CURRENT POSITION
+	MOVEM	C,PPOS		;WE ARE HERE NOW
+	LDB	C,[POINT 9,TMFCUR,17];GET CHARS FOR DIRECT CURSOR ADDR
+	SUBI	C,(T1)		;MINUS TABS REQUIRED
+	SUBI	C,(T2)		;MINUS SPACES REQUIRED
+	JUMPGE	C,DOTAB1	;JUMP IF SPACES/TABS FASTER
+	LDB	C,[POINT 9,TMFCUR,8]	;GET MAX COLUMN TO DIRECT CURSOR
+	SKIPE	NFCSW##			;SEE IF NOCRLF
+	 CAMGE	C,HPOS			;SEE IF WITHIN RANGE
+	  JRST	DOTAB1			;NO--USE TABS/SPACES
+	MOVE	T1,HPOS		;GET HPOS TO GO TO
+	CAML	T1,LINEW	;SEE IF OVERFLOW THIS LINE
+	  JRST	[IDIV	T1,LINEW	;YES--GET EXTRA LINES
+		 MOVEI	C,12		;GET A <LF>
+		 PUSHJ	P,RCHR		;OUTPUT T1 <LF>'S
+		 MOVEI	T1,(T2)		;GET REMANDER
+		 MOVEM	T1,PPOS		;RESET POSITION
+		 MOVEM	T1,HPOS		;..
+		 JRST	.+1]		;AND CONTINUE
+	HRRZ	C,TMFCUR	;NO--GET ADDR TO CALL DIRECT CURSOR
+	PUSHJ	P,(C)		;DISPATCH
+DOTABE:	POP	P,T2		;RESTORE T2
+	POP	P,T1		;RESTORE T1
+	POP	P,C		;RESTORE CHAR
+	POPJ	P,		;AND RETURN
+;
+;HERE TO OUTPUT T1 TABS AND T2 SPACES INSTEAD
+;
+DOTAB1:	JUMPE	T1,DOTAB2	;SKIP IF NO TABS NEEDED
+	MOVEI	C,"	"	;GET A TAB
+	PUSHJ	P,RCHR		;DO THEM
+DOTAB2:	SKIPG	T1,T2		;SKIP IF NO SPACES NEEDED
+	  JRST	DOTABE		;ALL DONE
+	MOVEI	C," "		;GET A SPACE
+	PUSHJ	P,RCHR		;DO THEM
+	JRST	DOTABE		;AND FINISH OFF
+
+;HERE TO OUTPUT T1 NUMBER OF C
+;
+RCHR:	SOSG	TTOCNT		;SEE IF ROOM
+	 PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	C,TTOPNT	;STORE
+	SOJG	T1,RCHR		;LOOP FOR ALL
+	POPJ	P,		;AND RETURN
+
+FCUR::	TRZ	FL,CURPRT	;CLEAR SPECIAL CURSOR PRINT
+	POPJ	P,		;AND EXITT
+
+ICUR::	TRZ	FL,CURPRT	;ASSUME CANT
+	SKIPG	TABINI		;SEE IF TERMINAL HAS TABS
+	 SKIPE	TMFCUR		;SEE IF CAN DO CURSOR ADDR
+	  TRO	FL,CURPRT	;YES--FLAG SPECIAL PRINT
+	SETZM	HPOS		;NO POSITION
+	SETZM	PPOS		;OR PRINTED POSITION
+	SETZM	PFLG		;AND NOTHING WAITING
+	POPJ	P,		;RETURN
+	SUBTTL	DIRECT CURSOR CONTROL ROUTINES
+
+;ALL OF THESE ROUTINES ARE CALLED WITH T1=COLUMN(MOD TTY WIDTH)
+;TO GO TO, AND THEY CAN USE T1,T2, AND C
+
+
+ADDCUR::!
+REGCUR::JUMPE	T1,[MOVEI T1,15	;IF COLUMN 0, TRY <CR>
+		    JRST  REGC.2];INSTEAD
+	MOVEI	C,20		;GET ^P
+	SOSG	TTOCNT		;SEE IF ROOM
+	 PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	C,TTOPNT	;STORE
+	CAIN	T1,11		;SUPER KLUDGE FOR TAB?? (COL 9)?
+	  JRST	REGC.1		;YES!
+	IDIVI	T1,^D10		;MAKE BCD
+	LSH	T1,^D4		;SHIFT OVER
+	ADDI	T1,(T2)		;POSITION FINAL
+REGC.2:	SOSG	TTOCNT		;SEE IF ROOM
+	 PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	T1,TTOPNT	;STORE
+	POPJ	P,		;AND RETURN
+REGC.1:	MOVEI	T1,10		;GO FOR COLUMN 8
+	SOSG	TTOCNT		;SEE IF ROOM
+	 PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	T1,TTOPNT	;STORE
+	MOVEI	T1," "		;AND SPACE TO COLUMN 9
+	JRST	REGC.2		;..
+
+V52CUR::MOVEI	C,33		;<ESC>
+	SOSG	TTOCNT		;SEE IF ROOM
+	 PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	C,TTOPNT	;STORE
+	MOVEI	C,"Y"		;"Y"
+	SOSG	TTOCNT		;SEE IF ROOM
+	 PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	C,TTOPNT	;STORE
+	MOVEI	C,"@"		;LARGE LINE = DONT MOVE VERTICALLY
+	SOSG	TTOCNT		;SEE IF ROOM
+	 PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	C,TTOPNT	;STORE
+	ADDI	T1," "		;POSITION COLUMN
+	SOSG	TTOCNT		;SEE IF ROOM
+	 PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	T1,TTOPNT	;STORE
+	POPJ	P,		;AND RETURN
+
+DIACUR::MOVEI	C,33		;<ESC>
+	SOSG	TTOCNT		;SEE IF ROOM
+	 PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	C,TTOPNT	;STORE
+	MOVEI	C,"	"	;<TAB>
+	SOSG	TTOCNT		;SEE IF ROOM
+	 PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	C,TTOPNT	;STORE
+	ADDI	T1,1		;ADVANCE 1 COLUMN
+	SOSG	TTOCNT		;SEE IF ROOM
+	 PUSHJ	P,FORCE		;NO--DUMP
+	IDPB	T1,TTOPNT	;STORE COLUMN
+	POPJ	P,		;AND RETURN
+	SUBTTL	THE LIST COMMAND
+
+OFLG==PDFL1		; Indicates O command
+DFLG==PDFL2		; Indicates that D switch was typed
+AFLG==PDFL3		; Indicates that A switch was given
+ 
+IFN	LSTSW,<
+OCMD::	PUSHJ	P,SCAN		; Look for a colon
+	SETZM	MFLG		;TURN OFF AT START
+	SKIPE	T1,ACCUM	;GET SCANNED NAME
+	 JRST	[CAME T1,[SIXBIT/M/];OM COMMAND?
+		  NERROR ILC	;NO
+		 SETOM	MFLG	;FLAG M COMMAND
+		 PUSHJ	P,SCAN	;SCAN ONWARDS
+		 JRST	.+1]	;AND CONTINUE
+	CAIE	C,":"		; Did we find it?
+	NERROR	ILC		; No, tell him 
+	SETZM	TMPDEV		; Make sure this is cleared
+	PUSHJ	P,SCAN		; Prime for READNM
+	MOVEI	T3,LSTBLK	; Point to LOOKUP/ENTER block
+	MOVEI	T1,LPPATH	; Place for a path
+	MOVEM	T1,LSTBLK+.RBPPN; Set up the pointer
+	PUSHJ	P,READNM##	; Get the filename from his command
+	  NERROR BFS		; He didn't type it right
+	SKIPN	RSW		; Did he type a switch
+	SKIPE	SSW		; (either /R or /S)
+	NERROR	ILC		; Remind him thats a no-no
+	SKIPE	TMPCOD		; We don't allow encryption here
+	NERROR	ILC		; ... remind him
+	SKIPN	T1,TMPDEV	; Device typed?
+	MOVSI	T1,'DSK'	; No, so he wants DSK
+	MOVEM	T1,LPDEVI+.OPDEV; Set up a device
+	MOVSI	T1,'INI'	; GET DEFAULT EXTENSION
+	SKIPE	MFLG		; SEE IF OM COMMAND
+	 SKIPN	DFXSW		; AND NO EXTENSION
+	  CAIA			; NO
+	   MOVEM T1,LSTBLK+.RBEXT; YES--SET OUR DEFAULT
+	TRO	FL2,OFLG	; Note this is an O command
+	TRZ	FL2,SUPN	; Assume sequenced
+	CAIE	C,","		; Is there a comma?
+	TRNE	FL,TERMF	; Or end of line?
+	JRST	OUPCM1		; and join processing
+	NERROR	ILC		; Wrong format
+
+LIST::	MOVSI	T2,'LPT'	; and device of LPT
+	MOVEM	T2,LPDEVI+.OPDEV; Set it up
+	SKIPN	T1,NEWNAM	; Is there a new name
+	MOVE	T1,ORGNAM	; Use original one if not
+	DMOVEM	T1,LSTBLK+.RBNAM; Setup name.LPT in LSTBLK
+	SETZM	LSTBLK+.RBPPN	; Use default path for output
+	TRZ	FL2,SUPN	; Assume sequenced output
+	TRO	FL2,AFLG	; And /A is default
+LISTS0:	PUSHJ	P,SCAN		; Get some information
+OUPCM1:	SKIPE	MFLG		;SEE IF OM COMMAND
+	 JRST	LISTS1		;YES--DONT TRY FOR RANGE
+	CAIE	C,","		; Is there a switch?
+	JRST	LIST9		; No, look for a terminator
+	PUSHJ	P,SCAN		; Yes, scan for it
+	PUSHJ	P,GETLSW	;GET O/L COMMAND SWITCHES
+	 JRST	LIST7		;NONE--TREAT AS LINE NUMBER
+	JRST	LISTS0		; And look for another
+
+LIST9:	TRNN	FL,TERMF	; Just a terminator
+	JRST	LIST7		; No, go look for a command string
+	MOVEI	T1,1		; List entire file
+	MOVEM	T1,LOPG
+	MOVSI	T1,1		; From 1 to impossibly high
+	MOVEM	T1,HIPG
+	TRZ	FL,CNTF 	; Make sure that this flag is off
+	JRST	LIST8		; Go start work
+
+LIST7:	PUSHJ	P,GET2D##	; Have already scanned, get 2 numbers
+LISTS1:	CAIE	C,","		; Is there a switch?
+	JRST	LIST10		; No
+	PUSHJ	P,SCAN		; Yes, scan for it
+	PUSHJ	P,GETLSW	; Get a switch
+	 NERROR	ILC		;REQUIRE SOMETHING HERE
+	PUSHJ	P,SCAN		; Scan the next comma or terminator
+	JRST	LISTS1
+
+LIST10: PUSHJ	P,CKTRMF	; Make sure it terminates correctly
+LIST8:	TRZ	FL,LINSN	; None seen yet
+	OPEN	LPT,LPDEVI	; Get it
+	  SKIPA	T1,CHNTAB+OUT
+	JRST	LIST8A		; LPT OK - use it
+	TRNE	FL2,OFLG	; O command
+	NERROR	DNA		; Device not available
+	MOVE	T1,.OPDEV(T1)
+	MOVEM	T1,LPDEVI+.OPDEV
+	OPEN	LPT,LPDEVI
+	  NERROR DNA
+LIST8A: MOVEI	T1,5		; Length of a lookup block
+	TRNN	FL2,DFLG!AFLG	; Should we protect his file?
+	TRO	T1,RB.NSE	; Yes, set non-superseding ENTER bit
+	MOVEM	T1,LSTBLK+.RBCNT; Save location
+	TRNN	FL2,AFLG	; Append to the file?
+	JRST	LIST8B		; No, don't look it up
+	XLOOKP	LPT,LSTBLK	; Look for the file if it is there
+	  JFCL
+	  JFCL
+LIST8B:	XENTER	LPT,LSTBLK	; Enter it 
+	  JRST	[HRRZ	T1,LSTBLK+.RBEXT  ; Error code
+		 TRO	FL,LINSN	  ; Supress useless message
+		 CAIE	T1,ERAEF%	  ; File already exists?
+		 JRST	LST6
+		 MOVEI	T1,LSTBLK
+		 MOVE T2,LPDEVI+.OPDEV	  ; Device name
+		 PUSHJ  P,FAEQRY##	  ; Ask him about file
+		 TRO	FL2,DFLG	  ; Anticipate 'yes'
+		 PUSHJ	P,CONFRM##
+		   JRST	LST6
+		 JRST	LIST8A]
+	TRNE	FL2,AFLG	; /A 
+	USETI	LPT,-1		; Position for append
+	SKIPE	MFLG		;OM COMMAND?
+	 JRST	MCM2		;YES--GO HANDLE
+	TRNE	FL2,OFLG	; O command?
+	JRST	OCM2		; Go handle
+; 
+LIST1:	MOVE	T1,[PGHS##,,PGHD##]; set up for header copy
+	BLT	T1,PGHDE##	; copy blank header into place
+	MOVE	ALTP,[POINT 7,PGHD,13]; set up for deposition
+	MOVEI	T3,HDOCH	; set up address of output routine
+	PUSHJ	P,GVOSTR##	; insert structure name
+	MOVEI	T4,ORGNAM##	; point to original name...
+	MOVEI	T5,ORGEXT##	;  and extension
+	SKIPN	NEWNAM		; but is there a new name?
+	JRST	LIST1A		; no
+	MOVEI	T4,NEWNAM##	; yes--point to new name...
+	MOVEI	T5,NEWEXT##	;  and extension
+LIST1A: PUSHJ	P,GVNAM1##	; print appropriate name
+	SKIPN	T1,NEWPTH##	; is there a new PTH?
+	SKIPE	T1,ORGPTH##	; no--but use old one only if there
+	PUSHJ	P,GVBPTH##	; let routine in SOSSET do the work
+	MOVE	ALTP,[POINT 7,PGHD+7]; reset pointer for date & time
+	DATE	T1,		; get date
+	IDIVI	T1,^D31 	; leaves day in T2
+	PUSH	P,T1		; save the rest
+	MOVEI	T1,1(T2)	; form day (must add 1 you know)
+	PUSHJ	P,DECPR##	; insert it
+	MOVEI	C,"-"		; get a separator
+	PUSHJ	P,HDOCH 	; insert it
+	POP	P,T1		; get back rest of date
+	IDIVI	T1,^D12 	; extract month
+	SKIPA	T4,[POINT 7,MONTAB(T2)]; point to month, skip into loop
+	PUSHJ	P,HDOCH 	; insert character
+	ILDB	C,T4		; get next month character
+	JUMPN	C,.-2		; keep going till done
+	MOVEI	C,"-"		; and another separator
+	PUSHJ	P,HDOCH 	; output it
+	ADDI	T1,^D64 	; make a real year
+	PUSHJ	P,DECPR 	; and insert it
+	IBP	ALTP		; skip over a space
+	MSTIME	T1,		; get the time
+	IDIVI	T1,^D60000	; convert to minutes
+	IDIVI	T1,^D60 	; now to hours
+	PUSH	P,T2		; save minutes
+	PUSHJ	P,DECPR 	; print hours
+	MOVEI	C,":"
+	PUSHJ	P,HDOCH 	; insert separator
+	POP	P,T1		; get minutes back
+	MOVEI	C,"0"		; make sure there are 2 digits
+	CAIG	T1,^D9
+	PUSHJ	P,HDOCH 	; insert extra 0
+	PUSHJ	P,DECPR 	; print minutes
+	SETOM	LOGPG		; Logical page to 0
+	TLO	FL2,NORENT	; Protect our critical regions
+	PUSHJ	P,FINDLO##	; Go find it
+	SETZM	LSTCNT		; Count of number of lines per page
+; Here to loop listing some lines
+ 
+LST2:	PUSHJ	P,ONMOV 	; Check range
+	  JRST	LST6		; Finish up
+	TRO	FL,LINSN	; Yep, we have seen one
+	CAMN	T1,PGMK 	; Check for page mark and handle special
+	JRST	LST4
+	PUSHJ	P,GETLTH##	; Get length of this line
+	IMULI	T1,5		; Convert to characters
+	MOVNS	T1		; Negate
+	HRLZI	T2,(T1)		; Set up counter
+	SOSG	LSTCNT		; Check to see if run out
+	PUSHJ	P,HDPRNT	; Go print heading
+LST2A:	MOVE	T1,PNTR 	; Get the pointer
+	TRNN	FL2,SUPN	; Do we want to suppress line numbers?
+	JRST	LST3A		; No
+	AOS	T1		; Yes, skip a word
+	HRLI	T1,(<POINT 7,0,6>); And a character
+	ADD	T2,[6,,6]	; And tell people we have done so
+	JRST	LST3		; Before going on our way
+LST3A:	HRLI	T1,(<POINT 7,0>); And set up byte pointer
+LST3:	ILDB	C,T1		; Get chr
+	JUMPE	C,LSTN		; If null
+	CAIE	C,12
+	CAIL	C,15		; Special character ?
+	JRST	LST5		; Nope, print as usual
+	CAIL	C,11		; Less than tabs get printed as usual
+	JRST	SPHD		; Get special handling
+LST5:	PUSHJ	P,POCHR 	; Print it
+LSTN:	AOBJN	T2,LST3
+	PUSHJ	P,FINDN		; To next line
+	JRST	LST2
+
+; Subroutine to get switches for O and L commands
+; Call with
+;	PUSHJ	P,GETLSW
+;	  <error return>
+;	<bits set in FL2>
+; Uses T1, T3
+
+GETLSW:	PUSHJ	P,SAVR##	;SAVE SOME TEMPS
+	SETZ	T3,		;CLEAR BITS FIRST
+	MOVS	T4,ACCUM	;Get the accumulator
+	CAIE	T4,'U  '	;Is it U?
+	CAIN	T4,'S  '	;or S (old habits die slowly)
+	TRO	T3,SUPN		;Yes, suppress line numbers
+	CAIN	T4,'D  '	;Is it D?
+	TRO	T3,DFLG		;Light the bit
+	CAIN	T4,'A  '	;Is it A
+	TRO	T3,AFLG		;Light the bit
+	TRNN	T3,AFLG!DFLG!SUPN;ANY GIVEN?
+	 POPJ	P,		;NO--NON-SKIP RETURN
+	TRNE	T3,AFLG!DFLG	;Either D or A?
+	TRNN	FL2,AFLG!DFLG	;Diagnose conflicting switches
+	TRNN	T3,AFLG!DFLG!SUPN ;Any given?
+	NERROR	ILC		;No, bad command
+	TDO	FL2,T3		;Light the switch bits
+	JRST	CPOPJ1##	;ITS EVEN DOCUMENTED LIKE THIS!
+; Here to list a special character
+ 
+SPHD:	CAIN	C,11		; Count special for tab
+	JRST	[ADDI	T2,10
+		ANDCMI T2,7
+		PUSHJ P,POCHR
+		JRST LSTN]
+	CAIN	C,14
+	JRST	[PUSHJ P,HDPRNT
+		JRST LSTN]
+	CAIN	C,"\"		; Needs delete,delete
+	JRST	[MOVEI C,177
+		PUSHJ P,POCHR
+		JRST LST5]	; And again
+	CAIE	C,13		; Vert.tab
+	ERROR	ICN		; Confused
+	PUSHJ	P,POCHR
+	MOVE	T3,LSTCNT
+	CAIG	T3,<%LPP+2>/3
+	JRST	[PUSHJ P,HDPRNT
+		JRST LSTN]
+	CAIG	T3,<2*<%LPP+2>>/3
+	MOVEI	T3,<%LPP+2>/3
+	CAIL	T3,<2*<%LPP+2>>/3
+	MOVEI	T3,<2*<%LPP+2>>/3
+	MOVEM	T3,LSTCNT
+	JRST	LSTN
+
+; Here at a page mark
+ 
+LST4:	PUSHJ	P,FINDN 	; Advance
+	SETOM	LOGPG		; Zero logical page again
+	MOVEI	T2,0		; This must be zero so get it that way
+	PUSHJ	P,HDPRNT	; Print a header
+	AOS	LSTCNT		; Plus 1 to make it come out right
+	JRST	LST2		; And continue
+
+; Here when done with the L command.  TTY is re-opened because the
+; L or O command may have been done to TTY and the monitor will no
+; longer do input on the first channel until it is re-opened.
+ 
+LST6:	RELEAS	LPT,0		; Get rid of it
+	GETSTS	TTY,SVTSTS	; Read TTY status
+	PUSHJ	P,CNCRST##	; Re-open TTY:
+	TRZ	FL2,SUPN	; Turn this off so * prints
+	TRNN	FL,LINSN	; Were any seen?
+	NERROR	NLN		; No, error
+	JRST	COMND		; And get more commands
+; Here to put out a character
+ 
+POCHR:	JUMPE	C,CPOPJ		; If null character
+	SOSG	LOBUF+2 	; Room for more?
+	OUTPUT	LPT,0
+	IDPB	C,LOBUF+1
+	POPJ	P,
+
+; Here to print a header
+ 
+HDPRNT::PUSH	P,T1		; Save pointer
+	MOVEI	C,14		; Get to new page
+	PUSHJ	P,POCHR
+	SKIPA	T1,[POINT 7,PGHD]; get pointer to header and skip
+HDPR1:	PUSHJ	P,POCHR 	; output a header character
+	ILDB	C,T1		; get a header character
+	JUMPN	C,HDPR1 	; print it if not done yet
+HDPR2:	PUSH	P,T2		; Save character count
+	MOVE	T1,CPG		; Get current page
+	MOVEI	T3,POCHR	; Where to print it
+	PUSHJ	P,DECPR 	; Print
+	AOSG	T1,LOGPG	; See if ok to print
+	JRST	HDPR3
+	MOVEI	C,"-"
+	PUSHJ	P,POCHR
+	PUSHJ	P,DECPR
+HDPR3:	MOVEI	C,15		; Now ret and 2 lfds
+	PUSHJ	P,POCHR
+	MOVEI	C,12
+	PUSHJ	P,POCHR
+	PUSHJ	P,POCHR
+	MOVEI	T1,%LPP 	; Reset line count
+	MOVEM	T1,LSTCNT
+	POP	P,T2		; Get back count of chrs
+	TRNN	T2,-1		; If 0, then all done
+	JRST	T1POPJ
+	MOVEI	T3,(T2)		; Get copy
+	MOVEI	C," "		; Print correct number of spaces
+	PUSHJ	P,POCHR
+	SOJG	T3,.-1
+T1POPJ::POP	P,T1		; Restore pointer
+	POPJ	P,
+
+; Here to output SIXBIT name.  Call with
+;	MOVE	T3,output routine address
+;	MOVE	T1,name
+;	PUSHJ	P,PRTSX
+; Uses T1,T2 and C.  Output routine must preserve T2.
+; 
+PRTSX:: MOVE	T2,T1		; put name in T2
+PRTSX1: JUMPE	T2,CPOPJ##	; return when done
+	CLEAR	T1,		; set up T1 to receive next char
+	LSHC	T1,6		; get a character
+	MOVEI	C,40(T1)	; convert to ASCII
+	PUSHJ	P,(T3)		; call output routine
+	JRST	PRTSX1		; go on
+
+; Here to insert a character into page header.	Call is
+;	MOVE	C,character
+;	PUSHJ	P,HDOCH
+; Uses ALTP for pointer; uses no other AC's.
+; 
+HDOCH:	IDPB	C,ALTP		; insert character
+	POPJ	P,
+; Here for the O command
+
+OCM2:	PUSHJ	P,FINDLO##	; Find first line of range
+	TRNE	FL2,SUPN	; Unsequenced?
+	JRST	OCM7
+	MOVSI	T2,(POINT 36,)	; 36 bit byte pointer
+	HLLM	T2,LOBUF+.BFPTR	; Set up the pointer
+	MOVE	T2,LPDEVI+.OPDEV ; Output device
+	DEVCHR	T2,		; Get characteristics
+	TRNE	T2,DV.M13	; Can this device do it?
+	SETSTS	LPT,13		; Yes, change mode
+	SKIPE	LOLN		; Should we type a page mark?
+	JRST	OCM6
+	MOVE	C,PGMK		; First word of page mark
+	PUSHJ	P,POCHR		; Send it out
+	MOVE	C,PGMK+1	; Next word
+	PUSHJ	P,POCHR		; Send it out
+	JRST	OCM6
+
+OCM7:	SKIPE	LOLN
+	JRST	OCM6
+	MOVEI	C,15		; Carriage return
+	PUSHJ	P,POCHR		; Send it out
+	MOVEI	C,14		; Form feed
+	PUSHJ	P,POCHR		; Emit that too
+OCM6:	PUSHJ	P,ONMOV		; In range
+	  JRST	LST6		; No, done
+	TRO	FL,LINSN	; We did something
+	PUSHJ	P,GETLTH##	; Get length of this line
+	TRNE	FL2,SUPN	; Sequenced?
+	JRST	OCM3
+	CAML	T1,LOBUF+.BFCTR ; Enough room for this line?
+	OUTPUT	LPT,		; No, advance to next block
+	MOVEI	T2,(PNTR)
+	HRLI	T2,(POINT 36,)
+	JRST	OCM5
+
+OCM3:	HRLI	T2,(POINT 7,0,6)
+	HRRI	T2,1(PNTR)
+	IMULI	T1,5
+	SUBI	T1,6
+OCM5:	ILDB	C,T2		; A word
+	PUSHJ	P,POCHR		; Type it
+	SOJG	T1,OCM5		; Loop over whole line
+	PUSHJ	P,FINDN		; Get next line
+	JRST	OCM6		; And do it
+
+;HERE FOR THE OM COMMAND
+
+MCM2:	MOVEI	T3,POCHR		;SETUP CHAR STICKER
+	PUSHJ	P,OMCMD##		;ZIP OFF TO SOSMAC TO PRINT
+	JRST	LST6			;AND GO FINISH UP
+MONTAB: ASCII	"Jan"
+	ASCII	"Feb"
+	ASCII	"Mar"
+	ASCII	"Apr"
+	ASCII	"May"
+	ASCII	"Jun"
+	ASCII	"Jul"
+	ASCII	"Aug"
+	ASCII	"Sep"
+	ASCII	"Oct"
+	ASCII	"Nov"
+	ASCII	"Dec"
+
+>; End of IFN LSTSW conditional
+IFE	LSTSW,<
+OCMD::
+LIST::	NERROR	ILC
+>
+	SUBTTL	THE ALTMODE AND LINEFEED COMMANDS
+ 
+; Altmode - print previous line
+ 
+BAKLIN::PUSHJ	P,FINDCL##	; Set to current logical position
+	TRZ	FL,LINSN	; No line seen as yet
+	OCRLF			; One CRLF
+	PUSH	P,CLN		; Save current line
+	PUSH	P,CPG		; and page
+BAK1:	PUSHJ	P,FINDB##	; Backup one line
+	JUMPE	T1,BAKBOF	; If hit front of file
+	CAMN	T1,PGMK		; Is this a page mark?
+	JRST	PRVPAG		; Yes, tell him 
+	MOVEM	T1,CLN		; No, set current line
+	POP	P,T4		; Old CPG
+	POP	P,T5		; Old CLN
+	CAME	T4,CPG		; On same page?
+	JRST	BAK2		; No, no sequence problem possible
+	CAMG	T5,CLN		; Yes, this one smaller than last?
+	RERROR	ORDER		; No, tell him about the problem
+BAK2:	PUSHJ	P,OUTLIN	; Type the line
+	JRST	COMND		; and get next command
+
+PRVPAG: MOVE	T2,CPG
+	MOVEM	T2,CPGL
+	PUSHJ	P,PGPRN
+	TRO	FL,LINSN	; Something has been typed
+	JRST	BAK1		; Ok, back up some more
+
+; Here if we hit the front of the file
+
+BAKBOF:	SETZM	CLN		; Now at very top of file
+	TRNN	FL,LINSN	; Anything typed yet?
+	NERROR	NLN		; No such line
+	JRST	COMND		; Yes, get next command
+; Linefeed - print next line
+ 
+NXTLIN::SKIPE	COMFLF		; From a command file
+	OCRLF			; Need a CRLF for this
+	PUSHJ	P,FINDCL##	; Find current logical line
+	CAMN	T1,CLN		; Did we really find it
+	PUSHJ	P,FINDN 	; Yes, get next else we already have it
+	JUMPE	T1,[NERROR NLN] ; Eof and not found
+	PUSH	P,T1		; Save line number
+	MOVEI	T1,0		; Length of command
+	PUSHJ	P,LFPCLR	; Space correctly on some displays
+	POP	P,T1		; Restore line number
+NXTL1:	CAMN	T1,PGMK 	; Is this a page mark?
+	JRST	NXTPG		; Treat specially
+	MOVEM	T1,CLN		; Set as current
+	PUSHJ	P,OUTLIN	; And print
+	JRST	COMND		; Done
+
+NXTPG:	PUSHJ	P,FINDN 	; Find a line on it
+	MOVE	T2,CPG
+	MOVEM	T2,CPGL
+	PUSHJ	P,PGPRN 	; Tell him
+	JUMPN	T1,NXTL1	; There is one there, print it
+	SETZM	CLN		; Set current line to zero
+	JRST	COMND
+ 
+;LFPCLR -- Routine to move the cursor up one line to get a single
+;	   space LF or P printout from multiple commands.
+
+LFPCLR::TRZE	FL,TERMFF	;SEE IF WANTED TO GO UP
+	 POPJ	P,		;NO--RETURN
+	SKIPE	TMFCUP		;CAN TERMINAL GO UP?
+	 XCT	TMFCUP		;YES--GO UP
+	SKIPE	TMFCUP		;CAN TERMINAL GO UP?
+	 TLNE	FL2,LNUMF	;SEQUENCED OUTPUT?
+	  POPJ	P,		;NO POSITIONING OR SEQ NUM WILL ERASE
+	LDB	T2,PMTSZP##	; Get size of prompt string
+	ADD	T1,T2		; Add to size of the command
+	OUTCHR	[" "]		; Space will print over the line
+	SOJG	T1,.-1		; Do it enough times to clear
+	XCT	TMFCR		;GET BACK TO START OF LINE
+	POPJ	P,		; And return
+	XLIST
+	LIT
+	LIST
+
+	RELOC	0
+
+HPOS:	BLOCK	1
+PPOS:	BLOCK	1
+PFLG:	BLOCK	1
+MFLG:	BLOCK	1
+
+	END

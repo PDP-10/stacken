@@ -1,0 +1,3139 @@
+! [Beginning of MCBLIB]
+!
+! COPYRIGHT (C) 1980
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASSACHUSETTS  01754
+!
+! THIS SOFTWARE IS FURNISHED  UNDER A LICENSE FOR USE ONLY ON A SINGLE
+! COMPUTER  SYSTEM AND  MAY BE  COPIED ONLY WITH  THE INCLUSION OF THE
+! ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE, OR ANY OTHER COPIES  THEREOF
+! MAY NOT BE PROVIDED OR  OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON
+! EXCEPT FOR USE ON SUCH SYSTEM AND TO ONE WHO AGREES TO THESE LICENSE
+! TERMS.  TITLE TO AND  OWNERSHIP OF THE  SOFTWARE  SHALL AT ALL TIMES
+! REMAIN IN DEC.
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT NOTICE
+! AND SHOULD  NOT BE CONSTRUED  AS A COMMITMENT  BY DIGITAL  EQUIPMENT
+! CORPORATION.
+!
+! DEC ASSUMES  NO  RESPONSIBILITY  FOR  THE USE OR  RELIABILITY OF ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DEC.
+!
+
+!++
+! FACILITY: MCB User's Library
+!
+! ABSTRACT:
+!
+!	This file contains the macros and structure definitions
+!	necessary to a process for operation within MCB.
+!
+! ENVIRONMENT:
+!
+! AUTHOR: Alan D. Peckham, CREATION DATE: 13-March-1980
+!
+! MODIFIED BY:
+!
+! 	, : VERSION
+! 01	- 
+! 03	- Use status definition macro from MCBSTS.
+! 04	- Change PHDR$ macro to use OWN psect instead of PLIT.
+! 05	- Correct RSX_UCB_SCB_IOP linkage.
+! 06	- Add $MCB_EXCEPTION
+! 07	- Begin MCB V3.2 changeover.
+! 08	- Fix LINKAGE MCB_INTERRUPT to preserve register 0.
+! 09	- Fix all linkages to routines which do not affect register 0.
+!	  CEX auxilliary routines called through CALL$C.
+! 10	- Registers not saved in EXRQN$.
+! 11	- Add CE_UDR (transmitter underrun).
+! 12	- Change CALL$C to CALL$I.
+! 13	- Add synonyms and make some values global.
+! 14	- Add interrupt inhibit/enable and table lookup services.
+! 15	- Fix $RSX_GET_TCB to check for no task situation.
+! 18	- Fix CALL$L to declare routine name if not already declared.
+!--
+
+literal
+    MCB$K_VERSION = 3,
+    MCB$K_LEVEL = 2,			! Updated on each data structure change
+    MCB$K_EDIT = 18;			! Updated on each edit
+
+%if %bliss (bliss16) %then
+literal
+    LIB$V0 = %rad50_11 '032',
+    LIB$V1 = %rad50_11 '180';
+%fi
+
+!
+! Synonyms
+!
+
+macro
+    MCB$K_SET_EXCEPTION = %name ('E.XVST') %,
+    MCB$K_SET_PROCESS = %name ('P.DTST') %,
+    MCB$K_CLEAR_PROCESS = %name ('P.DTCL') %,
+    MCB$K_GET_PROCESS_INDEX = %name ('P.DTGT') %,
+    MCB$K_GET_PROCESS_NAME = %name ('P.NMGT') %,
+    MCB$K_SET_PROCESS_NAME = %name ('P.NMST') %,
+    MCB$K_CLEAR_PROCESS_NAME = %name ('P.NMCL') %,
+    MCB$K_SET_VECTOR = %name ('V.ECST') %,
+    MCB$K_CLEAR_VECTOR = %name ('V.ECCL') %,
+    MCB$K_GET_LINE_NAME = %name ('S.NMGT') %,
+    MCB$K_SET_LINE_PROCESSES = %name ('S.LTST') %,
+    MCB$K_GET_LINE_PROCESSES = %name ('S.LTGT') %,
+    MCB$K_GET_DEVICE_NAME = %name ('D.NMGT') %;
+
+!
+! Signal handling
+!
+
+field
+    CONDIT_FIELDS =
+	set
+	STS$V_SEVERITY	= [0, 0, 3, 0],		! Severity field
+	STS$V_SUCCESS	= [0, 0, 1, 0],		! Success field
+	STS$V_COND_ID	= [0, 3, 13, 0],	! Identity field
+	STS$V_CUST_DEF	= [0, 15, 1, 0]		! Customer definition field
+	tes;
+
+macro
+    CONDITION_VALUE = block [1] field (CONDIT_FIELDS) %;
+
+literal
+    STS$K_SUCCESS	= 1,			! Success
+    STS$K_INFO		= 3,			! Information
+    STS$K_WARNING	= 0,			! Warning
+    STS$K_ERROR		= 2,			! Error
+    STS$K_SEVERE	= 4;			! Severe error
+
+keywordmacro
+    STS$VALUE (
+	SEVERITY = STS$K_SEVERE,		! default is severe error
+	CODE,					! no default
+	CUST_DEF = 1^15 ) =			! default is user definition
+	    (SEVERITY and 7) or
+	    (CODE and %o'17777')^3 or
+	    (if CUST_DEF neq 0
+		then 1^15
+		else 0) %;
+
+macro
+    STS$MATCH (A, B) =
+	(((A) and %o'177770') eql ((B) and %o'177770')) %;
+
+!
+! MCB Completion Code Definitions
+!
+
+REQUIRE 'MCB:MCBSTS';
+
+macro
+    $MCB$CODES [CODE_SET] =
+	$MCB$CODE (%remove (CODE_SET)) %,
+    $MCB$CODE (NAM, LVL, COD, TXT) [] =
+	NAM = STS$VALUE (SEVERITY = LVL, CODE = COD, CUST_DEF = 0) %;
+
+literal
+    $MCB$CODES ($MCB_STATUS, $RSX_STATUS);
+
+literal
+    $MCB$CODE (MCB$K_STATUS_MAX, 7, $MCB$NEXT_CODE - 1, 'Highest MCB status'),
+    $MCB$CODE (RSX$K_STATUS_MAX, 7, $RSX$NEXT_CODE - 1, 'Highest RSX status');
+
+undeclare
+    %quote $MCB$CODES,
+    %quote $MCB$CODE;
+
+%IF %BLISS (BLISS16)
+%THEN %(BLISS16)%
+
+MACRO
+    DECLARE_SEVERITY (prefix) [level] =
+	%IF NOT %DECLARED (%NAME ('$', prefix, '$cond_code'))
+	%THEN
+	    COMPILETIME %NAME ('$', prefix, '$cond_code') = 0;
+	%ELSE
+	    %ASSIGN (%NAME ('$', prefix, '$cond_code'), 0)
+	%FI
+	MACRO
+	    %NAME ('$', prefix, '_', level) (code_name, optional_text) =
+		LITERAL	code_name =
+		    STS$VALUE (
+			CODE = %NAME ('$', prefix, '$cond_code'),
+			SEVERITY = %NAME ('STS$K_', level),
+			CUST_DEF = 1);
+		%ASSIGN (%NAME ('$', prefix, '$cond_code'), %NAME ('$', prefix, '$cond_code') + 1 )
+	    %QUOTE % %;
+
+%FI %(BLISS16)%
+
+!
+! Linkages
+!
+
+%IF %BLISS (BLISS16)
+%THEN %(BLISS16)%
+
+LINKAGE
+
+    !
+    ! Routine invoked through synchronous calls
+    !
+
+    CALL$ = CALL;
+
+%FI %(BLISS16)%
+
+!
+! Synchronous calls
+!
+
+%IF %BLISS (BLISS16)
+%THEN %(BLISS16)%
+
+macro
+
+    !
+    ! Invoke old BLISS synchronous routine in extension process
+    !
+
+    CALL$B (ARG) =
+	%inform ('Now using CALL$E for extension process calling...')
+	%quote CALL$E (ARG, %remaining) %,
+
+    !
+    ! Invoke synchronous routine in the CEX process
+    !
+
+    CALL$I (INDEX) =
+	begin
+
+	external literal
+	    INDEX;
+
+	external routine
+	    $CALLI;
+
+	%if %null (%remaining)
+	%then
+	    $CALLI ($MCB$REVERSE (INDEX, 0))
+	%else
+	    $CALLI ($MCB$REVERSE (INDEX, %length - 1, %remaining))
+	%fi
+
+	end %,
+
+    !
+    ! Invoke synchronous routine in extension process
+    !
+
+    CALL$E (ADR, PIX) =
+	begin
+
+	external routine
+	    %if not %declared (ADR) %then ADR, %fi
+	    $CALLE;
+
+	%if %null (%remaining)
+	%then
+	    $CALLE ($MCB$REVERSE (PIX, ADR, 0))
+	%else
+	    $CALLE ($MCB$REVERSE (PIX, ADR, %length - 2, %remaining))
+	%fi
+
+	end %,
+
+    !
+    ! Invoke synchronous routine in local process
+    !
+
+    CALL$L (ADR) =
+	begin
+	%if not %declared (ADR) %then external routine ADR; %fi
+	fortran (ADR, %remaining)
+	end %,
+
+    !
+    ! Invoke synchronous routine in other process
+    !
+
+    CALL$P (ADR, PIX) =
+	begin
+
+	external routine
+	    %if not %declared (ADR) %then ADR, %fi
+	    $CALLP;
+
+	%if %null (%remaining)
+	%then
+	    $CALLP ($MCB$REVERSE (PIX, ADR, 0))
+	%else
+	    $CALLP ($MCB$REVERSE (PIX, ADR, %length - 2, %remaining))
+	%fi
+
+	end %,
+    $MCB$REVERSE (ARG) [] =
+	    %if not %null (%remaining) %then $MCB$REVERSE (%remaining), %fi
+	    ARG %;
+;
+
+%FI %(BLISS16)%
+
+!
+! Buffer move calls
+!
+
+%IF %BLISS (BLISS16)
+%THEN %(BLISS16)%
+
+MACRO
+
+    !
+    ! Move from mapped buffer
+    !
+
+%if %variant eql 0
+%then
+
+    MFBF$S (lng, from_bias, from_adr, begin_adr, end_adr) =
+	BEGIN
+
+	LINKAGE
+	    MV_LINKAGE = JSR (STANDARD, STANDARD, REGISTER = 2, REGISTER = 3)
+		: preserve (0) nopreserve (2, 3);
+
+	EXTERNAL ROUTINE
+	    $MVFBF : MV_LINKAGE NOVALUE;
+
+	%IF NOT %NULL (end_adr) %THEN GLOBAL REGISTER R2 = 2; %FI
+
+	$MVFBF (from_bias, from_adr, begin_adr, lng)
+
+	%IF NOT %NULL (end_adr) %THEN ; end_adr = .R2 %FI
+
+	END %,
+
+%else
+
+    MFBF$S (lng, from_bias, from_adr, begin_adr, end_adr) =
+	BEGIN
+
+	LINKAGE
+	    MV_LINKAGE = JSR (STANDARD, STANDARD, REGISTER = 2, REGISTER = 3; REGISTER = 2)
+		: preserve (0) nopreserve (2, 3);
+
+	EXTERNAL ROUTINE
+	    $MVFBF : MV_LINKAGE NOVALUE;
+
+	$MVFBF (from_bias, from_adr, begin_adr, lng; end_adr)
+	END %,
+
+%fi
+
+    !
+    ! Move to mapped buffer
+    !
+
+%if %variant eql 0
+%then
+
+    MTBF$S (lng, begin_adr, to_bias, to_adr, end_adr) =
+	BEGIN
+
+	LINKAGE
+	    MV_LINKAGE = JSR (STANDARD, STANDARD, REGISTER = 2, REGISTER = 3)
+		: preserve (0) nopreserve (2, 3);
+
+	EXTERNAL ROUTINE
+	    $MVTBF : MV_LINKAGE NOVALUE;
+
+	%IF NOT %NULL (end_adr) %THEN GLOBAL REGISTER R2 = 2; %FI
+
+	$MVTBF (to_bias, to_adr, begin_adr, lng)
+
+	%IF NOT %NULL (end_adr) %THEN ; end_adr = .R2 %FI
+
+	END %,
+
+%else
+
+    MTBF$S (lng, begin_adr, to_bias, to_adr, end_adr) =
+	BEGIN
+
+	LINKAGE
+	    MV_LINKAGE = JSR (STANDARD, STANDARD, REGISTER = 2, REGISTER = 3; REGISTER = 2)
+		: preserve (0) nopreserve (3);
+
+	EXTERNAL ROUTINE
+	    $MVTBF : MV_LINKAGE NOVALUE;
+
+	$MVTBF (to_bias, to_adr, begin_adr, lng; end_adr)
+	END %,
+
+%fi
+
+	!
+	! Map a buffer
+	!
+
+	MAP$ (bias) =
+	    BEGIN
+
+	    EXTERNAL
+		KISAR6 : volatile;
+
+	    KISAR6 = bias
+	    END %,
+
+	!
+	! Return the current mapping bias
+	!
+
+	SMAP$ (var) =
+	    BEGIN
+
+	    EXTERNAL
+		KISAR6 : volatile;
+
+	    var = .KISAR6
+	    END %;
+
+%FI %(BLISS16)%
+
+!
+! Create a process header
+!
+
+%IF %BLISS (BLISS16)
+%THEN %(BLISS16)%
+
+macro
+    PHDR$ (NAM, LLC, DLC, DDM, INT1, INT2, INT3) =
+	%inform ('Please use the $MCB_PROCESS macro') %;
+
+keywordmacro
+    $MCB_PROCESS (
+	CEX_DISPATCH = 0,
+	DDM_DISPATCH = %name ('.DSPCR'),
+	DLC_DISPATCH = %name ('.DSPCR'),
+	LLC_DISPATCH = %name ('.DSPCR'),
+	NAME,
+	RSX_DISPATCH = 0,
+	SIGNAL_HANDLER = 0) =
+
+	%if %null (NAME)
+	%then %errormacro ('Process name not supplied')
+	%fi
+
+	%if not %identical (CEX_DISPATCH, 0) and not %identical (NAME, CEX)
+	%then %errormacro ('CEX_DISPATCH only to be used by CEX process')
+	%fi
+
+	psect
+	    own = %name ('      ');
+
+	external
+	    %if %identical (LLC_DISPATCH, %name ('.DSPCR'))
+	     or %identical (DLC_DISPATCH, %name ('.DSPCR'))
+	     or %identical (DDM_DISPATCH, %name ('.DSPCR'))
+	    %then
+		%name ('.DSPCR'),
+	    %fi
+	    MCB$V0, MCB$V1;
+
+	own
+	    HEADER : vector [16] initial (
+		%rad50_11 %string (NAME), 3 + 1^8, 0, 0,
+		SIGNAL_HANDLER,	LLC_DISPATCH, DLC_DISPATCH, DDM_DISPATCH,
+		MCB$V0, MCB$V1, LIB$V0, LIB$V1,
+		1^8 + 1^9, RSX_DISPATCH, CEX_DISPATCH, 0);
+
+	undeclare
+	    HEADER;
+
+	psect
+	    own = $OWN$; %;
+
+%FI %(BLISS16)%
+
+!
+! Create a RSX driver header
+!
+
+%if %bliss (bliss16)
+%then %(BLISS16)%
+
+keywordmacro
+    $RSX_DRIVER (
+	DISPATCH,
+	NAME) =
+
+	%if %null (NAME)
+	%then %errormacro ('Driver name not supplied')
+	%fi
+
+	global bind
+	    %name ('$', NAME, 'TBL') = DISPATCH; %;
+
+%fi %(bliss16)%
+
+!
+! CCB definitions
+!
+
+FIELD
+    C_fields =
+	SET
+	C_LNK = [0, 0, 16, 0],
+	C_CHN = [1, 0, 16, 0],
+	C_STK = [2, 0, 16, 0],
+	C_OWN = [3, 0, 8, 0],
+	C_LIX = [4, 0, 8, 0],
+	C_LIN = [4, 0, 8, 0],
+	C_PIX = [4, 8, 8, 0],
+	C_FNC = [5, 0, 8, 0],
+	C_MOD = [5, 8, 8, 0],
+	C_STS = [6, 0, 16, 1],
+	C_BUF = [7, 0, 16, 0],
+	    C_BIAS = [7, 0, 16, 0],
+	    C_ADDR = [8, 0, 16, 0],
+	C_CNT = [9, 0, 16, 0],
+	C_PRM = [10, 0, 16, 0],
+	    C_PRM1 = [10, 0, 16, 0],
+	    C_PRM2 = [11, 0, 16, 0],
+	    C_PRM3 = [12, 0, 16, 0],
+	    C_PRM4 = [13, 0, 16, 0],
+	    C_PRM5 = [14, 0, 16, 0]
+	TES;
+
+LITERAL
+    FC_AST = 0*2,
+    FC_XME = 1*2,
+    FC_RCE = 2*2,
+    FC_KIL = 3*2,
+    FC_CTL = 4*2,
+    FC_TIM = 5*2,
+    FC_XCP = 6*2,
+    FC_RCP = 7*2,
+    FC_KCP = 8*2,
+    FC_CCP = 9*2,
+    FC_SYS = FC_TIM;
+
+LITERAL
+    FD_AST = 0*2,
+
+    FD_XME = 0*2,
+
+    FM_DAT = 0*2,
+    FM_RTN = 1*2,
+    FD_RCE = 2*2,
+
+    FM_KIL = 0*2,
+    FM_CRA = 1*2,
+    FM_XKL = 2*2,
+    FD_KIL = 2*2,
+
+    FM_STR = 1*2,
+    FM_STP = 2*2,
+    FM_NM  = 3*2,
+    FM_SET = 5*2,
+    FM_GET = 6*2,
+    FD_CTL = 6*2,
+
+    FM_STM = 0*2,
+    FM_LTM = 1*2,
+    FD_TIM = 5*2,
+
+    FD_XCP = FD_XME,
+
+    FM_SYN = 2*2,
+    FD_RCP = FD_RCE,
+
+    FD_KCP = FD_KIL,
+
+    FD_CCP = FD_CTL,
+
+    FM_PWF = 2*2,
+    FM_PIN = 3*2,
+    FM_CCB = 4*2,
+    FM_RDB = 5*2,
+    FD_SYS = FD_TIM;
+
+literal
+    CS_SUC = 0^3 + 1,		! Success
+
+    CE_ABO = -1^3 + 0,		! Operation aborted
+    CE_ERR = -2^3 + 0,		! General error
+    CE_MOP = -3^3 + 0,		! MOP message received
+    CE_SRC = -4^3 + 0,		! Start received
+    CE_RTE = -5^3 + 0,		! Receive error threshold
+    CE_NTE = -6^3 + 0,		! NAK error threshold
+    CE_TMO = -7^3 + 0,		! REP threshold error
+
+    CE_BUF = -16^3 + 0,		! Buffer allocation failure
+    CE_DCR = -17^3 + 0,		! Data CRC error
+    CE_HFE = -18^3 + 0,		! Header format error
+    CE_MTL = -19^3 + 0,		! Message too long
+    CE_ROV = -20^3 + 0,		! Receiver overrun
+    CE_DEV = -21^3 + 2,		! Hard device error
+    CE_DIS = -22^3 + 0,		! Disconnect detected
+    CE_UDR = -23^3 + 0;		! Transmitter underrun
+
+!
+! Timer block definitions
+!
+
+FIELD
+    T_fields =
+	SET
+	T_PIX = [1, 8, 8, 0],
+	T_IDN = [2, 0, 16, 0],
+	T_TIM = [7, 0, 16, 0]
+	TES;
+
+literal
+    T_LENGTH = 9;
+
+!
+! MCB interface linkages and macros
+!
+
+%IF %BLISS (BLISS16)
+%THEN %(BLISS16)%
+
+LINKAGE
+    RSX_UCB = JSR (REGISTER = 5) : NOPRESERVE (0, 1, 2, 3, 4, 5),
+    RSX_UCB_SCB_IOP = JSR (REGISTER = 5, REGISTER = 4, REGISTER = 1) : NOPRESERVE (0, 1, 2, 3, 4, 5),
+    MCB_ = JSR : NOPRESERVE (0, 1, 2, 3, 4, 5),
+    MCB_CCB = JSR (REGISTER = 4) : NOPRESERVE (0, 1, 2, 3, 4, 5),
+    MCB_CCB_MOD = JSR (REGISTER = 4, REGISTER = 3) : NOPRESERVE (0, 1, 2, 3, 4, 5),
+    MCB_DB = JSR (REGISTER = 5) : NOPRESERVE (0, 1, 2, 3, 4, 5),
+    MCB_DB_CCB = JSR (REGISTER = 5, REGISTER = 4) : NOPRESERVE (0, 1, 2, 3, 4, 5),
+    MCB_DB_CCB_MOD = JSR (REGISTER = 5, REGISTER = 4, REGISTER = 3) : NOPRESERVE (0, 1, 2, 3, 4, 5),
+    MCB_DB_MOD = JSR (REGISTER = 5, REGISTER = 3) : NOPRESERVE (0, 1, 2, 3, 4, 5),
+    MCB_INTERRUPT = JSR (REGISTER = 5) : PRESERVE (0, 1, 2, 3) NOPRESERVE (4, 5),
+    MCB_MOD = JSR (REGISTER = 3) : NOPRESERVE (0, 1, 2, 3, 4, 5),
+    LINKAGE_CCB = JSR (REGISTER = 4),
+    LINKAGE_CCB_MOD = JSR (REGISTER = 4, REGISTER = 3),
+    LINKAGE_DB = JSR (REGISTER = 5),
+    LINKAGE_DB_CCB = JSR (REGISTER = 5, REGISTER = 4),
+    LINKAGE_DB_CCB_MOD = JSR (REGISTER = 5, REGISTER = 4, REGISTER = 3),
+    LINKAGE_DB_MOD = JSR (REGISTER = 5, REGISTER = 3),
+    LINKAGE_MOD = JSR (REGISTER = 3);
+
+%FI %(BLISS16)%
+
+%IF %BLISS (BLISS16)
+%THEN %(BLISS16)%
+
+MACRO
+
+    !
+    ! Dispatch from a MCB dispatch sub-table
+    !
+
+    DISPATCH$ (idx, disp, args, lnkg) =
+	%IF %NULL (lnkg) %THEN BLISS %ELSE lnkg %FI
+	    (.(disp + idx), %REMOVE (args)) %,
+
+    !
+    ! Create a dispatch table
+    !
+
+    TABLE$ (default, top) =
+	UPLIT ($MCB$TABLE_A (0, default, MAX (top, $MCB$TABLE_M (%REMAINING)), %REMAINING)) %,
+    $MCB$TABLE_A (offset, default, maximum_offset) [] =
+	$MCB$TABLE_C (offset, default, %REMAINING)
+	%IF offset LSS maximum_offset
+	%THEN , $MCB$TABLE_A (offset + 2, default, maximum_offset, %REMAINING)
+	%FI %,
+    $MCB$TABLE_C (offset, default, entry) [] =
+	%IF offset EQL $MCB$TABLE_offset (%REMOVE (entry))
+	%THEN
+	    %IF %NULL ($MCB$TABLE_address (%REMOVE (entry)))
+	    %THEN default
+	    %ELSE $MCB$TABLE_address (%REMOVE (entry))
+	    %FI
+	%ELSE
+	    %IF NOT %NULL (%REMAINING)
+	    %THEN $MCB$TABLE_C (offset, default, %REMAINING)
+	    %ELSE default
+	    %FI
+	%FI%,
+    $MCB$TABLE_M [entry] =
+	$MCB$TABLE_offset (%REMOVE (entry)) %,
+    $MCB$TABLE_offset (offset, address) =
+	offset %,
+    $MCB$TABLE_address (offset, address) =
+	address %,
+
+    !
+    ! Create a vector
+    !
+
+    VECTOR$ (default, top) =
+	UPLIT ($MCB$VECTOR_A (0, default, MAX (top, $MCB$TABLE_M (%REMAINING)), %REMAINING)) %,
+    $MCB$VECTOR_A (offset, default, maximum_offset) [] =
+	$MCB$TABLE_C (offset, default, %REMAINING)
+	%IF offset LSS maximum_offset
+	%THEN , $MCB$VECTOR_A (offset + 1, default, maximum_offset, %REMAINING)
+	%FI %;
+
+%FI %(BLISS16)%
+
+%IF %BLISS (BLISS16)
+%THEN %(BLISS16)%
+
+MACRO
+
+    CCBGT$ = $MCB_GET_CCB %,
+
+    CCBRT$ = $MCB_RETURN_CCB %,
+
+    CMQIF$ = $MCB_STACK_CCB %,
+
+    CMQIN$ = $MCB_QUEUE_CCB %,
+
+    CMQRM$ = $MCB_DEQUEUE_CCB %,
+
+    CNSTM$ = $MCB_CANCEL_SHORT_TIMER %,
+
+    CNV22$ (BIAS, ADDRESS, LOW, HIGH) =
+	$MCB_CONVERT_TO_22_BIT_ADDRESS ((BIAS, ADDRESS), LOW, HIGH) %,
+
+    !
+    !
+    !
+
+    DDAST$ (index, status) =
+	BEGIN
+
+	LINKAGE
+	    DDAST_LINKAGE = JSR (REGISTER = 3, REGISTER = 2) : PRESERVE (0) NOPRESERVE (3, 4) CLEARSTACK VALUECBIT;
+
+	EXTERNAL ROUTINE
+	    $DDAST : DDAST_LINKAGE;
+
+	! Note: Cbit clear = FALSE = success
+
+	IF NOT $DDAST (status, index)
+	THEN
+	    MCB$_NORMAL
+	ELSE
+	    MCB$_NO_CCB
+
+	END %,
+
+    !
+    !
+    !
+
+    DDCCP$ (ccb, status) =
+	BEGIN
+
+	LINKAGE
+	    DDCCP_LINKAGE = JSR (REGISTER = 4, REGISTER = 3) : PRESERVE (0) NOPRESERVE (3, 4);
+
+	EXTERNAL ROUTINE
+	    $DDCCP : DDCCP_LINKAGE NOVALUE;
+
+	$DDCCP (ccb, status);
+	END %,
+
+    !
+    !
+    !
+
+    DDKCP$ (ccb, status) =
+	BEGIN
+
+	LINKAGE
+	    DDKCP_LINKAGE = JSR (REGISTER = 4, REGISTER = 3) : PRESERVE (0) NOPRESERVE (3, 4);
+
+	EXTERNAL ROUTINE
+	    $DDKCP : DDKCP_LINKAGE NOVALUE;
+
+	$DDKCP (ccb, status);
+	END %,
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    DDMDB$ (index, db) =
+	BEGIN
+
+	LINKAGE
+	    DDMDB_LINKAGE = JSR (REGISTER = 5) : PRESERVE (0) NOPRESERVE (5);
+
+	EXTERNAL ROUTINE
+	    $DDMDB : DDMDB_LINKAGE NOVALUE;
+
+	GLOBAL REGISTER
+	    R5 = 5;
+
+	$DDMDB (index);
+	%IF NOT %NULL (db) %THEN db = .R5; %FI
+	END %,
+
+%else
+
+    DDMDB$ (index, db) =
+	BEGIN
+
+	LINKAGE
+	    DDMDB_LINKAGE = JSR (REGISTER = 5; REGISTER = 5) : PRESERVE (0);
+
+	EXTERNAL ROUTINE
+	    $DDMDB : DDMDB_LINKAGE NOVALUE;
+
+	$DDMDB (index; db);
+	END %,
+
+%fi
+
+    !
+    !
+    !
+
+    DDRCP$ (ccb, status) =
+	BEGIN
+
+	LINKAGE
+	    DDRCP_LINKAGE = JSR (REGISTER = 4, REGISTER = 3) : PRESERVE (0) NOPRESERVE (3, 4);
+
+	EXTERNAL ROUTINE
+	    $DDRCP : DDRCP_LINKAGE NOVALUE;
+
+	$DDRCP (ccb, status);
+	END %,
+
+    !
+    !
+    !
+
+    DDXCP$ (ccb, status) =
+	BEGIN
+
+	LINKAGE
+	    DDXCP_LINKAGE = JSR (REGISTER = 4, REGISTER = 3) : PRESERVE (0) NOPRESERVE (3, 4);
+
+	EXTERNAL ROUTINE
+	    $DDXCP : DDXCP_LINKAGE NOVALUE;
+
+	$DDXCP (ccb, status);
+	END %,
+
+    !
+    !
+    !
+
+    DLAST$ (index, status) =
+	BEGIN
+
+	LINKAGE
+	    DLAST_LINKAGE = JSR (REGISTER = 3, REGISTER = 2) : PRESERVE (0) NOPRESERVE (3, 4) CLEARSTACK VALUECBIT;
+
+	EXTERNAL ROUTINE
+	    $DLAST : DLAST_LINKAGE;
+
+	! Note: Cbit clear = FALSE = success
+
+	IF NOT $DLAST (status, index)
+	THEN
+	    MCB$_NORMAL
+	ELSE
+	    MCB$_NO_CCB
+
+	END %,
+
+    !
+    !
+    !
+
+    DLCCP$ (ccb, status) =
+	BEGIN
+
+	LINKAGE
+	    DLCCP_LINKAGE = JSR (REGISTER = 4, REGISTER = 3) : PRESERVE (0) NOPRESERVE (3, 4);
+
+	EXTERNAL ROUTINE
+	    $DLCCP : DLCCP_LINKAGE NOVALUE;
+
+	$DLCCP (ccb, status);
+	END %,
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    DLCDB$ (index, db) =
+	BEGIN
+
+	LINKAGE
+	    DLCDB_LINKAGE = JSR (REGISTER = 5) : PRESERVE (0) NOPRESERVE (5);
+
+	EXTERNAL ROUTINE
+	    $DLCDB : DLCDB_LINKAGE NOVALUE;
+
+	GLOBAL REGISTER
+	    R5 = 5;
+
+	$DLCDB (index);
+	%IF NOT %NULL (db) %THEN db = .R5; %FI
+	END %,
+
+%else
+
+    DLCDB$ (index, db) =
+	BEGIN
+
+	LINKAGE
+	    DLCDB_LINKAGE = JSR (REGISTER = 5; REGISTER = 5) : PRESERVE (0);
+
+	EXTERNAL ROUTINE
+	    $DLCDB : DLCDB_LINKAGE NOVALUE;
+
+	$DLCDB (index; db);
+	END %,
+
+%fi
+
+    !
+    !
+    !
+
+    DLGET$ (ccb) =
+	BEGIN
+
+	LINKAGE
+	    DLGET_LINKAGE = JSR (REGISTER = 4) : PRESERVE (0) NOPRESERVE (4);
+
+	EXTERNAL ROUTINE
+	    $DLGET : DLGET_LINKAGE NOVALUE;
+
+	$DLGET (ccb);
+	END %,
+
+    !
+    !
+    !
+
+    DLRCE$ (ccb) =
+	BEGIN
+
+	LINKAGE
+	    DLRCE_LINKAGE = JSR (REGISTER = 4) : PRESERVE (0) NOPRESERVE (4);
+
+	EXTERNAL ROUTINE
+	    $DLRCE : DLRCE_LINKAGE NOVALUE;
+
+	$DLRCE (ccb);
+	END %,
+
+    !
+    !
+    !
+
+    DLRCP$ (ccb, status) =
+	BEGIN
+
+	LINKAGE
+	    DLRCP_LINKAGE = JSR (REGISTER = 4, REGISTER = 3) : PRESERVE (0) NOPRESERVE (3, 4);
+
+	EXTERNAL ROUTINE
+	    $DLRCP : DLRCP_LINKAGE NOVALUE;
+
+	$DLRCP (ccb, status);
+	END %,
+
+    !
+    !
+    !
+
+    DLSET$ (ccb) =
+	BEGIN
+
+	LINKAGE
+	    DLSET_LINKAGE = JSR (REGISTER = 4) : PRESERVE (0) NOPRESERVE (4);
+
+	EXTERNAL ROUTINE
+	    $DLSET : DLSET_LINKAGE NOVALUE;
+
+	$DLSET (ccb);
+	END %,
+
+    DLSTM$ = $MCB_START_SHORT_TIMER %,
+
+    !
+    !
+    !
+
+    DLSTP$ (ccb) =
+	BEGIN
+
+	LINKAGE
+	    DLSTP_LINKAGE = JSR (REGISTER = 4) : PRESERVE (0) NOPRESERVE (4);
+
+	EXTERNAL ROUTINE
+	    $DLSTP : DLSTP_LINKAGE NOVALUE;
+
+	$DLSTP (ccb);
+	END %,
+
+    !
+    !
+    !
+
+    DLSTR$ (ccb) =
+	BEGIN
+
+	LINKAGE
+	    DLSTR_LINKAGE = JSR (REGISTER = 4) : PRESERVE (0) NOPRESERVE (4);
+
+	EXTERNAL ROUTINE
+	    $DLSTR : DLSTR_LINKAGE NOVALUE;
+
+	$DLSTR (ccb);
+	END %,
+
+    !
+    !
+    !
+
+    DLXCP$ (ccb, status) =
+	BEGIN
+
+	LINKAGE
+	    DLXCP_LINKAGE = JSR (REGISTER = 4, REGISTER = 3) : PRESERVE (0) NOPRESERVE (3, 4);
+
+	EXTERNAL ROUTINE
+	    $DLXCP : DLXCP_LINKAGE NOVALUE;
+
+	$DLXCP (ccb, status);
+	END %,
+
+    !
+    !
+    !
+
+    DLXME$ (ccb) =
+	BEGIN
+
+	LINKAGE
+	    DLXME_LINKAGE = JSR (REGISTER = 4) : PRESERVE (0) NOPRESERVE (4);
+
+	EXTERNAL ROUTINE
+	    $DLXME : DLXME_LINKAGE NOVALUE;
+
+	$DLXME (ccb);
+	END %,
+
+    GTPRC$ (CCB) =
+	begin
+
+	bind
+	    $MCB$CCB = CCB : block field (C_FIELDS);
+
+	$MCB_GET_LINE_PROCESSES (.$MCB$CCB [C_LIX], $MCB$CCB [C_PRM1])
+	end %,
+
+    LDBGT$ (ccb) =
+	begin
+
+	local
+	    $MCB$SAV_MAP,
+	    $MCB$STS;
+
+	external
+	    MCB$GW_RDB_SIZE;
+
+
+	SMAP$ ($MCB$SAV_MAP);
+	$MCB$STS = $MCB_GET_CCB_AND_BUFFER (.MCB$GW_RDB_SIZE, ccb);
+	MAP$ (.$MCB$SAV_MAP);
+	.$MCB$STS
+	end %,
+
+    LDBRT$ (ccb) =
+	begin
+
+	local
+	    $MCB$SAV_MAP;
+
+	external
+	    MCB$GW_RDB_SIZE;
+
+	SMAP$ ($MCB$SAV_MAP);
+	$MCB_RETURN_CCB_AND_BUFFER (.MCB$GW_RDB_SIZE, ccb);
+	MAP$ (.$MCB$SAV_MAP);
+	end %,
+
+    LLCDB$ (db) =
+	begin
+
+	external
+	    MCB$GAW_PROCESS_DATA_BASE : vector [2];
+
+	MAP$ (.MCB$GAW_PROCESS_DATA_BASE [0]);
+	db = .MCB$GAW_PROCESS_DATA_BASE [1]
+	end %,
+
+    LLCRS$ = $MCB_SCHEDULE_CCB %,
+
+    !
+    !
+    !
+
+    LLLTM$ (dummy) =
+	BEGIN
+
+	EXTERNAL ROUTINE
+	    $LLLTM : NOVALUE;
+
+	$LLLTM ();
+	END %,
+
+    MCB$ = $MCB_RSX_TO_MCB %,
+
+    PDVID$ (NAME, INDEX) =
+	begin
+
+	local
+	    $MCB$HANDLE,
+	    $MCB$STATUS;
+
+	if ($MCB$STATUS = $MCB_GET_PROCESS_HANDLE (NAME, $MCB$HANDLE))
+	then
+	    INDEX = .$MCB$HANDLE;
+
+	.$MCB$STATUS
+	end %,
+
+    !
+    !
+    !
+
+    PDVNM$ (INDEX, NAME) =
+	begin
+
+	local
+	    $MCB$NAME,
+	    $MCB$STATUS;
+
+	if ($MCB$STATUS = CALL$I (MCB$K_GET_PROCESS_NAME, INDEX, $MCB$NAME))
+	then
+	    NAME = .$MCB$NAME;
+
+	.$MCB$STATUS
+	end %,
+
+    RDBCN$ = $MCB_CANCEL_RDB_REQUEST %,
+
+    RDBGT$ = $MCB_GET_RDB %,
+
+    RDBRQ$ = $MCB_REQUEST_RDB %,
+
+    RDBRT$ = $MCB_RETURN_RDB %,
+
+    RND$ = $MCB_GET_RANDOM_NUMBER %,
+
+    RSX$ = $MCB_MCB_TO_RSX %,
+
+    SYNCH$ = $MCB_SYNCHRONIZE %,
+
+    $MCB_EXCEPTION = $MCB_SET_EXCEPTION %;
+
+macro
+    MCB$GAW_PROCESS_DATA_BASE = %name ('.CRDAT') %,
+
+    MCB$GA_LOGGING_BUFFER = %name ('.LOGPT') %,
+
+    MCB$GA_PROCESS_DISPATCH = %name ('.CRDSP') %,
+
+    MCB$GW_PROCESS_HANDLE = %name ('.CRPIX') %,
+
+    MCB$GW_PROCESS_WINDOW = %name ('KISAR5') %,
+
+    MCB$GW_DATA_WINDOW = %name ('KISAR6') %,
+
+    MCB$GW_RDB_SIZE = %name ('.RDBSZ') %,
+
+    $MCB$BUFFER_ADDRESS (BIAS, ADDRESS) = ADDRESS %,
+
+    $MCB$BUFFER_BIAS (BIAS, ADDRESS) = BIAS %,
+
+    !
+    !
+    !
+
+    $MCB_CANCEL_CCB_REQUEST (DUMMY) =
+	begin
+
+	external routine
+	    $CCBCN : novalue;
+
+	$CCBCN ();
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_CANCEL_RDB_REQUEST (DUMMY) =
+	begin
+
+	external routine
+	    $RDBCN : novalue;
+
+	$RDBCN ();
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_CANCEL_SHORT_TIMER (TIMER_BLOCK) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_TIMER = jsr (register = 4) : PRESERVE (0);
+
+	external routine
+	    $STMCN : $MCB$LINKAGE_TIMER novalue;
+
+	$STMCN (TIMER_BLOCK);
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_CLEAR_PROCESS (DUMMY) =
+	CALL$I (MCB$K_CLEAR_PROCESS) %,
+
+    !
+    !
+    !
+
+    $MCB_CLEAR_PROCESS_NAME (NAME) =
+	CALL$I (MCB$K_CLEAR_PROCESS_NAME, NAME) %,
+
+    !
+    !
+    !
+
+    $MCB_CLEAR_VECTOR (VECTOR) =
+	CALL$I (MCB$K_CLEAR_VECTOR, VECTOR) %,
+
+    !
+    !
+    !
+
+    $MCB_CONVERT_FROM_UBA_ADDRESS (LOW, HIGH, ADDRESS) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_HIGH_LOW = jsr (register = 0, register = 1)
+		: nopreserve (1);
+
+	external routine
+	    $VIR18 : $MCB$LINKAGE_HIGH_LOW;
+
+	%if not %null (ADDRESS) %then ADDRESS = %fi
+	$VIR18 (HIGH, LOW)
+	end %,
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    $MCB_CONVERT_TO_22_BIT_ADDRESS (BUFFER, LOW, HIGH) =
+	%if not %identical (BUFFER, (%remove (BUFFER)))
+	%then %errormacro ('Buffer bias/address must be parenthesized') %fi
+	begin
+
+	linkage
+	    $MCB$LINKAGE_BIAS_ADDRESS = jsr (register = 2, register = 3)
+		: preserve (0) nopreserve (2, 3);
+
+	external routine
+	    $CNV22 : $MCB$LINKAGE_BIAS_ADDRESS novalue;
+
+	global register
+	    $MCB$R3 = 3,
+	    $MCB$R2 = 2;
+
+	$CNV22 (%remove (BUFFER));
+	%if not %null (LOW) %then LOW = .$MCB$R3; %fi
+	%if not %null (HIGH) %then HIGH = .$MCB$R2; %fi
+	end %,
+
+%else
+
+    $MCB_CONVERT_TO_22_BIT_ADDRESS (BUFFER, LOW, HIGH) =
+	%if not %identical (BUFFER, (%remove (BUFFER)))
+	%then %errormacro ('Buffer bias/address must be parenthesized') %fi
+	begin
+
+	linkage
+	    $MCB$LINKAGE_BIAS_ADDRESS = jsr (register = 2, register = 3; register = 3, register = 2)
+		: preserve (0);
+
+	external routine
+	    $CNV22 : $MCB$LINKAGE_BIAS_ADDRESS novalue;
+
+	$CNV22 (%remove (BUFFER); LOW, HIGH);
+	end %,
+
+%fi
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    $MCB_CONVERT_TO_UBA_ADDRESS (BUFFER, LOW, HIGH) =
+	%if not %identical (BUFFER, (%remove (BUFFER)))
+	%then %errormacro ('Buffer bias/address must be parenthesized') %fi
+	begin
+
+	linkage
+	    $MCB$LINKAGE_BIAS_ADDRESS = jsr (register = 2, register = 3)
+		: preserve (0) nopreserve (2, 3);
+
+	external routine
+	    $PHY18 : $MCB$LINKAGE_BIAS_ADDRESS novalue;
+
+	global register
+	    $MCB$R3 = 3,
+	    $MCB$R2 = 2;
+
+	$PHY18 (%remove (BUFFER));
+	%if not %null (LOW) %then LOW = .$MCB$R3; %fi
+	%if not %null (HIGH) %then HIGH = .$MCB$R2; %fi
+	end %,
+
+%else
+
+    $MCB_CONVERT_TO_UBA_ADDRESS (BUFFER, LOW, HIGH) =
+	%if not %identical (BUFFER, (%remove (BUFFER)))
+	%then %errormacro ('Buffer bias/address must be parenthesized') %fi
+	begin
+
+	linkage
+	    $MCB$LINKAGE_BIAS_ADDRESS = jsr (register = 2, register = 3; register = 3, register = 2)
+		: preserve (0);
+
+	external routine
+	    $PHY18 : $MCB$LINKAGE_BIAS_ADDRESS novalue;
+
+	$PHY18 (%remove (BUFFER); LOW, HIGH);
+	end %,
+
+%fi
+
+    !
+    !
+    !
+
+    $MCB_COPY_CHAIN_TO_BUFFER (CCB, TO_BUFFER) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_CCB = jsr (register = 4);
+
+	external routine
+	    $CPTBF : $MCB$LINKAGE_CCB;
+
+	$CPTBF (CCB, %remove (TO_BUFFER))
+	end %,
+
+    !
+    ! Remove a CCB from a queue
+    !
+
+%if %variant eql 0
+%then
+
+    $MCB_DEQUEUE_CCB (QUEUE, CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_QUEUE_CCB = jsr (register = 3) : PRESERVE (0) nopreserve (4) clearstack valuecbit;
+
+	external routine
+	    $CMQRM : $MCB$LINKAGE_QUEUE_CCB;
+
+	global register
+	    $MCB$R4 = 4;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CMQRM (QUEUE)
+	then
+	    begin
+	    CCB = .$MCB$R4;
+	    MCB$_NORMAL
+	    end
+	else
+	    MCB$_QUEUE_EMPTY
+
+	end %,
+
+%else %if %variant eql 1
+%then
+
+    $MCB_DEQUEUE_CCB (QUEUE, CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_QUEUE_CCB = jsr (register = 3; register = 4) : PRESERVE (0) clearstack valuecbit;
+
+	external routine
+	    $CMQRM : $MCB$LINKAGE_QUEUE_CCB;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CMQRM (QUEUE; CCB)
+	then
+	    MCB$_NORMAL
+	else
+	    MCB$_QUEUE_EMPTY
+
+	end %,
+
+%else
+
+    $MCB_DEQUEUE_CCB (QUEUE, CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_QUEUE_CCB = jsr (register = 3; register = 4) : preserve (0) clearstack valuecbit;
+
+	register
+	    $MCB$R4 = 4;
+
+	external routine
+	    $CMQRM : $MCB$LINKAGE_QUEUE_CCB;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CMQRM (QUEUE; $MCB$R4)
+	then
+	    begin
+	    CCB = .$MCB$R4;
+	    MCB$_NORMAL
+	    end
+	else
+	    MCB$_QUEUE_EMPTY
+
+	end %,
+
+%fi %fi
+
+    !
+    !
+    !
+
+    $MCB_DISABLE_INTERRUPT (VECTOR) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_VECTOR = jsr (register = 0);
+
+	external routine
+	    $INTDS : $MCB$LINKAGE_VECTOR novalue;
+
+	$INTDS (VECTOR)
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_DISABLE_LONG_TIMER (DUMMY) =
+	begin
+
+	external routine
+	    $LTMDS : novalue;
+
+	$LTMDS ()
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_ENABLE_INTERRUPT (VECTOR) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_VECTOR = jsr (register = 0);
+
+	external routine
+	    $INTEN : $MCB$LINKAGE_VECTOR novalue;
+
+	$INTEN (VECTOR)
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_ENABLE_LONG_TIMER (DUMMY) =
+	begin
+
+	external routine
+	    $LTMEN : novalue;
+
+	$LTMEN ()
+	end %,
+
+    !
+    ! Get a buffer
+    !
+
+    $MCB_GET_BUFFER (LENGTH, ADDRESS) =
+	$MCB_GET_CORE (LENGTH, ADDRESS) %,
+
+    !
+    ! Get a CCB
+    !
+
+%if %variant eql 0
+%then
+
+    $MCB_GET_CCB (CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_CCB = jsr : preserve (0) nopreserve (4) clearstack valuecbit;
+
+	external routine
+	    $CCBGT : $MCB$LINKAGE_CCB;
+
+	global register
+	    $MCB$R4 = 4;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CCBGT ()
+	then
+	    begin
+	    CCB = .$MCB$R4;
+	    MCB$_NORMAL
+	    end
+	else
+	    MCB$_NO_CCB
+
+	end %,
+
+%else %if %variant eql 1
+%then
+
+    $MCB_GET_CCB (CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_CCB = jsr (; register = 4) : preserve (0) clearstack valuecbit;
+
+	external routine
+	    $CCBGT : $MCB$LINKAGE_CCB;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CCBGT (; CCB)
+	then
+	    MCB$_NORMAL
+	else
+	    MCB$_NO_CCB
+
+	end %,
+
+%else
+
+    $MCB_GET_CCB (CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_CCB = jsr (; register = 4) : preserve (0) clearstack valuecbit;
+
+	register
+	    $MCB$R4 = 4;
+
+	external routine
+	    $CCBGT : $MCB$LINKAGE_CCB;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CCBGT (; $MCB$R4)
+	then
+	    begin
+	    CCB = .$MCB$R4;
+	    MCB$_NORMAL
+	    end
+	else
+	    MCB$_NO_CCB
+
+	end %,
+
+%fi %fi
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    $MCB_GET_CCB_AND_BUFFER (LENGTH, CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_LENGTH_CCB = jsr (register = 1) : preserve (0) nopreserve (4) clearstack valuecbit;
+
+	external routine
+	    $CBBGT : $MCB$LINKAGE_LENGTH_CCB;
+
+	global register
+	    $MCB$R4 = 4;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CBBGT (LENGTH)
+	then
+	    begin
+	    CCB = .$MCB$R4;
+	    MCB$_NORMAL
+	    end
+	else
+	    MCB$_NO_CSB
+
+	end %,
+
+%else %if %variant eql 1
+%then
+
+    $MCB_GET_CCB_AND_BUFFER (LENGTH, CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_LENGTH_CCB = jsr (register = 1; register = 4) : preserve (0) clearstack valuecbit;
+
+	external routine
+	    $CBBGT : $MCB$LINKAGE_LENGTH_CCB;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CBBGT (LENGTH; CCB)
+	then
+	    MCB$_NORMAL
+	else
+	    MCB$_NO_CSB
+
+	end %,
+
+%else
+
+    $MCB_GET_CCB_AND_BUFFER (LENGTH, CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_LENGTH_CCB = jsr (register = 1; register = 4) : preserve (0) clearstack valuecbit;
+
+	register
+	    $MCB$R4 = 4;
+
+	external routine
+	    $CBBGT : $MCB$LINKAGE_LENGTH_CCB;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CBBGT (LENGTH; $MCB$R4)
+	then
+	    begin
+	    CCB = .$MCB$R4;
+	    MCB$_NORMAL
+	    end
+	else
+	    MCB$_NO_CSB
+
+	end %,
+
+%fi %fi
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    $MCB_GET_CORE (LENGTH, ADDRESS) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_LENGTH_ADDRESS = jsr (register = 1) : nopreserve (0) clearstack valuecbit;
+
+	external routine
+	    $CORGT : $MCB$LINKAGE_LENGTH_ADDRESS;
+
+	global register
+	    $MCB$R0 = 0;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CORGT (LENGTH)
+	then
+	    begin
+	    ADDRESS = .$MCB$R0;
+	    MCB$_NORMAL
+	    end
+	else
+	    MCB$_NO_CORE
+
+	end %,
+
+%else %if %variant eql 1
+%then
+
+    $MCB_GET_CORE (LENGTH, ADDRESS) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_LENGTH_ADDRESS = jsr (register = 1; register = 0) : clearstack valuecbit;
+
+	external routine
+	    $CORGT : $MCB$LINKAGE_LENGTH_ADDRESS;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CORGT (LENGTH; ADDRESS)
+	then
+	    MCB$_NORMAL
+	else
+	    MCB$_NO_CORE
+
+	end %,
+
+%else
+
+    $MCB_GET_CORE (LENGTH, ADDRESS) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_LENGTH_ADDRESS = jsr (register = 1; register = 0) : clearstack valuecbit;
+
+	register
+	    $MCB$R0 = 0;
+
+	external routine
+	    $CORGT : $MCB$LINKAGE_LENGTH_ADDRESS;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $CORGT (LENGTH; $MCB$R0)
+	then
+	    begin
+	    ADDRESS = .$MCB$R0;
+	    MCB$_NORMAL
+	    end
+	else
+	    MCB$_NO_CORE
+
+	end %,
+
+%fi %fi
+
+    !
+    !
+    !
+
+    $MCB_GET_DEVICE_NAME (LIX, BUF) =
+	CALL$I (MCB$K_GET_DEVICE_NAME, LIX, BUF) %,
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    $MCB_GET_DSR (LENGTH, ADDRESS) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_LENGTH = jsr (register = 1) : nopreserve (0, 1) clearstack valuecbit;
+
+	external routine
+	    $DSRGT : $MCB$LINKAGE_LENGTH;
+
+	global register
+	    $MCB$R0 = 0,
+	    $MCB$R1 = 1;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $DSRGT (LENGTH)
+	then
+	    begin
+	    ADDRESS = .$MCB$R0;
+	    RSX$_NORMAL
+	    end
+	else
+	    RSX$_NO_MEMORY
+
+	end %,
+
+%else %if %variant eql 1
+%then
+
+    $MCB_GET_DSR (LENGTH, ADDRESS) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_LENGTH_ADDRESS = jsr (register = 1; register = 0) :
+		clearstack valuecbit;
+
+	external routine
+	    $DSRGT : $MCB$LINKAGE_LENGTH_ADDRESS;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $DSRGT (LENGTH; ADDRESS)
+	then
+	    RSX$_NORMAL
+	else
+	    RSX$_NO_MEMORY
+
+	end %,
+
+%else
+
+    $MCB_GET_DSR (LENGTH, ADDRESS) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_LENGTH_ADDRESS = jsr (register = 1; register = 0) :
+		clearstack valuecbit;
+
+	register
+	    $MCB$R0 = 0;
+
+	external routine
+	    $DSRGT : $MCB$LINKAGE_LENGTH_ADDRESS;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $DSRGT (LENGTH; $MCB$R0)
+	then
+	    begin
+	    ADDRESS = .$MCB$R0;
+	    RSX$_NORMAL
+	    end
+	else
+	    RSX$_NO_MEMORY
+
+	end %,
+
+%fi %fi
+
+    !
+    !
+    !
+
+    $MCB_GET_EXTENSION_HANDLE (NAME, INDEX) =
+	begin
+
+	local
+	    $MCB$MY_INDEX,
+	    $MCB$STATUS;
+
+	if ($MCB$STATUS = CALL$I (MCB$K_GET_PROCESS_INDEX, NAME, $MCB$MY_INDEX))
+	then
+	    INDEX = .$MCB$MY_INDEX;
+
+	.$MCB$STATUS
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_GET_LINE_PROCESSES (LIX, BUF) =
+	CALL$I (MCB$K_GET_LINE_PROCESSES, LIX, BUF) %,
+
+    !
+    !
+    !
+
+    $MCB_GET_PROCESS_HANDLE (NAME, INDEX) =
+	begin
+
+	local
+	    $MCB$MY_INDEX,
+	    $MCB$STATUS;
+
+	if ($MCB$STATUS = CALL$I (MCB$K_GET_PROCESS_INDEX, NAME, $MCB$MY_INDEX))
+	then
+	    INDEX = .$MCB$MY_INDEX;
+
+	.$MCB$STATUS
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_GET_RANDOM_NUMBER (MAX) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_NUM = jsr (register = 0);
+
+	external routine
+	    $RND : $MCB$LINKAGE_NUM;
+
+	$RND (MAX)
+	end %,
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    $MCB_GET_RDB (CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_CCB = jsr : preserve (0) nopreserve (4) clearstack valuecbit;
+
+	external routine
+	    $RDBGT : $MCB$LINKAGE_CCB;
+
+	global register
+	    $MCB$R4 = 4;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $RDBGT ()
+	then
+	    begin
+	    CCB = .$MCB$R4;
+	    MCB$_NORMAL
+	    end
+	else
+	    MCB$_NO_RDB
+
+	end %,
+
+%else %if %variant eql 1
+%then
+
+    $MCB_GET_RDB (CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_CCB = jsr (; register = 4) : preserve (0) clearstack valuecbit;
+
+	external routine
+	    $RDBGT : $MCB$LINKAGE_CCB;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $RDBGT (; CCB)
+	then
+	    MCB$_NORMAL
+	else
+	    MCB$_NO_RDB
+
+	end %,
+
+%else
+
+    $MCB_GET_RDB (CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_CCB = jsr (; register = 4) : preserve (0) clearstack valuecbit;
+
+	register
+	    $MCB$R4 = 4;
+
+	external routine
+	    $RDBGT : $MCB$LINKAGE_CCB;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $RDBGT (; $MCB$R4)
+	then
+	    begin
+	    CCB = .$MCB$R4;
+	    MCB$_NORMAL
+	    end
+	else
+	    MCB$_NO_RDB
+
+	end %,
+
+%fi %fi
+
+    !
+    !
+    !
+
+    $MCB_INITIALIZE_QUEUE (QUEUE) =
+	begin
+
+	bind
+	    $MCB$HIS_QUEUE = QUEUE : vector [2];
+
+	$MCB$HIS_QUEUE [0] = 0;
+	$MCB$HIS_QUEUE [1] = $MCB$HIS_QUEUE [0];
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_MATCH_COND (STATUS, PLIT_VECTOR) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_STS_VEC = jsr (register = 1, register = 0);
+
+	external routine
+	    $IDSTS : $MCB$LINKAGE_STS_VEC;
+
+	$IDSTS (STATUS, PLIT_VECTOR)
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_MATCH_VALUE (VALUE, PLIT_VECTOR) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_VAL_VEC = jsr (register = 1, register = 0);
+
+	external routine
+	    $IDVAL : $MCB$LINKAGE_VAL_VEC;
+
+	$IDVAL (VALUE, PLIT_VECTOR)
+	end %,
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    $MCB_MCB_TO_RSX (LLC_DB, UCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_UCB = jsr : preserve (0) nopreserve (5);
+
+	external routine
+	    $RSX : $MCB$LINKAGE_UCB novalue;
+
+	global register
+	    $MCB$R5 = 5;
+
+	$RSX ();
+	%if not %null (UCB) %then UCB = .$MCB$R5; %fi
+	end %,
+
+%else
+
+    $MCB_MCB_TO_RSX (LLC_DB, UCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_UCB = jsr (; register = 5) : preserve (0);
+
+	external routine
+	    $RSX : $MCB$LINKAGE_UCB novalue;
+
+	$RSX (; UCB);
+	end %,
+
+%fi
+
+    !
+    ! Move to mapped buffer
+    !
+
+    $MCB_MOVE_BUFFER_TO_BUFFER (LNG, FROM_BUFFER, TO_BUFFER) =
+	%if %identical (FROM_BUFFER, (%remove (FROM_BUFFER))) and
+	    %identical (TO_BUFFER, (%remove (TO_BUFFER)))
+	%then %errormacro ('Cannot move from unmapped to unmapped buffer') %fi
+	%if not %identical (FROM_BUFFER, (%remove (FROM_BUFFER))) and
+	    not %identical (TO_BUFFER, (%remove (TO_BUFFER)))
+	%then ch$move (LNG, FROM_BUFFER, TO_BUFFER) %exitmacro %fi
+	begin
+
+	linkage
+	    $MCB$LINKAGE_ADDR_LNG = jsr (register = 2, register = 3) : preserve (0) nopreserve (2, 3);
+
+	external routine
+	    %if %identical (FROM_BUFFER, (%remove (FROM_BUFFER)))
+	    %then $MVFBF %else $MVTBF %fi : $MCB$LINKAGE_ADDR_LNG novalue;
+
+	%if %identical (FROM_BUFFER, (%remove (FROM_BUFFER)))
+	%then $MVFBF (TO_BUFFER, LNG, %remove (FROM_BUFFER))
+	%else $MVTBF (FROM_BUFFER, LNG, %remove (TO_BUFFER))
+	%fi
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_PAUSE (SYNCH_BLOCK, ADDRESS) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_SBLK = jsr (register = 4) : preserve (0) nopreserve (4);
+
+	external routine
+	    $PAUSE : $MCB$LINKAGE_SBLK novalue;
+
+	block [SYNCH_BLOCK, 2, 0, %bpaddr, 0] = ADDRESS;
+	$PAUSE (SYNCH_BLOCK);
+	end %,
+
+    !
+    ! Queue a CCB on a queue
+    !
+
+    $MCB_QUEUE_CCB (QUEUE, CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_QUEUE_CCB = jsr (register = 4, register = 3) : preserve (0);
+
+	external routine
+	    $CMQIN : $MCB$LINKAGE_QUEUE_CCB novalue;
+
+	$CMQIN (CCB, QUEUE);
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_REQUEST_CCB (DUMMY) =
+	begin
+
+	external routine
+	    $CCBRQ : novalue;
+
+	$CCBRQ ();
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_REQUEST_RDB (DUMMY) =
+	begin
+
+	external routine
+	    $RDBRQ : novalue;
+
+	$RDBRQ ();
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_RETURN_BUFFER (LENGTH, ADDRESS) =
+	$MCB_RETURN_CORE (LENGTH, ADDRESS) %,
+
+    !
+    ! Return a CCB
+    !
+
+    $MCB_RETURN_CCB (CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_CCB = jsr (register = 4) : preserve (0) nopreserve (4);
+
+	external routine
+	    $CCBRT : $MCB$LINKAGE_CCB novalue;
+
+	$CCBRT (CCB);
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_RETURN_CCB_AND_BUFFER (LENGTH, CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_LENGTH_CCB = jsr (register = 1, register = 4) : preserve (0) nopreserve (4);
+
+	external routine
+	    $CBBRT : $MCB$LINKAGE_LENGTH_CCB novalue;
+
+	$CBBRT (LENGTH, CCB);
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_RETURN_CORE (LENGTH, ADDRESS) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_LENGTH_ADDRESS = jsr (register = 1, register = 0) : nopreserve (0, 1);
+
+	external routine
+	    $CORRT : $MCB$LINKAGE_LENGTH_ADDRESS novalue;
+
+	$CORRT (LENGTH, ADDRESS);
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_RETURN_DSR (LENGTH, ADDRESS) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_ADDRESS_LENGTH = jsr (register = 0, register = 1) : nopreserve (0, 1);
+
+	external routine
+	    $DSRRT : $MCB$LINKAGE_ADDRESS_LENGTH novalue;
+
+	$DSRRT (ADDRESS, LENGTH);
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_RETURN_RDB (CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_CCB = jsr (register = 4) : preserve (0) nopreserve (4);
+
+	external routine
+	    $RDBRT : $MCB$LINKAGE_CCB novalue;
+
+	$RDBRT (CCB);
+	end %,
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    $MCB_RSX_TO_MCB (UCB, LLC_DB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_UCB_DB = jsr (register = 5) : preserve (0) nopreserve (5);
+
+	external routine
+	    $MCB : $MCB$LINKAGE_UCB_DB novalue;
+
+	global register
+	    $MCB$R5 = 5;
+
+	$MCB (UCB);
+	%if not %null (LLC_DB) %then LLC_DB = .$MCB$R5; %fi
+	end %,
+
+%else
+
+    $MCB_RSX_TO_MCB (UCB, LLC_DB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_UCB_DB = jsr (register = 5; register = 5) : preserve (0);
+
+	external routine
+	    $MCB : $MCB$LINKAGE_UCB_DB novalue;
+
+	$MCB (UCB; LLC_DB)
+	end %,
+
+%fi
+
+    !
+    !
+    !
+
+    $MCB_SCHEDULE_CCB (CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_CCB = jsr (register = 4) : preserve (0) nopreserve (4);
+
+	external routine
+	    $SCHED : $MCB$LINKAGE_CCB novalue;
+
+	$SCHED (CCB);
+	end %,
+
+    !
+    ! Setup an Exception Vector
+    !
+
+    $MCB_SET_EXCEPTION (TYPE, NEW, OLD) =
+	CALL$I (MCB$K_SET_EXCEPTION, TYPE, NEW,
+	    %if not %null (OLD) %then OLD %else 0 %fi) %,
+
+    !
+    !
+    !
+
+    $MCB_SET_LINE_PROCESSES (LIX, BUF) =
+	CALL$I (MCB$K_SET_LINE_PROCESSES, LIX, BUF) %,
+
+    !
+    !
+    !
+
+    $MCB_SET_PROCESS (NAME, INDEX) =
+	begin
+
+	local
+	    $MCB$MY_INDEX,
+	    $MCB$STATUS;
+
+	if ($MCB$STATUS = CALL$I (MCB$K_SET_PROCESS, $MCB$MY_INDEX
+		%if not %null (NAME) %then , NAME %fi))
+	then
+	    INDEX = .$MCB$MY_INDEX;
+
+	.$MCB$STATUS
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_SET_PROCESS_NAME (NAME) =
+	CALL$I (MCB$K_SET_PROCESS_NAME, NAME) %,
+
+    !
+    !
+    !
+
+    $MCB_SET_VECTOR (VECTOR, DISPATCH, PRIORITY) =
+	CALL$I (MCB$K_SET_VECTOR, VECTOR, DISPATCH, PRIORITY) %,
+
+    !
+    ! Stack a CCB on a queue
+    !
+
+    $MCB_STACK_CCB (QUEUE, CCB) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_QUEUE_CCB = jsr (register = 4, register = 3) : preserve (0);
+
+	external routine
+	    $CMQIF : $MCB$LINKAGE_QUEUE_CCB novalue;
+
+	$CMQIF (CCB, QUEUE);
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_START_SHORT_TIMER (TIMER_BLOCK) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_TIMER = jsr (register = 4) : preserve (0);
+
+	external routine
+	    $STMRQ : $MCB$LINKAGE_TIMER novalue;
+
+	$STMRQ (TIMER_BLOCK);
+	end %,
+
+    !
+    !
+    !
+
+    $MCB_SYNCHRONIZE (SYNCH_BLOCK, ADDRESS) =
+	begin
+
+	linkage
+	    $MCB$LINKAGE_SBLK = jsr (register = 4) : preserve (0) nopreserve (4);
+
+	external routine
+	    $SYNCH : $MCB$LINKAGE_SBLK novalue;
+
+	block [SYNCH_BLOCK, 2, 0, %bpaddr, 0] = ADDRESS;
+	$SYNCH (SYNCH_BLOCK);
+	end %;
+
+%FI %(BLISS16)%
+
+%IF %BLISS (BLISS16)
+%THEN %(BLISS16)%
+
+!
+! RSX interface macros
+!
+
+MACRO
+
+    !
+    !
+    !
+
+    ACHCK$ (ADDRESS, LENGTH) =
+	$RSX_VALIDATE_BUFFER (LENGTH, ADDRESS) %,
+
+    !
+    !
+    !
+
+    ACHKB$ (ADDRESS, LENGTH) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_ADDRESS_LENGTH = jsr (register = 0, register = 1)
+		: nopreserve (1, 2) clearstack valuecbit;
+
+	external routine
+	    $ACHKB : $RSX$LINKAGE_ADDRESS_LENGTH;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $ACHKB (ADDRESS, LENGTH)
+	then
+	    RSX$_NORMAL
+	else
+	    RSX$_INVALID_ADDRESS
+
+	end %,
+
+    !
+    !
+    !
+
+    ALOCB$ = $RSX_GET_DSR %,
+
+    !
+    !
+    !
+
+    DEACB$ (ADDRESS, LENGTH) =
+	$RSX_RETURN_DSR (LENGTH, ADDRESS) %,
+
+    !
+    !
+    !
+
+    GTPKT$ = $MCB_GET_IOP %,
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    IOALT$ (UCB, STATUS, IOP) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_UCB_STATUS = jsr (register = 5, register = 0)
+		: nopreserve (0, 1, 2, 3, 4);
+
+	external routine
+	    $IOALT : $RSX$LINKAGE_UCB_STATUS novalue;
+
+	global register
+	    $RSX$R3 = 3;
+
+	$IOALT (UCB, STATUS);
+	%if not %null (IOP) %then IOP = .$RSX$R3; %fi
+	end %,
+
+%else
+
+    IOALT$ (UCB, STATUS, IOP) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_UCB_STATUS = jsr (register = 5, register = 0; register = 3)
+		: nopreserve (0, 1, 2, 3, 4);
+
+	external routine
+	    $IOALT : $RSX$LINKAGE_UCB_STATUS novalue;
+
+	$IOALT (UCB, STATUS; IOP)
+	end %,
+
+%fi
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    IODON$ (UCB, STATUS, COUNT, IOP) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_UCB_STATUS_COUNT = jsr (register = 5, register = 0, register = 1)
+		: nopreserve (0, 1, 2, 3, 4);
+
+	external routine
+	    $IODON : $RSX$LINKAGE_UCB_STATUS_COUNT novalue;
+
+	global register
+	    $RSX$R3 = 3;
+
+	$IODON (UCB, STATUS, COUNT);
+	%if not %null (IOP) %then IOP = .$RSX$R3; %fi
+	end %,
+
+%else
+
+    IODON$ (UCB, STATUS, COUNT, IOP) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_UCB_STATUS_COUNT = jsr (register = 5, register = 0, register = 1; register = 3)
+		: nopreserve (0, 1, 2, 3, 4);
+
+	external routine
+	    $IODON : $RSX$LINKAGE_UCB_STATUS_COUNT novalue;
+
+	$IODON (UCB, STATUS, COUNT; IOP)
+	end %,
+
+%fi
+
+    !
+    !
+    !
+
+    IOFIN$ (UCB, IOP, STATUS, COUNT) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_UCB_IOP_STS_CNT = jsr (register = 5, register = 3, register = 0, register = 1)
+		: nopreserve (0, 1, 2, 3, 4);
+
+	external routine
+	    $IOFIN : $RSX$LINKAGE_UCB_IOP_STS_CNT novalue;
+
+	$IOFIN (UCB, IOP, STATUS, COUNT);
+	end %,
+
+    !
+    !
+    !
+
+    QINSP$ (LIST_HEAD, ENTRY) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_QUEUE_ENTRY = jsr (register = 0, register = 1)
+		: nopreserve (2, 3);
+
+	external routine
+	    $QINSP : $RSX$LINKAGE_QUEUE_ENTRY novalue;
+
+	$QINSP (LIST_HEAD, ENTRY);
+	end %,
+
+    !
+    !
+    !
+
+%if %variant eql 0
+%then
+
+    QRMVF$ (LIST_HEAD, ENTRY) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_QUEUE = jsr (register = 0)
+		: nopreserve (1, 2, 3) clearstack valuecbit;
+
+	external routine
+	    $QRMVF : $RSX$LINKAGE_QUEUE;
+
+	global register
+	    $RSX$R1 = 1;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $QRMVF (LIST_HEAD)
+	then
+	    begin
+	    ENTRY = .$RSX$R1;
+	    RSX$_NORMAL
+	    else
+	else
+	    RSX$_QUEUE_EMPTY
+
+	end %,
+
+%else %if %variant eql 1
+%then
+
+    QRMVF$ (LIST_HEAD, ENTRY) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_QUEUE = jsr (register = 0; register = 1)
+		: nopreserve (2, 3) clearstack valuecbit;
+
+	external routine
+	    $QRMVF : $RSX$LINKAGE_QUEUE;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $QRMVF (LIST_HEAD; ENTRY)
+	then
+	    RSX$_NORMAL
+	else
+	    RSX$_QUEUE_EMPTY
+
+	end %,
+
+%else
+
+    QRMVF$ (LIST_HEAD, ENTRY) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_QUEUE = jsr (register = 0; register = 1)
+		: nopreserve (2, 3) clearstack valuecbit;
+
+	register
+	    $RSX$R1 = 1;
+
+	external routine
+	    $QRMVF : $RSX$LINKAGE_QUEUE;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $QRMVF (LIST_HEAD; $RSX$R1)
+	then
+	    begin
+	    ENTRY = .$RSX$R1;
+	    RSX$_NORMAL
+	    end
+	else
+	    RSX$_QUEUE_EMPTY
+
+	end %,
+
+%fi %fi
+
+    !
+    !
+    !
+
+    RELOC$ = $RSX_CONVERT_TO_BIAS_ADDRESS %,
+
+    !
+    !
+    !
+
+    EXRQN$ (TCB) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_TCB = jsr (register = 0) : nopreserve (0, 1, 2, 3);
+
+	external routine
+	    $EXRQN : $RSX$LINKAGE_TCB novalue;
+
+	$EXRQN (TCB);
+	end %,
+
+    !
+    !
+    !
+
+    QASTT$ (TCB, AST) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_TCB_AST = jsr (register = 0, register = 1)
+		: nopreserve (0, 2, 3);
+
+	external routine
+	    $QASTT : $RSX$LINKAGE_TCB_AST novalue;
+
+	$QASTT (TCB, AST);
+	end %,
+
+    !
+    !
+    !
+
+    TSKRT$ (tcb, uic) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_TCB_UIC = jsr (register = 0, register = 1) : nopreserve (0, 1, 2, 3)
+		clearstack valuecbit;
+
+	external routine
+	    $TSKRT: $RSX$LINKAGE_TCB_UIC;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $TSKRT (tcb, uic)
+	then
+	    RSX$_NORMAL
+	else
+	    RSX$_NO_TASK
+
+	end %,
+
+%if %variant eql 0
+%then
+
+    $RSX_CONVERT_TO_BIAS_ADDRESS (USER_ADDRESS, BIAS, ADDRESS) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_ADDRESS = jsr (register = 0) : nopreserve (1, 2);
+
+	external routine
+	    $RELOC : $RSX$LINKAGE_ADDRESS novalue;
+
+	global register
+	    $RSX$R1 = 1,
+	    $RSX$R2 = 2;
+
+	$RELOC (USER_ADDRESS);
+	BIAS = .$RSX$R1;
+	ADDRESS = .$RSX$R2;
+	end %,
+
+%else
+
+    $RSX_CONVERT_TO_BIAS_ADDRESS (USER_ADDRESS, BIAS, ADDRESS) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_ADDRESS = jsr (register = 0; register = 1, register = 2);
+
+	external routine
+	    $RELOC : $RSX$LINKAGE_ADDRESS novalue;
+
+	$RELOC (USER_ADDRESS; BIAS, ADDRESS)
+	end %,
+
+%fi
+
+%if %variant eql 0
+%then
+
+    $RSX_GET_DSR (LENGTH, ADDRESS, ALLOCATED_LENGTH) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_LENGTH = jsr (register = 1) : nopreserve (0, 1, 2) clearstack valuecbit;
+
+	external routine
+	    $ALOCB : $RSX$LINKAGE_LENGTH;
+
+	global register
+	    $RSX$R0 = 0,
+	    $RSX$R1 = 1;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $ALOCB (LENGTH)
+	then
+	    begin
+	    ADDRESS = .$RSX$R0;
+	    %if not %null (ALLOCATED_LENGTH)
+	    %then ALLOCATED_LENGTH = .$RSX$R1; %fi
+	    RSX$_NORMAL
+	    end
+	else
+	    RSX$_NO_MEMORY
+
+	end %,
+
+%else %if %variant eql 1
+%then
+
+    $RSX_GET_DSR (LENGTH, ADDRESS, ALLOCATED_LENGTH) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_LENGTH = jsr (register = 1; register = 0, register = 1) :
+		nopreserve (0, 1, 2) clearstack valuecbit;
+
+	external routine
+	    $ALOCB : $RSX$LINKAGE_LENGTH;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $ALOCB (LENGTH; ADDRESS, ALLOCATED_LENGTH)
+	then
+	    RSX$_NORMAL
+	else
+	    RSX$_NO_MEMORY
+
+	end %,
+
+%else
+
+    $RSX_GET_DSR (LENGTH, ADDRESS, ALLOCATED_LENGTH) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_LENGTH = jsr (register = 1; register = 0, register = 1) :
+		nopreserve (0, 1, 2) clearstack valuecbit;
+
+	register
+	    $RSX$R1 = 1,
+	    $RSX$R0 = 0;
+
+	external routine
+	    $ALOCB : $RSX$LINKAGE_LENGTH;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $ALOCB (LENGTH; $RSX$R0, $RSX$R1)
+	then
+	    begin
+	    ADDRESS = .$RSX$R0;
+	    %if not %null (ALLOCATED_LENGTH)
+	    %then ALLOCATED_LENGTH = .$RSX$R1; %fi
+	    RSX$_NORMAL
+	    end
+	else
+	    RSX$_NO_MEMORY
+
+	end %,
+
+%fi %fi
+
+%if %variant eql 0
+%then
+
+    $RSX_ACCEPT_IOP (OLD_UCB, IOP, UNIT, CONTROLLER, SCB, NEW_UCB) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_UCB = jsr (register = 5) : nopreserve (1, 2, 3, 4, 5) clearstack valuecbit;
+
+	external routine
+	    $GTPKT : $RSX$LINKAGE_UCB;
+
+	global register
+	    $RSX$R1 = 1,
+	    $RSX$R2 = 2,
+	    $RSX$R3 = 3,
+	    $RSX$R4 = 4,
+	    $RSX$R5 = 5;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $GTPKT (OLD_UCB)
+	then
+	    begin
+	    %if not %null (IOP) %then IOP = .$RSX$R1; %fi
+	    %if not %null (UNIT) %then UNIT = .$RSX$R2; %fi
+	    %if not %null (CONTROLLER) %then CONTROLLER = .$RSX$R3; %fi
+	    %if not %null (SCB) %then SCB = .$RSX$R4; %fi
+	    %if not %null (NEW_UCB) %then NEW_UCB = .$RSX$R5; %fi
+	    RSX$_NORMAL
+	    end
+	else
+	    RSX$_NO_PACKET
+
+	end %,
+
+%else %if %variant eql 1
+%then
+
+    $RSX_ACCEPT_IOP (OLD_UCB, IOP, UNIT, CONTROLLER, SCB, NEW_UCB) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_UCB = jsr (register = 5; register = 1, register = 2,
+		register = 3, register = 4, register = 5) : clearstack valuecbit;
+
+	external routine
+	    $GTPKT : $RSX$LINKAGE_UCB;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $GTPKT (OLD_UCB; IOP, UNIT, CONTROLLER, SCB, NEW_UCB)
+	then
+	    RSX$_NORMAL
+	else
+	    RSX$_NO_PACKET
+
+	end %,
+
+%else
+
+    $RSX_ACCEPT_IOP (OLD_UCB, IOP, UNIT, CONTROLLER, SCB, NEW_UCB) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_UCB = jsr (register = 5; register = 1, register = 2,
+		register = 3, register = 4, register = 5) : clearstack valuecbit;
+
+	register
+	    $RSX$R1 = 1,
+	    $RSX$R2 = 2,
+	    $RSX$R3 = 3,
+	    $RSX$R4 = 4,
+	    $RSX$R5 = 5;
+
+	external routine
+	    $GTPKT : $RSX$LINKAGE_UCB;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $GTPKT (OLD_UCB; $RSX$R1, $RSX$R2, $RSX$R3, $RSX$R4, $RSX$R5)
+	then
+	    begin
+	    %if not %null (IOP) %then IOP = .$RSX$R1; %fi
+	    %if not %null (UNIT) %then UNIT = .$RSX$R2; %fi
+	    %if not %null (CONTROLLER) %then CONTROLLER = .$RSX$R3; %fi
+	    %if not %null (SCB) %then SCB = .$RSX$R4; %fi
+	    %if not %null (NEW_UCB) %then NEW_UCB = .$RSX$R5; %fi
+	    RSX$_NORMAL
+	    end
+	else
+	    RSX$_NO_PACKET
+
+	end %,
+
+%fi %fi
+
+%if %variant eql 0
+%then
+
+    $RSX_GET_TCB (NAME, TCB) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_NAME = jsr (register = 3) : nopreserve (0) clearstack valuecbit;
+
+	external routine
+	    $SRSTD : $RSX$LINKAGE_NAME;
+
+	external
+	    $TSKHD : ref vector;
+
+	global register
+	    $RSX$R0 = 0;
+
+	! Note: Cbit clear = FALSE = success
+
+	if .$TSKHD [12] eqla 0
+	then
+	    RSX$_NO_TASK
+	else
+
+	    if $SRSTD (NAME)
+	    then
+		RSX$_NO_TASK
+	    else
+		begin
+		TCB = .$RSX$R0;
+		RSX$_NORMAL
+		end
+
+	end %,
+
+%else %if %variant eql 1
+%then
+
+    $RSX_GET_TCB (NAME, TCB) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_NAME = jsr (register = 3; register = 0) : clearstack valuecbit;
+
+	external routine
+	    $SRSTD : $RSX$LINKAGE_NAME;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $SRSTD (NAME; TCB)
+	then
+	    RSX$_NORMAL
+	else
+	    RSX$_NO_TASK
+
+	end %,
+
+%else
+
+    $RSX_GET_TCB (NAME, TCB) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_NAME = jsr (register = 3; register = 0) : clearstack valuecbit;
+
+	register
+	    $RSX$R0 = 0;
+
+	external routine
+	    $SRSTD : $RSX$LINKAGE_NAME;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $SRSTD (NAME; $RSX$R0)
+	then
+	    begin
+	    TCB = .$RSX$R0;
+	    RSX$_NORMAL
+	    end
+	else
+	    RSX$_NO_TASK
+
+	end %,
+
+%fi %fi
+
+    $RSX_REQUEST_TASK (TCB, UIC) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_TCB = jsr (register = 0) : nopreserve (0, 1, 2, 3),
+	    $RSX$LINKAGE_TCB_UIC = jsr (register = 0, register = 1) : nopreserve (0, 1, 2, 3);
+
+	external routine
+	    %if %null (UIC)
+	    %then $EXRQN : $RSX$LINKAGE_TCB
+	    %else $TSKRT : $RSX$LINKAGE_TCB_UIC
+	    %fi;
+
+
+	! Note: Cbit clear = FALSE = success
+
+	if not
+	    %if %null (UIC)
+	    %then $EXRQN (TCB)
+	    %else $TSKRT (TCB, UIC)
+	    %fi
+	then
+	    RSX$_NORMAL
+	else
+	    RSX$_NO_TASK
+
+	end %,
+
+    $RSX_RETURN_DSR (LENGTH, ADDRESS) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_ADDRESS_LENGTH = jsr (register = 0, register = 1) : nopreserve (0, 1, 2, 3);
+
+	external routine
+	    $DEACB : $RSX$LINKAGE_ADDRESS_LENGTH novalue;
+
+	$DEACB (ADDRESS, LENGTH);
+	end %,
+
+    $RSX_FINISH_IOP (UCB, IOP, STATUS, COUNT) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_UCB_STS = jsr (register = 5, register = 0)
+		: nopreserve (0, 1, 2, 3, 4),
+	    $RSX$LINKAGE_UCB_STS_CNT = jsr (register = 5, register = 0, register = 1)
+		: nopreserve (0, 1, 2, 3, 4),
+	    $RSX$LINKAGE_UCB_STS_CNT_IOP = jsr (register = 5, register = 0, register = 1, register = 3)
+		: nopreserve (0, 1, 2, 3, 4);
+
+	external routine
+	    %if %null (COUNT, IOP)
+	    %then $IOALT : $RSX$LINKAGE_UCB_STS
+	    %else %if %null (COUNT)
+	    %then $IODON : $RSX$LINKAGE_UCB_STS_CNT
+	    %else $IOFIN : $RSX$LINKAGE_UCB_STS_CNT_IOP
+	    %fi %fi novalue;
+
+	%if %null (COUNT, IOP)
+	%then $IOALT (UCB, STATUS)
+	%else %if %null (COUNT)
+	%then $IODON (UCB, STATUS, COUNT)
+	%else $IOFIN (UCB, STATUS, COUNT, IOP)
+	%fi %fi;
+	end %,
+
+    $RSX_SCHEDULE_AST (TCB, AST_BLOCK) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_TCB_AST = jsr (register = 0, register = 1) : nopreserve (0, 2, 3);
+
+	external routine
+	    $QASTT : $RSX$LINKAGE_TCB_AST novalue;
+
+	$QASTT (TCB, AST_BLOCK);
+	end %,
+
+    $RSX_VALIDATE_BUFFER (length, address) =
+	begin
+
+	linkage
+	    $RSX$LINKAGE_ADDRESS_LENGTH = jsr (register = 0, register = 1)
+		: nopreserve (1, 2) clearstack valuecbit;
+
+	external routine
+	    $ACHCK : $RSX$LINKAGE_ADDRESS_LENGTH;
+
+	! Note: Cbit clear = FALSE = success
+
+	if not $ACHCK (ADDRESS, LENGTH)
+	then
+	    RSX$_NORMAL
+	else
+	    RSX$_INVALID_ADDRESS
+
+	end %;
+
+%FI %(BLISS16)%
+
+!
+! [End of MCBLIB]

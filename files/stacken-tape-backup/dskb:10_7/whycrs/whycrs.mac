@@ -1,0 +1,500 @@
+	TITLE	WHYCRS - Read AVAIL.SYS and report reloads
+	SUBTTL	G.M. Uhler/GMU   22-Dec-82
+
+
+;Copyright (C) 1980, 1981, 1982, 1983 by
+;Digital Equipment Corporation, Maynard, Mass.
+;
+;
+;This software is furnished under a license and may be used and copied
+;only  in  accordance  with  the  terms  of  such license and with the
+;inclusion of the above copyright notice.  This software or any  other
+;copies thereof may not be provided or otherwise made available to any
+;other person.  No title to and ownership of the  software  is  hereby
+;transferred.
+;
+;The information in this software is subject to change without  notice
+;and  should  not  be  construed  as a commitment by Digital Equipment
+;Corporation.
+;
+;Digital assumes no responsibility for the use or reliability  of  its
+;software on equipment which is not supplied by Digital.
+
+
+	SEARCH	JOBDAT,MACTEN,SCNMAC,UUOSYM
+	.REQUEST	REL:SCAN,REL:HELPER
+	.DIRECTIVE .XTABM,FLBLST
+	SALL
+
+
+	WCSVER==1
+	WCSMIN==0
+	WCSEDT==2
+	WCSWHO==0
+
+	TWOSEG
+	RELOC	400000
+	LOC	.JBVER
+	VRSN.	(WCS)
+	RELOC
+
+
+
+;Assembly and loading instructions
+;
+;	.R MACRO
+;	*WHYCRS=WHYCRS
+;	*^C
+;	.R LINK
+;	*WHYCRS,REL:SCAN,REL:HELPER/G
+;AC definitions
+
+	F==0			;Flags
+	T1==1			;First of four temporaries
+	T2==2
+	T3==3
+	T4==4
+	P1==5			;First of four preserved registers
+	P2==6
+	P3==7
+	P4==10
+	N==P3			;SCAN convention
+	C==P4			;SCAN convention
+	P==17			;PDL pointer
+
+
+;Parameter definitions
+
+	.PDLEN==50		;Size of PDL
+	BLKSIZ==200		;Size of a disk block
+	DSK==1			;Input channel
+	OUT==2			;Output channel
+	WRKLEN==1200		;Number of words in working entry 
+
+
+;Offsets in the header for ERROR.SYS
+
+	.EHTYP==0		;Type, versions, lengths
+	  EH.TYP==777B8		;Mask for type field
+	  EH.CRS==1B16		;Entry extracted from CRASH.EXE
+	  EH.FFM==7B20		;Mask for format version field
+	    EL.FVR==0		;Format version of ERROR.SYS
+	  EH.HFM==7B23		;Mask for header version field
+	    EL.HVR==2		;Header version of ERROR.SYS
+	  EH.HLN==7B26		;Mask for header length field
+	    EL.HED==5		;Length of standard header
+	  EH.BLN==777B35	;Mask for body length
+	.EHDTM==1		;Universal date/time of entry
+	.EHUPT==2		;Uptime of system when entry created
+	.EHASN==3		;CPU serial number of cpu on which error was detected
+	.EHSEQ==4		;Sequence number of entry
+
+;Offsets in AVAIL.SYS monitor run values (.ESMRV) body
+
+	MRVPSN==0		;-Len,,Offset from MRVPSN to ASCIZ system name
+	MRVVER==1		;Monitor version number
+	MRVUPT==2		;Uptime in universal date/time format
+	MRVCTM==3		;Monitor crash time (+/- 6 min) in universal date/time fmt
+	MRVRTM==4		;Monitor reload time in universal date/time format
+	MRVWHY==5		;Why reload code in SIXBIT
+	MRVIDT==6		;Sum of all incremental date/time changes since reload
+	MRVSNM==7		;First of 5 words of ASCIZ system name
+;Flag definitions
+
+	FL.WTF==1B35	;Write this character to output file
+	FL.HDR==1B34	;Header needed on next entry
+	FL.ISC==1B33	;Input scan block allocated
+	FL.OSC==1B32	;Output scan block allocated
+
+
+;Macro definitions
+
+	DEFINE	ERROR	(FIRST,LABEL),<
+	  PUSHJ	P,ERRMSG
+	  XLIST
+	  IFNB <LABEL>, <CAIA [ASCIZ\?'FIRST'\]
+			 JRST LABEL
+			>
+	  IFB  <LABEL>, <CAI  [ASCIZ\?'FIRST'\]>
+	  LIST
+	>
+WHYCRS:	JFCL			;No CCL entry
+	RESET			;Clear the world
+	MOVE	P,[IOWD .PDLEN,PDL] ;Setup push down list
+	MOVEI	T1,WHYCRS	;Setup restart
+	MOVEM	T1,.JBREN	; address
+	MOVE	T1,.JBFF	;Get initial value of .JBFF
+	MOVEM	T1,MINCOR	;Save for core downs
+	MOVE	T1,[.ISCBL,,.ISCBK] ;Point to .ISCAN block
+	PUSHJ	P,.ISCAN##	;Initialize SCAN
+WCSSCN:	SETZM	Z.BGN		;First word to zero
+	MOVE	T1,[Z.BGN,,Z.BGN+1] ;Setup BLT pointer
+	BLT	T1,Z.END	;Clear it all
+	SETOM	P.BGN		;Initialize /BEGIN,
+	SETOM	P.END		; /END,
+	SETOM	P.REAS		; and /REASON switch values
+	SETZM	F		;No flags
+	MOVE	T1,MINCOR	;Get min core needed
+	MOVEM	T1,.JBFF	;Start of buffers
+	CORE	T1,		;Reduce core to a minimum
+	  JFCL			;Don't care
+	MOVE	T1,[.TSCBL,,.TSCBK] ;Point to .TSCAN block
+	PUSHJ	P,.TSCAN##	;Crack the command line
+	PUSHJ	P,APLDFL	;Apply defaults
+	  JRST	WCSSCN		;Error in command
+	PUSHJ	P,OPNFIL	;Open input and output files
+	  JRST	WCSSCN		;Failed
+	SETCM	T1,P.BGN	;Get value of /BEGIN
+	SKIPN	T1		;Value specified?
+	SETOM	T1		;No, SETCAM will make this zero
+	SETCAM	T1,P.BGN	;Save for checks
+	SETCM	T1,P.END	;Get value of /END
+	SKIPN	T1		;Value specified?
+	MOVX	T1,1B0		;No, SETCAM will make this -1_-1
+	SETCAM	T1,P.END	;Save for checks
+	MOVE	T1,ILKBLK+.RBSIZ ;Get size of input file
+	SUBI	T1,WRKLEN	;Minus size of working entry
+	SKIPG	P1,T1		;If only working entry in file,
+	JRST	WCSSCN		; quit now
+	PUSH	P,.JBFF		;Save pointer to table
+	ADDB	T1,.JBFF	;Add size of stuff we want to read
+	CORE	T1,		;Get the core
+	  ERROR	<Can't get core for AVAIL data>
+	MOVE	P2,0(P)		;Pointer to first word of table
+	USETI	DSK,<WRKLEN/BLKSIZ>+1 ;Set to read 1st block past working entry
+RDLOOP:	INPUT	DSK,IOW		;Read next block
+	STATZ	DSK,IO.ERR!IO.EOF ;Errors?
+	ERROR	<IOERR or unexpected EOF on input file>
+	MOVSI	T1,BUF+1	;Skip resync word in block
+	HRRI	T1,(P2)		; and move to next slot in buffer
+	BLT	T1,BLKSIZ-2(P2)	;Move it
+	ADDI	P2,BLKSIZ-1	;Bump buffer pointer by len of entry
+	SUBI	P1,BLKSIZ	;Done another 200 wds
+	JUMPG	P1,RDLOOP	;Loop if more
+	POP	P,P1		;P1=1st word of AVAIL data
+	TXO	F,FL.WTF	;Write data to file now
+
+PRLOOP:	LDB	T1,[POINTR .EHTYP(P1),EH.TYP] ;Get entry code
+	LDB	P2,[POINTR .EHTYP(P1),EH.HLN] ; and header length
+	ADDI	P2,(P1)		;Compute address of first word of body
+	CAIN	T1,.ESEOF	;EOF?
+	JRST	ENDIT		;Yes, go finish up
+	CAIE	T1,.ESMRV	;Monitor run value entry?
+	JRST	PRENDL		;No, try next
+	MOVE	T1,MRVCTM(P2)	;Get date/time of crash
+	CAML	T1,P.BGN	;Is it in the desired range?
+	CAMLE	T1,P.END	;?
+	JRST	PRENDL		;No, ignore it
+	SETCM	T1,P.REAS	;Get /REASON value
+	JUMPE	T1,PRLOO1	;Automatic match if none specified
+	HLRZ	T1,MRVWHY(P2)	;Get reason for crash
+	CAIE	T1,'S..'	;STOPCD?
+	SKIPA	T1,MRVWHY(P2)	;No, just get SIXBIT reason
+	HRLZ	T1,MRVWHY(P2)	;Yes, get just 3 character name
+	CAME	T1,P.REAS	;Match with /REASON?
+	JRST	PRENDL		;No, skip it
+PRLOO1:	AOS	TOTAL		;Count it
+	HLRZ	T2,MRVCTM(P2)	;Get date
+	IDIVI	T2,7		;Compute day in T3
+	CAIE	T3,3		;Saturday?
+	CAIN	T3,4		; or Sunday?
+	JRST	NOTPTM		;Yes, not prime time
+	HRRZ	T2,MRVCTM(P2)	;Get time
+	CAIL	T2,252525	;Before 0800?
+	CAILE	T2,600000	; after 1800?
+	JRST	NOTPTM		;Yes, don't count it
+	AOS	PRIME		;Bump count of prime-time reloads
+	SKIPA	T1,[[ASCIZ/* /]] ;Flag prime-time reloads with a *
+NOTPTM:	MOVEI	T1,[ASCIZ/  /]	;No flag if not prime time
+	PUSH	P,T1		;Save prefix
+	MOVEI	T1,[ASCIZ\
+        Monitor name        Ver  Crash date/time    Reload date/time   Reason
+  ------------------------ ----- ------------------ ------------------ ------
+\]
+	TXON	F,FL.HDR	;Need to print a header?
+	PUSHJ	P,.TSTRG##	;Yes, put it out
+	POP	P,T1		;Get prefix back
+	PUSHJ	P,.TSTRG##	;Type it
+	MOVSI	T2,(POINT 7,0)	;Build byte pointer to
+	HRR	T2,MRVPSN(P2)	; system name
+	ADDI	T2,MRVPSN(P2)	;Relocate it
+	MOVEI	T3,^D25		;Print 25 characters
+NMLOOP:	ILDB	T1,T2		;Get next one
+	JUMPE	T1,NMENDL	;End of string?
+	PUSHJ	P,.TCHAR##	;Put it out
+	SOJG	T3,NMLOOP	;Loop for all
+	CAIA			;Skip space
+NMENDL:	PUSHJ	P,.TSPAC## 	;Pad out string to the
+	SOJG	T3,.-1		;  full 25 characters
+
+	MOVE	T1,MRVVER(P2)	;Monitor version number
+	PUSHJ	P,.TOCTW##	;Type it
+	PUSHJ	P,.TSPAC##	; and a space
+	MOVE	T1,MRVCTM(P2)	;Crash date/time
+	PUSHJ	P,.TDTTM##	;Type it
+	PUSHJ	P,.TSPAC##	; and a space
+	MOVE	T1,MRVRTM(P2)	;Reload date/time
+	PUSHJ	P,.TDTTM##	;Type it
+	PUSHJ	P,.TSPAC##	; and a space
+	MOVE	T1,MRVWHY(P2)	;SIXBIT why reload
+	HLRZ	T2,T1		;Get left half
+	CAIN	T2,'S..'	;Was it a STOPCD?
+	HRLZS	T1		;Yes, don't print S..
+	PUSHJ	P,.TSIXN##	;Type it
+	PUSHJ	P,.TCRLF##	;Add a CRLF
+
+PRENDL:	LDB	T1,[POINTR .EHTYP(P1),EH.BLN] ;Get size of body of this entry
+	ADDI	T1,(P2)		;Find end of entry
+	MOVE	P1,T1		;Setup new pointer
+	JRST	PRLOOP		;Loop for next
+
+ENDIT:	PUSHJ	P,.TCRLF##	;Add a CRLF
+	MOVEI	T1,[ASCIZ/
+* = Reload occurred during prime-time
+/]
+	SKIPE	PRIME		;Were there any?
+	PUSHJ	P,.TSTRG##	;Yes, print message
+	MOVEI	T1,[ASCIZ/
+Total number of reloads in specified range = /]
+	PUSHJ	P,.TSTRG##	;Type it
+	MOVE	T1,TOTAL	;Get number
+	PUSHJ	P,.TDECW##	;Type it
+	MOVEI	T1,[ASCIZ/
+Total prime-time reloads in specified range = /]
+	PUSHJ	P,.TSTRG##	;Type it
+	MOVE	T1,PRIME	;Get the number
+	PUSHJ	P,.TDECW##	;Type it
+	MOVEI	T1,[ASCIZ/
+   (Monday-Friday, 0800-1800)
+/]
+	PUSHJ	P,.TSTRG##
+	RELEASE	OUT,		;Close output
+	RELEASE	DSK,		;Close input
+	JRST	WCSSCN		;and try next command
+;Subroutine to convert the SCAN blocks to OPEN, LOOKUP and
+;ENTER blocks and then open the appropriate files.
+;Call:
+;	PUSHJ	P,OPNFIL
+;	  Return here if something failed
+;	Return here if all ok
+
+OPNFIL:	MOVEI	T1,ISCBLK	;Point to input scan block
+	MOVEI	T2,IOPBLK	;Point to OPEN block
+	MOVEI	T3,ILKBLK	;Point to LOOKUP block
+	PUSHJ	P,.STOPN##	;Convert SCAN block
+	  ERROR	<Input SCAN block conversion failed>,.POPJ##
+	MOVX	T1,.IODMP	;Dump mode for input file
+	DPB	T1,[POINTR IOPBLK,IO.MOD] ;Store it
+	MOVX	T1,.RBSIZ	;Get size of lookup block
+	MOVEM	T1,ILKBLK+.RBCNT ;Store it
+	OPEN	DSK,IOPBLK	;Open the channel
+	  ERROR	<Input device OPEN failed>,.POPJ##
+	LOOKUP	DSK,ILKBLK	;Lookup the file
+	  ERROR	<Input file LOOKUP failed>,.POPJ##
+	MOVEI	T1,OSCBLK	;Point to output scan block
+	MOVEI	T2,OOPBLK	;Point to output OPEN block
+	MOVEI	T3,OENBLK	;Point to output ENTER block
+	PUSHJ	P,.STOPN##	;Convert SCAN block
+	  ERROR	<Output SCAN block conversion failed>,.POPJ##
+	MOVX	T1,.IOASC	;Use ASCII mode for output file
+	DPB	T1,[POINTR OOPBLK,IO.MOD] ;Store it
+	MOVSI	T1,OBUF		;Output buffer header
+	MOVEM	T1,OOPBLK+.OPBUF ;Store it
+	MOVX	T1,.RBSIZ	;Get size of ENTER block
+	MOVEM	T1,OENBLK+.RBCNT ;Store it
+	OPEN	OUT,OOPBLK	;Open channel
+	  ERROR	<Output device OPEN failed>,.POPJ##
+	ENTER	OUT,OENBLK	;Enter file
+	  ERROR	<Output file ENTER failed>,.POPJ##
+	JRST	.POPJ1##	;Give skip return
+
+
+;Subroutine to print an error message.
+;Call:
+;	PUSHJ	P,ERRMSG
+;	CAI	[ASCIZ\msg to print\]
+;	 Return here always
+
+ERRMSG:	HRRZ	T1,@0(P)	;Get message address
+	PUSHJ	P,.TSTRG##	;Type it
+	PUSHJ	P,.TCRLF##	;Add a CRLF
+	JRST	.POPJ1##	;Give skip return
+;Subroutine to write one character to the output file or TTY.
+;Call with character in T1 and with FL.WTF set to write to the
+;output file
+;Call:
+;	PUSHJ	P,TYPCHR
+;	Return here always
+
+TYPCHR:	TXNN	F,FL.WTF	;Write to file?
+	JRST	TYPCH1		;No, TTY
+	SOSG	OBUF+.BFCTR	;Room for more?
+	OUTPUT	OUT,		;No, flush
+	IDPB	T1,OBUF+.BFPTR	;Store in buffer
+	POPJ	P,		;Return
+TYPCH1:	OUTCHR	T1		;Write it to TTY
+	POPJ	P,		;Return
+
+
+;Subroutine to return the address of the input scan block
+;Call:
+;	PUSHJ	P,ALCINP
+;	 Return here always with:
+;		T1=Address of scan block
+;		T2=Length of scan block
+
+ALCINP:	TXOE	F,FL.ISC	;Already been here once?
+	  ERROR	<Multiple input specs illegal>,WCSSCN
+	MOVEI	T1,ISCBLK	;Point at scan block
+	MOVX	T2,.FXLEN	; and length
+	POPJ	P,
+
+
+;Subroutine to return the address of the output scan block
+;Call:
+;	PUSHJ	P,ALCOUT
+;	 Return here always with:
+;		T1=Address of scan block
+;		T2=Length of scan block
+
+ALCOUT:	TXOE	F,FL.OSC	;Already been here once?
+	  ERROR	<Multiple output specs illegal>,WCSSCN
+	MOVEI	T1,OSCBLK	;Point at scan block
+	MOVX	T2,.FXLEN	; and length
+	POPJ	P,
+;Subroutine to check input and output scan blocks and apply any
+;defaults that the user did not type.
+;Call:
+;	PUSHJ	P,APLDFL
+;	  Return here if error
+;	Return here if ok
+
+APLDFL:	MOVX	T1,FX.NDV	;Get null device bit
+	TDNN	T1,OSCBLK+.FXMOD ;User type a device?
+	SKIPN	OSCBLK+.FXDEV	;  or nothing at all?
+	SKIPA	T2,[SIXBIT/TTY/] ;Default output device is TTY
+	JRST	APLDF1		;Use his device
+	MOVEM	T2,OSCBLK+.FXDEV ;Store default device in block
+	ANDCAM	T1,OSCBLK+.FXMOD ;Clear bit
+	ANDCAM	T1,OSCBLK+.FXMOM ;  and mask
+APLDF1:	SETCM	T1,OSCBLK+.FXNMM ;Get mask for filename
+	JUMPE	T1,APLDF2	;Go if no wildcards
+	AOSN	T1		;Error if wildcards
+	SKIPE	OSCBLK+.FXNAM	;...
+	JRST	APLOER
+	MOVE	T1,[SIXBIT/WHYCRS/] ;Default filename is WHYCRS
+	MOVEM	T1,OSCBLK+.FXNAM ;Store it
+	SETOM	OSCBLK+.FXNMM	;Set full mask
+APLDF2:	HRRZ	T1,OSCBLK+.FXEXT ;Get mask for extension
+	CAIN	T1,777777	;Full mask?
+	JRST	APLDF3		;Yes, use his extension
+	SKIPE	OSCBLK+.FXEXT	;Error if wildcards
+	JRST	APLOER		;...
+	HRLOI	T1,'LST'	;Default extension is LST
+	MOVEM	T1,OSCBLK+.FXEXT ;Store it
+APLDF3:	MOVEI	T1,OSCBLK	;Point to output scan block
+	PUSHJ	P,CHKDIR	;Check for wildcards in directory
+APLOER:	  ERROR	<Wildcards illegal in output spec>,.POPJ##
+	MOVX	T1,FX.NDV	;Get null device bit
+	TDNN	T1,ISCBLK+.FXMOD ;User type a device?
+	SKIPN	ISCBLK+.FXDEV	;Or nothing at all?
+	SKIPA	T2,[SIXBIT/SYS/] ;Default input device is SYS
+	JRST	APLDF4		;Use his
+	MOVEM	T2,ISCBLK+.FXDEV ;Store device
+	ANDCAM	T1,ISCBLK+.FXMOD ;Clear bit
+	ANDCAM	T1,ISCBLK+.FXMOM ;  and mask
+APLDF4:	SETCM	T1,ISCBLK+.FXNMM ;Get mask for filename
+	JUMPE	T1,APLDF5	;Go if fully specified
+	AOSN	T1		;Error if wildcards
+	SKIPE	ISCBLK+.FXNAM	;...
+	JRST	APLIER		;...
+	MOVE	T1,[SIXBIT/AVAIL/] ;Default filename is AVAIL
+	MOVEM	T1,ISCBLK+.FXNAM ;Store it
+	SETOM	ISCBLK+.FXNMM	;Set full mask
+APLDF5:	HRRZ	T1,ISCBLK+.FXEXT ;Get mask for extension
+	CAIN	T1,777777	;Full mask?
+	JRST	APLDF6		;Yes, use his extension
+	SKIPE	ISCBLK+.FXEXT	;Error if wildcards
+	JRST	APLIER		;...
+	HRLOI	T1,'SYS'	;Default extension is SYS
+	MOVEM	T1,ISCBLK+.FXEXT ;Store it
+APLDF6:	MOVEI	T1,ISCBLK	;Point to input scan block
+	PUSHJ	P,CHKDIR	;Check for wildcards in directory
+APLIER:   ERROR	<Wildcards illegal in input spec>,.POPJ##
+	JRST	.POPJ1##	;Give skip return
+;Subroutine to check the directory specified in a scan block for
+;wildcards.
+;Call:
+;	MOVEI	T1,address of scan block
+;	PUSHJ	P,CHKDIR
+;	 Return here is wildcard found
+;	Return here if no wildcards
+
+CHKDIR:	MOVX	T2,FX.DIR	;Get directory specified bit
+	TDNN	T2,.FXMOD(T1)	;[-]??
+	JRST	.POPJ1##	;Yes
+	SETCM	T2,.FXDIM(T1)	;Get mask for PPN
+	JUMPN	T2,.POPJ##	;Error if wildcards
+	MOVEI	T1,.FXDIR+2(T1)	;Point to first SFD
+	HRLI	T1,-<.FXLND-1>	;Make it an AOBJN pointer
+CHKDI1:	SKIPN	(T1)		;End of list?
+	JRST	.POPJ1##	;Yes, give skip return
+	SETCM	T2,1(T1)	;Get mask for next word of directory
+	JUMPN	T2,.POPJ##	;Error if wildcards
+	ADDI	T1,1		;Step to next word
+	AOBJN	T1,CHKDI1	;Loop for all
+	JRST	.POPJ1##	;Give good return
+;High segment data areas
+
+	DEFINE	SWTCHS,<
+	  XLIST
+	  SP	BEGIN,P.BGN,.SWDTP##,,FS.VRQ
+	  SP	END,P.END,.SWDTP##,,FS.VRQ
+	  SP	REASON,P.REAS,.SIXSW##,,FS.VRQ
+	  LIST
+	>
+
+	DOSCAN	(WCSSW)		;Generate scan tables
+
+
+.ISCBK:	IOWD	1,[SIXBIT/WHYCRS/] ;Name is WHYCRS
+	EXP	0
+	EXP	TYPCHR		;Character typer address
+.ISCBL==.-.ISCBK
+
+.TSCBK:	IOWD	WCSSWL,WCSSWN
+	XWD	WCSSWD,WCSSWM
+	XWD	0,WCSSWP
+	EXP	-1
+	EXP	0
+	XWD	ALCINP,ALCOUT
+.TSCBL==.-.TSCBK
+
+
+;Low segment data areas
+
+	RELOC
+
+MINCOR:	BLOCK	1		;Initial size of program
+PDL:	BLOCK	.PDLEN		;Push down list
+IOW:	IOWD	BLKSIZ,BUF	;IOWD for buffer
+	EXP	0		;Terminator
+
+Z.BGN==.			;Start of block to zero on startup
+ISCBLK:	BLOCK	.FXLEN		;Input SCAN block
+OSCBLK:	BLOCK	.FXLEN		;Output SCAN block
+IOPBLK:	BLOCK	.OPBUF+1	;Input OPEN block
+OOPBLK:	BLOCK	.OPBUF+1	;Output OPEN block
+ILKBLK:	BLOCK	.RBSIZ+1	;Input LOOKUP block
+OENBLK:	BLOCK	.RBSIZ+1	;Output ENTER block
+P.BGN:	BLOCK	1		;Value of /BEGIN switch
+P.END:	BLOCK	1		;Value of /END switch
+P.REAS:	BLOCK	1		;Value of /REASON switch
+TOTAL:	BLOCK	1		;Total number of reloads
+PRIME:	BLOCK	1		;Total number during prime-time
+OBUF:	BLOCK	.BFCTR+1	;Output buffer header
+BUF:	BLOCK	BLKSIZ		;Buffer for input file
+Z.END==.-1			;End of area to zero
+
+
+	END	WHYCRS

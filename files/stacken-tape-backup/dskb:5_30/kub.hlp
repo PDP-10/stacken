@@ -1,0 +1,107 @@
+Program f|r att vrida den ungerska kuben till sitt utg}ngsl{ge.
+==============================================================
+
+Programmet skrivet av Hans Riesel.
+
+Programmet startas med "R GAM:KUB"
+
+Kubens olika delar indelas i:
+mittbitar, sex st, anger sidans f{rg
+h|rnbitar }tta st
+kantbitar, 12 st
+
+I programmet betecknas de olika sidornas f{rger med nummer enligt:
+1 = vit, 2 = bl}, 3 = r|d, 4 = orange, 5 = gr|n och 6 = gul.
+
+I handeln f|rekommer flera olika f{rgsammans{ttningar av kuber.
+Detta program {r utformat f|r en kub av f|ljande utseende:
+
+Med beteckningarna nedan kan kuben ritas upp s} h{r:
+
+    d                            3
+   phab  med f{rgbeteckningar:  6215
+    g                            4
+
+Eller samma sak uttryckt med ord: H}ller man vit sida mot sig
+och bl} upp}t ska orange vara till v{nster och r|tt till h|ger.
+Bortre sidan gul och nedre gr|n. Har man andra placeringar av
+f{rgerna m}ste man byta beteckning p} f{rgerna p} kuben, vilket
+givetvis kan vara sv}rt att genomf|ra.
+
+
+D} programmet exekveras beg{rs indata f|r en sida i taget. Det ska
+anges }tta siffror skilda }t av mellanslag f|r var sida. En sida
+matas in i f|ljande ordning:
+1 5 2
+8 X 6
+4 7 3
+
+
+Antalet m|jliga kombinationer av kuben {r:
+2**12 * (8!/2) * 3**7 * (12!/2) = 43 252 003 274 489 856 000.
+
+Kuben antages ha sidorna:
+d droit, h|ger
+g gauche, v{nster
+h haut, |vre
+b bas, nedre
+a avant, fr{mre
+p posterieur, bakre
+
+H|rnen kallas med beteckningarna ovan:
+hag -> h1      bag -> h5
+hgp -> h2      bgp -> h6
+hpd -> h3      bpd -> h7
+hda -> h4      bda -> h8
+
+Kantbitarna:
+ha -> k1       pd -> k7
+hg -> k2       da -> k8
+hp -> k3       ba -> k9
+hd -> k4       bg -> k10
+ag -> k5       bp -> k11
+gp -> k6       bd -> k12
+
+s betyder att sidan s skall vridas 1/4 varv medsols, s2 betyder
+att den skall vridas 1/2 varv och s3 eller s-1 att den skall
+vridas 1/4 varv motsols.
+
+(s)**n betyder att vridningen s ska utf|ras n g}nger.
+
+A, B och C betecknar sinsemellan n{rst}ende sidor. T ex sidorna
+a, g och p.
+
+
+Transformationsformlerna utf|res fr}n v{nster till h|ger.
+
+]terst{llandet av kuben sker i fyra etapper:
+1.  Kantbitarna p} sina r{tta platser. Vridning 1-10 nedan.
+2.  Kantbitarna vrids r{tt.            Vridning 12-13.
+3.  H|rnen p} sina r{tta platser.      Vridning 14-16.
+4.  H|rnen vrids r{tt.                 Vridning 17-18.
+
+1.  A       Vrid en sida 1/4 varv. (18 olika vridningar m|jliga).
+2.  AB      Vrid tv} n{rliggande sidor 1/4 varv. (270)
+3.  AB(A-1) Vrid tv} n{rliggande sidor 1/4 varv och f|rsta sidan
+            tillbaka igen.
+4.  AB(A-1)(B-1) Vrid tv} n{rliggande sidor 1/4 varv och tillbaka igen.
+5.  ABC(B-1)(A-1)
+6.  ABC(B-1)(C-1)(A-1) Vrid tre n{rliggande sidor 1/4 varv och
+            tillbaka i permuterad ordning.
+7.  (A2)(B2)(C2)(B2)(C2)(A2)
+8.  (AB)**3 Vrid tv} n{rliggande sidor v{xelvis tre g}nger.
+9.  (d-1)(h-1)dhp(h-1)(p-1) Byte av n{rliggande kantbitar k1 och k2.
+            (Sidoeffekt: V{ndning av k7, byte av h|rnen h1 och h7 samt
+            vridning av h|rnet h3).
+10. Byt kantbitar i samma mittplan.
+12. (a-1)ga(g-1)h(g-1)(h-1)g V{ndning av n{rliggande kantbitar k1
+            och k2. (Sidoeffekt: Byte av h|rnen h1 och h4 samt h2 och h5).
+13. V{nd kantbitar i samma mittplan.
+14. (ad(a-1)(d-1))**3 Byter h|rnen h1 och h4 samt h7 och h8.
+15. Byt tre h|rn, variant 1.
+16. Byt tre h|rn, variant 2.
+17. ph(p-1)(h-1)(g-1)(p-1)g(a-1)(g-1)pghp(h-1)(p-1)a
+           Vrider h|rnen h1 och h4.
+18. Vrid motst}ende h|rn.
+
+	<Slut p} GAM:KUB.HLP 810701/PO>

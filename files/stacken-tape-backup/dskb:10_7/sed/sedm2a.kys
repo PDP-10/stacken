@@ -1,0 +1,25 @@
+MIME2A Editor Keyboard (running in enhanced VT52 mode)
+
+  .____.____.____.____.        .____.____.____.____.         .____.____.____.____.      .____.____.____.____.
+  !    !    !page!page!        !line!line!    !    !         !CUR !CUR !CUR !CUR !      !ENTR!RE- !HOME!LEFT!
+  !line!br- !send!prnt!        !ins !del !undl!blnk!         ! UP !DOWN!LEFT!RGHT!      !    !CALL!    !back!
+  !loc ! eak!line!line!        !page!page!ints!b/w !         ! /\ ! \/ ! <- ! -> !      !blue!red !blck!spac!
+  !____!____!____!____!        !____!____!____!____!         !____!____!____!____!      !____!____!____!____!
+
+     ._____.____.____.____.____.____.____.____.____.____.____.____.____.____.____.      .____.____.____.____.
+     !     !    !    !    !    !    !    !    !    !    !    !    !    !    !    !      !    !    !    !    !
+     ! esc ! !  ! @  ! #  ! $  ! %  ! ^  ! &  ! *  ! (  ! )  ! _  ! +  ! ~  ! |  !      !MARK!LINE!CASE! -  !
+     !     ! 1  ! 2  ! 3  ! 4  ! 5  ! 6  ! 7  ! 8  ! 9  ! 0  ! -  ! =  ! `  ! \  !      ! 7  ! 8  ! 9  !    !
+     !_____!_.__!_.__!_.__!_.__!_.__!_.__!_.__!_.__!_.__!_.__!_.__!_.__!_.__!_.__!      !____!____!____!____!
+     !       !    !ROLL!SRCH!SRCH!ROLL!ROLL!BACK!TAB !ENTR!PERC!    !    !RE- !         !    !    !    !    !
+     ! TAB   !xon !BK L!BACK!FWD !FW L!FW P!TAB !    !CCH !GOTO! {  ! }  !SET !         ! 4  ! 5  ! 6  ! ,  !
+     !       ! q  ! w  ! e  ! r  ! t  ! y  ! u  ! i  ! o  ! p  ! [  ! ]  ! del!         !    !    !    !    !
+  .__!_._____!____!____!____!____!____!____!____!____!____!_.__!_.__!____!____!_.       !____!____!____!____!
+  !    !       !ROLL!    !INS !DEL !PUT !CUR !ERAS!SLID!SLID!    !    !         !       !SET !SWCH!WIN-!INS !
+  !cntl! caps  !BL P!xoff!LINE!LINE!    !LEFT!EOL !LEFT!RGHT! :  ! "  ! RETURN  !       !FILE!    !DOW !MODE!
+  !    ! lock  ! a  ! s  ! d  ! f  ! g  ! h  ! j  ! k  ! l  ! ;  ! ,  !         !       ! 1  ! 2  ! 3  ! e  !
+  !____!_______!____!____!____!____!____!____!____!____!____!_.__!_.__!____.____!       !____!____!____! n  !
+  !    !         !EXIT!EXCT!ABRT!PICK!INS !DEL !RE- !    !    !    !       !ERAS!       !         !ERAS! t  !
+  !num ! shift   !    !    !    !    !SPAC!SPAC!TURN! <  ! >  ! ?  ! shift !EOL !       !REAL-TAB !CHAR! e  !
+  !    !         ! z  ! x  ! c  ! v  ! b  ! n  ! m  ! ,  ! .  ! /  !       !lnfd!       !    0    ! .  ! r  !
+  !____!_________!____!____!____!____!____!____!____!____!____!____!_______!____!       !_________!____!____!

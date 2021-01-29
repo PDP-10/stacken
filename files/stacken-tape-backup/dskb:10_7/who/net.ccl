@@ -1,0 +1,8 @@
+/MODE:NODE/DPY/SUMMARY/PRINT-
+/INITIAL:("ANF10 status of ",NAME,"for ",DATE," ",TIME,", Up:",UPTIME,CRLF)-
+/HEADING:(-
+" Node  Number  OPR  CTL  LAP  LAR  LAS  LMA  LMP  LMR  LMS  MOM",CRLF,-
+"------ ------  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---")-
+/FORMAT:(NODENA:6:L,"  ",NODENU:5:R,"  ",-
+OPR:3:R,"  ",CTL:3:R,"  ",LAP:3:R,"  ",LAR:3:R,"  ",LAS:3:R,"  ",-
+LMA:3:R,"  ",LMP:3:R,"  ",LMR:3:R,"  ",LMS:3:R,"  ",MOM:3:R)

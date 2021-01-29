@@ -1,0 +1,515 @@
+TITLE	tftp -- tftp client.
+
+SEARCH	GLXMAC			;Get GLXLIB symbols
+search	udpsym
+opdef udp.[call[sixbit 'udp.']]
+
+PROLOG	tftp
+
+TFTVER==1			;Major version 1
+TFTMIN==0			;No minor version yet
+TFTWHO==2			;Who last patched this (JEQ)
+TFTEDT==1			;Edit level
+
+.TEXT	"/SYMSEG:LOW/LOCALS"	;Debugging aid
+
+; Macros:
+
+DEFINE	FLDDB.(TYP,FLGS,DATA,HLPM,DEFM,LST),<
+	..XX==<FLD(TYP,CM%FNC)>+FLGS+<Z LST>
+	IFNB <HLPM>,<..XX==CM%HPP!..XX>
+	IFNB <DEFM>,<..XX==CM%DPP!..XX>
+	EXP	..XX
+	IFNB <DATA>,<DATA>
+	IFB  <DATA>,<0>
+	IFNB <HLPM>,<POINT 7,[ASCIZ \HLPM\]>
+	IFB  <HLPM>,<IFNB <DEFM>,<0>>
+	IFNB <DEFM>,<POINT 7,[ASCIZ \DEFM\]>
+>;End of DEFINE FLDDB.
+
+DEFINE	FLDBK.(TYP,FLGS,DATA,HLPM,DEFM,BRKADR,LST),<
+	..XX==<FLD(TYP,CM%FNC)>+FLGS+<Z LST>
+	IFNB <HLPM>,<..XX=CM%HPP!..XX>
+	IFNB <DEFM>,<..XX=CM%DPP!..XX>
+	IFNB <BRKADR>,<..XX=CM%BRK!..XX>
+        EXP	..XX
+	IFNB <DATA>,<DATA>
+	IFB <DATA>,<0>
+	IFNB <HLPM>,<POINT 7,[ASCIZ \HLPM\]>
+	IFB <HLPM>,<IFNB <DEFM'BRKADR>,<0>>
+	IFB <DEFM>,<IFNB <BRKADR>,<0>>
+	IFNB <DEFM>,<POINT 7,[ASCIZ \DEFM\]>
+	IFNB <BRKADR>,<BRKADR>
+>;End of DEFINE FLDBK.
+
+udp==1				;I/O channel for network.
+
+;***  Data area
+
+CMDBLK:	BLOCK	.CMGJB+1	;The command state block
+PDL:	BLOCK	<PDLSIZ==^D100>	;Push down list
+CMDBUF:	BLOCK	<BUFSIZ==100>	;Command buffer
+ATMBUF:	BLOCK	<ATMSIZ==100>	;Atom buffer
+REPADR:	BLOCK	1		;Reparse address.
+NXTCMD:	BLOCK	1		;Address to go to for next command.
+STACKP:	BLOCK	1		;Stack pointer for each command level.
+CMDGJB:	BLOCK	16		;GTJFN% argument block for COMND%
+BUZZFB:	FLDDB.(.CMNOI)		;Function block for buzzing.
+
+remadr:	byte (8) ^D192, ^D168, ^D111, ^D58 ;Preload to save time.
+;;;	block	1		;Remote IP address.
+ascflg:	exp	-1		;ascii (-1) or binary (0) flag.
+remfil:	block	atmsiz		;Remote file name.
+lclifn:	block	1		;local ifn.
+nxtblk:	block	1		;Next block # to receive.
+donflg:	block	1		;get/put done.
+
+timflg:	block	1		;Timer interrupt happened.
+udpflg:	block	1		;UDP: interrupt happened.
+
+psivec:!			;Interrupt vector.
+psiudp:	exp	udpint, 0, 0, 0	;Slot for UDP: interrupts.
+psitim:	exp	timint, 0, 0, 0	;Slot for timer interrupts.
+
+; Initialization block:
+
+IB:	$BUILD	IB.SZ
+	 $SET	IB.OUT,,T%TTY
+	 $SET	IB.FLG,IT.OCT,1
+	$EOB
+
+fob:	$build	fob.sz
+	  $set(fob.fd,,cmdgjb)
+	  $set(fob.cw,fb.bsz,7)
+	$eob
+
+argblk:	block	.udlen
+
+	buflen==^D516		;datagram buffer length.
+
+buffer:	block	<buflen+3>/4	;The buffer itself.
+
+; Command state template:
+
+CMDTMP:	EXP	0		;Flags,,reparse address
+	XWD	.PRIIN,.PRIOU	;Input JFN,,output JFN
+	POINT	7,PROMPT	;Byte pointer to prompter
+	POINT	7,CMDBUF	;Byte pointer to command buffer
+	POINT	7,CMDBUF	;Byte pointer to next-to-be-parsed
+	EXP	BUFSIZ*5-1	;Count of space left in buffer
+	EXP	0		;Number of unparsed chars
+	POINT	7,ATMBUF	;Byte pointer to atom buffer
+	EXP	ATMSIZ*5-1	;Space left in atom buffer
+	EXP	CMDGJB		;GTJFN% block pointer
+CMTSIZ==.-CMDTMP		;Get size of template
+SUBTTL  Main lupe
+
+START:	JFCL			;Ignore CCL entry
+	RESET			;Reset the spinning world
+	MOVE	P,[		;Load the stack pointer
+		IOWD	PDLSIZ,PDL]
+	MOVEI	S1,IB.SZ	;Load size of init block
+	MOVEI	S2,IB		;Load address of init block
+	PUSHJ	P,I%INIT	;Initialize the world
+	movei	t1,psivec	;Set up the PSI system.
+	piini.	t1,		; ...
+	 jfcl			; How to handle?
+	movsi	t1,(ps.fon)	;Turn system on.
+	pisys.	t1,		; ...
+	 jfcl			; How to handle this error?
+	move	t1,[ps.fac+[
+			exp .pctmr
+			xwd <psitim-psivec>,0
+			xwd 0,0]]
+	pisys.	t1,
+	 jfcl			; Cant really happen.
+	MOVEI	S1,CMDBLK	;Load command state block address
+	HRLI	S1,CMDTMP	;Load address of template
+	BLT	S1,CMDBLK+CMTSIZ-1 ;Fill in the block from the template
+;*
+;* Now we start parsing commands.
+;*
+	PUSHJ	P,ENTLVL	;Enter the initial command level.
+	MOVEI	S1,PROMPT	;Load address of normal prompter.
+	PUSHJ	P,SETPRO	;Set prompter & reparse address, init COMND%.
+	MOVEI	S2,[FLDDB.(.CMKEY,,CMDTAB)]
+	PUSHJ	P,PARSE		;Get a command
+	 JUMPF	CMDERR		; Error, go complain
+	HRRZ	S2,(T2)		;Load routine address
+	JRST	(S2)		;Dispatch
+
+PROMPT:	ASCIZ	"TFTP>"
+
+CMDTAB:	$STAB			;Start of command table
+	 keytab .exit2,  <>, cm%inv
+	 keytab .ascii,  <ascii>
+	 keytab .binary, <binary>
+	 keytab .connect,<connect>
+	 keytab	.exit,   <exit>
+	 keytab .get,    <get>
+	 keytab .put,    <put>
+	 keytab .exit,   <quit>
+	 keytab .show,   <show>
+	$ETAB
+SUBTTL  Parsing subroutines.
+;*
+;* Here to perform a COMND% jsys for the user.  Call with S2 pointing
+;* to a function data block.
+;*
+PARSE:	MOVEI	S1,CMDBLK	;Load pointer to command state block.
+	PUSHJ	P,S%CMND	;Do the COMND%
+	MOVE	T1,CR.FLG(S2)	;Get flags
+	MOVE	T2,CR.RES(S2)	;Get value
+	MOVE	T3,CR.PDB(S2)	;Get PDB pointers
+	TXNE	T1,CM%RPT	;Any need for a reparse?
+	 JRST	PARS.2		; Yes, go set up for reparsing.
+	TXNN	T1,CM%NOP	;Did it parse?
+	 $RETT			; Yes, return true
+	$RETF			;Nope, return false
+
+PARS.2:	MOVE	P,STACKP	;Restore stack pointer
+	JRST	@REPADR		;Return to somewhere.
+;*
+;* Here on parsing errors.
+;*
+CMDERR:	$TEXT	T%TTY,<^M^J?Command error - ^E/[-1]/>
+	move	p,stackp	;Restore stack pointer,
+	jrst	@nxtcmd		; and go for next command.
+
+;*
+;* Here to confirm a command.
+;*
+CONFRM:	PUSHJ	P,.SAVET	;Save all registers.
+	MOVEI	S2,[FLDDB.(.CMCFM)]
+	PUSHJ	P,PARSE		;Call the parser
+	 JUMPF	CMDERR		; Check for errors
+	$RETT			;No errors, return true.
+;*
+;* Here to act noisy.
+;*
+BUZZ:	HRROM	S1,BUZZFB+.CMDAT;Set up FDB for parsing.
+	MOVEI	S2,BUZZFB	;Load FDB address.
+	JRST	PARSE		;Go do the work.
+;*
+;* Routine to set up prompter and reparse address.
+;*
+SETPRO:	HRROM	S1,CMDBLK+.CMRTY
+	POP	P,REPADR	;Load new reparse address from top-of-stack
+	MOVEI	S1,CMDBLK	;Load command state block address
+	MOVEI	S2,[FLDDB.(.CMINI)]
+	PUSHJ	P,S%CMND	;Init COMND%
+	JRST	@REPADR		;Return via reparse address
+;*
+;* Here to enter a subcommand level.
+;*
+ENTLVL:	POP	P,TF		;Get our return address.
+	PUSH	P,NXTCMD	;Save previous command loop address.
+	PUSH	P,STACKP	;Save previous stack pointer.
+	MOVEM	TF,NXTCMD	;Save the new loop address.
+	MOVEM	P,STACKP	;Save the new stack pointer.
+	JRST	@NXTCMD		;Return to caller.
+;*
+;* Here to exit a subcommand level.
+;*
+EXILVL:	POP	P,TF		;Get our return address.
+	MOVE	P,STACKP	;Load this level stack pointer.
+	POP	P,STACKP	;Restore previous stack pointer.
+	POP	P,NXTCMD	;Restore previous command loop address.
+	JRST	@TF		;Return.
+SUBTTL  Command handlers -- EXIT and ^Z
+
+timint:	setom	timflg		;Timer interrupt, flag this.
+dismis:	debrk.
+	 jfcl
+	popj	p,
+
+udpint:	setom	udpflg		;UDP: interrupt, flag this.
+	jrst	dismis
+
+;* command handlers:
+
+.ascii:	movei	s1,[asciz "mode"]
+	pushj	p,buzz
+	pushj	p,confrm
+	setom	ascflg
+	jrst	@nxtcmd
+
+.binary:movei	s1,[asciz "mode"]
+	pushj	p,buzz
+	pushj	p,confrm
+	setzm	ascflg
+	jrst	@nxtcmd
+
+.connect:
+	push	p,[4]
+.conn2:	movei	s2,[flddb.(.cmnux,cm%sdh,^D10,<ip address>)]
+	pushj	p,parse
+	 jumpf	cmderr
+	lsh	t4,^D8
+	andi	t2,377
+	ior	t4,t2
+	sosg	(p)
+	 jrst	.conn3
+	movei	s2,[flddb.(.cmtok,,<point 7,[asciz "."]>)]
+	pushj	p,parse
+	 jumpf	cmderr
+	jrst	.conn2
+
+.conn3:	lsh	t4,4
+	exch	t4,(p)
+	pushj	p,confrm
+	pop	p,remadr
+	jrst	@nxtcmd
+
+.EXIT:	MOVEI	S1,[ASCIZ "to monitor"]
+	PUSHJ	P,BUZZ		;Give buzz words.
+	PUSHJ	P,CONFRM	;Confirm command
+.exit2:	$HALT			;Visit operating system
+	JRST	@NXTCMD		;Back for next command
+
+rembrk:	777777,,777760
+	400000,,000000
+	000000,,000000
+	000000,,000020
+
+.get:	movei	s1,[asciz "remote file"]
+	pushj	p,buzz
+	movei	s2,[fldbk.(.cmfld,,,<remote file>,,rembrk)]
+	pushj	p,parse
+	 jumpf	cmderr
+	move	s1,[xwd atmbuf,remfil]
+	blt	s1,remfil+atmsiz-1
+	movei	s1,[asciz "local file"]
+	pushj	p,buzz
+	movei	s2,[flddb.(.cmofi)]
+	pushj	p,parse
+	 jumpf	cmderr
+	pushj	p,confrm
+	pushj	p,tftget
+	jrst	@nxtcmd
+
+prsrfi:	movei	s1,[asciz "remote file"]
+	pushj	p,buzz
+	movei	s2,[fldbk.(.cmfld,,,<remote file>,,rembrk)]
+	pushj	p,parse
+	 jumpf	cmderr
+	move	s1,[xwd atmbuf,remfil]
+	blt	s1,remfil+atmsiz-1
+	popj	p,
+
+.put:	movei	s1,[asciz "local file"]
+	pushj	p,buzz
+	movei	s2,[flddb.(.cmifi)]
+	pushj	p,parse
+	 jumpf	cmderr
+	pushj	p,prsrfi
+	pushj	p,confrm
+	pushj	p,tftput
+	jrst	@nxtcmd
+
+.show:	movei	s1,[asciz "status"]
+	pushj	p,buzz
+	pushj	p,confrm
+	$text(,<remote address = ^A>)
+	move	t1,remadr
+	pushj	p,prtipa
+	movei	t1,[asciz "ascii"]
+	skipn	ascflg
+	 movei	t1,[asciz "binary"]
+	$text(,<, mode = ^T/(t1)/>)
+	jrst	@nxtcmd
+
+b1==377b7
+b2==377b15
+b3==377b23
+b4==377b31
+
+prtipa:	$text (,<^d/t1,b1/.^d/t1,b2/.^d/t1,b3/.^d/t1,b4/^A>)
+	popj	p,
+
+tftput:	$text	(,<[put: remote = ^T/remfil/, local = ^F/cmdgjb/]>)
+	$text	(,<... not yet implemented ...>)
+	popj	p,
+
+tftget:	$text	(,<[get: remote = ^T/remfil/, local = ^F/cmdgjb/]>)
+	skipn	t1,remadr
+	 jrst[	$text(,<?No remote address given.>)
+		jrst @nxtcmd]
+	movem	t1,argblk+.udrad
+	movei	t1,^D69
+	movem	t1,argblk+.udrpr
+	setzm	t1,argblk+.udlad
+	setzm	t1,argblk+.udlpr
+	movei	t1,udp
+	movem	t1,argblk+.uddev
+	open	udp,[
+		exp .iobyt+uu.aio
+		sixbit 'udp'
+		xwd 0,0]
+	 jrst[	$text(,<?Cannot open UDP:>)
+		jrst	@nxtcmd]
+	move	t1,[ps.fac+[
+			exp udp
+			xwd <psiudp-psivec>,ps.rid
+			xwd 0,0]]
+	pisys.	t1,
+	 jrst[	$text(,<?cannot add UDP: interrupts.>)
+		jrst @nxtcmd]
+	setzm	udpflg
+	movei	s1,fob.sz
+	movei	s2,fob
+	pushj	p,f%oopn	;Try open output file.
+	 jumpf[	$text(,<?Cannot open ^F/cmdgjb/ for output.>)
+		jrst	@nxtcmd]
+	movem	s1,lclifn	;Save ifn.
+
+	movei	t1,1
+	movem	t1,nxtblk
+	setzm	donflg
+
+	movei	t4,6		;Number of tries.
+
+get.0:	pushj	p,bldrrq
+	pushj	p,sndbuf
+	movei	t1,5		;Set timeout.
+	pushj	p,alarm
+get.1:	skipn	timflg		;Timeout?
+	 jrst	get.2		; No.
+	sojge	t4,get.0	;Yes, had enough?
+	$text(,<?No answer from ^A>)
+	move	t1,remadr
+	pushj	p,prtipa
+	$text(,<, aborting.>)
+	jrst	get.8
+
+get.2:	skipe	udpflg		;UDP activity?
+	 jrst	get.3		; Yes, go on.
+	movei	t1,1
+	sleep	t1,
+	jrst	get.1
+
+get.3:	movei	t1,^D30		;Set timeout.
+	pushj	p,alarm
+get.4:	skipe	donflg		;Done now?
+	 jrst	get.9
+	skipn	udpflg		;UDP 
+	 jrst	get.6
+	setzm	udpflg
+get.5:	movei	t1,^D516
+	movem	t1,argblk+.udcnt
+	movei	t1,buffer
+	movem	t1,argblk+.udbuf
+	movei	t1,.udrea
+	movem	t1,argblk+.udfnc
+	movei	t1,argblk
+	udp.	t1,
+	 jrst	get.4
+	ldb	t1,[point 16,buffer,15]
+	cain	t1,5
+	 jrst	get.er
+	cain	t1,3
+	 jrst	get.dt
+get.xx:	move	t1,nxtblk	;Check expected seq:n
+	soje	t1,get.1	; First block is special.
+	jrst	get.5		;Not our block, continue waiting.
+
+get.er:	ldb	t1,[point 16,buffer,31]
+	$text(,<TFTP error ^d/t1/, ^A>)
+	ldb	t1,[point 8,buffer+1,7]
+	jumpe	t1,get.e2
+	move	t4,[point 8,buffer+1]
+	$text(,<(^Q/t4/)>)
+	jrst	get.8
+
+get.e2:	$text(,<string missing.>)
+	jrst	get.8
+
+get.dt:	ldb	t1,[point 16,buffer,31]
+	came	t1,nxtblk
+	 jrst	get.5
+	pushj	p,cpydat
+	setom	udpflg
+	jrst	get.3
+
+get.6:	skipn	timflg		;Timeout?
+	 jrst	get.7
+	$text(,<?Timeout talking to ^A>)
+	move	t1,remadr
+	pushj	p,prtipa
+	$text(,<, aborting.>)
+	jrst	get.9
+
+get.7:	movei	t1,1
+	sleep	t1,
+	jrst	get.4
+
+get.8:	move	s1,lclifn
+	pushj	p,f%rrel
+	 ;* Error? How to handle?
+	jrst	get.10
+
+get.9:	move	s1,lclifn
+	pushj	p,f%rel
+	 ;* handle error? how?
+
+get.10:	;* remove udp: and timer interrupts, close udp: device.
+	jrst	@nxtcmd
+
+alarm:	pitmr.	t1,
+	 jfcl
+	setzm	timflg
+	popj	p,
+
+cpydat:	move	t4,[point 8,buffer+1]
+	move	t3,argblk+.udcnt
+	subi	t3,4		;Just the data count.
+	caie	t3,^D512	;Full block?
+	 setom	donflg		; No, last one.
+	aos	nxtblk		;Bump next block expected.
+	jumple	t3,sndack	;If no data at all, don't copy.
+cpy.2:	move	s1,lclifn
+	ildb	s2,t4
+	pushj	p,f%obyt
+	 ;* error? handle how?
+	sojg	t3,cpy.2
+
+sndack:	movei	t1,4
+	dpb	t1,[point 16,buffer,15]
+	movem	t1,argblk+.udcnt
+sndbuf:	movei	t1,.udset
+	movem	t1,argblk+.udfnc
+	movei	t1,argblk
+	udp.	t1,
+	 jrst[	$text(,<?cannot set params, udp error ^D/t1/>)
+		jrst @nxtcmd]
+	movei	t1,.udwri
+	movem	t1,argblk+.udfnc
+	movei	t1,argblk
+	udp.	t1,
+	 jrst[	$text(,<?cannot send packet, udp error ^D/t1/>)
+		jrst @nxtcmd]
+	popj	p,
+
+bldrrq:	movei	t1,1
+	dpb	t1,[point 16,buffer,15]
+	move	t1,[point 7,remfil]
+	move	t2,[point 8,buffer,15]
+	movei	t3,0		;Char count.
+bldr.1:	ildb	s2,t1
+	idpb	s2,t2
+	addi	t3,1
+	jumpn	s2,bldr.1
+	skipn	ascflg		;Ascii mode?
+	 skipa	t1,[point 7,[asciz "octet"]]
+	  move	t1,[point 7,[asciz "netascii"]]
+bldr.2:	ildb	s2,t1
+	idpb	s2,t2
+	addi	t3,1
+	jumpn	s2,bldr.2
+	addi	t3,2		;Include opcode bytes.
+	movem	t3,argblk+.udcnt
+	movei	t1,buffer
+	movem	t1,argblk+.udbuf
+	popj	p,
+
+END	START

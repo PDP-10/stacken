@@ -1,0 +1,69 @@
+FUR is a File Utility Routine
+Its commands are:
+	DELETE <list of files>
+	ERASE <list of files or magnetic tapes>
+	RENAME <new name>=<old names>
+	PAD <value> <list of files>
+	COPY <newname>=<old names>
+	FIND <list of files>
+In addition, the command
+	DECIDE
+will cause FUR to question you about each change just before
+it is done.  The responses to the ? are Y (yes), N (no), G (go), H (help) or
+Q (quit).  NODECIDE puts FUR back into the automatic mode. 
+The BEQUIET switch will cut down on output; NOBEQUIET restores it.
+Operation on non-disk files may not work.  Protection on
+files can be changed with the /PROTECTION switch on the
+left.  Version numbers can be added or changed with /VERSION.
+
+You can put the BEQUIET or DECIDE switches in your SWITCH.INI
+file to have them invoked automatically.
+
+Files can be encrypted when copied by FUR.  Use the /ENCRYPT:key
+switch.  The 'key' can be a string of letters and numbers up to 100
+characters long.  Special characters can be included if 'key' is
+enclosed in quotation marks. The /ENCRYPT key applies to the file
+which it immediately follows.
+
+Examples:
+Make a copy of help files beginning with W in your own area:
+	/COPY =HLP:W*
+Delete all system .TMP files not accessed in last 30 days
+	/DELETE ALL:.TMP[*,*,*,*,*]/ABEFORE:-30D
+Delete all files in SFD [,,PLOTX,OLD]
+	/DELETE [,,PLOTX,OLD]
+Delete all files as above but write the files to zeroes first
+	/ERASE [,,PLOTX,OLD]
+Erase magnetic tape MTB2:
+	/ERASE MTB2: ! Note colon is required
+Move PLOTS.* to [,,PLOTX,OLD] FROM [,,PLOTX,NEW]
+	/RENAME [,,PLOTX,OLD]=PLOTS[,,PLOTX,NEW]
+Protect all files on PAK3:[10,*] with code 055
+	/RENAME /PR:055=PAK3:[10,*]
+Put version number 23B(146) on file COMPIL.MAC
+	/RENAME /VERSION:23B(146)=COMPIL.MAC
+Put spooled name "MLAB" on the file FOO.DAT
+	/RENAME /SPLNAM:MLAB=FOO.DAT
+Copy all files from DSKA: to DSKD:
+	/COPY DSKD:[,,*,*,*,*,*]=DSKA:[,,*,*,*,*,*]
+Copy all of file structure DSKG: to PAKW: (backup disk on disk)
+	/BEQUIET ! to cut down on printing
+	/COPY PAKW:[*,*,*,*,*,*,*]=DSKG:[*,*,*,*,*,*,*]
+Make an encrypted copy of the file SOS.MAC:
+	/COPY SOS.FUN/PROT:077/ENCRYPT:"SECRET KEY"=SOS.MAC
+Make this file usable again:
+	/COPY SOS.MAC=SOS.FUN/ENCRYPT:"SECRET KEY"
+Change the key on the file to "WWW"
+	/COPY SOS.MAC/ENC:WWW=SOS.MAC/ENCRYPT:"SECRET KEY"
+Pad the ISAM index file MASTER.IDX with 20 blocks
+	/PAD +20 MASTER.IDX
+Pad the ISAM data file MASTER.IDA to twice its present size
+	/PAD *2 MASTER.IDA
+Concatenate files A,B, and C creating D.
+Note that FUR never concatenates unless /CONCATENATE is present
+	/COPY D/CONCATENATE=A,B,C,D
+
+Warning: Be very careful with encryption; you can definitely
+encrypt your file twice, and/or lose due to disk error if the
+input and output names are the same.  The extension .ENC is
+recommended for encrypted files to help you remember.

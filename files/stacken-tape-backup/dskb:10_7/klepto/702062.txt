@@ -1,0 +1,453 @@
+
+               Digital Equipment Corporation
+             **DECsystem-10 Customer Support**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                      PCO LOG REPORT
+                      --------------
+
+
+
+
+
+
+
+
+
+                        12-SEP-84
+
+
+         This document contains the most current
+        information  on the Program Change Orders
+                    recorded to date.Digital Equipment Corporation       12-SEP-84    Page   1
+PCO Log Report
+
+                   *********************
+                   *PCO #:10-702   -062*
+                   *********************
+
+
+[Program Data]          System:   702
+                        Component:702
+
+[Validity]         7.02, FIXED IN 7.03, QUASAR 4(1216)
+
+[Date Entered]          27-JUL-84
+
+[Programmer]            SENDLOSKY
+
+[Routines]              STRMPA    I$MSTR
+
+[Key Words]             .IPCST      STRUCTURE   OMOUNT
+
+[Source Before Edit]    %702 (000000)
+
+[Source After Edit]     %702 (011258)
+
+[Miscellaneous]         DOC changes:   Y
+                        SER/SPR Number:10-034816
+                        Archived:      NO
+                        OTHER PRODUCT:
+                        AUTOPATCH TAPE #
+
+
+************************************************************************
+
+[Notes]Digital Equipment Corporation       12-SEP-84    Page   2
+PCO Log Report
+
+[PCO Write-up]
+
+
+
+                        **********
+
+
+[SYMPTOM]
+ 
+When a structure is mounted  by  a  program  other  than  PULSAR,
+QUASAR never knows about it.
+ 
+ 
+
+                        **********
+
+
+[DIAGNOSIS]
+ 
+No code in the monitor or QUASAR.
+ 
+ 
+
+                        **********
+
+
+[CURE]
+ 
+Add the code.  In the monitor, when a structure is being  mounted
+by  someone  other  than  PULSAR,  send the new .IPCST, structure
+mounted message, to QUASAR.  In QUASAR, add the code  to  support
+this new message from the monitor.
+ Digital Equipment Corporation       12-SEP-84    Page   3
+PCO Log Report
+
+
+[FILCOM]
+File 1)	GLXX:UUOSYM.BAS[30,702,BLD,LWS]	created: 1319 13-Dec-83
+File 2)	GLXX:UUOSYM.MAC[30,702,BLD,LWS]	created: 1313 17-Jul-84
+ 
+1)72	.IPCS1==1	;FIRST ARGUMENT
+****
+2)72		.IPCST==47	;STRUCTURE MOUNT (TO MDA)
+2)	.IPCS1==1	;FIRST ARGUMENT
+**************
+ Digital Equipment Corporation       12-SEP-84    Page   4
+PCO Log Report
+
+
+[FILCOM]
+File 1)	GLXX:IPCSER.BAS[30,702,BLD,LWS]	created: 1039 04-Jan-84
+File 2)	GLXX:IPCSER.MAC[30,702,BLD,LWS]	created: 1327 17-Jul-84
+ 
+1)24	.IPCTL==:IPCFTM-IPCFTB+1
+****
+2)24	IPCFST:	EXP	ERRUF		;(47) STRUCTURE MOUNT (TO MDA)
+2)	.IPCTL==:IPCFTM-IPCFTB+1
+**************
+1)24	IPCFM==.-IPCFTB			;LENGTH OF TABLE
+****
+2)24	.IPCST==IPCFST-IPCFTB+1
+2)	IPCFM==.-IPCFTB			;LENGTH OF TABLE
+**************
+1)52	>;IFN FTMDA
+**** @ REMMPA+9
+2)53	;STRMPA - NOTIFY MDA OF A STRUCTURE MOUNT
+2)	;	F / STR D.B.
+2)	;	RETURN 	CPOPJ	ALWAYS
+2)	STRMPA::PUSHJ	P,SAVE1##	;NEED A PRESERVED AC
+2)		MOVEI	P1,1+1+1	;NEED ONE OVERHEAD WORD + 1 FOR
+	STR NAME + 1 FOR UNIT
+2)		HLRZ	T1,STRUNI##(F)	;PICK UP FIRST UNIT IN STR
+2)	STRMP1:	HLRZ	T1,UNISTR##(T1)	;FIND NEXT UNIT
+2)		SKIPE	T1		;END OF CHAIN?
+2)		AOJA	P1,STRMP1	;NOT YET
+2)		MOVE	T2,P1		;GET NUMBER OF WORDS NEEDED
+2)		PUSHJ	P,GETWDS##	;GET SOME CORE
+2)		  POPJ	P,		;CAN'T
+2)		MOVEI	T3,.IPCST	;FUNCTION CODE
+2)		HRLI	T3,(P1)		;LENGTH
+2)		MOVEM	T3,0(T1)	;STORE IT
+2)		MOVE	T3,STRNAM##(F)	;GET STR NAME
+2)		MOVEM	T3,1(T1)	;STORE IT
+2)		MOVSI	P1,(P1)		;SAVE [LENGTH,,MESSAGE ADDRESS]
+2)		HRR	P1,T1
+2)		HLRZ	T3,STRUNI##(F)	;GET FIRST UDB ADDR
+2)	STRMP2:	MOVE	T2,UNINAM##(T3)	;GET UNIT NAME
+2)		MOVEM	T2,2(T1)	;SAVE
+2)		HLRZ	T3,UNISTR##(T3)	;GET LINK TO NEXT UDB
+2)		SKIPE	T3		;END OF CHAIN?
+2)		AOJA	T1,STRMP2	;NOT YET
+2)		MOVE	T1,P1		;GET MESSAGE ADDRESS BACK
+2)		PJRST	ATTMP1		;SEND IT AND RETURN
+2)	>;IFN FTMDA
+**************
+ Digital Equipment Corporation       12-SEP-84    Page   5
+PCO Log Report
+
+
+[FILCOM]
+File 1)	GLXX:FILFND.BAS[30,702,BLD,LWS]	created: 0944 17-Jan-84
+File 2)	GLXX:FILFND.MAC[30,702,BLD,LWS]	created: 1518 17-Jul-84
+ 
+1)30		JRST	CPOPJ1##	;RETURN TO HAPPY USER
+**** @ DEFS13+10
+2)30	IFN FTMDA,<
+2)		CAME	J,TLPJOB##	;PULSAR DOING THE MOUNT?
+2)		S0PSHJ	STRMPA##	;NO--TELL QUASAR WHATS GOING ON
+2)	> ;END IFN FTMDA
+2)		JRST	CPOPJ1##	;RETURN TO HAPPY USER
+**************
+ Digital Equipment Corporation       12-SEP-84    Page   6
+PCO Log Report
+
+
+[FILCOM]
+File 1)	GLXX:QSRMAC.MAC[7,3,GALAXY,QSRSCH]    	created: 0958 05-Jul-84
+File 2)	GLXX:QSRMAC.MAC[7,3,GALAXY,QSRSCH,LWS]	created: 1440 16-Jul-84
+ 
+1)1	QSREDT==1216			;EDIT NUMBER
+1)2	SUBTTL	Table of Contents
+****
+2)1	QSREDT==1217			;EDIT NUMBER
+2)2	SUBTTL	Table of Contents
+**************
+1)12	\	;End Of Revision History
+****
+2)	1217	QSRMAC	Add support for new 'structure mounted' message
+2)		QSRMDA	from monitor. This message is a result from
+2)		QSRT10	a priv'd user mounting a structure without
+2)		QUASAR	PULSAR getting involved.
+2)			GCO 10055	16-Jul-84 /LWS
+2)	\	;End Of Revision History
+**************
+1)126		   VL.RSN==777B35		;VOLUME RESOURCE NUMBER
+****
+2)126		   VL.FRC==1B19			;[1217] VOLUME 'FORCE' M
+	OUNTED
+2)		   VL.RSN==777B35		;VOLUME RESOURCE NUMBER
+**************
+1)127		.UCBCN:! BLOCK	1		;USER MOUNT COUNT
+1)		.UCBVL:! BLOCK	1		;PTR TO VOLUME MOUNTED O
+	N THIS DEVICE
+1)		.UCBVS:! BLOCK	1		;POINTER TO THE VSL WHIC
+	H OWNS THIS UCB
+1)		UCBLEN:!			;A UCB LENGTH
+1)			DEPHASE
+****
+2)127		.UCBS1:! BLOCK	1		;[1217] YES, A SECOND WO
+	RD FOR STATUS
+2)		    U1.FRC==1B0			  ;[1217] 'FORCED MOUNT'
+	. VOL LINKED IS
+2)						  ;[1217]  BEING MOUNTED
+	 BEHIND PULSAR'S BACK
+2)		.UCBCN:! BLOCK	1		;USER MOUNT COUNT
+2)		.UCBVL:! BLOCK	1		;PTR TO VOLUME MOUNTED O
+	N THIS DEVICE
+2)		.UCBVS:! BLOCK	1		;POINTER TO THE VSL WHIC
+	H OWNS THIS UCB
+2)		UCBLEN:!			;A UCB LENGTH
+2)		.UCBS0==.UCBST			;[1217] FOR SYMMETRY
+2)			DEPHASE
+**************
+ Digital Equipment Corporation       12-SEP-84    Page   7
+PCO Log Report
+
+
+[FILCOM]
+File 1)	GLXX:QUASAR.MAC[7,3,GALAXY]           	created: 1438 25-Apr-84
+File 2)	GLXX:QUASAR.MAC[7,3,GALAXY,QSRSCH,LWS]	created: 1434 16-Jul-84
+ 
+1)4		;DEFINE MESSAGE ENTRY POINTS THAT ARE SYSTEM DEPENDENT
+****
+2)4		SYSPRM	%IPCST,.IPCST,0		;[1217] MONITOR STR MOUN
+	TED MSG (TOPS10)
+2)		;DEFINE MESSAGE ENTRY POINTS THAT ARE SYSTEM DEPENDENT
+**************
+1)5		SUBTTL		SYSTEM QUASAR
+****
+2)4		SYSPRM	X$MSTR,I$MSTR##,E$IMT	;[1217] MON STR MOUNTED
+	MSG (TOPS10)
+2)5		SUBTTL		SYSTEM QUASAR
+**************
+1)8		TBLLEN==.-SYSTBL		;TABLE LENGTH
+****
+2)8		%IPCST,,X$MSTR			;[1217] STR MOUNTED MSG
+2)		TBLLEN==.-SYSTBL		;TABLE LENGTH
+**************
+ Digital Equipment Corporation       12-SEP-84    Page   8
+PCO Log Report
+
+
+[FILCOM]
+File 1)	DSK:QSRMDA.MAC[7,3,GALAXY]            	created: 1324 16-May-84
+File 2)	GLXX:QSRMDA.NEW[7,3,GALAXY,QSRSCH,LWS]	created: 1519 16-Jul-84
+ 
+1)46		MOVEI	S2,[ASCIZ ||]		;ASSUME WRITE ENABLED
+1)		SKIPE	S1			;WAS IT?
+1)		MOVEI	S2,[ASCIZ |Unit is hardware write protected|]
+1)		$WTO	(<Volume ^W/.VLVID(P1)/ for structure ^W/.DSSNM(
+	T3)/ mounted>,<^T/(S2)/>,MDAOBJ)
+1)		MOVE	S1,.VLSTR(P1)		;GET THE STRUCTURE NAME
+	IN S1
+1)		SETZM	S2			;NO ALIAS...
+1)		SKIPE	D$ASR			;IS AUTOMATIC STR RECOGN
+	ITION ENABLED ???
+**** @ DSKD.8+2
+2)46		LOAD	S2,.UCBS1(T2),U1.FRC	;[1217] GET 'FORCED' MOU
+	NT BIT
+2)		STORE	S2,.VLFLG(P1),VL.FRC	;[1217] SET IN VOL BLOCK
+	 ALSO
+2)		MOVEI	S2,[ASCIZ ||]		;ASSUME WRITE ENABLED
+2)		SKIPE	S1			;WAS IT?
+2)		MOVEI	S2,[ASCIZ |Unit is hardware write protected|]
+2)		$WTO	(<Volume ^W/.VLVID(P1)/ for structure ^W/.DSSNM(
+	T3)/ mounted>,<^T/(S2)/>,MDAOBJ)
+2)		MOVE	S1,.VLSTR(P1)		;GET THE STRUCTURE NAME
+	IN S1
+2)		SETZM	S2			;NO ALIAS...
+2)		MOVX	TF,VL.FRC		;[1217] GET 'FORCED' MOU
+	NT BIT
+2)		TDNN	TF,.VLFLG(P1)		;[1217] IS A 'FORCED' MO
+	UNT IN PROGRESS ?
+2)		SKIPE	D$ASR			;IS AUTOMATIC STR RECOGN
+	ITION ENABLED ???
+**************
+1)77		$COUNT	(STRM)			;count # of successful s
+	tr mounts
+1)		MOVX	S1,%STAMN		;GET STRUCTURE MOUNTED B
+	IT
+**** @ MNTOPC+5
+2)77	MNTA.0:	$COUNT	(STRM)			;[1217] COUNT # OF SUCCE
+	SSFUL STR MOUNTS
+2)		MOVX	S1,%STAMN		;GET STRUCTURE MOUNTED B
+	IT
+**************
+1)170		$RETF				;RETURN
+1)	> ;END TOPS-10 CONDITIONAL
+**** @ BLDS.3+1
+2)170		MOVX	S1,VL.FRC		;[1217] STRUCTURE TRYING
+	 TO BE 'FORCED'
+2)		TDNN	S1,.VLFLG(P1)		;[1217]   UP BY SOMEONE
+	??Digital Equipment Corporation       12-SEP-84    Page   9
+PCO Log Report
+
+
+2)		$RETF				;RETURN
+2)		MOVE	S1,P1			;[1217] YES, BUT TOO BAD
+	!!!
+2)		MOVX	S2,.DMNCK		;[1217] GET /NOCHECK BIT
+2)		PUSHJ	P,SNDDSM		;[1217] TELL PULSAR TO D
+	ISMOUNT STR
+2)		$RETF				;[1217] RETURN FALSE
+2)	> ;END TOPS-10 CONDITIONAL
+**************
+1)171		MOVE	S2,.UCBNM(S2)		;GET ITS SIXBIT NAME
+**** @ SNDB.1+3
+2)171		MOVX	TF,U1.FRC		;[1217] GET 'FORCED' MOU
+	NT BIT FOR UCB
+2)		ANDCAM	TF,.UCBS1(S2)		;[1217] CLEAR IT IN UCB.
+2)		MOVE	S2,.UCBNM(S2)		;GET ITS SIXBIT NAME
+**************
+1)172		PUSHJ	P,SNDLBR		;SEND THE MSG OFF TO THE
+	 TAPE LABELER
+1)		$RETT				;AND RETURN
+1)	>
+**** @ SNDB.3+11
+2)172		LOAD	TF,.VLFLG(P1),VL.FRC	;[1217] GET 'FORCED' MOU
+	NT BIT
+2)		SKIPE	P2			;[1217] ALWAYS SEND ON D
+	ISMOUNT
+2)		JUMPN	TF,SNDB.4		;[1217] DON'T BOTHER PUL
+	SAR IF 'FORCED'
+2)		PUSHJ	P,SNDLBR		;SEND THE MSG OFF TO THE
+	 TAPE LABELER
+2)		$RETT				;AND RETURN
+2)	SNDB.4:	MOVE	S1,P1			;[1217] GET PRIMARY VOL
+	ADDRESS
+2)		SETZM	S2			;[1217] CLEAR S2
+2)		PUSHJ	P,MNTA.0		;[1217] TELL OPR IT'S MO
+	UNTED
+ 
+ 
+2)		MOVX	S1,VL.FRC		;[1217] GET 'FORCED' MOU
+	NT BIT
+2)		ANDCAM	S1,.VLFLG(P1)		;[1217] DON'T NEED IT AN
+	YMORE
+2)		$RETT				;[1217] RETURN
+2)	>
+**************
+ Digital Equipment Corporation       12-SEP-84    Page  10
+PCO Log Report
+
+
+[FILCOM]
+File 1)	GLXX:QSRT10.MAC[7,3,GALAXY]           	created: 1438 25-Apr-84
+File 2)	GLXX:QSRT10.MAC[7,3,GALAXY,QSRSCH,LWS]	created: 1443 16-Jul-84
+ 
+1)11		SUBTTL	I$SYSV  --  Read time-dependent system variables
+****
+2)10		INTERN	I$MSTR		;[1217] ROUTINE TO HANDLE MONITO
+	R STR MOUNTED MSG
+2)11		SUBTTL	I$SYSV  --  Read time-dependent system variables
+**************
+1)23		SUBTTL	I$ATCH/I$DTCH - ATTACH/DEATCH MESSAGE PROCESSING
+	 ROUTINES
+****
+2)23	SUBTTL	I$MSTR - PROCESS MONITOR STRUCTURE MOUNTED MSG
+2)	;This routine extracts each unit from the .IPCST message and kic
+	ks
+2)	;PULSAR to recognize labels on the device. If the UCB for the un
+	it
+2)	;doesn't exist, one is created. The UC.FRC bit is lit in the UCB
+2)	;indicating that the volume(s) is/are being mounted someone othe
+	r
+2)	;than PULSAR.
+2)	;CALL: 	M/ The message address
+2)	;RET: 	True always
+2)	I$MSTR:	PUSHJ	P,.SAVE3		;[1217] SAVE P1-P3
+2)		HLRZ	P2,.IPCS0(M)		;[1217] GET LENGTH OF MS
+	G
+2)		CAIGE	P2,3			;[1217] MUST CONTAIN AT
+	LEAST STR AND UNIT
+2)		$RETT				;[1217] IGNORE IF TOO SH
+	ORT
+2)		MOVNI	P2,-2(P2)		;[1217] BUILD AOBJN
+2)		HRLI	P2,.IPCS2(M)		;[1217]   PTR TO PICK UP
+2)		MOVSS	P2			;[1217]     UNITS IN MES
+	SAGE
+2)	MSTR.1:	SKIPN	P1,(P2)			;[1217] GET SIXBIT UNIT
+	NAME
+2)		  $STOP	(MUN,<Missing unit name in .IPCST message>) ;[12
+	17] SO THERE!
+2)		MOVE	S1,P1			;[1217] GET UNIT NAME IN
+	 S1
+2)		PUSHJ	P,D$GUCB##		;[1217] GO SEE IF UCB EX
+	ISTS
+2)		JUMPT	MSTR.3			;[1217] UCB EXISTS, GO K
+	ICK PULSAR
+2)		MOVE	S1,UCBQUE##		;[1217] NO UCB, CREATE O
+	NE
+2)		MOVX	S2,UCBLEN		;[1217] FOR THIS UNIT.
+2)		PUSHJ	P,L%CENT		;[1217]
+2)		MOVE	S1,S2			;[1217] GET THE ADDRESS
+	OF UCBDigital Equipment Corporation       12-SEP-84    Page  11
+PCO Log Report
+
+
+2)		MOVE	P3,S1			;[1217] SAVE ACROSS NEXT
+	 CALL
+2)		MOVEM	P1,.UCBNM(S1)		;[1217] STORE UNIT NAME
+	IN UCB
+2)		PUSHJ	P,I$GATR		;[1217] GO FILL IN SPECI
+	FICS
+2)		MOVE	S1,P3			;[1217] GET UCB ADDRESS
+	BACK
+2)		PUSHJ	P,D$INCA##		;[1217] UPDATE 'A' MATRI
+	X
+2)		MOVE	S1,P3			;[1217] GET UCB ADDRESS
+	AGAIN
+2)	MSTR.3:	MOVX	S2,UC.AVR!UC.AVA	;[1217] THIS DEVICE IS A
+	VAILABLE AND
+2)		IORM	S2,.UCBS0(S1)		;[1217] WE'RE GOING TO R
+	EAD LABELS!
+2)		MOVX	S2,U1.FRC		;[1217] GET 'FORCED MOUN
+	T' BIT
+2)		IORM	S2,.UCBS1(S1)		;[1217] LITE IN SECOND U
+	CB STATUS WORD
+2)		MOVE	S1,P1			;[1217] GET SIXBIT UNIT
+	NAME AGAIN
+2)		PUSHJ	P,D$SREC##		;[1217] SEND RECOGNIZE M
+	SG TO PULSAR
+2)		AOBJN	P2,MSTR.1		;[1217] LOOP FOR ALL UNI
+	TS IN MSG
+2)		$RETT				;[1217] RETURN AND WAIT
+	FOR PULSAR ACK
+2)24		SUBTTL	I$ATCH/I$DTCH - ATTACH/DEATCH MESSAGE PROCESSING
+	 ROUTINES
+**************
+
+[END OF PCO 10-702   -062]

@@ -1,0 +1,1510 @@
+MODULE ANALYZE (				!Analyze crash context
+		IDENT = '003080',
+		LANGUAGE (BLISS16, BLISS36)
+		) =
+BEGIN
+!
+!
+!
+! COPYRIGHT (C) 1979 BY
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+! COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: MDA
+!
+! ABSTRACT:
+!
+!
+! This module contains the routines to analyze the crash context
+! and provide an initial analysis as to its cause.
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 5-NOV-79
+!
+! MODIFIED BY:
+!
+!	Alan D. Peckham, 2-Jul-80 : VERSION 3
+! 01	- Remove Comm/Exec references
+!	  Change RSX symbol references
+! 02	- Support for new dump area in CEXCOM 3(18).
+! 03	- Fix I/O dump area access coding.
+! 04	- Identify crash status.
+! 05	- Allow for dump without crash status.
+! 06    - Avoid interpreting user crash status.
+! 08    - Make WINDOW a global routine.
+!--
+
+!<BLF/LOWERCASE_KEY>
+!<BLF/UPPERCASE_USER>
+!
+! TABLE OF CONTENTS:
+!
+
+forward routine
+    ANALYZE : novalue,				!Display analysis of crash.
+    CHECK_CLOCK : novalue,			!Check for infinite looping.
+    CHECK_PC : novalue,				!Check what the PC is into.
+    CHECK_PROCESS : novalue,			!Check the current process.
+    CHECK_REGISTERS : novalue,			!Check for meaningful registers.
+    CHECK_TASK : novalue,			!Check out current task.
+    DMPPHY : novalue,				!Display APR value as physical address.
+    GETREG,					!Get I/O page register.
+    INSTR_LENGTH,				!Get instruction.
+    KERNAL_CONTEXT : novalue,			!Display kernel context.
+    OPERAND_LENGTH,				!Get operand.
+    SPACE : novalue,				!Display mapping space information.
+    USER_CONTEXT : novalue,			!Display user context.
+    WINDOW : novalue;				!Display a window of memory.
+
+!
+! INCLUDE FILES:
+!
+
+library 'MDACOM';				!MDA COMMON DEFINITIONS
+
+library 'RSXLIB';				!RSX definitions.
+
+library 'MCBLIB';				!MCB definitions.
+
+library 'CEXLIB';				!CEX definitions.
+
+!
+! MACROS:
+!
+
+macro
+    HALTED =
+	(.CRASH_STATUS [1] eql UNDEFINED) %;
+
+macro
+    STS_CODE (NUM) =
+	((NUM^-3) and %o'17777') %,
+    STS_PICK [LST] =
+	%remove (LST) %,
+    STS_NAME [NAM, LVL, COD, TXT] =
+	[COD] = CH$ASCII (NAM) %,
+    STS_NAME_LENGTH [NAM, LVL, COD, TXT] =
+	[COD] = %charcount (NAM) %,
+    STS_PC_PS [NAM, LVL, COD, TXT] =
+	[COD] = STS_SS (%explode (NAM)) %,
+    STS_SS (CHR1, CHR2, CHR3) =
+	%identical (CHR1, 'S') and
+	%identical (CHR2, 'S') and
+	%identical (CHR3, '$') %,
+    STS_TEXT [NAM, LVL, COD, TXT] =
+	[COD] = CH$ASCII (TXT) %,
+    STS_TEXT_LENGTH [NAM, LVL, COD, TXT] =
+	[COD] = %charcount (TXT) %;
+
+!
+! EQUATED SYMBOLS:
+!
+
+$CEX_PDTDEF
+
+!
+! OWN STORAGE:
+!
+!<BLF/NOFORMAT>
+
+own
+    STATUS_NAME : vector [STS_CODE (MCB$K_STATUS_MAX) + 1]
+	preset (STS_NAME (STS_PICK ($MCB_STATUS))),
+    STATUS_NAME_LENGTH : vector [STS_CODE (MCB$K_STATUS_MAX) + 1]
+	preset (STS_NAME_LENGTH (STS_PICK ($MCB_STATUS))),
+    STATUS_PC_PS : vector [STS_CODE (MCB$K_STATUS_MAX) + 1]
+	preset (STS_PC_PS (STS_PICK ($MCB_STATUS))),
+    STATUS_TEXT : vector [STS_CODE (MCB$K_STATUS_MAX) + 1]
+	preset (STS_TEXT (STS_PICK ($MCB_STATUS))),
+    STATUS_TEXT_LENGTH : vector [STS_CODE (MCB$K_STATUS_MAX) + 1]
+	preset (STS_TEXT_LENGTH (STS_PICK ($MCB_STATUS)));
+
+!<BLF/FORMAT>
+
+own
+    CRASH_STATUS : vector [10],
+    INSTR : vector [3],
+    KISAPR : vector [8],
+    KSP,
+    OPR_DD,
+    OPR_R,
+    OPR_SS,
+    PS,
+    R : vector [8],
+    UISAPR : vector [8],
+    USP;
+
+bind
+    KISAR5 = KISAPR [5],
+    KISAR6 = KISAPR [6],
+    pc = R [7],
+    r0 = R [0],
+    r1 = R [1],
+    r2 = R [2],
+    r3 = R [3],
+    r4 = R [4],
+    r5 = R [5],
+    UISAR5 = UISAPR [5];
+
+!
+! EXTERNAL REFERENCES:
+!
+
+external routine
+    BITLS : novalue,				!Display list of names for bits that are on.
+    BYTLS : novalue,				!Display value name as part of list.
+    BYTSM : novalue,				!Display value name.
+    CHKMCH,
+    FILDT : novalue,				!Convert file creation date to ASCII.
+    CNV18 : novalue,				!Convert bias/address to 18 bit physical address.
+    FILNM : novalue,				!Convert file name to ASCII.
+    GETBYT,					!GET BYTE FROM DUMP FILE
+    GETWRD,					!GET WORD FROM DUMP FILE
+    MAPAPR : novalue,				!SET MAPPING REGISTER
+    MAPKNL : novalue,				!Map to kernel space.
+    MAPTSK,					!Map to given task.
+    MAPUSR : novalue,				!Map to user space.
+    MEMDMP : novalue,
+    SBTTL : novalue,				!SET LIST FILE SUB-TITLE
+    SKIP : novalue,				!Put a blank line on the listing file.
+    VMADMP : novalue,
+    $CBTA;
+
+external
+    FLAGS : bitvector [M_MAX_BITS];
+
+global routine ANALYZE : novalue = 		!Display crash analysis.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY THE GENERAL AND MAPPING REGISTERS, THE STACK, AND THE
+!	CONTEXT OF THE CRASH PC.
+!
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	SETS LISTING OUTPUT SUBTITLE
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+
+    local
+	ADR;
+
+    SBTTL (CH$ASCIZ ('CRASH CONTEXT'));
+
+    if not SYMBOL_TABLE ('RSX11S', 'CEXCOM') then return;
+
+    !+
+    ! Extract time and date from exec tables
+    !-
+
+    begin
+
+    local
+	DATE_AND_TIME : vector [8];
+
+    bind
+	DATE = DATE_AND_TIME [0] : vector [3],
+	TIME = DATE_AND_TIME [3] : vector [5];
+
+    ADR = SYMBOL ($TTNS) - 12;
+
+    incr index from 0 to 6 do
+	DATE_AND_TIME [.index] = GETWRD (2*.index + .ADR);
+
+    DATE_AND_TIME [7] = GETWRD (SYMBOL ($TKPS));
+
+    if .DATE [0] neq 0
+    then
+	PUTLN (3, CH$ASCIZ ('CRASH OCCURRED AT %3Z  %Y'), TIME, DATE)
+    else
+	PUTLN (3,
+	    CH$ASCIZ ('SYSTEM WAS UP FOR %M HOURS, %M MINUTES, %M SECONDS'), .DATE [2]*24 + .TIME [0],
+	    .TIME [1], .TIME [2]);
+
+    end;
+
+!    if DN20 and (ADR = GETWRD (SYMBOL ('.MCHVC'))) neq 0
+    if DN20 and (ADR = CHKMCH()) neq 0
+    then
+	begin
+	!
+	! Display the crash reason
+	!
+	ADR = GETWRD (.ADR + SYMBOL ('M.SIG'));
+	CRASH_STATUS [0] = GETWRD (.ADR);
+
+	incr index from 1 to min (.CRASH_STATUS [0], 9) do
+	    CRASH_STATUS [.index] = GETWRD (ADR = .ADR + 2);
+
+        if .block [CRASH_STATUS [1], 0, 15, 1, 0] eql 0
+        then
+            begin
+
+            if .block [CRASH_STATUS [1], 0, 3, 13, 0] leq MCB$K_STATUS_MAX
+            then
+                PUTLN (3, CH$ASCIZ ('REASON FOR CRASH: %#A (%#A)'),
+                   .STATUS_TEXT_LENGTH [ADR = .block [CRASH_STATUS [1], 0, 3, 13, 0]],
+                   .STATUS_TEXT [.ADR], .STATUS_NAME_LENGTH [.ADR], .STATUS_NAME [.ADR])
+            else
+                PUTLN (3, CH$ASCIZ ('REASON FOR CRASH: %P'), .CRASH_STATUS [1]);
+
+            end
+        else
+            begin
+            ADR = GETWRD (SYMBOL ('.CRPIX')) and %O'177';
+            PUTLN (3, CH$ASCIZ ('SIGNAL FROM PROCESS %R (%O): %P'),
+                   PROCESS_NAME (.ADR), .ADR, .CRASH_STATUS [1]);
+            end;
+
+	PUTLN (1, CH$ASCIZ ('  PARAMETERS: %#P'), min (.CRASH_STATUS [0], 9), .CRASH_STATUS [1],
+            .CRASH_STATUS [2], .CRASH_STATUS [3], .CRASH_STATUS [4], .CRASH_STATUS [5],
+            .CRASH_STATUS [6], .CRASH_STATUS [7], .CRASH_STATUS [8], .CRASH_STATUS [9]);
+	end
+    else
+	begin
+	PUTLN (3, CH$ASCIZ ('THE PROCESSOR MAY HAVE HALTED'));
+	PUTLN (1, CH$ASCIZ ('  NO VOLATILE REGISTER INFORMATION AVAILABLE'));
+
+	incr index from 0 to 9 do
+	    CRASH_STATUS [.index] = UNDEFINED;
+
+	end;
+
+    if DN20 and not HALTED
+    then
+	begin
+
+	local
+	    SWITCHED_STACK,
+	    SYSTEM_STACK;
+
+	incr APR from 0 to 7 do
+	    begin
+	    KISAPR [.APR] = GETREG (%o'172340' + .APR^1);
+	    UISAPR [.APR] = GETREG (%o'177640' + .APR^1);
+	    end;
+
+	if DEFINED (ADR = SYMBOL ('.PANPS')) then PS = GETWRD (.ADR) else PS = UNDEFINED;
+
+	if DEFINED (ADR = SYMBOL ('.PANSP')) then KSP = GETWRD (.ADR) else KSP = UNDEFINED;
+
+	if DEFINED (ADR = SYMBOL ('.KNLRG'))
+	then
+
+	    incr index from 0 to 5 do
+		R [.index] = GETWRD (.ADR + .index^1);
+
+	if DEFINED (ADR = SYMBOL ('.KNLP6')) then MAPAPR (6, KISAR6 = GETWRD (.ADR));
+
+	if DEFINED (ADR = SYMBOL ('.USRSP')) then USP = GETWRD (.ADR) else USP = UNDEFINED;
+
+	R [6] = (selectone .PS<14, 2> of
+	    set
+	    [0] : .USP;
+	    [3] : .KSP;
+	    [otherwise] : UNDEFINED;
+	    tes);
+
+	if DEFINED (ADR = SYMBOL ('.MCHVC'))
+	then
+
+!	    if (ADR = GETWRD (.ADR)) neq 0
+	    if (ADR = CHKMCH()) neq 0
+	    then
+		begin
+		R [0] = GETWRD (.ADR + SYMBOL ('M.R0'));
+		MAPAPR (5, KISAR5 = GETWRD (.ADR + SYMBOL ('M.AR5')));
+		ADR = GETWRD (.ADR + SYMBOL ('M.SIG'));
+
+		if .STATUS_PC_PS [.block [CRASH_STATUS [1], 0, 3, 13, 0]]
+		then
+		    begin
+		    R [7] = GETWRD (.ADR + 2 + GETWRD (.ADR)^1 + 0);
+		    PS = GETWRD (.ADR + 2 + GETWRD (.ADR)^1 + 2);
+		    end
+		else
+		    R [7] = GETWRD (.ADR - 2);
+
+		end;
+
+	SYSTEM_STACK = GETWRD (SYMBOL ($STKDP)) neq 1;
+	SWITCHED_STACK = .SYSTEM_STACK and (.KISAR5 eql .UISAR5);
+	PUTLN (2, CH$ASCIZ ('ANALYSIS OF CONTEXT:'));
+	CHECK_CLOCK ();
+	CHECK_PC ();
+
+	if not .SYSTEM_STACK
+	then
+	    begin
+
+	    if .PS<14, 2> neq 3
+	    then
+		PUTLN (1,
+		    CH$ASCIZ (WARNING,
+			'PS NOT IN USER MODE, AND YET RSX SAYS IT IS ON THE USER STACK'));
+
+	    CHECK_TASK ();
+	    end
+	else
+
+	    if .SWITCHED_STACK
+	    then
+		begin
+		CHECK_TASK ();
+		end
+	    else
+
+		if GETBYT (SYMBOL ($IDLFL)) neq 0
+		then
+		    PUTLN (1,
+			CH$ASCIZ ('  CRASH OCCURRED WHILE IN WAIT INSTRUCTION'))
+		else
+		    begin
+
+                    local
+                         BIAS,
+                         INDEX;
+
+		    !
+		    ! Determine active process
+		    !
+
+                    if (INDEX = GETWRD (SYMBOL ('.CRPDB'))) neq 0
+                    then
+                        begin
+                        INDEX = GETBYT (.INDEX + FL$OFFSET (PDT$B_INDEX));
+
+                        if (BIAS = GETWRD (.INDEX + FL$OFFSET (PDT$W_CODE_BIAS))) eql .KISAR5
+                        then
+                            PUTLN (1,  CH$ASCIZ ('CURRENT PROCESS: %R (%O)'),
+                                   PROCESS_NAME (.INDEX), .INDEX)
+                        else
+                            begin
+
+                            local
+                                 NAME;
+
+                            bind
+                                PHDNAM = %o'120000';
+
+                            MAPAPR (5, .KISAR5);
+                            NAME = GETWRD (PHDNAM);
+                            PUTLN (1,  CH$ASCIZ ('CURRENT PROCESS: %R (%O) > %R'),
+                                   PROCESS_NAME (.INDEX), .INDEX, .NAME)
+                            end;
+
+                        end
+                    else
+                        PUTLN (1, CH$ASCIZ ('  CURRENT PROCESS OR TASK INDETERMINATE'));
+		    end;
+
+	end;
+
+    if DN20
+    then
+	begin
+	if not HALTED then
+	begin
+	PUTLN (2, CH$ASCIZ ('VOLATILE REGISTERS:'));
+	PUTLN (1, CH$ASCIZ ('%4SPC = %P  PS = %P  SP(K) = %P  SP(U) = %P'), .pc, .PS, .KSP, .USP);
+	PUTLN (1, CH$ASCIZ ('%4SR0 = %P  R1 = %P  R2 = %P  R3 = %P  R4 = %P  R5 = %P'), .r0, .r1, .r2, .r3,
+	    .r4, .r5);
+
+	!
+	! Display parity register info
+	!
+
+	begin
+
+	local
+	    HEADER,
+	    PARITY;
+
+	bind
+	    PARTB = SYMBOL ('$PARTB');
+
+	HEADER = FALSE;
+
+	incr index from 0 to 15 do
+
+	    if ((ADR = GETWRD (PARTB + (.index + 1)^1)) neq PARTB) and ((PARITY = GETREG (.ADR)) neq 1)
+	    then
+		begin
+
+		if not .HEADER
+		then
+		    begin
+		    PUTLN (2, CH$ASCIZ ('PARITY REGISTERS:'));
+		    HEADER = TRUE;
+		    end;
+
+		if (.PARITY and %o'070036') neq %o'000000'
+		then
+		    PUTLN (1,
+			CH$ASCIZ (WARNING,
+			    'PARITY REGISTER %P HAS INVALID BITS ON: %P'), .ADR, .PARITY)
+		else
+		    begin
+
+		    if not .PARITY<0, 1>
+		    then
+			PUTLN (1,
+			    CH$ASCIZ (WARNING,
+				'PARITY REGISTER %P IS NOT ENABLED'), .ADR);
+
+		    PUTLN (1,
+			(if .PARITY<15, 1> then CH$ASCIZ (
+				'%4SREGISTER %P REPORTS PARITY ERROR IN %O000 TO %O777') else CH$ASCIZ (
+				'%4SREGISTER %P IS TRACKING %O000 TO %O000')), .ADR, .PARITY<5, 7>^2,
+			.PARITY<5, 7>^2 + 3);
+		    end;
+
+		end;
+
+	end;
+
+	!
+	! Display Memory Management Unit info
+	!
+
+	begin
+
+	local
+	    SR0,
+	    SR1,
+	    SR2,
+	    SR3;
+
+	bind
+	    MODES = BYTE_LIST ((0, 'KERNEL'), (1, 'SUPERVISOR'), (3, 'USER'));
+
+	PUTLN (2, CH$ASCIZ ('MEMORY MANAGEMENT:'));
+
+	if .CRASH_STATUS [1] eql SS$MMU
+	then
+	    begin
+	    SR0 = (if .CRASH_STATUS [0] geq 2 then .CRASH_STATUS [2] else 0);
+	    SR1 = (if .CRASH_STATUS [0] geq 3 then .CRASH_STATUS [3] else 0);
+	    SR2 = (if .CRASH_STATUS [0] geq 4 then .CRASH_STATUS [4] else 0);
+	    SR3 = (if .CRASH_STATUS [0] geq 5 then .CRASH_STATUS [5] else 0);
+	    end
+	else
+	    begin
+	    SR0 = GETREG (%o'177572');
+	    SR1 = GETREG (%o'177574');
+	    SR2 = GETREG (%o'177576');
+	    SR3 = GETREG (%o'172516');
+	    end;
+
+	if .SR0<0, 1>
+	then
+	    PUTLN (1, CH$ASCIZ ('  MANAGEMENT IS ENABLED'))
+	else
+	    PUTLN (1,
+		CH$ASCIZ ('  MANAGEMENT IS DISABLED'));
+
+	if .SR0<8, 1> then PUTLN (0, CH$ASCIZ ('  MAINTENANCE IS ENABLED'));
+
+	if .SR0<13, 3> neq 0
+	then
+	    begin
+	    PUTLN (1, CH$ASCIZ ('  AN ABORT IS IN PROGRESS:'));
+
+	    if .SR0<15, 1> then PUTLN (0, CH$ASCIZ ('%4SNON-RESIDENT PAGE'));
+
+	    if .SR0<14, 1> then PUTLN (0, CH$ASCIZ ('%4SPAGE LENGTH ERROR'));
+
+	    if .SR0<13, 1> then PUTLN (0, CH$ASCIZ ('%4SREAD-ONLY ACCESS VIOLATION'));
+
+	    end
+	else
+	    SKIP (1);
+
+	PUTLN (0, CH$ASCIZ ('  VIRTUAL ADDRESS OF LAST INSTRUCTION FETCH = %P'), .SR2);
+	PUTLN (0, CH$ASCIZ ('  PAGE LAST REFERENCED = %O IN %@ MODE'), .SR0<1, 3>, BYTSM, MODES, .SR0<5, 2>);
+	end;
+
+	!
+	! Now the memory mappings
+	!
+
+	MAPAPR (5, .KISAR5);
+	MAPAPR (6, .KISAR6);
+	PUTLN (1, CH$ASCIZ ('  KERNEL MAPPING SPACE:'));
+	SPACE (KISAPR, %o'172300');
+	PUTLN (1, CH$ASCIZ ('  USER MAPPING SPACE:'));
+	SPACE (UISAPR, %o'177600');
+	end;
+	end
+    else
+	begin
+
+	local
+	    CRSBF;
+
+	CRSBF = SYMBOL ($CRSBF);
+
+	incr APR from 0 to 7 do
+	    MAPAPR (.APR, (KISAPR [.APR] = GETWRD (.CRSBF + %o'232' - (.APR*2))));
+
+	pc = GETWRD (.CRSBF + %o'526');
+	PS = GETWRD (.CRSBF + %o'522');
+	KSP = GETWRD (.CRSBF + %o'524');
+	USP = 0;
+	PUTLN (1, CH$ASCIZ ('PC = %P  PS = %P  SP = %P'), .pc, .PS, .KSP);
+	PUTLN (2, CH$ASCIZ ('R0 = %P  R1 = %P  R2 = %P  R3 = %P  R4 = %P  R5 = %P'),
+	    GETWRD (.CRSBF + %o'504'), GETWRD (.CRSBF + %o'506'), GETWRD (.CRSBF + %o'510'),
+	    GETWRD (.CRSBF + %o'512'), GETWRD (.CRSBF + %o'514'), GETWRD (.CRSBF + %o'516'));
+	PUTLN (2, CH$ASCIZ ('KERNEL MAPPING'));
+	PUTLN (1, CH$ASCIZ ('APR0 = %P  APR1 = %P  APR2 = %P  APR3 = %P'), GETWRD (.CRSBF + %o'232'),
+	    GETWRD (.CRSBF + %o'230'), GETWRD (.CRSBF + %o'226'), GETWRD (.CRSBF + %o'224'));
+	PUTLN (1, CH$ASCIZ ('APR4 = %P  APR5 = %P  APR6 = %P  APR7 = %P'), GETWRD (.CRSBF + %o'222'),
+	    GETWRD (.CRSBF + %o'220'), GETWRD (.CRSBF + %o'216'), GETWRD (.CRSBF + %o'214'));
+	end;
+
+    !+
+    ! Display the kernel context.
+    !-
+
+    KERNAL_CONTEXT ();
+
+    !+
+    ! Display the current user task context.
+    !-
+
+    USER_CONTEXT ();
+
+    !+
+    ! I/O Page Context
+    !-
+
+    begin
+
+    local
+	ADR,
+	BIAS,
+	HIGH_PHYSICAL : vector [2],
+	LENGTH,
+	LOW_DISPLAY : vector [2],
+	LOW_PHYSICAL : vector [2];
+
+    LOW_DISPLAY [0] = %o'3';
+    MAPKNL ();
+    begin
+    $CEX_PDTDEF
+
+    local
+         CEX_PDB;
+
+    CEX_PDB = GETWRD (SYMBOL ('.PDBVB'));
+    BIAS = GETWRD (.CEX_PDB + FL$OFFSET (PDT$W_DATA_BIAS));
+    ADR = GETWRD (.CEX_PDB + FL$OFFSET (PDT$A_DATA_ADDRESS));
+    end;
+    MAPAPR (6, .BIAS);
+
+    if GEQ16 (GETWRD (.ADR), %o'160000')
+    then
+	begin
+	SBTTL (CH$ASCIZ ('I/O PAGE DUMP'));
+
+	while (LOW_DISPLAY [1] = GETWRD (.ADR)) neq 0 do
+	    begin
+	    SKIP (2);
+	    LENGTH = GETWRD (ADR = .ADR + 2) - .LOW_DISPLAY [1];
+	    CNV18 (LOW_PHYSICAL, (ADR = .ADR + 2), .BIAS);
+	    CNV18 (HIGH_PHYSICAL, (ADR = .ADR + .LENGTH + 2), .BIAS);
+	    MEMDMP (LOW_DISPLAY, LOW_PHYSICAL, HIGH_PHYSICAL);
+	    MAPAPR (6, .BIAS);
+	    end;
+
+	end;
+
+    end;
+    end;					!OF ANALYZE
+
+routine CHECK_CLOCK : novalue = 		!Check for inifinite loops.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY THE GENERAL AND MAPPING REGISTERS, THE STACK, AND THE
+!	CONTEXT OF THE CRASH PC.
+!
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	SETS LISTING OUTPUT SUBTITLE
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+
+    local
+	INTCT;
+
+    selectone (INTCT = GETWRD (SYMBOL ('$INTCT'))) of
+	set
+
+	[%o'177777', 0] :
+	    0;
+
+	[otherwise] :
+	    PUTLN (1, CH$ASCIZ ('  THE PROCESSOR HAS BEEN IN A FORK FOR %M. TICKS'), .INTCT);
+	tes;
+
+    end;					!OF CHECK_CLOCK
+routine CHECK_PC : novalue = 			!Check what the PC is into.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY THE GENERAL AND MAPPING REGISTERS, THE STACK, AND THE
+!	CONTEXT OF THE CRASH PC.
+!
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	SETS LISTING OUTPUT SUBTITLE
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+
+    macro
+	CODES =
+ SS$INS, SS$MMU, SS$NXM %;
+
+    bind
+	DST_REG_TEXT = CH$ASCIZ ('    DESTINATION OPERAND REGISTER R%O = %P'),
+	OFFENDER_TEXT = CH$ASCIZ ('  OFFENDING INSTRUCTION:	%#P'),
+	SRC_REG_TEXT = CH$ASCIZ ('    SOURCE OPERAND REGISTER R%O = %P');
+
+    if .PS<14, 2> eql 3 then MAPUSR () else MAPKNL ();
+
+    case .CRASH_STATUS [1] from min (CODES) to max (CODES) of
+	set
+
+	[SS$INS] :
+	    PUTLN (1, OFFENDER_TEXT, 1, GETWRD (.pc - 2));
+
+	[SS$NXM] :
+
+	    if (decr LENGTH from 3 to 1 do if INSTR_LENGTH (.pc - .LENGTH^1) eql .LENGTH then
+			begin
+			PUTLN (1, OFFENDER_TEXT, .LENGTH, .INSTR [0], .INSTR [1], .INSTR [2]);
+
+			if .OPR_SS geq 0 then PUTLN (0, SRC_REG_TEXT, .OPR_SS<0, 3>, .R [.OPR_SS<0, 3>]);
+
+			if .OPR_DD geq 0 then PUTLN (0, DST_REG_TEXT, .OPR_DD<0, 3>, .R [.OPR_DD<0, 3>]);
+
+			exitloop 0;
+			end
+		) neq 0
+	    then
+		PUTLN (1, CH$ASCIZ (WARNING, 'CANNOT IDENTIFY OFFENDING INSTRUCTION'));
+
+	[SS$MMU] :
+	    begin
+
+	    local
+		LENGTH;
+
+	    LENGTH = INSTR_LENGTH (GETREG (%o'177576'));
+	    PUTLN (1, OFFENDER_TEXT, .LENGTH, .INSTR [0], .INSTR [1], .INSTR [2]);
+
+	    if .OPR_SS geq 0 then PUTLN (0, SRC_REG_TEXT, .OPR_SS<0, 3>, .R [.OPR_SS<0, 3>]);
+
+	    if .OPR_DD geq 0 then PUTLN (0, DST_REG_TEXT, .OPR_DD<0, 3>, .R [.OPR_DD<0, 3>]);
+
+	    end;
+
+	[inrange, outrange] :
+	    0;
+	tes;
+
+    MAPKNL ();
+    end;					!OF CHECK_PC
+routine CHECK_PROCESS (PDV_ADDRESS) : novalue = 	!Check the current process.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY THE GENERAL AND MAPPING REGISTERS, THE STACK, AND THE
+!	CONTEXT OF THE CRASH PC.
+!
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	SETS LISTING OUTPUT SUBTITLE
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+    0
+    end;					!OF CHECK_PROCESS
+routine CHECK_REGISTERS : novalue = 		!Check the registers for info.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY THE GENERAL AND MAPPING REGISTERS, THE STACK, AND THE
+!	CONTEXT OF THE CRASH PC.
+!
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	SETS LISTING OUTPUT SUBTITLE
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+
+    incr RN from 0 to 5 do
+
+	selectone .R [.RN] of
+	    set
+
+	    [%o'160010' to %o'163777'] :
+		PUTLN (1, CH$ASCIZ ('  REGISTER R%O CONTAINS A DEVICE REGISTER ADDRESS: %P'), .RN, .R [.RN]);
+	    tes;
+
+    end;					!OF CHECK_REGISTERS
+routine CHECK_TASK : novalue = 			!Check the current task.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY THE GENERAL AND MAPPING REGISTERS, THE STACK, AND THE
+!	CONTEXT OF THE CRASH PC.
+!
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	SETS LISTING OUTPUT SUBTITLE
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+
+    local
+	TCB_ADDRESS;
+
+    TCB_ADDRESS = GETWRD (SYMBOL ($TKTCB));
+
+    if .TCB_ADDRESS neq SYMBOL ($HEADR)
+    then
+	begin
+	PUTLN (1, CH$ASCIZ ('  CRASH OCCURRED IN TASK %2R,  TCB = %P'),
+	    GETWRD (.TCB_ADDRESS + FL$OFFSET (T_NAM) + 0), GETWRD (.TCB_ADDRESS + FL$OFFSET (T_NAM) + 2),
+	    .TCB_ADDRESS)
+	end
+    else
+	begin
+	PUTLN (1, CH$ASCIZ (WARNING, 'CRASH OCCURRED IN NULL TASK WHILE IN USER STATE'));
+	end;
+
+    end;					!OF CHECK_TASK
+routine DMPPHY (BUF_PTR_ADR, PAT_PTR_ADR, PRM_LST_ADR_ADR) : novalue =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! The next parameters are:
+!	VALUE
+!
+! FORMAL PARAMETERS:
+!
+!	..BUF_PTR_ADR				!Pointer to output buffer.
+!	..PAT_PTR_ADR				!Pointer to pattern string.
+!	..PRM_LST_ADR_ADR			!Pointer to next parameter.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    begin
+
+    literal
+	FLAG1 = 4^11 + 1^9 + 8,
+	FLAG2 = 2^11 + 1^9 + 8;
+
+    local
+	PRM_LST : ref vector,
+	VALUE;
+
+    PRM_LST = ..PRM_LST_ADR_ADR;
+    VALUE = .PRM_LST [0];
+    .PRM_LST_ADR_ADR = PRM_LST [1];
+    $CBTA (.BUF_PTR_ADR, .VALUE, FLAG1) + $CBTA (.BUF_PTR_ADR, 0, FLAG2)
+    end;					!End of DMPPHY
+routine GETREG (ADDRESS) = 			!Get I/O Page Register
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	None
+!
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	None
+!
+!--
+
+    begin
+
+    local
+	ADR,
+	REG_HIGH,
+	REG_LOW;
+
+    MAPKNL ();
+    begin
+    $CEX_PDTDEF
+
+    local
+         CEX_PDB;
+
+    CEX_PDB = GETWRD (SYMBOL ('.PDBVB'));
+    MAPAPR (6, GETWRD (.CEX_PDB + FL$OFFSET (PDT$W_DATA_BIAS)));
+    ADR = GETWRD (.CEX_PDB + FL$OFFSET (PDT$A_DATA_ADDRESS));
+    end;
+
+    if GEQ16 (GETWRD (.ADR), %o'160000')
+    then
+	begin
+
+	while (REG_LOW = GETWRD (.ADR)) neq 0 do
+	    begin
+	    REG_HIGH = GETWRD (ADR = .ADR + 2);
+
+	    while LEQ16 (.REG_LOW, .REG_HIGH) do
+		begin
+		ADR = .ADR + 2;
+
+		if .REG_LOW eql .ADDRESS then return GETWRD (.ADR);
+
+		REG_LOW = .REG_LOW + 2;
+		end;
+
+	    ADR = .ADR + 2;
+	    end;
+
+	end
+    else
+	UNDEFINED
+
+    end;					!OF GETREG
+routine INSTR_LENGTH (ADDRESS) = 		!Determine length of given instruction.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY THE GENERAL AND MAPPING REGISTERS, THE STACK, AND THE
+!	CONTEXT OF THE CRASH PC.
+!
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	SETS LISTING OUTPUT SUBTITLE
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+    OPR_DD = UNDEFINED;
+    OPR_R = UNDEFINED;
+    OPR_SS = UNDEFINED;
+
+    incr index from 0 to 2 do
+	INSTR [.index] = GETWRD (.ADDRESS + .index^1);
+
+    selectone .INSTR [0] of
+	set
+	!
+	! One word instructions
+	!
+
+	[%o'000000' to %o'000006', %o'000230' to %o'000277', %o'000400' to %o'003477', %o'006400' to %o
+	    '006477', %o'077000' to %o'104777', %o'170000' to %o'177777'] :
+	    1;
+	!
+	! Instructions with register
+	!  xxxxxR
+	!
+
+	[%o'000200' to %o'000207', %o'075000' to %o'075037'] :
+	    begin
+
+	    map
+		INSTR : block [3];
+
+	    OPR_R = .INSTR [0, 0, 3, 0];
+	    1
+	    end;
+	!
+	! Instructions with source
+	!  xxxxSS
+	!
+
+	[%o'006500' to %o'006577', %o'106500' to %o'106577'] :
+	    begin
+
+	    map
+		INSTR : block [3];
+
+	    OPR_SS = .INSTR [0, 0, 6, 0];
+	    1 + OPERAND_LENGTH (.OPR_SS)
+	    end;
+	!
+	! Instructions with register and source
+	!  xxxRSS
+	!
+
+	[%o'070000' to %o'073777'] :
+	    begin
+
+	    map
+		INSTR : block [3];
+
+	    OPR_R = .INSTR [0, 6, 3, 0];
+	    OPR_SS = .INSTR [0, 0, 6, 0];
+	    1 + OPERAND_LENGTH (.OPR_SS)
+	    end;
+	!
+	! Instructions with destination
+	!  xxxxDD
+	!
+
+	[%o'000100' to %o'000177', %o'000300' to %o'000377', %o'005000' to %o'006377', %o'006600' to %o
+	    '006777', %o'105000' to %o'106377', %o'106600' to %o'106677'] :
+	    begin
+
+	    map
+		INSTR : block [3];
+
+	    OPR_DD = .INSTR [0, 0, 6, 0];
+	    1 + OPERAND_LENGTH (.OPR_DD)
+	    end;
+	!
+	! Instructions with register and destination
+	!  xxxRDD
+	!
+
+	[%o'004000' to %o'004777', %o'074000' to %o'074777'] :
+	    begin
+
+	    map
+		INSTR : block [3];
+
+	    OPR_R = .INSTR [0, 6, 3, 0];
+	    OPR_DD = .INSTR [0, 0, 6, 0];
+	    1 + OPERAND_LENGTH (.OPR_DD)
+	    end;
+	!
+	! Instructions with source and destination
+	!  xxSSDD
+	!
+
+	[%o'010000' to %o'067777', %o'110000' to %o'167777'] :
+	    begin
+
+	    map
+		INSTR : block [3];
+
+	    OPR_SS = .INSTR [0, 6, 6, 0];
+	    OPR_DD = .INSTR [0, 0, 6, 0];
+	    1 + OPERAND_LENGTH (.OPR_SS) + OPERAND_LENGTH (.OPR_DD)
+	    end;
+	!
+	! Unused instructions
+	!
+
+	[%o'000007' to %o'000077', %o'000210' to %o'000227', %o'007000' to %o'007777', %o'075040' to %o
+	    '076777', %o'106400' to %o'106477', %o'106700' to %o'107777'] :
+	    1;
+	tes
+
+    end;					!OF INSTR_LENGTH
+routine KERNAL_CONTEXT : novalue = 		!Check for inifinite loops.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY THE GENERAL AND MAPPING REGISTERS, THE STACK, AND THE
+!	CONTEXT OF THE CRASH PC.
+!
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	SETS LISTING OUTPUT SUBTITLE
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+    SBTTL (CH$ASCIZ ('KERNEL CONTEXT'));
+
+    if .PS<14, 2> eql 0
+    then
+	PUTLN (2, CH$ASCIZ ('KERNEL SP = %P,  STACK:'), .KSP)
+    else
+	PUTLN (2,
+	    CH$ASCIZ ('KERNEL STACK:'));
+
+    WINDOW (SYMBOL (V$$CTR), SYMBOL ($STACK));
+
+    if .PS<14, 2> eql 0
+    then
+	begin
+	PUTLN (2, CH$ASCIZ ('KERNEL PC = %P,  CONTEXT:'), .pc);
+	WINDOW ((if .pc lssu 80 then 0 else ((.pc - 80) and not 15)), ((.pc + 80) and not 15));
+	end;
+
+    end;					!OF KERNAL_CONTEXT
+routine OPERAND_LENGTH (DESIGNATOR) = 		!Determine length of given operand.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY THE GENERAL AND MAPPING REGISTERS, THE STACK, AND THE
+!	CONTEXT OF THE CRASH PC.
+!
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	SETS LISTING OUTPUT SUBTITLE
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+
+    case .DESIGNATOR<3, 3> from 0 to 7 of
+	set
+
+	[0, 1, 4, 5] :
+	    0;
+
+	[2, 3] :
+
+	    if .DESIGNATOR<0, 3> neq 7 then 0 else 1;
+
+	[6, 7] :
+	    1;
+	tes
+
+    end;					!OF OPERAND_LENGTH
+routine SPACE (APRS, PDRS) : novalue =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    begin
+
+    map
+	APRS : ref vector [8];
+
+    local
+	PDR;
+
+    bind
+	PDR_BITS = BIT_LIST ((1^6, 'WRITTEN_INTO'), (1^3, 'EXPAND_DOWN')),
+	ACCESS_VALUE = BYTE_LIST ((0, 'NON_RESIDENT'), (1, 'READ_ONLY'), (3, 'READ_WRITE'));
+
+    PUTLN (1, CH$ASCIZ ('%4SVIRTUAL  PHYSICAL LENGTH%34TFLAGS'));
+    PUTLN (0, CH$ASCIZ ('%4S-------- -------- ------%34T-----'));
+
+    incr index from 0 to 7 do
+	begin
+	PDR = GETREG (.PDRS + .index^1);
+	PUTLN (0, CH$ASCIZ ('%5S%P   %@  %P%34T%@%@'), .index^13, DMPPHY, .APRS [.index], (.PDR<8, 7> + 1)^6,
+	    BYTLS, ACCESS_VALUE, .PDR<1, 2>, BITLS, PDR_BITS, .PDR);
+	end;
+
+    end;					!End of SPACE
+routine USER_CONTEXT : novalue = 		!Check for inifinite loops.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY THE GENERAL AND MAPPING REGISTERS, THE STACK, AND THE
+!	CONTEXT OF THE CRASH PC.
+!
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	SETS LISTING OUTPUT SUBTITLE
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+
+    local
+	HEADER_ADDRESS,
+	HIGH_STACK,
+	LOW_STACK,
+	TCB_ADDRESS,
+	UPC,
+	USP;
+
+    if (TCB_ADDRESS = GETWRD (SYMBOL ($TKTCB))) neq SYMBOL ($HEADR)
+    then
+	begin
+	SBTTL (CH$ASCIZ ('CURRENT TASK CONTEXT'));
+	HEADER_ADDRESS = GETWRD (GETWRD (.TCB_ADDRESS + FL$OFFSET (T_PCB)) + SYMBOL ('P.HDR'));
+	LOW_STACK = GETWRD (GETWRD (.HEADER_ADDRESS + FL$OFFSET (H_WND)) + 2 + FL$OFFSET (W_BLVR)) + GETWRD (
+	    .HEADER_ADDRESS + FL$OFFSET (H_HDLN));
+	HIGH_STACK = GETWRD (.HEADER_ADDRESS + FL$OFFSET (H_ISP));
+	UPC = (if .PS<14, 2> eql 3 then .pc else GETWRD (GETWRD (.HEADER_ADDRESS + FL$OFFSET (H_GARD)) - 14));
+	USP = GETWRD (.HEADER_ADDRESS + FL$OFFSET (H_CSP));
+
+	if MAPTSK (.TCB_ADDRESS)
+	then
+	    begin
+
+	    if .PS<14, 2> eql 3
+	    then
+		PUTLN (2, CH$ASCIZ ('USER STACK:'))
+	    else
+		PUTLN (2,
+		    CH$ASCIZ ('USER SP = %P,  STACK:'), .USP);
+
+	    WINDOW (.LOW_STACK, .HIGH_STACK);
+	    PUTLN (2, CH$ASCIZ ('USER PC = %P,  CONTEXT:'), .UPC);
+	    WINDOW ((if .UPC lssu 80 then 0 else ((.UPC - 80) and not 15)), ((.UPC + 80) and not 15))
+	    end
+	else
+	    PUTLN (1, CH$ASCIZ (FATAL, 'CANNOT MAP TO TASK "%2R"'),
+		GETWRD (.TCB_ADDRESS + FL$OFFSET (T_NAM) + 0), GETWRD (.TCB_ADDRESS + FL$OFFSET (T_NAM) + 2));
+
+	end;
+
+    MAPKNL ();
+    end;					!OF USER_CONTEXT
+global routine WINDOW (START_ADDRESS, END_ADDRESS) : novalue =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    begin
+
+    local
+	ADDR,
+	FIRST_ADDRESS,
+	WORD_COUNT,
+	WORDS : vector [8],
+	WORDS_ADR;
+
+    SKIP (1);
+    ADDR = .START_ADDRESS;
+
+    while .ADDR lssu .END_ADDRESS do
+	begin
+	FIRST_ADDRESS = .ADDR;
+	WORD_COUNT = 0;
+
+	incra WORDS_ADR from WORDS [0] to WORDS [7] do
+	    begin
+	    .WORDS_ADR = GETWRD (.ADDR);
+	    ADDR = .ADDR + 2;
+	    WORD_COUNT = .WORD_COUNT + 1;
+
+	    if .ADDR eql .END_ADDRESS then exitloop;
+
+	    end;
+
+	PUTLN (0, CH$ASCIZ ('     %P	%#P'), .FIRST_ADDRESS, .WORD_COUNT, .WORDS [0], .WORDS [1], .WORDS [2],
+	    .WORDS [3], .WORDS [4], .WORDS [5], .WORDS [6], .WORDS [7]);
+	end;
+
+    end;					!End of WINDOW
+global routine CHKMCH =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!	CHECK THE MECHANISM VECTOR BY COMPARING THE MECHANISM VECTOR
+!	FOUND BY SEARCHING THE KERNAL STACK WITH THE ONE CONTAINED
+!	IN .MCHVC.  DISPLAY A WARNING MESSAGE IF THEY ARE DIFFERENT.
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	MECHANISM VECTOR OBTAINED FROM THE KERNAL STACK
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+        ADR,
+        MCH,
+        WORDS_ADR,
+        START_ADDRESS,
+        END_ADDRESS;
+
+    MCH = GETWRD (SYMBOL ('.MCHVC'));
+    if (GETWRD (.mch) eql 1) and (GETWRD (.mch+16) eql %O'177774')
+    then return .mch;
+
+    START_ADDRESS =  SYMBOL ($STACK);
+    END_ADDRESS = SYMBOL (V$$CTR);
+
+    decra WORDS_ADR from .START_ADDRESS to .END_ADDRESS by 2
+        do
+        if (GETWRD(.WORDS_ADR) eql %O'177774')
+        then
+            begin
+            ADR = .WORDS_ADR - 16;
+            if ((GETWRD (.ADR)) eql 1)
+            then
+                begin
+                PUTLN (1,CH$ASCIZ (WARNING,'MECHANISM VECTOR = %P NOT VALID, USING %P INSTEAD'),.MCH,.ADR);
+                return .ADR
+		end
+            else exitloop;
+            end;
+        PUTLN (1,CH$ASCIZ (WARNING, 'MECHANISM VECTOR = %P NOT VALID, AND NOT FOUND ON KERNAL STACK'));
+        return 0;
+    end;			!End of CHKMCH
+end				!End of module
+eludom

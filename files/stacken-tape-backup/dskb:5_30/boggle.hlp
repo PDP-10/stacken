@@ -1,0 +1,35 @@
+Boggle {r ett flerpersonsspel d{r man p}        A  R  X  P
+kort tid ska hitta s} m}nga ord som m|jligt
+i en kvadrat med 4 * 4 bokst{ver. N{r man       L  T  C  E
+bildar ett ord g}r man fr}n en bokstav till
+en n{rliggande som man inte anv{nt i samma      B  A  R  K
+ord. Orden m}ste vara minst 3 bokst{ver.
+I m|nstret till h|ger kan man allts} bilda      Q  H  U  Y
+till exempel KEX, HALTA, BAL och ALTARE.
+
+Spelet finns p} marknaden med tr{t{rningar med bokst{ver och
+ett timglas f|r att m{ta tiden. Redan i den versionen {r det
+ett av dom roligaste och mest upphetsande spelen som finns.
+I datortappningen sitter alla deltagare (h|gst nio stycken)
+vid varsin terminal och datorn sk|ter tidh}llningen.
+P} sk{rmen ser man hela tiden hur det g}r f|r en sj{lv och f|r
+motst}ndarna.
+
+N}r tiden runnit ut f}r alla tillf{lle att se och klaga p}
+varandras ord. Datorn sj{lv bed|mer inte om ett ord finns, den
+kontrollerar bara om det g}r att l{gga i m|nstret. Spelarna b|r bara
+godk{nna ord i grundform; det {r en f|rdel om n}gon har till-
+g}ng till Svenska akademiens ordlista.
+
+Programmet boggle startas med kommandot
+
+   RUN GAM:BOGGLE
+
+Den som startar programmet f}r sedan fr}gor om vilka andra
+terminaler som ska vara med. De andra spelarna kan inte vara
+inloggade n{r de bogglar.
+
+
+Programmet {r skrivet av Viggo Eriksson.
+
+	<Slut p} GAM:BOGGLE.HLP  8112011>

@@ -1,0 +1,47 @@
+title	iflist - list ip interfaces
+search	jobdat, uuosym, macten
+
+opdef	ifnam. [call [sixbit 'ifnam.']]
+
+t1==1
+t2==2
+t3==3
+t4==4
+
+c==10
+
+p==17
+
+pdl:	block	<pdllen==^D100>
+
+iflist:	jfcl
+	reset
+	move	p,[iowd pdllen, pdl]
+	movei	t4,0
+loop:	move	t1,t4
+	ifnam.	t1,
+	 jrst	fail
+	pushj	p,prsix
+	pushj	p,pcrlf
+	aoja	t4,loop
+
+fail:	monrt.
+	jrst	iflist
+
+prsix:	setz	t2,
+	rotc	t1,6
+	cail	t2,'A'
+	 caile	t2,'Z'
+	  subi	t2,40
+	movei	c,100(t2)
+	pushj	p,prchr
+	jumpn	t1,prsix
+	popj	p,
+
+prchr:	outchr	c
+	popj	p,
+
+pcrlf:	outstr[	byte (7) 15, 12, 0]
+	popj	p,
+
+end	iflist

@@ -1,0 +1,132 @@
+UNIVERSAL	MNTMAC	MOUNT AND ALLOCATE COMMONALITY
+SUBTTL	P. Taylor /PJT/LWS  29-Feb-84
+
+;
+;
+;
+;        COPYRIGHT (c) 1975,1976,1977,1978,1979,1980,1981,1982,
+;			 1983,1984,1985,1986
+;                    DIGITAL EQUIPMENT CORPORATION
+;			ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;     
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;     
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+
+
+
+	SEARCH	GLXMAC			;Get Galaxy symbols
+	PROLOG	(MOUNT)
+
+	SEARCH	ORNMAC,QSRMAC
+
+	EXTERN	PARSER,P$HELP
+	PARSET				;Declare external Parser routines
+SUBTTL	MACRO definitions
+
+
+DEFINE	TXT(ARG) <POINT 7,[ASCIZ@ARG@]>
+
+
+;DEFINE A MACRO TO HANDLE FATAL COMMAND ERRORS
+
+DEFINE	$ERR(TXT),<
+	LSTOF.
+	JSP	TF,ERROR		;;Display the error
+	CAI	[ITEXT	(<TXT>)]		;;Error text is built here
+	LSTON.>
+
+DEFINE	$DATA (NAME,SIZE<1>) <
+ NAME:	BLOCK SIZE
+	 ..LOC==.>
+
+DEFINE	$GDATA	(NAME,SIZE),<
+	$DATA	(<NAME>,<SIZE>)
+	INTERN	NAME
+>;END $GDATA
+SUBTTL	ERRORS returned by subroutines
+
+;Define subroutine error return mechanism
+
+DEFINE	$RETER(CODE) <
+	PJRST	[MOVEI	S1,CODE
+		 $RETF]>
+
+;Define the errors
+
+DEFINE ERRS <
+
+	XX	(IDN,Invalid device type)
+	XX	(NSD,No such device)
+	XX	(UND,Unknown device type)
+	XX	(USD,Unsupported device type)
+	XX	(EZD,Ersatz device type)
+	XX	(PLD,Pathological device type)		;;[55]
+	XX	(ASN,Ambiguous structure name)		;;[55]
+	XX	(ISN,Invalid structure name)
+	XX	(GDN,Generic device name)
+
+> ;End ERRS definition
+
+
+DEFINE	XX(CODE,TEXT) <
+	ZZ==ZZ+1
+	ER$'CODE==ZZ>
+
+	ZZ==0		;Initialize error variable
+	ERRS		;Equate the error codes
+
+SUBTTL	AC and FLAG definitions
+
+
+	F==13				;Global flag AC
+
+	  FL.TAP==1B0	;Tape request
+	  FL.DSK==1B1	;Disk request
+	  FL.WRT==1B2	;Write enable
+	  FL.WLK==1B3	;Write lock
+	  FL.EXC==1B4	;Exclusive/sharable access
+	  FL.SCR==1B5	;Scratch volume set
+	  FL.NEW==1B6	;New volume set
+	  FL.WAT==1B7	;Wait for operation to complete
+	  FL.NOT==1B8	;Notify on completion
+	  FL.PAS==1B9	;Active/passive search list
+	  FL.BYP==1B10	;Bypass label processing
+	  FL.MOU==1B11	;This is a mount request
+	  FL.REM==1B12	;A remark has been sent with the request
+	  FL.NOC==1B13	;Creates are not OK as part of DSK:
+	  FL.LAB==1B14	;User typed some sort of /LABELS switch
+	  FL.RMV==1B15	;[REM] /REMOVE was typed
+	  FL.CHK==1B16	;/CHECK was typed
+	  FL.TRK==1B17	;/TRACK: was specified
+	  FL.GDV==1B18	;Generic device specified
+	  FL.QTA==1B19	;/QUOTA was specified
+	  FL.MOR==1B20	;[55] Look for more ACK messages
+	  FL.LST==1B21	;[56] MOUNT <CR><LF> was typed (maybe MOUNT /LIST someday)
+SUBTTL	Constants and assembly parameters
+	
+	SYSPRM	(MAXPRO,00777,777777)	;Maximum file protection
+
+;Constants
+
+	XP	CMDLEN,^D200/5		;Room for 200 characters in command line
+	XP	CMD.SZ,^D512		;Size of command  argument block
+	XP	PAKSIZ,^D100		;Size of message packet
+
+;**;[55] Add definitions for user ACK code fields. /LWS
+
+	ACK.NT==400000,,0		;[55] Mask for /NOTIFY
+	ACK.JB==377400,,0		;[55] Mask for job number
+	ACK.UT==377,,777777		;[55] Mask for UDT bits
+	END

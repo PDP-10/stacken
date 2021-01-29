@@ -1,0 +1,482 @@
+	SUBTTL	Bill Meier 3-Apr-85
+
+	SEARCH	WHOMAC
+	$SETUP	(WHOVER,+)
+
+	WHOVER==6
+	WHOMIN==0
+	WHOWHO==0
+	WHOEDT==243
+
+$$NAME:: ASCIZ	|WHOONC version 6(243) built on  3-Feb-88|
+	 BYTE(7)" "," "," ",.CHCRT,.CHLFD
+INITXT:: BLOCK	LN$INI		;STORAGE FOR INITIALIZATION TEXT
+
+	TITLE.	(WHO,WHO,<WHO - A status information display program>)
+	WHOTTL
+	WHOPTX
+	WHO137
+;               TABLE OF CONTENTS FOR WHOVER
+;
+;
+;                        SECTION                                   PAGE
+;    1. Bill Meier 9-Jul-80.......................................   1
+;    2. Edit History..............................................   3
+	SUBTTL	Edit History
+
+;24-Mar-78
+;
+;1-3	Development edits
+;4	Add more selection switchs
+;5	Add DDB scan and wildcard logic
+;6	Allow for ^C if JACCT
+;7	Add /JSTATUS: args
+;10	Allow /SEND:"text" to selected jobs
+;11	Add /SUMMARY/NOPRINT
+;12 	Fix VM stats when swapped, include page rate, fix R1/R2 tests
+;13	Add /ACTIVE/SUMMARY/SWAP:(IN,OUT,FIT,FORCE)
+;	If jaccted, only let TRMOP. send work if [1,2] or poke
+;14	Add LINE mode to print out stuff on TTY lines not nessecarily
+;	controlled by jobs and associated new switches
+;15	Add (in LINE mode) /[NO]SLAVE /[NO]CONNECT print LIMIT if set
+;16	Include more stuff for DDB printout, support MTA stuff too
+;17	Create file STD:LINES.INI with terminal locations and phone
+;	numbers.  In line mode add /LOCATION:"STRING"/PHONE:"STRING"
+;20	Add /MAP to MAP to other function; IE 1/MAP shows job 1 AND
+;	its TTY info
+;21	TRMOP. send worked if batch job. dont do CTLJOB check if batch
+;22	Fix file switches in SWITCH.INI, change LINE mode typeout
+;	a little bit, replace JOBMAX with LOGMAX in JOB mode /SUMMARY
+;23	Add switches /FILE and /FILES just like /DDB and /DDBS
+;	Add LOGINQ statistics in LINE mode
+;24	Add /FORCE:command for priveledged jobs
+;25	Add more stuff for TTY ddbs (char counts,etc). Include more
+;	FILSER stuff (read counts), and fix spaces/dashed in names
+;26	Improve GETTAB routine; include table/index in errors
+;	Add /OUTPUT:string /INPUT:string to type string out/in
+;	Allow /SEND/OUTPUT/INPUT if to same programmer
+;27	Update to 7.00 UUOs, DDB scanning (and funny space) Use SPY
+;	pages and have truely shareable core image.
+;30	Fix /DPY and /REPEAT defaults. Allow PTYs in line mode
+;	Add /INCLUDE:PTY and implement /PTY for line mode
+;31	Add general /SET:fnc:args to do all sorts of SETUUO's for other
+;	jobs. Same priv checking as other action functions.
+;32	Dont allow /DPY if not logged in. Add /NETWORK:(CONNECT,DISCONNECT)
+;	as another type of action.
+;33	Implement /FAST/NORMAL/SLOW for line mode. Also, include
+;	character count stuff if /SLOW. Trap fatal job errors so we
+;	can exit more gracefully. With new SCAN, dont allow indirect
+;	command files if not logged in.
+;34	Fix ?ill mem ref with DDBs getting swapped out when we look
+;	Add /PERFORMANCE for LINE mode, add switch /MODE:(JOB,LINE)
+;35	Inprove format stuff, default /BLANK format, update to new
+;	DPYPAK, form TSG version, make compatible with 6.03 again
+;	Fix /SEND to take arrow form of control characters, and to form
+;	OPRnnn if needed. Improve scanning of "WHO name" and "WHO ."
+;	Add /VFAST (very fast) to list just name and TTY
+;	Fix /MAP for PTYs and CTY
+;36	Improve wait state codes (especially EW, HB, TI/DI/IO)
+;37	Add /CHANNEL to typeout USRJDA and bits. Also, /BBATCH to
+;	select jobs in background batch
+;40	Add /SUMMARY:key to give different breakdowns
+;
+;2(40)	2-Jun-80
+;
+;41	Fix OPRnnn in send, change format to ;;OPR(TTYnnn): - for
+;	local OPR or ;;OPRnn(TTYnnn): - for remote OPR
+;42	Make single source for KI/KL/KS (inline tests)
+;	Verify we have some lenghts right (check DDBLEN)
+;43	Add IPCF send/receive information
+;44	Add new switch /LOGICAL to list logical names in funny space
+;	Improve name listing routine and space handling
+;45	Add more /SUMMARY arguments, allowing rounding to place things
+;	like number of disk reads into buckets.
+;	Really implement /NETWORK:CONNECT
+;46	Add /INCREMENTAL (finally!!) for /REPEAT or /DPY
+;47	Allow /SEND to the same project only
+;50	Add runtime commands in DPY mode
+;51	Add /ORIGIN to list path program (low+high seg) came from
+;52	Improve handling of TTY/PTY/CTY specifications
+;53	List DDB under channel spec if /DDBS and /CHANNEL
+;54	Return functionality of /REPEAT:n:m to repeat m times
+;	sleeping n seconds. Add LIMIT as format keyword.
+;55	Improve name matching to retry users mask shifted to the
+;	start of every space. So, .W BILL or .W MEIER match "BILL MEIER"
+;56	Fix sync of error messages when output device is my terminal
+;	Better error message for /DPY if not logged in
+;57	Allow +/- in DPY mode to roll the screen up or down to display
+;	more information than would fix on the screen.
+;60	Include low/high version information in /ORIGIN output
+;
+;2A(61)	22-Sep-80
+;
+;61	Fix some bugs reported by Tufts
+;	1) Headers on /SUMMARY:xxx dont line up pretty
+;	2) When we tried to read funny space in line mode, we died with ?WHOCCP
+;	3) /INCLUDE:SEGMENT doesnt. Remove keyword as /ORIGIN does it better
+;	4) Conflict with /LOGINQ and /LOGICAL. Change to /PATH:NAMES
+;	5) User specified format switch too sticky across commands
+;**	6) Cant use ? and * in user name wildcarding
+;
+;62	Add /PATH:PATH,JSL,NAMES) like PATH program to list path stuff
+;63	Fix incremental statistics when more than one spec is given
+;64	Fix flagged control characters in SEND/INPUT/OUTPUT command
+;	strings that are lower case. Ie ^c should be the same as ^C
+;65	Remove all 603 stuff. Everyone should be 7 series now.
+;66	Fix /FORCE from eating too much. Things like WHO/FORCE:HALT 24
+;	would HALT all jobs, as 24 was eaten by scanner!
+;67	Always print " + " if high segment and /ORIGIN
+;
+;3(70) 14-Dec-80
+;
+;70	Rework all of WHO to be faster and more efficient. Allow more
+;	selection switches, better format handling and more keywords.
+;	Fix some DPY bugs with exit and continue
+;71	Add /SORT switch to sort by any key, in ascending or descending
+;	order, and selecting the first n jobs.
+;72	Really fix /INCREMENTAL for multiple specs and with /SORT.
+;73	Improve /PATH output to make it just like PATH monitor command.
+;74	Fix up DDB stuff to add different typeout modes and SFDs.
+;75	Replace missing TRMOP. function .TORMT with simulator, and
+;	generate $STOP if we use a TRMOP. function that we dont simulate
+;	so this doesnt happen again!
+;76	Add code to read the swapping space for UPMPs and funny space.
+;	Fix bug with /ORIGIN and swapped out job, and also erroronous
+;	duplicted second sfd program was run from.
+;77	Add /ACCOUNT:"string" to select jobs with account strings, add
+;	/INCLUDE:ACCOUNT to do the obvious, and change format of 
+;	LINES.INI to have node name and line number.
+;	Expand IPCF information, add /INCLUDE:SPOOL.
+;100	Add expanded typeout of NPDs for TSKs with /DDBS
+;	Change /STATE: into /WSCODE: and replace /STATE: with
+;	keyword list.
+;101	Add /INCLUDE:IPCF
+;102	Change most /INCLUDEs into /INFORMATION. Add /INFORMATION:TTY
+;	to list lots of INITIA type TTY parameters. Improve format
+;	handling some, add more keywords like CRLF and SPACE.
+;103	More format improvements, add format control switches
+;	/INITIAL /HEADING /FOOTING /FINAL for real custom output
+;104	Fix some little bugs, add /INFORM:SIZE to type out some
+;	access table information
+;105	Add /PRGRUN and fix EW wait codes for 702
+;106	Cleanup reading the swapping space, and ?WHOWJU errors
+;
+;6-Mar-81 3(106)
+;
+;107	Fix /[no]MIC selection switch in line mode
+;110	Improve /STATE by adding (QUEUES,RWAITS,CODES) like S.MAC
+;	Expand /SUMMARY output for job mode, fix "n jobs running"
+;111	Fix /MODE when specified by itself. Fix /FOOTING with no jobs
+;	Toggle normal/slow DDBS with "S" and "D" commands in DPY mode.
+;	Cleanup some old values (use SYSGET things) NBSTIM,UPTIME
+;112	Exit /DPY better if .SET WATCH set
+;113	Add /INFORMATION:BATCH for WTO, OPR, batch stuff
+;	Add /STREAM/WTO/GLXOPR selection switches
+;114	Add /[no]APPEND for initial open of output file
+;	Fix for appending to output files in SFDs
+;	Create output file with WHOs version, if no /VERSION specified.
+;	Remove /NODPY, make it /DPY:0
+;	Add /INFORMATION:PRIVILEGES
+;	Fix handling of A and D in dpy mode
+;115	Fix to run under KL paging monitors
+;116	Begin to implement WHOSRV and network WHO ability
+;117	Allow /FORMAT switch in LINE mode
+;120	Expand LINE mode format typeout and keywords
+;121	Change /VM to select jobs whose virtual size .gt. physical size
+;	Expand TTY and LPT ddbs to show node / line / unit
+;	Show SLA DLA and state for network DDBS if /DDBS:SLOW
+;122	Improve things to GETTAB as may offsets as we can so WHO isnt
+;	so monitor dependent
+;123	Add /LPPN to select logged in PPN, format keywords LPPN, LPRGNUM,
+;	LPRJNUM. Selection switches /[no]PIVOT /[no]WHEEL
+;124	Expand info for magtape DDB output (/INFORMATION:MTA)
+;	and TUBSTS codes.
+;125	Add /INFORMATION:DEFAULTS and format/sort/summary keywords
+;	DEFBUFFER, DEFPROTECTON, DEFATTACH, PROSET
+;126	Fix MIC status not to ?Ill mem ref, fix state codes and
+;	line mode /MAP if not priveleged
+;127	Generate separate switch tables for JOB and LINE mode so we dont
+;	have so many switches that dont apply in the other modes
+;130	If listing to non-TTY, give informational message indicating
+;	the output file spec.
+;	Add /CAPABILITY: switch just like /PRIVILEGE and 
+;	/INFORMATION:CAPABILITY to list them
+;131	Add support for FTMDC (requires FTIPC too) for MDC features
+;	/PRIV/CAP:(SETP,PRGRUN)  and /[no]SETP
+;132	Improve checks for ?WHOTOR TTY number out of range, and add
+;	?WHOJOR Job number out of range message.
+;133	Include controlled job info for PTY DDB display
+;134	Add support for new 7.02 pathological file names, and /COMMANDS
+;135	Dont type out NPDs for TSK DDBS unless user has SPY privs.
+;	Sometimes they contain users passwords!
+;136	Fix output open error trying to output error message to the
+;	filespec which it couldnt open! Improve expansion of some
+;	error codes from NODE., JOBPEK, and PAGE. uuos.
+
+; Version 4 27-Nov-81
+;
+;137	Create version 4 with new mode NODE to list node related stuff,
+;	like the NETWORK program/command but better, of course!
+;	Cleanup code to really make adding more modes general
+;	Add APC support for local TSN, Gandalf, auto-dialer tests.
+;140	Pretty up /SUMMARY:KEY a little, and include totals
+;141	Restructor mainline, and improve errors when things rejected
+;	Either %WHOARC All jobs rejected by contraints or
+;	?WHONTM Job not assigned (simliar messages for other modes)
+;	Improve /INFORMATION:keys handling
+;142	Fix /LOCATE:"xxx" and /ACCOUNT:"xxx" from only selecting based 
+;	on first word.
+;143	Expand /INFORMATION:ORIGIN to include DDT and/or PFH info, as well
+;	as high segment name and origin if segment superseded.
+;144	Fix /PPN:[,] /LPPN:[,]. Spell "Ambiguous" correctly.
+;	Set switch value required for line mode /LOCATE so we dont halt.
+;	Dont allow negative /DPY or /REPEAT or /SORT or /FORMAT values.
+;145	Check for various duplicate switch errors, like ./JOB:30 or
+;	FOO/NAME:BAR
+;146	Allow /VFAST/FAST/NORMAL/SLOW/FORMAT and /INFORMATION switches
+;	to be file specific. Also /DDBS/MAP/PERFORMANCE/ORIGIN!
+;	Add /INFORMATION:TIME to print JLT and RESET times.
+;147	Add /NODETACH /NOTTY /NOPTY /NOCTY to do the obivous
+;	Add /INFORM:CORE and summary/sort keywords CPL,CVL,MPL,MVL
+;	Add format/sort/summary keywords PHYLOW, VIRLOW, PHYHIG,VIRHIG
+;	to list low/high segment physical/virtual core size
+;150	Add interface to GLXMEM for memory mangement, and GLXLNK for
+;	linked list handling. Restructure code to take advantage of 
+;	this and reduce low-seg size.
+;151	Fix bug with /INFORM:CHANNEL listing the wrong channels
+;	Also, GETTAB the number of extended channels; dont assume 100.
+;152	Add job mode slection switches /[no]DDT and /[no]PFH
+;	Type out PFH performance data if present under /ORIGIN
+;153	Add CHARGE ID (CID) and BADGE for TSG, pretty up /PERFORMANCE 
+;	with better spacing of fields, and greater precision.
+;154	Fix /DSKPRIORIY for negative values, fix ^C/^Z/E .CONTINUE when
+;	/REPEAT but not /DPY from outputing garbage.
+;155	Add new PFH FTPERF stuff
+;156	Finally fix /MAP/INCREMENTAL to get it right!
+;157	Range check node numbers (if FTIPC) so /NODE:12345 doesnt get
+;	?GETTAB table index error
+;	Correct check for spy/poke privs, when reading I/O status from
+;	DDB, so we dont die if user has SPY privs, but the DDB is in
+;	funny space.
+;160	Add new DDCMP (DDP) object type in NODE mode
+;161	Add 'B' in DPY mode to toggle /INFORM:BATCH
+;	Require explicit name or job (job mode) or TTY (line mode)
+;	for action functions, so we dont accidentally get everyone!
+;	Dont let IJLT or ISTM times be negative (if the system is real
+;	slow, a job resets after we had the UDT but before we read the
+;	reset time).
+;162	Add new job state code ^S for TO and control-s'ed
+;	Delimit PPN with "-" if pivoted.
+;	Fix missing dashes in name if /FLOAT
+;163	Add new mode USER to read SYS:ACCT.SYS for ppn/name translation
+;
+; Version 5 18-Jun-82
+;
+;
+;164	Add DTA DDB info with filespec, block, and reelid
+;165	Fix ACTIVE states not to include event wait states
+;166	Add /COLUMN:n switch for DPY mode to select n column display
+;167	Improve handling of versions and conditionals
+;170	Display BIGBUF value on /INFORMATION:DEFAULTS, and add
+;	summary/sort/format keyword DEFBIGBUF for it
+;171	Add /INFORMATION:STATES to typo out ASCIZ state descriptions
+;172	Fix many spelling errors. Star /NODE switch in line mode.
+;	Fix /NETWORK:CONNECT to work again
+;173	Default blank name to "GUEST" if logged in.
+;	Continue past FENCE when checking strs in S/L
+;	Add /INFORMATION:WATCH to type watch and message bits
+;	If one CPU, type * after last job run, rather than ourselves
+;174	Add simulation of all necesasry NODE. UUO functions.  Take advantage
+;	of ANF-10 network GETTABs available with 7.02 to eliminate the need
+;	for hard wiring in ANF-10 offsets and byte pointers.
+;	Enhance NODE summary line to include all network devices.
+;	Add full simulation of GOBSTR UUO (minus the priv checking).
+;	Add PATH. UUO simulation for reading a job's path.
+;	Remove the DSKCHR UUO from WHOCHK and get mount counts using the
+;	GOBSTR simulator.  Also enhance the mount count display a bit.
+;175	Beef up USER mode to allow display of full ACCT.SYS entry using
+;	the /FORMAT or /INFORMATION switches.
+;176	Add flag FL.ANF10 and associated checks so WHO no longer requires
+;	network support in the monitor.  Correct half-word errors where
+;	storage of active and passive search lists were concerned.  Fix
+;	cosmetic bug in DECtape DDB display.  Add /HANGUP (file specific)
+;	switch to LINE mode to hangup dataset lines and allow us to get
+;	back to the MICOM switch too.  Don't allow /MODE:USER to work
+;	unless logged in (security bug).  The call to DOACTION might cause
+;	us to be detached, and if logged out, leaving [2,5] 'TO' jobs
+;	laying around.  After the call to DOACTION, if this is the case,
+;	force /PRINT:NO.
+;177	Make WHO self configuring by adding WHOONC, once-only initialization
+;	logic.  This module will read the monitor's symbol table, extracting
+;	values and storing them in the sharable high segment.  When done,
+;	it will shrink core and save itself.  This edit removes the WHOSYM
+;	module.
+;
+;200	Prepare for release with the TOPS-10 7.02 monitor.  Remove the
+;	dependancy on private copies of MACTEN and SCNMAC.
+;
+;201	Clean up some stuff and fix bug a few bugs:
+;	1. Correct filespec defaulting in WHOONC.
+;	2. Use existing code in WHOMAP to interface to the mapper in WHOONC.
+;	3. Add monitor feature checking to WHOONC and WHOUUO to catch version
+;	   skews between configured WHO and the monitor.
+;	4. Build the ANF10 object table into the hi seg at once-only time.
+;	5. Make FWORD and UWORD skip when a word is fetched.  The non-skip
+;	   return is taken if reading a crash file and the target word is
+;	   swapped out.
+;	6. Add entry point MAPSTP to the WHOMAP's mapper error handler to
+;	   process stopcodes when bad things happen.
+;	7. Make it work with 701/701A again.
+;
+;202	1. Add support for new TRMOP to read the APC.
+;	2. Add minimal JOB mode support for DECnet nodes.
+;	3. Add DNET. UUO simulator (functions 1 and 2, not called yet).
+;	4. Add BWORD to fetch a byte from a monitor word.
+;	5. Remove FTGET since MAP handles GETTAB simulation now.
+;	6. Add code to determine if charge numbers are supported.
+;	7. Add code to determine if LOGIN queue is supported.
+;
+;203	Work on server code a bit.  Add /SERVE to support this mode of
+;	operation.  There are three server types: IPCF, ANF10, and DECnet.
+;
+;204	Implement a primative ASCII protocol used mainly to pass informational
+;	data to and from the server.  The only meaningful data items are the
+;	mode indicator (.MOD <keyword>) and protocol terminator (.END text).
+;
+;205	1. Fix address check when server writes log file (caused by edit 202)
+;	2. *FILES and *FAST conflict.  *FAST wins.
+;	3. Be a little more forgiving in VRSKEW by clearing -VWHO.
+;	4. Zero junk left in low seg by WHOONC.
+;	5. Dynamically allocate TSK buffers.
+;	6. Add unsolicited breakpoint address typeout in DDT diplay.
+;
+;206	More bug fixes:
+;	1. Forgot to fudge up .JBCOR in WHOONC.
+;	2. Correct logic to read APC in WHOUUO.
+;	3. Correct logic to return APC for IPC monitors prior to 702.
+;	4. If not spying, then can't NRTINF won't work.  This edit allows
+;	   WHO to run without privs again.
+;	Note: WHO %5(206) released with the 7.02 monitor.
+;
+; Start of version 6 development to support the 7.03 monitor.
+;
+;207	Make WHO only work with the current monitor.  It's getting too
+;	difficult to make WHO work for all 7 series monitors.  Remove
+;	the VERSION macro.  Also remove FTPRGRUN and FTRESET and turn
+;	those features on permanently.
+;
+;210	Remove code in WHOUUO to read swapping space for KI paging monitors.
+;	Remove last references to hardwired funny space symbols and use
+;	GETTABed values or those extracted from the symbol table.
+;
+;211	More non-zero section bug fixes.  Fix callers of MWORD to clear
+;	the LH of the target address if section zero is wanted.  Don't
+;	have MWORD do it.  Change all references from XWORD to MWORD
+;	and delete XWORD.
+;
+;212	Add STRUCTURE mode.
+;
+;213	Add UNIT mode.
+;
+;214	Expand LPT DDB display to include hardware characteristics.
+;	Display contents of TMPCOR files.
+;
+;215	1. Lots of bug fixes.
+;	2. Change core display to be LOW+HIGH+OVERHEAD pages.
+;	3. Disable /INCLUDE:FUNNY for now.
+;	4. Do not attempt to display virtual pages until 703 is fixed.
+;	5. Fix stopcode display to work with new 703 stuff.
+;
+;216	Add new DSKCHR word (.DCDET) to DSKCHR simulator.  add new
+;	format keywords "ALTERNATE" and "DETACHED" to display the
+;	alternate and detached alternate ports of disk drives.
+;
+;217	Remove old TRMOP. UUO simulator and replace with one that uses
+;	the monitor's TOPTB1 table by extracting byte pointers and calling
+;	BWORD.
+;
+;220	Upgrade WHOUUO to DECnet PHASE IV.
+;
+;221	Fix off-by-one bug in computation of job overhead pages.
+;
+;222	Attempt to make WHO work again with 703:
+;	1. Shrink size and complexity of overall program by using
+;	   standard SCAN instead of RDH's SWIL package.
+;	2. Suffix job mode connect column display with "L" for
+;	   LAT lines (returned by APC TRMOP).
+;	3. Expand core display to include low+high+overhead pages.
+;	   Do this at the expense of the user name column which will
+;	   soon become obsolete with long ASCIZ user names anyway.
+;	4. Temporarily patch out DECnet node searching until a decision
+;	   is made whether or not to fully support DECnet in WHO.
+;	5. Correct segment size calculation for NZS programs.
+;
+;223	Correct display of job overhead pages.  KBY moved IMGIN/IMGOUT again.
+;
+;224	Have /INFORM:NAME type user name in JOB mode.
+;
+;225	Add job's context number to the normal and slow displays
+;
+;226	1. Remove context number from displays.  There's no room for it.
+;	2. Due to popular demand, put user name back at the expense of
+;	   the runtime column.  Move runtime to /INFORM:TIME.
+;	3. GETTAB %CNDAE and run the previous version of WHO if the
+;	   monitor version doesn't agree with the one WHO was built for.
+;
+;227	Correct low segment size reporting for jobs that don't have a
+;	high segment (reported one too small).  This also programs around
+;	one of KBY's bugs that writes junk into JBTSWP+0.
+;
+;230	Display new APC types for LAT and CTERM lines.  Also add /LAT and
+;	/CTERM to the JOB and LINE mode switch tables.
+;
+;231	Fix cosmetic bug in LPT DDB display.  Remove buffered OUTSTR code
+;	from WHOTXT since that now exists in SCAN.
+;
+;232	Completely remove USER mode.  It doesn't work with the new 703
+;	accounting system and the changes are too incompatible to deal
+;	with.  Also repeat 0 out DECnet code since it doesn't stand a
+;	prayer of a chance of working.  The TOPS-20 group changes the
+;	DECnet database faster than I can update WHO.  The node name
+;	and number storage is hashed and scattered all over the monitor.
+;
+;233	Remove job/context stuff.  It can never work.  Keep in synch with
+;	SCNSER.
+;
+;234	RDH	21-DEC-85
+;	Ill UUO in WHOONC/SYML.1. Make WHO handle extended symbol tables
+;	(Requires MAP %2(56) or later). Remove path block specification
+;	from the SAVE. uuo - it has to be from the low seg (which causes
+;	a non-null lowseg!), not hiseg (Addr check), acs (get wiped out by
+;	monitor), or JOBDAT (Ill addr in uuo).
+;
+;235	DPM	14-Aug-86
+;	Crock around JB$SGN to make it "work" with 704 monitors.
+;
+;236	DPM	26-Aug-86
+;	Unit numbers in the DDB moved in 703 from the RH to LH of DEVSER.
+;	Only affects NETDDB and PTYDDB routines.
+;
+;237	DPM	18-Sep-86
+;	JB$(SGN) will exit without storing result if no high segment
+;	for a job making it look like a SPY segment.
+;
+;240	DPM	15-Dec-87
+;	Move logged-in PPN stuff out of the FTIPC conditionals.  This is
+;	in the standard monitors now.
+;
+;241	DPM	22-Dec-87
+;	Fix undefined global references when WHOONC scans the monitor's
+;	symbol table, caused by AUTCON rewrite and KDB/UDB reorganization.
+;
+;242	DPM	12-Jan-87
+;	Fix magtape DDB display.  TDVUDB is now a full word quantity.
+;
+;243	DPM	 3-Feb-88
+;	Avoid ill mem refs simulating DSKCHR UUOs.  It helps to call MWORD
+;	rather than doing MOVE T1,(T1).
+
+
+;End of Edit History
+
+	END

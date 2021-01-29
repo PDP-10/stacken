@@ -1,0 +1,392 @@
+MODULE BUFFERS (				!Find and display MCB buffers
+		IDENT = '003060',
+		LANGUAGE (BLISS16, BLISS36)
+		) =
+BEGIN
+!
+!			  COPYRIGHT (c) 1980 BY
+!	      DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND  COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH  LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR  ANY  OTHER
+! COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE  WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS  A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: MCBDA - MCB Crash Dump Analyzer
+!
+! ABSTRACT:
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 31-JUL-80
+!
+! MODIFIED BY:
+!
+! 	, : VERSION
+! 01	-
+! 04	- Do not display unused CCB/buffers.
+! 06    - Adapt for net CEXCOM structures.
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    BUFFERS : NOVALUE,				!Find and display MCB buffers
+    PUTRDB : NOVALUE,				!Display an RDB
+    PUTSDB : NOVALUE;				!Display an SDB
+
+!
+! INCLUDE FILES:
+!
+
+library 'MDACOM';				!MDA COMMON DEFINITIONS
+
+library 'MCBLIB';				!MCB DEFINITIONS
+
+library 'CEXLIB';				!CEX definitions
+
+!
+! MACROS:
+!
+!	None
+!
+! EQUATED SYMBOLS:
+!
+
+$CEX_BFPDEF
+$CEX_CBPDEF
+$CEX_CCBDEF
+$CEX_PDTDEF
+
+!
+! OWN STORAGE:
+!
+!
+! EXTERNAL REFERENCES:
+!
+
+EXTERNAL ROUTINE
+    ANYMSG : NOVALUE,				!Interpret data according to protocol
+    BITLS : NOVALUE,				!IDENTIFY BITS AND EDIT INTO ASCII
+    BYTSM : NOVALUE,				!IDENTIFY AND EDIT BYTE INTO ASCII
+    CNV18 : NOVALUE,				!Convert address and bias to 18-bit address.
+    GETBYT,					!GET A BYTE FROM THE DUMP FILE
+    GETWRD,					!GET A WORD FROM THE DUMP FILE
+    MAPAPR : NOVALUE,				!SET MAPPING REGISTER
+    MEMDMP : NOVALUE,				!Dump physical memory.
+    PUTBUF : NOVALUE,				!EDIT AND DISPLAY BUFFER
+    PUTCCB : NOVALUE,				!EDIT AND DISPLAY CCB
+    SBTTL : NOVALUE,				!SET LIST FILE SUB-TITLE
+    SKIP : NOVALUE;				!Insert blank lines in listing.
+
+EXTERNAL
+    FLAGS : BITVECTOR [M_MAX_BITS];
+
+GLOBAL ROUTINE BUFFERS : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+    SBTTL (CH$ASCIZ ('COMM/EXEC BUFFER POOLS'));	!Set our sub-title
+
+    IF NOT SYMBOL_TABLE ('CEXCOM') THEN RETURN;
+
+    BEGIN
+
+    LOCAL
+	BIAS,
+	BUF,
+	BUF_LNG,
+	CCB,
+	CNT;
+
+    !+
+    ! Now we can display the buffers
+    !-
+
+    FLAGS [M_BUF] = 0;
+
+    !+
+    ! Display the CCBs.
+    !-
+
+    begin
+
+    local
+	CBP;
+
+    CBP = SYMBOL ('.CCBTB');
+
+    IF (CCB = GETWRD (.CBP + FL$OFFSET (CBP$A_ALLOCATED_ADDRESS))) NEQ 0
+    THEN
+	BEGIN
+	PUTLN (2, CH$ASCIZ ('CCBS IN THE BUFFER POOL:'));
+	CNT = GETWRD (.CBP + FL$OFFSET (CBP$W_ALLOCATED_LENGTH))/(CCB$K_LENGTH^1);
+
+	WHILE (CNT = .CNT - 1) GEQ 0 DO
+	    BEGIN
+
+	    IF FL$SET (GETWRD (.CCB + %fieldexpand (CCB$V_USED, 0)^1), CCB$V_USED)
+	    THEN
+		PUTCCB (1, .CCB, 0);
+
+	    CCB = .CCB + CCB$K_LENGTH^1;
+	    END;
+
+	END
+    ELSE
+	PUTLN (2, CH$ASCIZ ('CCBS ARE NOT ALLOCATED'));
+
+    end;
+
+    !+
+    ! Display the RDBs.
+    !-
+
+    begin
+
+    local
+	CBP;
+
+    CBP = SYMBOL ('.RDBTB');
+    BUF_LNG = GETWRD (.CBP + FL$OFFSET (CBP$H_SIZE));
+
+    if (CCB = GETWRD (.CBP + FL$OFFSET (CBP$A_ALLOCATED_ADDRESS))) NEQ 0
+    THEN
+	BEGIN
+	PUTLN (2, CH$ASCIZ ('RDBS IN THE BUFFER POOL:'));
+	BIAS = GETWRD (.CBP + FL$OFFSET (CBP$W_ALLOCATED_BIAS));
+	BUF = %O'140000';
+	CNT = GETWRD (.CBP + FL$OFFSET (CBP$W_ALLOCATED_LENGTH))/(CCB$K_LENGTH^1);
+
+	WHILE (CNT = .CNT - 1) GEQ 0 DO
+	    BEGIN
+
+	    IF FL$SET (GETWRD (.CCB + %fieldexpand (CCB$V_USED, 0)^1), CCB$V_USED)
+	    THEN
+		PUTRDB (1, .CCB, 0, .BUF_LNG);
+
+	    CCB = .CCB + CCB$K_LENGTH^1;
+	    END;
+
+	END
+    ELSE
+	PUTLN (2, CH$ASCIZ ('RDBS ARE NOT ALLOCATED'));
+
+    end;
+
+    !+
+    ! Display the SDBs.
+    !-
+
+    begin
+
+    local
+         BFP;
+
+    BFP = GETWRD (SYMBOL ('.CORTA'));
+
+    decru COUNT from GETWRD (SYMBOL ('.CORNM')) to 1 do
+        begin
+        BUF_LNG = GETWRD (.BFP + FL$OFFSET (BFP$H_SIZE));
+
+        IF (BIAS = GETWRD (.BFP + FL$OFFSET (BFP$W_ALLOCATED_BIAS))) NEQ 0
+        THEN
+            BEGIN
+            PUTLN (2, CH$ASCIZ ('LENGTH %M. BUFFER POOL:'), .BUF_LNG);
+            CNT = GETWRD (.BFP + FL$OFFSET (BFP$H_ALLOCATED));
+            BUF = %O'140000';
+
+            DO
+                   BEGIN
+                   MAPAPR (6, .BIAS);
+
+                   IF GETWRD (.BUF + FL$OFFSET (BFH$A_PROCESS)) nequ 0
+                   THEN
+                       PUTSDB (1, .BIAS, .BUF, 0, .BUF_LNG);
+
+                   BUF = .BUF + BFH$K_LENGTH^1 + .BUF_LNG;
+                   BIAS = .BIAS + .BUF <6, 8>;
+                   BUF <6, 8> = 0;
+                   END
+            WHILE (CNT = .CNT - 1) nequ 0;
+
+            END
+        ELSE
+            PUTLN (2, CH$ASCIZ ('LENGTH %M. BUFFER POOL NOT ALLOCATED'), .BUF_LNG);
+
+        BFP = .BFP + BFP$K_LENGTH^1;
+        end;
+
+    end;
+
+    END;
+    END;					!End of BUFFERS
+
+ROUTINE PUTRDB (LINES, ADDRESS, FORMATTER, LENGTH) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+    PUTCCB (.LINES, .ADDRESS, .FORMATTER);
+
+    IF .FLAGS [M_CEX_BUFS]
+    THEN
+	BEGIN
+
+	LOCAL
+	    ADR,
+	    BIAS;
+
+	ADR = GETWRD (.ADDRESS + FL$OFFSET (CCB$A_ADDRESS));
+	BIAS = GETWRD (.ADDRESS + FL$OFFSET (CCB$W_BIAS));
+	SKIP (1);
+
+	IF .FLAGS [M_CEX_INTERPRET]
+	THEN
+	    ANYMSG (.BIAS, .ADR, .LENGTH)
+	ELSE
+	    BEGIN
+
+	    LOCAL
+		LOW_PHYSICAL : VECTOR [2],
+		HIGH_PHYSICAL : VECTOR [2];
+
+	    CNV18 (LOW_PHYSICAL, .ADR, .BIAS);
+	    CNV18 (HIGH_PHYSICAL, .ADR + .LENGTH, .BIAS);
+	    MEMDMP (LOW_PHYSICAL, LOW_PHYSICAL, HIGH_PHYSICAL);
+	    END;
+
+	END;
+
+    END;					!End of PUTRDB
+ROUTINE PUTSDB (LINES, BIAS, ADDRESS, FORMATTER, LENGTH) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+    begin
+
+    local
+         INDEX,
+         LEN;
+
+    INDEX = GETBYT (GETWRD (.ADDRESS + FL$OFFSET (BFH$A_PROCESS)) + FL$OFFSET (PDT$B_INDEX));
+    LEN = GETWRD (.ADDRESS + FL$OFFSET (BFH$H_SIZE));
+    PUTLN (.LINES, (if .LEN eql 0
+            then CH$ASCIZ ('  BIAS: %P  ADDRESS: %P  PROCESS: %R (%O)  INACTIVE')
+            else CH$ASCIZ ('  BIAS: %P  ADDRESS: %P  PROCESS: %R (%O)  LENGTH: %M.')),
+           .BIAS, .ADDRESS, PROCESS_NAME (.INDEX), .INDEX, .LEN);
+    end;
+
+    IF .FLAGS [M_CEX_BUFS]
+    THEN
+	BEGIN
+
+	IF .FLAGS [M_CEX_INTERPRET]
+	THEN
+	    ANYMSG (.BIAS, .ADDRESS + BFH$K_LENGTH^1, .LENGTH)
+	ELSE
+	    BEGIN
+
+	    LOCAL
+		LOW_PHYSICAL : VECTOR [2],
+		HIGH_PHYSICAL : VECTOR [2];
+
+	    CNV18 (LOW_PHYSICAL, .ADDRESS + BFH$K_LENGTH^1, .BIAS);
+	    CNV18 (HIGH_PHYSICAL, .ADDRESS + BFH$K_LENGTH^1 + .LENGTH, .BIAS);
+	    MEMDMP (LOW_PHYSICAL, LOW_PHYSICAL, HIGH_PHYSICAL);
+	    END;
+
+	END;
+
+    END;					!End of PUTSDB
+END						!End of module
+
+ELUDOM

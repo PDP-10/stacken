@@ -1,0 +1,148 @@
+title	foo
+
+.text	"/symseg:low/locals"
+
+search jobdat, uuosym, macten
+
+t1==1
+t2==2
+
+p==17
+
+arg:	block	^D9
+
+buffer:	block	^D579/4
+
+reply:	asciz	"Gurkmacka tangorabatt.
+"
+
+pdl:	block	<pdllen==^D100>
+
+vector:	exp	indone
+	block	3
+
+foo:	jfcl
+	reset
+	open	1,[
+		exp	.iobyt+uu.aio
+		sixbit	"udp"
+		xwd	0,0]
+	 halt
+	movei	1,vector
+	piini.	1,
+	 halt
+	move	1,[
+		ps.fac+ps.fon+[
+			exp	1
+			xwd	0,ps.rid
+			exp	0]]
+	pisys.	1,
+	 halt
+	movei	1,1
+	movem	1,arg+0		;Function code.
+	movem	1,arg+1		;Channel.
+	setom	arg+4		;ARGH, this is a bug.
+	movem	1,arg+6		;ARGH, this is a bug.
+	movei	1,^D69		;TFTP port number.
+	movem	1,arg+5
+	movei	1,arg
+	call	1,[sixbit "udp."]
+	 halt
+
+loop:	movx	0,<hb.rio+^D10000>
+	hiber	0,
+	 halt
+	jrst	loop
+
+prdec:	idivi	1,^D10
+	push	p,2
+	skipe	1
+	 pushj	p,prdec
+	pop	p,2
+	addi	2,"0"
+	outchr	2
+	popj	p,
+
+pripa:	push	p,1
+	ldb	1,[point 8,(p),7]
+	pushj	p,prdec
+	pushj	p,prper
+	ldb	1,[point 8,(p),15]
+	pushj	p,prdec
+	pushj	p,prper
+	ldb	1,[point 8,(p),23]
+	pushj	p,prdec
+	pushj	p,prper
+	ldb	1,[point 8,(p),31]
+	pushj	p,prdec
+	pop	p,(p)
+	popj	p,
+
+pcrlf:	outstr[	byte (7) 15, 12, 0]
+	popj	p,
+
+prper:	outchr[	exp "."]
+	popj	p,
+
+indone:	outstr[	asciz "Input done!
+"]
+	move	p,[iowd pdllen, pdl]
+inloop:	movei	1,3
+	movem	1,arg+0
+	movei	1,1
+	movem	1,arg+1
+	movei	1,buffer
+	movem	1,arg+7
+	movei	1,^D576
+	movem	1,arg+10
+	movei	1,arg
+	call	1,[sixbit "udp."]
+	 jrst	chkend
+	outstr[	asciz "  Datagram ("]
+	move	1,arg+10
+	pushj	p,prdec
+	outstr[	asciz " bytes) from "]
+	move	1,arg+4
+	pushj	p,pripa
+	outstr[ asciz " port "]
+	move	1,arg+6
+	pushj	p,prdec
+	pushj	p,pcrlf
+	outstr[	asciz "TFTP opcode = "]
+	ldb	1,[point 16,buffer, 15]
+	push	p,1		;Save opcode a while.
+	pushj	p,prdec
+	pushj	p,pcrlf	
+	pop	p,1		;Restore opcode.
+	caie	1,1		;Read Request?
+	 jrst	inloop		; No, loop.
+	move	1,[point 7, reply]
+	move	2,[point 8, buffer + 1]
+	move	3,[byte (16) 5, 1]
+	movem	3,buffer	;Opcode 5 = error, seq = 1.
+	movei	4,4
+sloop:	ildb	3,1
+	jumpe	3,slend
+	idpb	3,2
+	aoja	4,sloop
+
+slend:	movei	1,1
+	movem	1,arg+0
+	movei	1,arg
+	call	1,[sixbit "udp."]
+	 halt
+	movei	1,2
+	movem	1,arg+0
+	movei	1,buffer
+	movem	1,arg+7
+	movem	4,arg+10
+	movei	1,arg
+	call	1,[sixbit "udp."]
+	 halt
+	jrst inloop
+
+chkend:	debrk.
+	 jfcl
+	halt
+
+end	foo

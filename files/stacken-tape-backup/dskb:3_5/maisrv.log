@@ -1,0 +1,9 @@
+ 7-May-3 21:32:49	MAISRV, version 1(20), started.
+ 7-May-3 21:32:49	Started: 4 SMTP servers.
+ 7-May-3 21:32:49	Started: 0 MAIL-11 servers.
+ 7-May-3 21:33:04 1-Received SMTP connect from TOPSY
+ 7-May-3 21:33:21 1-Received HELP
+ 7-May-3 21:33:30 1-Received QUIT
+22-May-3 13:50:06 2-Received SMTP connect from TOPSY
+22-May-3 13:50:15 2-Received HELP
+22-May-3 13:50:22 2-Received QUIT

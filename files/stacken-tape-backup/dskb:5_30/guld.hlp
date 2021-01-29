@@ -1,0 +1,20 @@
+GULD {r ett lekprogram som endast kan k|ras fr}n sk{rmterminaler.
+Det g{ller att h{mta guldtackor fr}n guldfyndet och l|sa in dem i
+banken. F|r varje inl|st guldtacka f}r du 8000 kr. Men du skall
+akta dig f|r de skumma n|jeskvarteren, ty d{r riskerar du att bli
+r}nad, bedragen eller att smittas med ot{cka sjukdomar. Och g} inte
+genom r|varskogen annat {n n{r r|varna sovar, annars kanske r|varna
+tar dina pengar.
+
+Kommandon till GULD:
+Tangenterna m{rkta med pilar UPP, NED, V[NSTER och H\GER anv{nds
+f|r att |ka din hastigheten i angiven riktning.
+? ger hj{lputskrift.
+L g|r att du l{gger ifr}n dig guldtackan.
+CONTROL-Z stoppar exekveringen.
+\vriga tangenter g|r att du }ker en minut med samma hastighet
+som f|rut.
+
+Programmet GULD startas med monitorkommandot "R GAM:GULD".
+
+	<Slut p} GAM:GULD.HLP - 810419/JP>

@@ -1,0 +1,3000 @@
+TITLE	PATH -- Monitor level SETSRC commands plus enhancements
+SUBTTL	G.M. Uhler/GMU/RCB  30-Aug-84
+
+	SEARCH	JOBDAT,MACTEN,SWIL,UUOSYM
+	.DIRECTIVE .XTABM,FLBLST
+	SALL		; CLEAN UP LISTING
+
+	.REQUEST	REL:SWIL	; LOAD SCAN AND HELPER
+
+	TWOSEG
+	RELOC	400000
+
+COPYRIGHT (C) DIGITAL EQUIPMENT CORPORATION 1978,1984.
+
+;COPYRIGHT (C) 1978,1979,1980,1981,1982,1983,1984 BY
+;DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+;
+;
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+;ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+;INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+;COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+;OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+;TRANSFERRED.
+;
+;THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+;AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+;CORPORATION.
+;
+;DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+;SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+
+
+
+;
+;Show versions of universal files
+
+	%%JOBD==%%JOBD
+	%%MACT==%%MACT
+;	%%SCNM==%%SCNM
+	%%UUOS==%%UUOS
+
+
+	PTHVER==3	; DEC VERSION
+	PTHMIN==0	; DEC MINOR VERSION
+	PTHEDT==25	; DEC EDIT NUMBER
+	PTHWHO==0	; WHO LAST EDITED
+
+	LOC	.JBVER
+	VRSN.	(PTH)	; VERSION NUMBER TO JOB DATA AREA
+	RELOC
+	SUBTTL	Revision history
+
+
+COMMENT `
+
+[1]	26-Mar-79	The sequence .PATH<CR> .CONTINUE<CR> caused
+			I/O to unassigned channel.  Make CONTINUE act
+			the same as REENTER.
+[2]	12-May-79	Change the logical name code to know about the
+			new format for the logical name block.
+[3]	29-May-79	If PATH gets an error return trying to do a /CLEAR,
+			it loops forever retrying the UUO.  Give up with
+			an appropriate message if the /CLEAR fails
+[4]	07-Aug-79	If /PHYSICAL is applied to any component in a
+			logical name definition, PATH will ignore any
+			existing logical name in performing the substitution
+			for the component.
+[5]	21-Aug-79	In search list switches where the user types
+			a * with no modifiers (e.g., NOCREATE), keep
+			the existing modifier bits for each structure
+			represented by the *.
+[6]	15-Nov-79	APLSTK was AOBJNing on the wrong AC sometimes
+			causing a loop.  Correct the AC.
+[7]	06-Dec-79	"pa/mod:dskb:write" (note the lower case) would
+			result in "?PTHUSM Unknown structure modifier 7RITE"
+			Call .SIXSW instead of .SIXSC.
+[10]	18-Jun-80	Change the job search list before changing the
+			default path so the user can do both in the same
+			command if the SFDs in the path only exist on the
+			structure being added.
+[11]	18-Jun-80	Change the processing of /SEARCH and /LIB to
+			reflect the new monitor algorithm.
+[12]	09-Jul-80	Change the search list switch processing routines
+			to do the REMOVEs then the ADDs and finally the
+			MODIFYs.  This allows commands of the form
+			.PATH/REM:DSKG/ADD:DSKG which causes DSKG to be
+			moved to the end of the current search list.
+
+
+;Start version 2 here
+
+[13]	30-Sep-81	Change the definition of logical names to allow
+			filenames and extensions to be specified.  Also
+			implement /OVERRIDE and /COMMAND.
+[14]	30-Sep-81	If the user specifies no path in a component for
+			a logical name, zero the PPN word of the
+			component in the logical name block and let the
+			monitor fill it in.
+
+;Revision history continued
+
+
+[15]	01-May-82	If the user defined a logical name with the
+			[,...] construct, type the logical name back
+			at him with [,] instead of filling in the
+			PPN.
+[16]	22-Mar-83	Remove the /COMMAND function since that is now
+			provided by another program.
+
+
+Start version 3 here
+
+[17]	01-Sep-83	Change over to use RDH's SCAN.
+[20]	17-Nov-83	Add .PA=DEV: construct to change path and
+			add a structure if needed.
+[21]	22-Nov-83	Fix bug with defaulting strs in names to DSK:
+			caused by [17].
+[22]	03-Feb-84	Add the /UP and /DOWN switches for easy SFD level
+			changes in default paths.
+[23]	22-Apr-84	Add the < and > constructs for easy use of UP and
+			DOWN type features.
+[24]	29-Aug-84	.PA XX:=XPN:/L listed all pathological names,
+			rather than just XX:.
+[25]	30-Aug-84	Improve speed of /ADD by changing the default path
+			into UFD level during the STRUUO (when safe).
+`	; End revision history
+	SUBTTL	Symbol definitions
+
+
+;AC definitions
+;
+	F==0		; FLAGS
+	T1==1		; FIRST OF FOUR TEMPORARIES
+	T2==2
+	T3==3
+	T4==4
+	P1==5		; FIRST OF FOUR PRESERVED REGISTERS
+	P2==6
+	P3==7
+	P4==10
+	N==P3		; SCAN CONVENTION
+	C==P4		; SCAN CONVENTION
+	P==17		; PDL POINTER
+;
+;Miscellaneous definitions
+;
+	ND .PDLEN,100	; LENGTH OF PDL
+	ND DEBUG$,0	; NO DEBUG FEATURES
+	TTY==1		; TTY CHANNEL
+;Flag bits in F
+;
+	FL.ERR==1B0	; FATAL ERROR ENCOUNTERED
+	FL.WRN==1B1	; WARNING MESSAGE ISSUED
+	FL.TEL==1B2	; INFORMATIVE MESSAGE ISSUED
+	FL.SDP==1B3	; USER TYPED SOMETHING REQUIRING NEW DEFAULT PATH
+	FL.SAP==1B4	; USER TYPED SOMETHING REQUIRING NEW ADDITIONAL PATH
+	FL.SLN==1B5	; USER TYPED SOMETHING REQUIRING LOGICAL NAME
+	FL.JSL==1B6	; USER TYPED SOMETHING REQUIRING NEW SEARCH LIST
+	FL.SSL==1B7	; USER TYPED SOMETHING REQUIRING NEW SYSTEM SEARCH LIST
+	FL.UFD==1B8	; CHANGED TO UFD FOR /ADD SPEED HACK
+	FL.RDP==1B9	; PTSDP CONTAINS CURRENT DEFAULT PATH
+	FL.RAP==1B10	; PTSAP CONTAINS CURRENT ADDITIONAL PATH
+	FL.CLN==1B11	; USER WANTS TO CHANGE A LOGICAL NAME
+	FL.GSO==1B12	; USER TYPED GLOBAL SWITHES ONLY
+	FL.LSN==1B13	; USER WANTS TO LIST A LOGICAL NAME
+	FL.FST==1B14	; GENERAL FLAG USED TO INDICATE 1ST TIME SOMETHING HAPPENS
+	FL.TOF==1B15	; TTY OPEN FAILED, USE OUTCHRS
+	FL.SLS==1B16	; USER TYPED AT LEAST ONE SYS SEARCH LIST SWITCH
+	FL.JLS==1B17	; USER TYPED AT LEAST ONE JOB SEARCH LIST SWITCH
+	FL.CSL==1B18	; ALREADY COPIED CURRENT SEARCH LIST INTO NEW SL
+	FL.RSP==1B19	; RESCAN SUCCEEDED, DON'T PROMPT
+	FL.RSF==1B20	; RESCAN FIRST CALL (LIT ONLY FOR ONE CALL)
+	FL.PRM==1B21	; SECOND PROMPT VIA TSCAN
+	FL.RSN==1B22	; FIRST SCAN CALL WHEN RESCAN FAILED
+;
+;The following flags are stored in L.LIST by SCAN when it processes
+;the /[NO]LIST switch.  They are then moved to F for processing.
+;
+	FL.LST==1B<^D36-<LSW.L+1>> ; LIST THINGS IN CONTEXT OF COMMAND (/L)
+	FL.LAL==1B<^D36-LSWALL>	   ; LIST EVERYTHING (/L:ALL)
+	FL.LLN==1B<^D36-LSWNAMES>  ; LIST LOGICAL NAMES (/L:NAMES)
+	FL.LSS==1B<^D36-LSWSSL>    ; LIST SYSTEM SEARCH LIST (/L:SSL)
+	FL.LJS==1B<^D36-LSWJSL>    ; LIST JOB SEARCH LIST (/L:JSL)
+	FL.LPT==1B<^D36-LSWPATH>   ; LIST PATH (/L:PATH)
+	FL.LCG==1B<^D36-LSWCHANGE> ; LIST THOSE THINGS THAT HAVE CHANGED (/L:CHANGE)
+	FL.LSW==FL.LLN!FL.LSS!FL.LJS!FL.LPT!FL.LCG ; ALL LIST FLAGS MINUS FL.LST AND FL.LAL
+	SUBTTL	Macro definitions
+
+
+;The following symbols define the error option selected by the third
+;argument to the ERROR, WARN, and TELL macros.
+;
+	EO.NUL==0		; NO OPTION GIVEN
+	EO.STP==1		; STOP PROGRAM ON THIS ERROR
+	EO.NCR==2		; NO CRLF AT END OF THIS MESSAGE
+	EO.MAX==2		; MAX NUMBER OF ERROR OPTIONS
+
+
+;Macro to type a fatal error message.  The arguments are:
+;
+;	PRFX	- Error prefix, e.g., the XXX in ?PTHXXX ...
+;	FIRST	- The message to be typed
+;	OPTION	- Error option; may be STOP, NOCRLF, or blank
+;	LABEL	- Label to jump to after message is issued
+;
+	DEFINE	ERROR	(PRFX,FIRST,OPTION,LABEL), <
+	  ERRFLG==EO.NUL
+	  IFIDN	<OPTION>,<STOP>,   <ERRFLG==EO.STP>
+	  IFIDN	<OPTION>,<NOCRLF>, <ERRFLG==EO.NCR>
+
+	  PUSHJ	P,.ERR
+	  XLIST
+	  F..'PRFX==.
+	  IFNB	<LABEL>, <CAIA ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]
+			  JRST LABEL
+			 >
+	  IFB	<LABEL>, <CAI  ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]>
+	  LIST
+	> ; End DEFINE ERROR
+;Macro to type a warning message.  The arguments are:
+;
+;	PRFX	- Error prefix, e.g., the XXX in %PTHXXX ...
+;	FIRST	- The message to be typed
+;	OPTION	- Error option; may be STOP, NOCRLF, or blank
+;	LABEL	- Label to jump to after message is issued
+;
+	DEFINE	WARN	(PRFX,FIRST,OPTION,LABEL), <
+	  ERRFLG==EO.NUL
+	  IFIDN	<OPTION>,<STOP>,   <ERRFLG==EO.STP>
+	  IFIDN	<OPTION>,<NOCRLF>, <ERRFLG==EO.NCR>
+
+	  PUSHJ	P,.WARN
+	  XLIST
+	  W..'PRFX==.
+	  IFNB	<LABEL>, <CAIA ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]
+			  JRST LABEL
+			 >
+	  IFB	<LABEL>, <CAI  ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]>
+	  LIST
+	> ; End DEFINE WARN
+
+
+;Macro to type an informative message.  The arguments are:
+;
+;	PRFX	- Error prefix, e.g., the XXX in [PTHXXX ...]
+;	FIRST	- The message to be typed
+;	OPTION	- Error option; may be STOP, NOCRLF, or blank
+;	LABEL	- Label to jump to after message is issued
+;
+	DEFINE	TELL	(PRFX,FIRST,OPTION,LABEL), <
+	  ERRFLG==EO.NUL
+	  IFIDN	<OPTION>,<STOP>,   <ERRFLG==EO.STP>
+	  IFIDN	<OPTION>,<NOCRLF>, <ERRFLG==EO.NCR>
+
+	  PUSHJ	P,.TELL
+	  XLIST
+	  T..'PRFX==.
+	  IFNB	<LABEL>, <CAIA ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]
+			  JRST LABEL
+			 >
+	  IFB	<LABEL>, <CAI  ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]>
+	  LIST
+	> ; End DEFINE TELL
+;Macro to type debug information on entry to a subroutine. Debugging
+;information is typed if one of the following conditions is met:
+;
+;	1. PATH is assembled with DEBUG$ non-zero to assemble
+;	   the debugging package.
+;	2. The location DEBALL is deposited non-zero.  This will
+;	   type debugging information for all subroutines.
+;	3. If information about a particular routine in desired,
+;	   leave DEBALL zero and change the SKIPE DEBALL before
+;	   each call to .DEBUG to a JFCL.
+;
+;the arguments are as follows:
+;
+;	$NAME - NAME of the routine
+;	$LIST - LIST of locations to type on entry
+;
+;If the switch DEBUG$ is zero, this macro assembles
+;nothing.
+
+	DEFINE	TRACE$	($NAME,$LIST), <
+	  IFN DEBUG$, <		;; ASSEMBLE ONLY IF DEBUG IS ON
+	    SKIPE DEBALL	;; TYPE ONLY IF WANTED
+	    XLIST
+	    PUSHJ P,.DEBUG	;; CALL DEBUG ROUTINE
+	    CAI	  [SIXBIT/$NAME/	;; GENERATE ROUTINE NAME
+	    IFNB <$LIST>, <
+	      IRP $LIST, <		;; FOR ALL ELEMENTS OF $LIST
+	        EXP   $LIST	;; PLUS ADDRESS
+	      >	;; END IRP $LIST
+	    >	;; END IFNB $LIST
+	    XWD   -1,0]		; -1,,0 TERMINATES BLOCK
+	    LIST
+	  >	;; END IFN DEBUG$
+	>	;; END DEFINE TRACE$
+;Macro to generate the storage words for those switches that are
+;entirely processed by SCAN, i.e., those for which SCAN doesn't call us.
+;Symbols generated are as follows:
+;
+;	S.XXXX		Non-file specific switch storage
+;	F.XXXX		File specific switch storage that will be
+;			moved into the scan block
+;	P.XXXX		Sticky default storage for file-specific
+;			switches.  (parallel table to F.XXXX)
+;	$SWXXX		Offset of the switch relative to the start
+;			of the specific switch block
+;	$FXXXX		Offset in the scan block of file-specific
+;			switch storage and extra word storage
+;
+	DEFINE	SWTGEN  ($SLIST,$FLIST,$XLIST), <
+	  XLIST
+	  SW.BGN==.		;; DEFINE START OF SWITCH AREA
+	  ;;
+	  ;; GENERATE STORAGE WORDS FOR EACH SWITCH
+	  ;;
+	  S.BGN==.		;; DEFINE START OF NON-FILE SWITCH AREA
+	  IRP $SLIST, <
+	    $SW'$SLIST==.-S.BGN	;; DEFINE OFFSET OF SWITCH IN AREA
+	    S.'$SLIST: BLOCK 1	;; LOCATION CONTAINING VALUE OF SWITCH
+	  >  ; END IRP $SLIST
+	  S.END==.-1		;; DEFINE END OF NON-FILE SWITCH AREA
+	  S.LEN==S.END-S.BGN+1	;; DEFINE LENGTH OF NON-FILE SWITCH AREA
+
+	  F.PTR==.FXLEN		;; LOCAL FILE SWITCH SCAN BLOCK AREA STARTS HERE
+	  F.BGN==.		;; DEFINE START OF FILE SWITCH AREA
+	  IRP $FLIST, <
+	    $SW'$FLIST==.-F.BGN	;; DEFINE OFFSET OF SWITCH IN AREA
+	    $FX'$FLIST==F.PTR	;; DEFINE OFFSET OF SWITCH IN SCAN BLOCK
+	    F.PTR==F.PTR+1	;; BUMP SCAN BLOCK POINTER
+	    F.'$FLIST: BLOCK 1	;; VALUE OF FILE SWITCH GOES HERE
+	  >  ; END IRP $FLIST
+	  F.END==.-1		;; DEFINE END OF FILE SWITCH AREA
+	  F.LEN==F.END-F.BGN+1	;; DEFINE LENGTH OF FILE SWITCH AREA
+	  $FXLLS==F.PTR-1	;; DEFINE OFFSET OF LAST SWITCH IN SCAN BLOCK
+	  SW.END==.-1		;; DEFINE END OF SWITCH AREA
+	  SW.LEN==SW.END-SW.BGN+1  ;; DEFINE LENGTH OF SWITCH AREA
+
+	  IRP $XLIST, <
+	    $FX'$XLIST==F.PTR	;; DEFINE EXTRA WORDS IN SCAN BLOCK
+	    F.PTR==F.PTR+1	;; ADVANCE POINTER
+	  >  ; END IRP $XLIST
+	  $FXLEN==F.PTR		;; DEFINE TOTAL LENGTH OF SCAN BLOCK
+
+	  P.BGN==.		;; STICKY DEFAULT SWITCH AREA STARTS HERE
+	  ;;
+	  ;; GENERATE WORDS FOR STICKY DEFAULTS
+	  ;;
+	  IRP $FLIST, <
+	    P.'$FLIST: BLOCK 1	;; VALUE OF STICKY DEFAULT GOES HERE
+	  >  ; END IRP $FLIST
+
+	  P.END==.-1		;; DEFINE END OF STICKY DEFAULT AREA
+	  LIST
+	>  ; END DEFINE SWTGEN
+;In order to process the search list switches, we define two types of
+;blocks.  The first, defined below, is associated with each search list
+;switch and gives parameters specific to each switch.
+;
+;	!=======================================================!
+;	!                    PJSP T1,?SLSWT                     ! $SLJSP
+;	!-------------------------------------------------------!
+;XXXBLK:!Address of first word of block containing switch values! $SLSPT
+;	!-------------------------------------------------------!
+;	!   AOBJP pointer to next free slot for switch values   ! $SLSAB
+;	!-------------------------------------------------------!
+;	!     Count of structures specified by this switch      ! $SLSCT
+;	!=======================================================!
+
+	$SLJSP==-1	; OFFSET TO PJSP T1,?SLSWT
+	$SLSPT==0	; OFFSET TO ADDR OF SWITCH VALUE BLOCK
+	$SLSAB==1	; OFFSET TO AOBJP POINTER TO NEXT FREE
+			; SLOT IN SWITCH VALUE BLOCK
+	$SLSCT==2	; OFFSET OF COUNT OF STRS IN SWITCH VALUE
+			; BLOCK
+	$SLSLN==3	; LENGTH OF POSITIVE OFFSET BLOCK
+			; (I.E., NOT INCLUDING $SLJSP)
+
+
+;The following block gives information about the search list (either
+;job or system) that is independent of the particular switch specified.
+;
+;	!=======================================================!
+;	!      Count of structures in current search list       ! $SLCCT
+;	!-------------------------------------------------------!
+;	!    Address of block containing current search list    ! $SLCPT
+;	!-------------------------------------------------------!
+;	!        Count of structures in new search list         ! $SLNCT
+;	!-------------------------------------------------------!
+;	!      Address of block containing new search list      ! $SLNPT
+;	!-------------------------------------------------------!
+;	!AOBJP pointer to next available slot in new search list! $SLNAB
+;	!-------------------------------------------------------!
+;	! Max number of structures allowed in this search list  ! $SLMAX
+;	!=======================================================!
+
+	$SLCCT==0	; COUNT OF STRS IN CURRENT SEARCH LIST
+	$SLCPT==1	; ADDRESS OF CURRENT SEARCH LIST BLOCK
+	$SLNCT==2	; COUNT OF STRS IN NEW SEARCH LIST
+	$SLNPT==3	; ADDRESS OF FIRST STR IN NEW SEARCH LIST BLOCK
+	$SLNAB==4	; AOBJP POINTER TO NEXT FREE SLOT IN NEW
+			; SEARCH LIST
+	$SLMAX==5	; MAX STRS ALLOWED IN THIS SEARCH LIST
+	$SLXLN==6	; LENGTH OF THE BLOCK
+
+	SL.WLD==1B35	; FLAG SET IN .DFJST WORD OF A SEARCH LIST BLOCK
+			; TO INDICATE THAT THIS STR WAS ADDED TO THE
+			; NEW SEARCH LIST BY A * REFERENCE.
+;Macro to relocate to the high segment if not already there.
+
+	DEFINE	$HIGH, <
+	  IFL	<.-400000>, <
+	    XLIST
+	    LIT
+	    RELOC
+	    LIST
+	  >
+	>
+
+
+;Macro to relocate to the low segment if not already there.
+
+	DEFINE	$LOW, <
+	  IFGE	<.-400000>, <
+	    XLIST
+	    LIT
+	    RELOC
+	    LIST
+	  >
+	>
+;Macro to store a constant in consecutive memory locations (The one in
+;MACTEN doesn't work right for FIRST==LAST).  Note that this macro has
+;the restriction that it must be called only after the locations
+;specified by FIRST and LAST are defined.  If this restriction is not
+;met, MACRO will generate phase errors since it doesn't know how many
+;words to generate on pass 1.
+;The arguments are:
+;
+;	AC	- AC to use
+;	FIRST	- FIRST location into which to store
+;	LAST	- Last location into which to store
+;	CONS	- Constant to store
+
+	DEFINE	STORE(AC,FIRST,LAST,CONS), <
+	  IFB <LAST>,< LAST%%==FIRST>	;; IF NO LAST, ASSUME FIRST
+	  IFNB <LAST>,<LAST%%==LAST>	;; OTHERWISE USE LAST
+	  IFL <LAST%%-FIRST>,<
+	    PRINTX % FINAL LOCATION .LT. STARTING LOCATION IN STORE MACRO
+	  >
+	  IFE <CONS>,<  SETZM	FIRST>	;;IF CONS=0, CLEAR FIRST
+	  IFE <CONS>+1,<SETOM	FIRST>	;;IF CONS=-1, SET FIRST TO -1
+	  IFN <CONS>*<<CONS>+1>, <
+	    MOVX	AC,<CONS>	;;ELSE DO IT
+	    MOVEM AC,FIRST		;; THE HARD WAY
+	  >
+	  XLIST
+	  IFG <LAST%%-FIRST>,<		;;IF MORE THAN ONE LOCATION
+	    MOVE  AC,[FIRST,,FIRST+1]
+	    BLT   AC,LAST%%		;;DISTRIBUTE THE CONSTANT
+	  >
+	  LIST
+	>
+	SUBTTL	Path switch definitions
+
+;Define the prefixes for all search list switches.
+
+	DEFINE	SLSWCH,<
+	  XLIST
+	  X	CR,J		;; /CREATE
+	  X	RM,J		;; /REMOVE
+	  X	AD,J		;; /ADD
+	  X	MD,J		;; /MODIFY
+	  X	CR,S		;; /SCREATE
+	  X	RM,S		;; /SREMOVE
+	  X	AD,S		;; /SADD
+	  X	MD,S		;; /SMODIFY
+	  LIST
+	> ; End DEFINE SLSWCH
+
+
+;Define the default maxima for each switch
+
+	DEFINE	X ($PREFX,$TYPE), <
+	  DM	'$PREFX'$TYPE',0,0,0 ;; MUST SPECIFY VALUE FOR SWITCH
+	>
+
+	SLSWCH			; GENERATE ALL DEFAULT MAXIMA
+
+	DM	UP,5,0,1
+
+
+;Define the valid switches for SCAN
+
+	DEFINE	SWTCHS, <
+	  XLIST
+	  SP	*ADD,0,ADJSWT,ADJ,FS.LRG!FS.NFS!FS.VRQ ; /ADD:LIST
+	  SS	CLEAR,S.CLEAR,1,FS.NFS			; /CLEAR
+	  SP	*CREATE,0,CRJSWT,CRJ,FS.LRG!FS.NFS!FS.VRQ ; /CREATE:LIST
+	  SL	*LIST,L.LIST,LSW,FL.LST,FS.NFS!FS.OBV	;/LIST:OPTIONS
+	  SP	*MODIFY,0,MDJSWT,MDJ,FS.LRG!FS.NFS!FS.VRQ ; /MODIFY:LIST
+	  SN	*NEW,S.NEW,FS.NFS			; /[NO]NEW
+	  SN	*OVERRIDE,F.OVERRIDE			; /[NO]OVERRIDE
+	  SP	*REMOVE,0,RMJSWT,RMJ,FS.LRG!FS.NFS!FS.VRQ ; /REMOVE:LIST
+	  SP	SADD,0,ADSSWT,ADS,FS.LRG!FS.NFS!FS.VRQ ; /SADD:LIST
+	  SN	*SCAN,S.SCAN,FS.NFS			; /[NO]SCAN
+	  SP	SCREATE,0,CRSSWT,CRS,FS.LRG!FS.NFS!FS.VRQ ; /SCREATE:LIST
+	  SN	SEARCH,F.SEARCH				; /[NO]SEARCH
+	  SP	SMODIFY,0,MDSSWT,MDS,FS.LRG!FS.NFS!FS.VRQ ; /SMODIFY:LIST
+	  SP	SREMOVE,0,RMSSWT,RMS,FS.LRG!FS.NFS!FS.VRQ ; /SREMOVE:LIST
+	  SN	SYS,S.SYS,FS.NFS			; /[NO]SYS
+	  SP	*UP,S.UP,.SWDEC##,UP,FS.NFS		; /UP:NUMBER
+	  SP	*DOWN,0,SFDADD,,FS.NFS!FS.VRQ		; /DOWN:LIST
+	  LIST
+	> ; End DEFINE SWTCHS
+
+
+;Define the valid keys for the /LIST switch
+
+	KEYS	LSW,<CHANGE,PATH,JSL,SSL,NAMES,ALL>
+
+
+;Generate the scan tables for SCAN
+
+	DOSCAN	(PTHSW)		; GENERATE THE SWITCH TABLES
+	SUBTTL	High segment data locations
+
+
+;.ISCAN block
+
+.ISCBK:	XWD	12,%%FXVER	; NSCAN HEADER
+	IOWD	1,[SIXBIT/PATH/]  ; IOWD TO TABLE OF LEGAL MONITOR COMMANDS
+	XWD	OFFSET,'PTH'	; STARTING OFFSET,,SIXBIT CCL NAME
+	XWD	0,W.TTY		; 0,,ADDRESS OF CHARACTER OUTPUT RTN
+	EXP	0		; POINTER TO INDIRECT FILE BLOCK
+	XWD	PROMPT,XITCLS	; ADDR OF PROMPT RTN,,ADDR OF EXIT RTN
+.ISCBL==.-.ISCBK
+
+
+;.TSCAN block
+
+.TSCBK:	XWD	12,%%FXVER	; NSCAN HEADER
+	IOWD	PTHSWL,PTHSWN	; IOWD TO LEGAL SWITCH NAMES
+	XWD	PTHSWD,PTHSWM	; DEFAULT SWITCH AREA,,PROCESSOR SWITCH TABLE
+	XWD	0,PTHSWP	; 0,,ADDR OF SWITCH POINTERS FOR STORING
+	EXP	-1		; LET HELPER PROVIDE THE HELP
+	XWD	CLRALL,CLRFIL	; CLEAR ALL ANSWERS,,CLEAR FILE ANSWER
+	XWD	ALCINP,ALCOUT	; ALLOCATE INPUT,,ALLOCATE OUTPUT
+	XWD	MEMSTK,APLSTK	; MEMORIZE STICKY DEFAULTS,,APPLY STICKY DEFAULTS
+	XWD	CLRSTK,FS.MIO	; CLEAR STICKY DEFAULTS,,ALLOW MIXED SWITCHES
+.TSCBL==.-.TSCBK
+
+
+;.OSCAN block
+
+.OSCBK:	XWD	12,%%FXVER	; NSCAN HEADER
+	IOWD	PTHSWL,PTHSWN	; IOWD TO LEGAL SWITCH NAMES
+	XWD	PTHSWD,PTHSWM	; DEFAULT SWITCH AREA,,PROCESSOR SWITCH TABLE
+	XWD	0,PTHSWP	; 0,,ADDR OF SWITCH POINTERS FOR STORING
+.OSCBL==.-.OSCBK
+
+
+;Table of break characters (Carriage return intentionally left out)
+
+BRKTBL:	1_.CHBEL!1_.CHLFD!1_.CHVTB!1_.CHFFD!1_.CHCNZ!1_.CHESC!1_.CHCNR!1_.CHCNT!1_.CHCNC
+
+
+;The following tables give the legal modifiers for search list switches
+;and the corresponding flag bits to use if that modifier is seen.
+
+SLNTAB:	SIXBIT/CREATE/
+	SIXBIT/WRITE/
+	SIXBIT/NOCREA/
+	SIXBIT/NOWRIT/
+SLNTBL==.-SLNTAB
+
+SLITAB:	0+(FS.MNC)		; /CREATE = CLEAR NO-CREATE BIT
+	0+(FS.MWL)		; /WRITE = CLEAR NO-WRITE BIT
+	FS.MNC+(FS.MNC)		; /NOCREATE = SET NO-CREATE BIT
+	FS.MWL+(FS.MWL)		; /NOWRITE = SET NO-WRITE BIT
+;Generate one table for each type of search list (job and system)
+;giving the address of the routine to process that switch and
+;the address of the switch block.
+;
+	DEFINE	X ($PREFX,$TYPE), <
+	  IFIDN <$TYPE>,<J>, <
+	    XWD	CHK'$PREFX'X,$PREFX'$TYPE'BLK
+	    ..ZZ==..ZZ+1
+	  >
+	>
+
+	..ZZ==0
+JSBLST:	SLSWCH			; GENERATE ONE WORD FOR EACH JOB SWITCH
+JSBPTR:	XWD	-..ZZ,JSBLST	; AND AOBJN POINTER TO THE TABLE
+
+	DEFINE	X ($PREFX,$TYPE), <
+	  IFIDN <$TYPE>,<S>, <
+	    XWD CHK'$PREFX'X,$PREFX'$TYPE'BLK
+	    ..ZZ==..ZZ+1
+	  >
+	>
+
+	..ZZ==0
+SSBLST:	SLSWCH			; GENERATE ONE WORD FOR EACH SYS SWITCH
+SSBPTR:	XWD	-..ZZ,SSBLST	; AND AOBJN POINTER TO THE TABLE
+	SUBTTL	Low segment data locations
+
+
+	$LOW
+
+
+;From here to Z.END zeroed on every time through PTHSCN
+
+Z.BGN==.
+GTNSAV:	BLOCK	1		; SAVE AOBJP POINTER TO SWITCH LIST HERE
+				; WHILE DOING CURRENT SL
+SCNIFS:	BLOCK	1		; POINTER TO FIRST INPUT SCAN BLOCK
+SCNILS:	BLOCK	1		; POINTER TO LAST INPUT SCAN BLOCK
+SCNOFS:	BLOCK	1		; POINTER TO FIRST OUTPUT SCAN BLOCK
+SCNOLS:	BLOCK	1		; POINTER TO LAST OUTPUT SCAN BLOCK
+L.LIST:	BLOCK	1		; LISTING SWITCH BITS
+P.LIST:	BLOCK	1		; LISTING BITS FROM COMMAND LINE
+JSLBLK:	BLOCK	$SLXLN		; JOB SEARCH LIST PARAMETER BLOCK
+SSLBLK:	BLOCK	$SLXLN		; SYSTEM SEARCH LIST PARAMETER BLOCK
+SSWCNT:	BLOCK	1		; TOTAL STRS IN ALL SSL SWITCHES
+JSWCNT:	BLOCK	1		; TOTAL STRS IN ALL JSL SWITCHES
+PTHPTR:	BLOCK	1		; ADDRESS OF SIXBIT NAME PATH BLOCK
+LNMPTR:	BLOCK	1		; ADDRESS OF LOGICAL NAME SUBSTITUTION BLOCK
+DSCBLK:	BLOCK	.DCSAJ+1	; DSKCHR BLOCK
+SFDCNT:	BLOCK	1		; COUNT OF SFDS TO DESCEND
+SFDALS:	BLOCK	5		; SFDS TO DESCEND WITH
+PTSDP:	BLOCK	.PTMAX		; DEFAULT PATH BLOCK
+PTSAP:	BLOCK	.PTMAX		; ADDITIONAL PATH BLOCK
+PTSLN:	BLOCK	.PTLLB		; LOGICAL NAME BLOCK
+SLBLK:	BLOCK	.DFGST+1	; GOBSTR AND JOBSTR BLOCKS GO HERE
+
+;	SWTGEN  (<Non-file switch list>,<File switch list>,<Extra words list>)
+	SWTGEN  (<UP,CLEAR,NEW,SCAN,SYS>,<OVERRIDE,SEARCH>,<LNK>)
+
+;Define the search list switch blocks
+
+	DEFINE	X ($PREFX,$TYPE), <
+	  $PREFX'$TYPE'SWT: BLOCK 1	;; PJST T1,?SLSWT
+	  $PREFX'$TYPE'BLK: BLOCK $SLSLN ;; THE BLOCK
+	>
+
+	SLSWCH			; GENERATE ALL SWITCH BLOCKS
+Z.END==.-1			; END OF AREA TO ZERO
+
+
+OFFSET:	BLOCK	1		; ENTRY POINT OFFSET
+MINCOR:	BLOCK	1		; INITIAL VALUE OF .JBFF
+XSLMAX:	BLOCK	1		; MAX SSL STRS,,MAX JSL STRS
+MYPATH:	BLOCK	.PTMAX		; OUR CURRENT PATH
+PDL:	BLOCK	.PDLEN		; PDL
+TOBUF:	BLOCK	.BFCTR+1	; TTY OUTPUT BUFFER
+
+	$HIGH
+	SUBTTL	Initialization
+
+
+PATH:	PORTAL	.+2		; ALLOW PROTECTED EXECUTION
+	PORTAL	.+2		; DITTO FOR CCL ENTRY
+	TDZA	T1,T1		; CLEAR CCL ENTRY FLAG AND SKIP
+	  MOVEI	T1,1		; INDICATE CCL ENTRY
+	MOVEM	T1,OFFSET	; STORE ENTRY POINT OFFSET FOR SCAN
+	RESET			; CLEAR THE WORLD
+	MOVE	P,[IOWD .PDLEN,PDL] ; SETUP PDL
+	SETZM	F		; CLEAR FLAGS
+	MOVEI	T1,PATH		; GET REENTER ADDRESS
+	MOVEM	T1,.JBREN	;  AND SAVE IN JOB DATA REGION
+	MOVX	T1,%LDMSS	; GETTAB TO RETURN MAX STRS IN SL'S
+	GETTAB	T1,		; GET IT
+	  MOVE	T1,[^D36,,^D10]	; USE THE DEFAULT
+	MOVEM	T1,XSLMAX	; SAVE FOR LATER
+	MOVX	T1,.IOASC!UU.PHS; GET PHYSICAL DEVICE IN ASCII MODE
+	MOVX	T2,SIXBIT/TTY/	; DEVICE IS A TTY
+	MOVX	T3,<TOBUF,,0>	; OUTPUT BUFFER IS TOBUF
+	OPEN	TTY,T1		; OPEN THE TTY
+	  TXOA	F,FL.TOF	; FAILED, SET FLAG AND SKIP OUTBUF
+	OUTBUF	TTY,1		; USE ONE OUTPUT BUFFER
+	MOVE	T1,.JBFF	; GET SMALLEST CORE VALUE
+	MOVEM	T1,MINCOR	;  AND SAVE FOR LATER
+
+	MOVE	T1,[XWD .ISCBL,.ISCBK]	; GET LEN,,ADDR OF .ISCAN BLOCK
+	PUSHJ	P,.ISCAN##	; INITIALIZE SCAN
+	SKIPL	T1		; DID WE FIND A COMMAND?
+	  TXOA	F,FL.RSP!FL.RSF	; YES, NOTE RESCAN HAPPENED
+	 TXO	F,FL.RSN	; NO, NOTE FIRST TIME NON-RESCAN
+	SUBTTL	Main scanner loop
+
+
+;Here to processes each command.  Call .TSCAN to crack the command
+;string and .OSCAN to get the defaults from SWITCH.INI.
+
+PTHSCN:	MOVE	P,[IOWD	.PDLEN,PDL] ; INSURE PDL IS IN PHASE
+	ANDX	F,FL.TOF!FL.RSP!FL.RSF!FL.RSN	; CLEAR ALL BUT TTY FLAGS
+	STORE	T1,Z.BGN,Z.END,0 ; CLEAR ALL APPROPRIATE STORAGE
+	PUSHJ	P,INISLB	; INITIALIZE SEARCH LIST SWITCH BLOCKS
+	MOVE	T1,MINCOR	; GET INITIAL VALUE OF .JBFF
+	MOVEM	T1,.JBFF	; RESTORE IT
+	CORE	T1,		; CORE DOWN TO A MINIMUM
+	 JFCL			; DON'T CARE
+	PUSHJ	P,GETPTH	; GET OUR CURRENT PATH
+
+	MOVE	T1,[XWD .OSCBL,.OSCBK]	; POINT TO .OSCAN/.PSCAN BLOCK
+	PUSHJ	P,.PSCAN##	; CHECK FOR PROMPT NEEDED
+	  TDZA	T1,T1		; PROMPT RETURN
+	 SETO	T1,		; NO PROMPT
+	TXZE	F,FL.ERR!FL.WRN ; ANYTHING WRONG LAST CALL?
+	  JRST	[TXZ	F,FL.RSF!FL.RSN	; NO LONGER FIRST
+		 JRST	PTHSCN]		; YES, GIVE UP ON THAT LINE
+	SKIPN	T1		; NEED TO PROMPT?
+	  JRST	[HRREI	C,.CHEOL	; PRE-LOAD AN EOL (JUST IN CASE)
+		 TXNE	F,FL.RSF	; IF FIRST AFTER RESCAN,
+		   JRST	PTHSC1		; THEN WAS .PA <CR>, SO DON'T TRY IT
+		 PUSHJ	P,PPRMPT	; ELSE, TRY TO FIGURE OUT HOW TO PROMPT
+		 JRST	.+1]		; AND REJOIN
+	TXZ	F,FL.RSF	; NO LONGER FIRST AFTER RESCAN
+	PUSHJ	P,.TIAUC##	; GET FIRST CHARACTER OF LINE
+	CAXN	C,.CHEOF	; IF SCAN'S EOF CHARACTER,
+	  JRST	[TXZE	F,FL.RSN	; FIRST CALL?
+		   JRST	PTHSC2		; YES, TREAT AS NULL COMMAND LINE
+		 PUSHJ	P,.MONRT##	; NO, THEN EXIT
+		 JRST	PATH]		; RESTART ON CONTINUE
+	TXZ	F,FL.RSN	; NOT FIRST ANY MORE
+	CAIE	C,"<"		; 'UP' CHARACTER?
+	CAIN	C,">"		; 'DOWN' CHARACTER?
+	  JRST	PTHMOD		; GO HANDLE PSCAN NECESSITIES
+PTHSC1:	PUSHJ	P,.REEAT##	; NOT A PSCAN CHARACTER, PUT IT BACK FOR TSCAN
+
+PTHSC2:	MOVE	T1,[XWD	.TSCBL,.TSCBK]	; POINT TO .TSCAN BLOCK
+	PUSHJ	P,.TSCAN##	; CRACK THE COMMAND LINE
+
+PTHSC3:	TXZE	F,FL.ERR!FL.WRN	; ANY ERRORS OR WARNINGS ON THAT COMMAND?
+	  JRST	PTHSCN		; YES, GIVE UP ON IT
+
+	MOVE	T1,L.LIST	; GET COMMAND STRING LIST BITS
+	MOVEM	T1,P.LIST	; SAVE FOR LATER
+	SETZM	L.LIST		; CLEAR BITS FOR SWITCH.INI SETTINGS
+
+	MOVE	T1,[XWD	.OSCBL,.OSCBK]	; POINT TO .OSCAN BLOCK
+	PUSHJ	P,.OSCAN##	; READ SWITCH.INI
+
+	SKIPN	T1,P.LIST	; SKIP IF COMMAND STRING LIST SWITCH SPECIFIED
+	  MOVE	T1,L.LIST	;   ELSE USE SWITCH.INI DEFAULTS
+	TXZE	T1,FL.LAL	; CLEAR /L:A BIT AND SKIP IF NOT SET
+	  TXO	T1,FL.LSW	; SET ALL OTHER LIST BITS
+	ANDX	T1,FL.LSW!FL.LST; ISOLATE JUST THE BITS
+	IORM	T1,F		;   AND STORE THEM IN THE FLAG WORD
+;
+;SCAN has the annoying habit of giving us a free input scan block even
+;though no input specifications were seen when only global switches were
+;typed.  This type of scan block may be distinguished by a zero device
+;word.  To avoid problems later, clear the input scan block pointers if
+;we get one of these scan blocks and set a flag telling what happened.
+
+	MOVE	T1,SCNIFS	; GET ADDRESS OF INPUT SCAN BLOCKS
+	JUMPE	T1,CHKOUT	; IF NONE, DON'T CHANGE LIST SCNILS
+	CAME	T1,SCNILS	; ONLY ONE OF THEM?
+	 JRST	CHKOUT		; NO, CONTINUE WITH THE CHECKING
+	MOVE	T1,.FXFLD(T1)	; YES, GET FLAGS FOR FIELDS PRESENT
+	TXNE	T1,FX.UXX	; ANYTHING INTERESTING TYPED?
+	 JRST	CHKOUT		; YES, KEEP THE SPEC
+	SETZM	SCNIFS		; PRETEND LIKE NO INPUT BLOCKS
+	SETZM	SCNILS		; ...
+	TXO	F,FL.GSO	; SET "GLOBAL SWITCHES ONLY" BIT
+	SUBTTL	Command validation and error checking
+
+
+;Here when SCAN has finished cracking the command line.  At this point,
+;we know that the command is at least superficially syntactically
+;correct.  We must now rigorously check it for both syntactic and
+;semantic correctness before we perform any required functions.  First,
+;the output scan blocks...
+
+CHKOUT:	SKIPN	P1,SCNOFS	; LOGICAL NAME DEFINITION SPECIFIED?
+	  JRST	CHKINP		; NO, CHECK INPUT SCAN BLOCKS
+	MOVE	T1,.FXFLD(P1)	; GET MASK FOR FIELDS PRESENT
+	TXNE	T1,FX.UNM	; CAN'T HAVE A FILENAME
+	  ERROR	FLD,<Filename illegal in logical name definition>,,PTHSCN
+	TXNE	T1,FX.UEX	;   OR AN EXTENSION
+	  ERROR	ELD,<Extension illegal in logical name definition>,,PTHSCN
+	TXNE	T1,FX.UDR	; CAN'T HAVE A DIRECTORY
+	 ERROR	DLD,<Directory illegal in logical name definition>,,PTHSCN
+	TXNE	T1,FX.UND	; CAN'T HAVE A NODE
+	 ERROR	NLD,<Node illegal in logical name definition>,,PTHSCN
+	TXNE	T1,FX.UDV	; IF SPECIFIED A LOGICAL NAME
+	TXO	F,FL.SLN	; LIGHT "SET LOGICAL NAME" BIT
+;Here when we have validated the output scan block.  We must now do the
+;same for all input scan blocks.
+
+
+CHKINP:	SKIPN	P1,SCNIFS	; GET FIRST POINTER TO INPUT SCAN BLOCKS
+	  JRST	CHKUDN		; NONE THERE, CHECK /CLEAR
+CHKIN1:	MOVE	T1,P1		; POINT TO BLOCK
+	MOVX	T2,$FXLEN	;   AND GET LENGTH
+	PUSHJ	P,.OSDFS##	; LET SCAN APPLY THE SWITCH.INI DEFAULTS
+	PUSHJ	P,MOVSTK	; NOW APPLY DEFAULTS FOR OUR SWITCHES
+	TXNN	F,FL.SLN	; DEFINING LOGICAL NAME?
+	  JRST	CHKIN4		; NO, GO CHECK OTHER STUFF
+	SKIPL	$FXSEA(P1)	;USER SAY /[NO]SEARCH HERE?
+	  ERROR	SIC,<SEARCH attribute illegal in logical name component>,,PTHSCN
+	SKIPL	$FXOVE(P1)	;USER SAY /[NO]OVERRIDE HERE?
+	  ERROR	OIC,<OVERRIDE attribute illegal in logical name component>,,PTHSCN
+
+	MOVE	T1,.FXFLD(P1)	; GET FIELDS MASK WORD
+	MOVSI	T2,'DSK'	; GET DEFAULT DEVICE
+	TXNN	T1,FX.UDV!FX.SDV ; ANY DEVICE SPEC SEEN?
+	  MOVEM	T2,.FXDEV(P1)	; NO, SAVE DSK: AS THE DEVICE
+	TXNN	T1,FX.UDR	; WAS A DIRECTORY SPECIFIED?
+	  JRST	CHKIN3		; NO, SETSLN WILL HANDLE SUBSTITUTIONS
+	PUSHJ	P,CHKWLD	; CHECK FOR WILDCARD IN THE DIRECTORY
+	  ERROR	WLC,<Wildcards illegal in directory for logical name component>,,PTHSCN
+	TXNE	T1,FX.DPJ	; USER SAY [,PN]?
+	  HRROS	.FXDIR(P1)	; YES, PUT -1 IN LH
+	TXNE	T1,FX.DPG	; USER SAY [PN,]?
+	  HLLOS	.FXDIR(P1)	; YES, PUT -1 IN RH
+CHKIN3:	HRRZ	P1,$FXLNK(P1)	; ADVANCE TO NEXT SCAN BLOCK
+	JUMPN	P1,CHKIN1	; LOOP IF NOT AT END
+	JRST	CHKUDN		; GO CHECK FOR /CLEAR
+;Here when there are no output scan blocks.  We now know that the user
+;either typed a new default path or an existing logical name which he
+;either wants to change or list.
+
+CHKIN4:	CAME	P1,SCNILS	; CAN ONLY HAVE ONE SPEC (FOR NOW)
+	  ERROR	MLN,<Multiple logical names illegal>,,PTHSCN
+	MOVE	T1,.FXFLD(P1)	; GET BIT MASK FOR FIELDS GIVEN
+	TXNE	T1,FX.UDV	; IF NULL DEVICE, ASSUME NEW PATH
+	 SKIPE	SCNOFS		; ANY OUTPUT BLOCKS?
+	  JRST	CHKIN5		; YES, DEVICE IS FOR DEFAULT PATH SETTING
+	TXNE	T1,FX.UNM	; CAN'T HAVE FILENAME HERE
+	  ERROR	FLN,<Filename illegal in logical name>,,PTHSCN
+	TXNE	T1,FX.UEX	;   OR AN EXTENSION
+	  ERROR	ELN,<Extension illegal in logical name>,,PTHSCN
+	TXNE	T1,FX.UDR	; CAN'T HAVE A DIRECTORY
+	 ERROR	DLN,<Directory illegal in logical name>,,PTHSCN
+	TXNE	T1,FX.UND	;   OR A NODE
+	 ERROR	NLN,<Node illegal in logical name>,,PTHSCN
+	SKIPGE	$FXOVE(P1)	;   OR /OVERRIDE STATUS?
+	 SKIPL	$FXSEA(P1)	; USER WANT TO CHANGE SEARCH STATUS?
+	  TXOA	F,FL.CLN	; YES, SET THE BIT
+	   TXO	F,FL.LSN	; NO, LIST THIS NAME
+	JRST	CHKUDN		;   AND CONTINUE
+
+CHKIN5:	TXNE	T1,FX.UNM	; CAN'T HAVE FILENAME HERE
+	  ERROR	FPC,<Filename illegal in default path change>,,PTHSCN
+	TXNE	T1,FX.UEX	;   OR AN EXTENSION
+	  ERROR	EPC,<Extension illegal in default path change>,,PTHSCN
+	TXNE	T1,FX.UND	;   OR A NODE NAME
+	  ERROR	NPC,<Node illegal in default path change>,,PTHSCN
+	PUSHJ	P,CHKWLD	; CHECK FOR WILD CARDS IN PATH
+	  JRST	E$$WPC		; WILDCARDS ILLIGAL IN PATH CHANGE
+	SKIPL	$FXSEA(P1)	; CAN'T HAVE /[NO]SEARCH HERE
+	  ERROR	SPC,</SEARCH illegal in default path change>,,PTHSCN
+	SKIPL	$FXOVE(P1)	; CAN'T HAVE /[NO]OVERRIDE HERE
+	  ERROR	OPC,</OVERRIDE illegal in default path change>,,PTHSCN
+	TXNE	T1,FX.UDV	; SETTING DEFAULT PATH FROM A LOGICAL NAME?
+	  JRST	CHKIN6		; YES, GO ELSEWHERE FOR THIS
+	MOVE	T1,.FXDIR(P1)	; GET THE PPN
+	TLNN	T1,-1		; PROJECT NUMBER SPECIFIED?
+	  HLL	T1,.MYPPN##	; NO, USE OURS
+	TRNN	T1,-1		; PROGRAMMER NUMBER SPECIFIED?
+	  HRR	T1,.MYPPN##	; NO, USE OURS
+	MOVEM	T1,.FXDIR(P1)	; STORE IT BACK
+	PUSHJ	P,GETCDP	; INSURE CURRENT VALUES ARE SETUP
+	MOVE	T1,SCNIFS	; GET SCAN BLOCK ADDRESS
+	MOVX	T2,<-.FXLND,,0>	;   AND AOBJN POINTER TO PTSDP
+CHKIN2:	SKIPN	T3,.FXDIR(T1)	; GET NEXT WORD OF DIRECTORY
+	  JRST	CHKIN7		; FOUND ZERO TERMINATOR
+	MOVEM	T3,PTSDP+.PTPPN(T2) ; STORE IN PATH BLOCK
+	ADDI	T1,2		; SKIP OVER MASK WORD IN SCAN BLOCK
+	AOBJN	T2,CHKIN2	; BUMP PATH BLOCK INDEX AND LOOP IF MORE
+CHKIN7:	SETZM	PTSDP+.PTPPN(T2); INSURE ZERO WORD TERMINATOR IN PATH BLOCK
+	TXO	F,FL.SDP	; LIGHT "SET DEFAULT PATH" BIT
+	TXNE	F,FL.LCG!FL.LST	; /L OR /L:C SET?
+	  TXO	F,FL.LPT	; YES, SET /L:PATH ALSO
+	JRST	CHKUDN		; SKIP =DEV: CODE
+;
+;Here for .PA=<dev>: construct to set default path from a logical name.
+;
+CHKIN6:	PUSHJ	P,GETCDP	; GET CURRENT VALUES
+	MOVE	T3,PTSDP+.PTSWT	; SAVE /SCAN VALUE
+	MOVE	T2,.FXDEV(P1)	; GET DEVICE FOR THE PATH
+	MOVEM	T2,PTSDP	; PUT INTO DEFAULT PATH BLOCK
+	MOVE	T2,[.PTMAX,,PTSDP]
+	PATH.	T2,		; GET SPEC FOR THE DEVICE
+	  ERROR	NXD,<Non-existent device specified for default path>,,PTHSCN
+	MOVEM	T3,PTSDP+.PTSWT	; RESTORE /SCAN VALUE
+	MOVE	T2,PTSDP+.PTPPN	; GET PATH'S UFD
+	TLC	T2,-1
+	TLCN	T2,-1		; IF LH=-1
+	HLL	T2,.MYPPN##	; DEFAULT FROM OUR PPN
+	TRC	T2,-1
+	TRCN	T2,-1		; IF RH=-1
+	HRR	T2,.MYPPN##	; DEFAULT FROM OUR PPN
+	MOVEM	T2,PTSDP+.PTPPN	; STORE BACK AGAIN
+	TXO	F,FL.SDP	; LIGHT "SET DEFAULT PATH" BIT
+	TXNE	F,FL.LCG!FL.LST	; /L OR /L:C SET?
+	  TXO	F,FL.LPT	; YES, SET /L:PATH ALSO
+	PUSHJ	P,CHKDSK	; ADD CORRESPONDING STR TO JSL IF NECESSARY
+;
+;Check desire to go up or down in default path
+;
+CHKUDN:	SKIPGE	S.UP		; WAS /UP SEEN?
+	SKIPLE	SFDCNT		; OR /DOWN ?
+	  TRNA			; YES, MUST PROCESS
+	JRST	CHKZLN		; NO, CHECK /CLEAR
+	PUSHJ	P,GETCDP	; GET PATH TO CHANGE
+	TXO	F,FL.SDP	; AND SAY WE WANT TO CHANGE IT
+	TXNE	F,FL.LCG!FL.LST	; /L OR /L:C SET?
+	  TXO	F,FL.LPT	; YES, SET /L:PATH ALSO
+	MOVSI	T1,-5		; MAXIMUM COUNT OF SFDS
+CHKUD1:	SKIPE	PTSDP+.PTSFD(T1) ; IS THIS THE ENDING SFD?
+	 AOBJN	T1,CHKUD1	; NO, KEEP LOOKING FOR END
+	SKIPGE	T2,S.UP		; /UP SEEN?
+	  JRST	CHKUD2		; NO, LOOK FOR /DOWN
+	CAILE	T2,(T1)		; YES, DOES IT GO TOO FAR BACK UP?
+	 ERROR	UED,</UP exceeds current path depth>,,PTHSCN
+	SUBI	T1,(T2)		; NO, JUST BACK UP THE POINTER
+	SETZM	PTSDP+.PTSFD(T1) ; AND ENSURE PROPER BLOCK TERMINATION
+CHKUD2:	SKIPG	T2,SFDCNT	; /DOWN LIST GIVEN?
+	 JRST	CHKZLN		; NO, DONE HERE--CHECK /CLEAR
+	HRRZ	T3,T1		; YES, COPY POINTER VALUE
+	ADD	T3,T2		; SEE HOW MANY DEEP WE WANT TO GET
+	CAILE	T3,5		; WITHIN REASON?
+	  JRST	E$$SDI		; NO, GIVE ERROR
+	MOVNS	T2		; GET NEGATIVE COUNT OF SFDS TO ADD
+	HRLZS	T2		; MAKE AOBJN WORD FOR STORAGE LOOP
+CHKUD3:	MOVE	T3,SFDALS(T2)	; GET SFD TO ADD
+	MOVEM	T3,PTSDP+.PTSFD(T1) ; PUT INTO PATH LIST
+	AOJ	T1,		; INCREMENT STORAGE POINTER
+	AOBJN	T2,CHKUD3	; LOOP UNTIL COUNT EXHAUSTED
+	SETZM	PTSDP+.PTSFD(T1) ; ENSURE PROPER ZERO TERMINATION OF LIST
+;
+;Fall into CHKZLN
+;
+;Check to make sure the user didn't say /CLEAR with any other logical
+;name command.
+;
+CHKZLN:	SKIPG	S.CLEAR		; USER SAY /CLEAR?
+	  JRST	SETUP		; NO
+	TXNE	F,FL.SLN!FL.CLN!FL.LSN ; ANY OTHER LOGICAL NAME COMMANDS?
+	  ERROR	CNC,</CLEAR may not be included with logical name changes>,,PTHSCN
+	TXNE	F,FL.LCG!FL.LST	; /L OR /L:C SET?
+	  TXO	F,FL.LLN	; YES, SET /L:NAMES
+	SUBTTL	Function setup
+
+
+;Here when the command has been validated by the checks above. We must
+;now setup the blocks to perform the required functions.
+;
+;Check for /[NO]NEW
+;
+SETUP:	SKIPGE	P1,S.NEW	; USER SAY /[NO]NEW?
+	  JRST	SETSYS		; NO
+	PUSHJ	P,GETCAP	; INSURE CURRENT VALUES ARE SETUP
+	DPB	P1,[POINTR PTSAP+.PTSWT,PT.SNW] ; SET NEW VALUE IN BLOCK
+	TXO	F,FL.SAP	; LIGHT "SET ADDITIONAL PATH" BIT
+	TXNE	F,FL.LCG!FL.LST	; /L OR /L:C SET?
+	  TXO	F,FL.LPT	; YES, SET /LIST:PATH ALSO
+;
+;Check for /[NO]SYS
+;
+SETSYS:	SKIPGE	P1,S.SYS	; USER SAY /[NO]SYS?
+	  JRST	SETSCN		; NO
+	PUSHJ	P,GETCAP	; INSURE CURRENT VALUES ARE SETUP
+	DPB	P1,[POINTR PTSAP+.PTSWT,PT.SSY] ; SET NEW VALUE IN BLOCK
+	TXO	F,FL.SAP	; LIGHT "SET ADDITIONAL PATH" BIT
+	TXNE	F,FL.LCG!FL.LST	; /L OR /L:C SET?
+	  TXO	F,FL.LPT	; YES, SET /L:PATH ALSO
+;
+;Check for /[NO]SCAN
+;
+SETSCN:	SKIPGE	P1,S.SCAN	; USER SAY /[NO]SCAN?
+	  JRST	SETSLN		; NO
+	PUSHJ	P,GETCDP	; INSURE CURRENT VALUES ARE SETUP
+	ADDX	P1,.PTSCN	; CONVERT 0/1 TO .PTSCN/.PTSCY
+	DPB	P1,[POINTR PTSDP+.PTSWT,PT.SCN] ; SET NEW VALUE IN BLOCK
+	TXO	F,FL.SDP	; LIGHT "SET DEFAULT PATH" BIT
+	TXNE	F,FL.LCG!FL.LST	; /L OR /L:C SET?
+	  TXO	F,FL.LPT	; YES, SET /L:PATH ALSO
+;Check for logical name definition
+;
+SETSLN:	TXNN	F,FL.SLN	; USER WANT TO SET A LOGICAL NAME?
+	  JRST	SETCLN		; NO
+	MOVE	P1,SCNOFS	; GET POINTER TO OUTPUT SCAN BLOCK
+	PUSHJ	P,SETLNF	; SETUP LOGICAL NAME FLAGS
+	MOVE	T1,.FXDEV(P1)	; GET LOGICAL NAME
+	MOVEM	T1,PTSLN+.PTLNM	; STORE IN THE BLOCK
+	MOVEI	P2,PTSLN+.PTLSB-1; BUILD RH OF AOBJP POINTER TO BLOCK
+	HRLI	P2,-<.PTLLB-.PTLSB+1> ; COMPLETE LH
+	SKIPN	P1,SCNIFS	; SKIP IF DEFINITION
+	  JRST	[MOVX	T1,PT.UDF ; GET "UNDEFINE" BIT
+		 MOVEM	T1,PTSLN+.PTLNF ; AND STORE IN BLOCK
+		 MOVEI	P1,SCNIFS-$FXLNK; MAKE HRRZ BELOW RETURN ZERO
+		 JRST	SETLN7	; BIND OFF BLOCK
+		]
+SETLN1:	PUSHJ	P,FNDPTH	; FIND PATH ASSOCIATED WITH THIS DEVICE
+	CAXE	T1,.FPIPP	; THIS ONE HAVE AN IMPLIED PPN?
+	 CAXN	T1,.FPLNM	;  OR A LOGICAL NAME?
+	  JRST	SETLN2		; YES, ALWAYS DO THE SUBSTITUTION
+	MOVX	T2,FX.DIR	; GET "DIRECTORY SPECIFIED" BIT
+	TDNN	T2,.FXMOM(P1)	; USER SPECIFY ONE FOR THIS SPEC?
+SETLN2:	  JRST	@[EXP SETLN3,SETLN5,SETLN6](T1) ; DISPATCH
+	JRST	SETLN4		; YES, LEAVE IT ALONE
+;Here if no path associated with this name.  Zero the PPN word in
+;the SCAN block and use that.
+;
+SETLN3:	SETZM	.FXDIR(P1)	; INSURE NO PPN
+SETLN4:	PUSHJ	P,INSSCB	; INSERT SCAN BLOCK INTO THIS LOGICAL NAME
+	  JRST	E$$TMC		; TOO MANY FOR THIS SPEC
+	JRST	SETLN7		; JOIN COMMON CODE
+;
+;Here if the path for the device is a simple path spec.
+;
+SETLN5:	PUSHJ	P,INSPTH	; INSERT PATH INTO THIS LOGICAL NAME
+	  JRST	E$$TMC		; TOO MANY FOR THIS SPEC
+	JRST	SETLN7		; JOIN COMMON CODE
+;
+;Here if this device is really a logical name. Substitute the components
+;into the logical name block.
+;
+SETLN6:	PUSHJ	P,INSLNM	; INSERT LOGICAL NAME INTO THIS SPEC
+	  JRST	E$$TMC		; TOO MANY
+SETLN7:	HRRZ	P1,$FXLNK(P1)	; ADVANCE TO NEXT SCAN BLOCK
+	JUMPN	P1,SETLN1	; LOOP IF NOT AT END
+	AOBJP	P2,E$$TMC	; INSURE NO BLOCK OVERFLOW
+	SETZM	(P2)		; DO FINAL TERMINATOR
+	AOBJP	P2,E$$TMC	; INSURE NO BLOCK OVERFLOW
+	SETZM	(P2)		;  AND ONE MORE TO END THE BLOCK
+	SUBI	P2,PTSLN-1	; CONVERT TO COUNT OF WORDS IN BLOCK
+	HRRZM	P2,PTSLN+.PTFCN	; STORE COUNT AS ADVERTISED
+	TXNE	F,FL.LCG!FL.LST	; /L OR /L:C SET?
+	  TXO	F,FL.LSN	; YES, SET TO LIST THIS NAME
+	JRST	SETCLN		; SKIP THE ERROR MESSAGE
+
+E$$TMC:	ERROR	TMC,<Too many logical name components>,,PTHSCN
+;Check for logical name change
+;
+SETCLN:	TXNN	F,FL.CLN	; USER WANT TO CHANGE LOGICAL NAME?
+	  JRST	SETLLN		; NO
+	MOVE	P1,SCNIFS	; GET INPUT SCAN BLOCK ADDRESS
+	MOVE	T1,.FXDEV(P1)	; GET LOGICAL NAME
+	PUSHJ	P,GETSLN	; READ THE INFORMATION
+	  JRST	[PUSHJ	P,E$$NSL ; TELL OF NO SUCH NAME
+		 TXZ	F,FL.CLN!FL.SLN ; CLEAR LOGICAL NAME FLAGS
+		 JRST	SETJSL	; AND CONTINUE
+		]
+	PUSHJ	P,SETLNF	; SETUP LOGICAL NAME FLAGS
+	MOVEI	T1,PTSLN+.PTLSB	; POINT TO BLOCK JUST RETURNED
+SETCL1:	SKIPN	0(T1)		; LOOK FOR TWO ZEROS
+	 SKIPE	1(T1)		; TERMINATING BLOCK
+	  CAIA			; NOT FOUND, CONTINUE WITH THIS BLOCK
+	   JRST	SETCL3		; FOUND THEM
+	ADDX	T1,.PTLPP	; STEP TO START OF PATH BLOCK
+SETCL2:	SKIPE	0(T1)		; LOOK FOR ZERO TERMINATING PATH BLOCK
+	  AOJA	T1,SETCL2	; LOOP FOR NEXT WORD
+	AOJA	T1,SETCL1	; STEP TO START OF NEXT GROUP
+SETCL3:	SUBI	T1,PTSLN-2	; COMPUTE THE NUMBER OF WORDS
+	HRRZM	T1,PTSLN+.PTFCN	; STORE IN THE BLOCK AS ADVERTISED
+	TXO	F,FL.SLN	; CHANGE TO SET LOGICAL NAME
+	TXNE	F,FL.LCG!FL.LST	; /L OR /L:C SET?
+	  TXO	F,FL.LSN	; YES, SET /L:NAMES ALSO
+
+SETLLN:	TXNE	F,FL.LSN	; USER WANT TO LIST THIS LOGICAL NAME?
+	  TXO	F,FL.LLN	; YES, SET /L:NAMES ALSO
+;Check for new job search list
+;
+SETJSL:	TXNN	F,FL.JLS	; ANY JOB SEARCH LIST SWITCHES SPECIFIED?
+	  JRST	SETSSL		; NO, CHECK SYSTEM SEARCH LIST
+	MOVE	P1,ADJBLK+$SLSCT ; GET COUNT OF STRS IN /ADD
+	ADD	P1,RMJBLK+$SLSCT ; ADD TOTAL FROM /REMOVE
+	ADD	P1,MDJBLK+$SLSCT ; ADD TOTAL FROM /MODIFY
+	JUMPE	P1,SETJS1	; OK IF ZERO
+	SKIPE	CRJBLK+$SLSCT	; CAN'T HAVE ABOVE WITH /CREATE
+	  ERROR	COS,<CREATE illegal with other search list switches>,,PTHSCN
+SETJS1:	PUSHJ	P,GETJSL	; GET CURRENT JOB SEARCH LIST
+	  JRST	SETSSL		; FAILED, FORGET IT
+	MOVE	T1,JSLBLK+$SLMAX ; GET MAX STRS ALLOWED IN SEARCH LIST
+	LSH	T1,1		; TIMES 2 FOR SLOP
+	MOVX	T2,.FSDSO	; ADDITIONAL WORDS FOR HEADER
+	PUSHJ	P,BLDAOB	; ALLOCATE CORE AND RETURN AOBJP POINTER
+	MOVEM	T1,JSLBLK+$SLNPT ; SAVE START ADDRESS IN BLOCK
+	MOVEM	T2,JSLBLK+$SLNAB ;  ALONG WITH AOBJP POINTER
+	MOVEI	P2,JSLBLK	; POINT TO JSL PARAMETER BLOCK
+	MOVE	P3,JSBPTR	; GET AOBJN POINTER TO SWITCH BLOCK TABLE
+	PUSHJ	P,CHKSLB	; INVOKE ROUTINE FOR ALL SWITCHES WITH
+				; NON-ZERO STR COUNTS
+	TXO	F,FL.JSL	; LIGHT "SET NEW JOB SEARCH LIST" BIT
+	TXNE	F,FL.LCG!FL.LST	; /L OR /L:C SET
+	  TXO	F,FL.LJS	; YES, SET /L:JSL
+;
+;Check for new system search list
+;
+SETSSL:	TXNN	F,FL.SLS	; ANY SYS SEARCH LIST SWITCHES SPECIFIED?
+	  JRST	DOFNC		; NO, GO DO FUNCTIONS
+	MOVE	P1,ADSBLK+$SLSCT ; GET COUNT OF STRS IN /SADD
+	ADD	P1,RMSBLK+$SLSCT ; ADD TOTAL FROM /SREMOVE
+	ADD	P1,MDSBLK+$SLSCT ; ADD TOTAL FROM /SMODIFY
+	JUMPE	P1,SETSS1	; OK IF ZERO
+	SKIPE	CRSBLK+$SLSCT	; CAN'T HAVE ABOVE WITH /SCREATE
+	  ERROR	SOS,<SCREATE illegal with other search list switches>,,PTHSCN
+SETSS1:	PUSHJ	P,GETSSL	; GET CURRENT SYSTEM SEARCH LIST
+	  JRST	DOFNC		; FAILED, FORGET IT
+	MOVE	T1,SSLBLK+$SLMAX ; GET MAX STRS ALLOWED IN SEARCH LIST
+	LSH	T1,1		; TIMES 2 FOR SLOP
+	MOVX	T2,.FSDSO	; PLUS WORDS FOR HEADER
+	PUSHJ	P,BLDAOB	; ALLOCATE CORE AND RETURN AOBJP POINTER
+	MOVEM	T1,SSLBLK+$SLNPT ; SAVE STARTING ADDRESS OF BLOCK
+	MOVEM	T2,SSLBLK+$SLNAB ;  ALONG WITH AOBJP POINTER
+	MOVEI	P2,SSLBLK	; POINT TO SSL PARAMETER BLOCK
+	MOVE	P3,SSBPTR	; GET AOBJN POINTER TO SWITCH BLOCK TABLE
+	PUSHJ	P,CHKSLB	; INVOKE ROUTINE FOR ALL SWITCHES THAT HAVE
+				; A NON-ZERO STR COUNT
+	TXO	F,FL.SSL	; LIGHT "SET NEW SYSTEM SEARCH LIST" BIT
+	TXNE	F,FL.LCG!FL.LST	; /L OR /L:C SET?
+	  TXO	F,FL.LSS	; YES, SET /L:SSL
+	SUBTTL	Function execution
+
+
+;Here to finally perform any functions as indicated by the command.
+;The code on the last few pages setup all the necessary UUO blocks so
+;the only thing we should have to do is perform the appropriate UUOs.
+
+DOFNC:	TXNE	F,FL.JSL	; NEED TO SET NEW JOB SEARCH LIST?
+	  PUSHJ	P,STNJSL	; YES, DO IT
+	TXNE	F,FL.SDP	; NEED TO SET NEW DEFAULT PATH?
+	  PUSHJ	P,SETNDP	; YES, DO IT
+	TXNE	F,FL.SAP	; NEED TO SET NEW ADDITIONAL PATH?
+	  PUSHJ	P,SETNAP	; YES, DO IT
+	TXNE	F,FL.SSL	; NEED TO SET NEW SYSTEM SEARCH LIST?
+	  PUSHJ	P,STNSSL	; YES, DO IT
+	SKIPLE	S.CLEAR		; NEED TO CLEAR ALL LOGICAL NAMES?
+	  PUSHJ	P,CLRLNM	; YES, DO IT
+	TXNE	F,FL.SLN	; NEED TO SET ANY LOGICAL NAMES?
+	 PUSHJ	P,SETLNM	; YES, DO IT
+	  JFCL			; IGNORE ERROR RETURN
+	SKIPN	SCNIFS		; IF ANY SCAN BLOCKS,
+	 SKIPE	SCNOFS		;   THEN DON'T DIDDLE WITH LIST SWITCHES
+	  JRST	DOFNC1		;   SO SKIP THE CODE
+	TXNN	F,FL.GSO	; IF PATH <CR>
+	  TXO	F,FL.LPT	;   THEN SET /L:PATH
+	TXNE	F,FL.LST	; /L SET?
+	 TXNE	F,FL.LSW	;   AND NOTHING ELSE?
+	  CAIA			; NO
+	   TXO	F,FL.LPT	; YES, SET /L:P
+DOFNC1:	TXNE	F,FL.LPT	; USER WANT PATH LISTED?
+	  PUSHJ	P,LSTPTH	; YES, DO IT
+	TXNE	F,FL.LJS	; USER WANT SEARCH LIST LISTED?
+	  PUSHJ	P,LSTJSL	; YES, DO IT
+	TXNE	F,FL.LSS	; USER WANT SYSTEM SL LISTED?
+	  PUSHJ	P,LSTSSL	; YES, DO IT
+	TXNE	F,FL.LLN	; USER WANT LOGICAL NAMES LISTED?
+	  PUSHJ	P,LSTLNM	; YES, DO IT
+	JRST	PTHSCN		;   AND DO IT ALL OVER FOR THE NEXT COMMAND
+	SUBTTL	Listing routines
+
+
+;Routine to type the user's current path information.
+;The call is:
+;
+;		PUSHJ	P,PTHLST
+;		 <always return here>
+
+LSTPTH: TRACE$	LSTPTH		; TYPE DEBUGGING INFO
+	PUSHJ	P,GETCDP	; GET DEFAULT PATH IF WE DON'T ALREADY HAVE IT
+	PUSHJ	P,GETCAP	; GET ADDITIONAL PATH FOR /LIB
+	MOVEI	T1,[ASCIZ/Path:	/] ; TELL HIM WHAT THIS IS
+	PUSHJ	P,.TSTRG##	; PRINT IT
+	MOVEI	T1,PTSDP	; POINT TO START OF PATH BLOCK
+	TLO	T1,TS.DRP	; PATH BLOCK FLAG TO .TDIRB
+	PUSHJ	P,.TDIRB##	; LET SCAN TYPE THE DEFAULT PATH
+	MOVEI	T1,0		; ZERO MESSAGE ADDRESS
+	LDB	T2,[POINTR PTSDP+.PTSWT,PT.SCN] ; GET SCAN SWITCH
+	CAXN	T2,.PTSCN	; /NOSCAN?
+	  MOVEI	T1,[ASCIZ\/NOSCAN\] ; YES, SETUP MESSAGE
+	CAXN	T2,.PTSCY	; /SCAN?
+	  MOVEI	T1,[ASCIZ\/SCAN\] ; YES, SETUP THAT ONE
+	SKIPE	T1		; ONLY PRINT IF THERE IS A MESSAGE
+	  PUSHJ	P,.TSTRG##	; TYPE THE STRING
+	MOVE	T2,PTSDP+.PTSWT	; GET SWITCHES FROM BLOCK
+	MOVEI	T1,[ASCIZ\/NEW\] ; SETUP FOR /NEW TEST
+	TXNE	T2,PT.NEW	; USER HAVE /NEW SET?
+	  PUSHJ	P,.TSTRG##	; YES, TELL HIM
+	MOVE	T2,PTSDP+.PTSWT	; GET SWITCHES BACK
+	MOVEI	T1,[ASCIZ\/SYS\] ; SETUP FOR /SYS TEST
+	TXNE	T2,PT.SYS	; USER HAVE /SYS SET?
+	  PUSHJ	P,.TSTRG##	; YES, TELL HIM
+	SKIPN	PTSAP+.PTPPN	; /LIB EXIST?
+	  PJRST	.TCRLF##	; NO, END THE LINE AND RETURN
+	MOVEI	T1,[ASCIZ\/LIB:\] ; GET MESSAGE
+	PUSHJ	P,.TSTRG##	; TYPE IT
+	MOVEI	T1,PTSAP	; POINT AT LIB BLOCK
+	TLO	T1,TS.DRP	; TELL SCAN IT'S A PATH BLOCK
+	PUSHJ	P,.TDIRB##	; TYPE VALUE
+	PJRST	.TCRLF##	; END WITH CRLF AND RETURN
+;Routine to list the job search list.
+;The call is:
+;
+;		PUSHJ	P,LSTJSL
+;		 <always return here>
+
+LSTJSL:	TRACE$	LSTJSL		; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE1##	; SAVE P1
+	STORE	T1,SLBLK,SLBLK+.DFGST,0 ;CLEAR THE BLOCK
+	MOVEI	T1,[ASCIZ/Job search list:	/]
+	PUSHJ	P,.TSTRG##	; TYPE A HEADER
+	SETOB	P1,SLBLK+.DFJNM	; SET FIRST STR INDICATION
+LSTJS1:	MOVX	T1,<.DFJST+1,,SLBLK>	; POINT TO BLOCK
+	JOBSTR	T1,		; GET THE NEXT STRUCTURE
+	  WARN	RJS,<Can't read job search list>,,.POPJ##
+	SKIPN	T1,SLBLK+.DFJNM	; HANDLE FENCE SPECIALLY
+	  JRST	[MOVEI	T1,[ASCIZ/, FENCE/] ; TELL OF FENCE
+		 AOSN	P1		    ; UNLESS NO SL
+		   MOVEI T1,[ASCIZ/FENCE/]   ; NO COMMA
+		 PUSHJ	P,.TSTRG##	    ; TYPE THE STRING
+		 SETZM	P1		    ; FLAG NOT FIRST STR
+		 JRST	LSTJS1		    ; AND DO PASSIVE SL
+		]
+	AOJE	T1,.TCRLF##	; END WITH CRLF AND RETURN
+	MOVEI	T1,[ASCIZ/, /]	; GET SEPARATOR
+	AOSE	P1		; DON'T PRINT FOR FIRST STR
+	  PUSHJ	P,.TSTRG##	; TYPE THE SEPARATOR
+	MOVE	T1,SLBLK+.DFJNM	; GET STR NAME
+	PUSHJ	P,.TSIXN##	;   AND TYPE IN SIXBIT
+	PUSHJ	P,.TCOLN##	;   FOLLOWED BY A COLON
+	MOVE	P1,SLBLK+.DFJST	; GET STATUS BITS FOR THIS STR
+	MOVEI	T1,[ASCIZ\/NOWRITE\]
+	TXZE	P1,DF.SWL	; IS IT SOFTWARE WRITE LOCKED?
+	  PUSHJ	P,.TSTRG##	; YES, TELL HIM
+	MOVEI	T1,[ASCIZ\/NOCREATE\]
+	TXZE	P1,DF.SNC	; HOW ABOUT NO CREATE?
+	  PUSHJ	P,.TSTRG##	; YES, TELL HIM THAT ALSO
+	JRST	LSTJS1		; GO GET NEXT STRUCTURE
+;Routine to list the system search list.
+;The call is:
+;
+;		PUSHJ	P,LSTSSL
+;		 <always return here>
+
+LSTSSL:	TRACE$	LSTSSL		; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE1##	; SAVE P1
+	STORE	T1,SLBLK,SLBLK+.DFGST,0	;CLEAR THE BLOCK
+	MOVEI	T1,[ASCIZ/System search list:	/]
+	PUSHJ	P,.TSTRG##	; TYPE A HEADER
+	SETOB	P1,SLBLK+.DFGNM	; SET FIRST STR INDICATION
+LSTSS1:	MOVX	T1,<.DFGST+1,,SLBLK>	; POINT TO BLOCK
+	GOBSTR	T1,		; GET THE NEXT STRUCTURE
+	  WARN	RSS,<Can't read system search list>,,.POPJ##
+	SKIPE	T1,SLBLK+.DFGNM	; STOP ON FENCE
+	 AOSN	T1		;   OR ON LAST STRUCTURE
+	  JRST	.TCRLF##	; RETURN AFTER TYPING CRLF
+	MOVEI	T1,[ASCIZ/, /]	; GET SEPARATOR
+	AOSE	P1		; DON'T PRINT FOR FIST STR
+	  PUSHJ	P,.TSTRG##	; TYPE THE SEPARATOR
+	MOVE	T1,SLBLK+.DFGNM	; GET STR NAME
+	PUSHJ	P,.TSIXN##	;   AND TYPE IN SIXBIT
+	PUSHJ	P,.TCOLN##	;   FOLLOWED BY A COLON
+	MOVE	P1,SLBLK+.DFGST	; GET STATUS BITS FOR THIS STR
+	MOVEI	T1,[ASCIZ\/NOWRITE\]
+	TXZE	P1,DF.SWL	; IS IT SOFTWARE WRITE LOCKED?
+	  PUSHJ	P,.TSTRG##	; YES, TELL HIM
+	MOVEI	T1,[ASCIZ\/NOCREATE\]
+	TXZE	P1,DF.SNC	; HOW ABOUT NO CREATE?
+	  PUSHJ	P,.TSTRG##	; YES, TELL HIM THAT ALSO
+	JRST	LSTSS1		; GO GET NEXT STRUCTURE
+;Routine to list logical names based on what was typed in the Command
+;string.  The algorithm used is as follows:
+;
+;IF no input scan blocks THEN the user either typed no
+;  logical names or is undefining one, so list all existing names
+;ELSE IF output scan block, THEN the user is defining a new
+;       name so just list that one
+;     ELSE IF FL.LSN is set, THEN the user wants a list of one
+;            specific name so list that one
+;          ELSE user typed a default path so list all existing names
+;
+;The call is:
+;
+;		PUSHJ	P,LSTLNM
+;		 <always return here>
+
+LSTLNM:	TRACE$	LSTLNM,<F,SCNIFS,SCNOFS> ; TYPE DEBUGGING INFO
+	TXO	F,FL.FST	; SET FIRST TIME FLAG
+	PUSHJ	P,.SAVE1##	; SAVE P1
+	SKIPE	P1,SCNIFS	; SKIP IF NO INPUT SCAN BLOCKS
+	 TXNN	F,FL.LSN	;   OR IF NO LOGICAL NAMES SET
+	  JRST	LSTLN1		;   THEN LIST ALL EXISTING NAMES
+	SKIPE	SCNOFS		; IF AN OUTPUT SCAN BLOCK
+	  MOVE	P1,SCNOFS	; THEN LIST JUST THAT ONE
+	MOVE	T1,.FXDEV(P1)	; GET NAME TO LIST
+	PUSHJ	P,GETSLN	; READ THAT LOGICAL NAME
+	  CAIA			; NAME NOT THERE
+	PJRST	LSTNAM		; LIST IT AND RETURN
+
+E$$NSL:	WARN	NSL,<No such logical name as >,NOCRLF
+	MOVE	T1,.FXDEV(P1)	; GET BAD NAME
+	PJRST	TYPNAM		; TYPE NAME AND RETURN
+;
+;Here to list all existing logical names
+;
+LSTLN1:	SETZM	PTSLN+.PTLNM	; SET NAME TO 0 TO GET THE FIRST ONE
+LSTLN2:	PUSHJ	P,GETNLN	; GET THE NEXT ONE IN LINE
+	  WARN	RLN,<Can't read logical names>,,.POPJ##
+	SKIPN	T1,PTSLN+.PTLNM	; DONE IF WE GOT BACK A ZERO
+	  POPJ	P,		;   SO RETURN
+	PUSHJ	P,LSTNAM	; LIST THIS NAME
+	JRST	LSTLN2		;   AND GO GET NEXT ONE
+;Routine to list the logical name stored at PTSLN.
+;The call is:
+;
+;		PUSHJ	P,LSTNAM
+;		 <always return here>
+
+LSTNAM:	TRACE$	LSTNAM		; TYPE DEBUGGING INFO
+	MOVEI	T1,[ASCIZ/Logical name definitions:
+/]
+	TXZE	F,FL.FST	; FIRST TIME HERE?
+	  PUSHJ	P,.TSTRG##	; YES, TYPE THE HEADER
+	PUSHJ	P,.SAVE1##	; SAVE P1
+	MOVE	T1,PTSLN+.PTLNM	; GET THE LOGICAL NAME
+	PUSHJ	P,.TSIXN##	; TYPE IT
+	PUSHJ	P,.TCOLN##	; FOLLOWED BY A COLON
+	MOVE	P1,PTSLN+.PTLNF	; GET THE FLAGS
+	MOVEI	T1,[ASCIZ\/SEARCH\] ; SETUP FOR /SEARCH
+	TXNE	P1,PT.SEA	; IS THIS ONE LIB'ED?
+	  PUSHJ	P,.TSTRG##	; YES TELL HIM
+	MOVEI	T1,[ASCIZ\/OVERRIDE\] ; SETUP FOR /OVERRIDE
+	TXNE	P1,PT.OVR	; IS THIS ONE?
+	  PUSHJ	P,.TSTRG##	; YES, TELL HIM
+	MOVEI	T1,[ASCIZ/ = /]	; GET SEPARATOR
+	PUSHJ	P,.TSTRG##	;  AND TYPE IT
+	MOVEI	P1,PTSLN+.PTLSB	; POINT TO FIRST COMPONENT
+LSTNA1:	SKIPN	0(P1)		; DONE WITH THE LIST YET?
+	 SKIPE	1(P1)		; ?
+	  CAIA			; NO, CONTINUE
+	   JRST	.TCRLF##	; YES, END WITH CRLF AND RETURN
+	CAIE	P1,PTSLN+.PTLSB	; THIS THE FIRST ONE IN THE LIST
+	  PUSHJ	P,.TCOMA##	; NO, TYPE A COMMA
+	SKIPN	T1,.PTNOD(P1)	; ANY NODE SPECIFIED?
+	  JRST	LSTNA2		; NO, CONTINUE
+	PUSHJ	P,.TSIXN##	; TYPE IT
+	PUSHJ	P,.TCOLN##	; TYPE A COLON
+	PUSHJ	P,.TCOLN##	; TYPE ANOTHER
+LSTNA2:	MOVE	T1,.PTLSL(P1)	; GET SEARCH LIST OF THIS ONE
+	PUSHJ	P,.TSIXN##	; TYPE THE SEARCH LIST
+	PUSHJ	P,.TCOLN##	; FOLLOWED BY A COLON
+	SKIPN	T1,.PTFIL(P1)	; ANY FILENAME SPECIFIED?
+	 SKIPE	.PTEXT(P1)	; NO, HOW ABOUT AN EXTENSION?
+	  CAIA			; ONE OF THEM WAS SPECIFIED
+	   JRST	LSTNA4		; NO, CONTINUE
+	JUMPE	T1,LSTNA3	; PRINT FILENAME ONLY IF NO EXTENSION
+	HLRZ	T2,.PTEXT(P1)	; GET EXTENSION
+	CAIN	T2,'UFD'	; THIS A UFD?
+	 JUMPGE	T1,[PUSHJ P,.TPPNW## ; YES, PRINT PPN IF NOT SIXBIT
+		    JRST  .+2	     ; AND SKIP THE SIXBIT TYPE
+		   ]
+	PUSHJ	P,.TSIXN##	; TYPE FILENAME
+LSTNA3:	MOVEI	T1,"."		; GET SEPARATOR
+	PUSHJ	P,.TCHAR##	; TYPE IT
+	HLLZ	T1,.PTEXT(P1)	; GET EXTENSION
+	PUSHJ	P,.TSIXN##	; TYPE IT
+LSTNA4:	MOVX	T1,.PTLPP	; GET OFFSET TO START OF PATH
+	ADDB	T1,P1		; POINT TO IT
+	SKIPN	T2,(T1)		; NO PATH AT ALL?
+	  AOJA	P1,LSTNA1	; NO, INCREMENT POINTER AND GO ON
+	PUSHJ	P,TDIRB		; TYPE THE PATH BLOCK
+LSTNA6:	SKIPE	(P1)		; FIND LAST WORD IN PATH BLOCK
+	  AOJA	P1,LSTNA6	; LOOP UNTIL FOUND
+	AOJA	P1,LSTNA1	; BUMP ONCE MORE AND TYPE NEXT
+;Routine to type a path block and worry about the [,] case.
+;The call is:
+;		MOVEI	T1,path block address
+;		MOVE	T2,(T1)		;Get first word
+;		PUSHJ	P,TDIRB
+;		 <return here always>
+
+TDIRB:	TRACE$	TDIRB,<T1,T2>	; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE2##	; SAVE P1-P2
+	DMOVE	P1,T1		; SAVE ARGUMENTS IN P1, P2
+	MOVEI	T1,"["		; GET A LEFT BRACKET
+	PUSHJ	P,.TCHAR##	; TYPE IT
+	HLRE	T1,P2		; GET PROJECT NUMBER
+	AOJE	T1,TDIRB1	; DON'T TYPE IF -1
+	HLRZ	T1,P2		; RETRIEVE PROJECT NUMBER
+	PUSHJ	P,.TOCTW##	; TYPE THE PROJECT NUMBER
+TDIRB1:	PUSHJ	P,.TCOMA##	; TYPE A COMMA
+	HRRE	T1,P2		; GET THE PROGRAMMER NUMBER
+	AOJE	T1,TDIRB2	; DON'T TYPE IF -1
+	HRRZ	T1,P2		; RETRIEVE PROGRAMMER NUMBER
+	PUSHJ	P,.TOCTW##	; TYPE THE PROGRAMMER NUMBER
+TDIRB2:	HRLI	P1,-.FXLND	; BUILD AOBJP POINTER TO PATH BLOCK
+TDIRB3:	AOBJP	P1,.TRBRK##	; IF TOO MANY, TYPE BRACKET AND RETURN
+	SKIPN	0(P1)		; FIND THE END OF BLOCK?
+	  PJRST	.TRBRK##	; YES, CLOSE OFF BLOCK AND RETURN
+	PUSHJ	P,.TCOMA##	; TYPE A COMMA
+	MOVE	T1,0(P1)	; GET THE NEXT SFD
+	PUSHJ	P,.TSIXN##	; TYPE IT
+	JRST	TDIRB3		; LOOP FOR MORE
+	SUBTTL	Routines that perform PATH. and STRUUO functions
+
+
+;Routine to set any new default path required by the command string.
+;Call after setting up the default path block at PTSDP.
+;The call is:
+;
+;		PUSHJ	P,SETNDP
+;		 <return here always>
+
+SETNDP:	TRACE$	SETNDP		; TYPE DEBUGGING INFO
+	TXZ	F,FL.RDP	; FORCE GETCDP TO REREAD BLOCK
+	MOVX	T1,.PTFSD	; FUNCTION TO DEFINE DEFAULT PATH
+	MOVEM	T1,PTSDP+.PTFCN	; STORE IN PATH. BLOCK
+	MOVX	T1,PT.SCN	; GET MASK FOR /SCAN SWITCH
+	ANDM	T1,PTSDP+.PTSWT	; CLEAR ALL BUT THE SWITCH
+	MOVX	T1,<.PTMAX,,PTSDP> ; POINT TO PATH BLOCK
+	PATH.	T1,		; SET NEW DEFAULT PATH
+	  CAIA			; FAILED, ANALYZE ERROR
+	POPJ	P,		; RETURN OK
+
+	AOSE	T1		; AC==-1 => NON-EXISTENT SFD
+	  WARN	NMS,<No monitor SFD support>,,SETND1
+	ERROR	NES,<Non-existent SFD>,,SETND1
+
+SETND1:	TXNN	F,FL.UFD	; CHANGED TO UFD FOR /ADD?
+	 POPJ	P,		; NO, DON'T TRY TO RESTORE
+	MOVE	T1,[.PTMAX,,MYPATH] ; POINTER TO SET BACK TO STARTING PATH
+	PATH.	T1,		; TRY IT
+	  JRST	E$$DPR		; FAILED
+	POPJ	P,		; RETURN
+
+
+;Routine to set any new additional path required by the command string.
+;Call after setting up the additional path block at PTSAP.
+;The call is:
+;
+;		PUSHJ	P,SETNAP
+;		 <always return here>
+
+SETNAP:	TRACE$	SETNAP		; TYPE DEBUGGING INFO
+	TXZ	F,FL.RAP	; FORCE GETCAP TO REREAD BLOCK
+	MOVX	T1,.PTFSL	; FUNCTION TO DEFINE ADDITIONAL PATH
+	MOVEM	T1,PTSAP+.PTFCN	; STORE IN PATH BLOCK
+	MOVX	T1,PT.SNW!PT.SSY ; GET MASK FOR IMPORTANT BITS
+	ANDM	T1,PTSAP+.PTSWT	; CLEAR ALL BUT THOSE
+	MOVX	T1,PT.DTL	; GET "DON'T TOUCH LIB" BIT
+	IORM	T1,PTSAP+.PTSWT	; SET IT SO WE DON'T CLOBBER LIB
+	MOVX	T1,<.PTMAX,,PTSAP> ; POINT TO BLOCK
+	PATH.	T1,		; SET NEW ADDITIONAL PATH
+	  WARN	LNS,<Libraries not supported>,,.POPJ##
+	POPJ	P,		; RETURN
+;Routine to set a new job search list.  Call with JSLBLK+$SLNCT
+;containing the number of STRS in the list and JSLBLK+$SLNPT containing
+;a pointer to the start of the list.
+;The call is:
+;
+;		PUSHJ	P,STNJSL
+;		 <always return here>
+
+STNJSL:	TRACE$	STNJSL		; TYPE DEBUGGING INFO
+	SKIPG	T1,JSLBLK+$SLNCT ; MORE THAN ONE STRUCTURE?
+	 TELL	LSJ,<Removing last structure from job search list>
+	CAMLE	T1,JSLBLK+$SLMAX ; GREATER THAN MAX ALLOWED?
+	  PJRST	E$$TMS		; YES, TELL HIM
+	SKIPN	RMJBLK+$SLSCT	; IF DOING A REMOVE,
+	SKIPE	CRJBLK+$SLSCT	; OR A CREATE,
+	 JRST	STNJS1		; THEN IT'S NOT A SIMPLE ADD
+	SKIPN	ADJBLK+$SLSCT	; DOING AN ADD?
+	 JRST	STNJS1		; NO, DON'T NEED THE SPEED HACK
+	MOVX	T1,PT.SCN	; MASK FOR /SCAN INFORMATION
+	ANDM	T1,MYPATH+.PTSWT ; KEEP ONLY THAT IN SWITCHES WORD
+	STORE	T1,MYPATH,,.PTFSD ; STORE FUNCTION TO SET DEFAULT PATH
+	MOVE	T1,[.PTMAX,,MYPATH] ; POINTER TO SET IT
+	PATH.	T1,		; IS OUR CURRENT PATH STILL VALID?
+	  JRST	STNJS1		; NO, SO CAN'T HACK OUR PATH FOR SPEED IN /ADD
+	MOVE	T1,[3,,MYPATH]	; YES, POINT TO SET TO JUST UFD
+	PATH.	T1,		; DO SO
+	  JRST	STNJS1		; OK IF FAILED
+	TXO	F,FL.UFD	; NOTE CHANGED TO UFD FOR /ADD SPEED HACK
+STNJS1:	MOVE	T1,JSLBLK+$SLNPT ; GET POINTER TO START OF LIST
+	SUBI	T1,.FSCSO	; POINT TO START OF BLOCK FOR JSL
+	MOVX	T2,.FSSRC	; FUNCTION TO DEFINE NEW SL
+	MOVEM	T2,.FSFCN(T1)	; STORE IN BLOCK
+	MOVE	T2,JSLBLK+$SLNCT ; GET NUMBER OF STRS IN LIST
+	IMULI	T2,.DFJBL	; MULTIPLY BY # WORDS PER STR
+	HRLI	T1,.FSCSO(T2)	; ADD STARTING OFFSET AND MOVE TO T1
+	STRUUO	T1,		; SET NEW SL
+	  WARN	JSF,<Job search list definition failed>
+	TXNE	F,FL.UFD	; CHANGED TO UFD?
+	 TXNE	F,FL.SDP	; YES, CHANGING DEFAULT PATH?
+	  POPJ	P,		; OK, NO NEED TO RESTORE PATH, JUST RETURN
+	MOVE	T1,[.PTMAX,,MYPATH] ; POINTER FOR RESTORING PATH
+	PATH.	T1,		; DO SO
+E$$DPR:	  WARN	DPR,<Default path restoration failed>
+	POPJ	P,		; RETURN
+;Routine to set a new system search list.  Call with SSLBLK+$SLNCT
+;containing the number of STRS in the list and SSLBLK+$SLNPT containing
+;a pointer to the start of the list.
+;The call is:
+;
+;		PUSHJ	P,STNSSL
+;		 <always return here>
+
+STNSSL:	TRACE$	STNSSL		; TYPE DEBUGGING INFO
+	SKIPG	T1,SSLBLK+$SLNCT ; MORE THAN ONE STRUCTURE?
+	  TELL	LSS,<Removing last structure from system search list>
+	CAMLE	T1,SSLBLK+$SLMAX ; GREATER THAN MAX ALLOWED?
+	  PJRST	E$$TMS		; YES, TELL HIM
+	MOVE	T1,SSLBLK+$SLNPT ; GET POINTER TO START OF LIST
+	SUBI	T1,.FSDSO	; POINT TO START OF BLOCK FOR JSL
+	MOVX	T2,.FSDSL	; FUNCTION TO DEFINE NEW SSL
+	MOVEM	T2,.FSFCN(T1)	; STORE IN BLOCK
+	SETZM	.FSDJN(T1)	; ZERO JOB NUMBER (SYS:)
+	SETZM	.FSDPP(T1)	;   AND PPN
+	MOVX	T2,DF.SRM	; GET "REMOVE FROM SL COMPLETELY" BIT
+	MOVEM	T2,.FSDFL(T1)	; STORE IN FLAGS WORD
+	MOVE	T2,SSLBLK+$SLNCT ; GET NUMBER OF STRS IN LIST
+	IMULI	T2,.DFJBL	; MULTIPLY BY # WORDS PER STR
+	HRLI	T1,.FSDSO(T2)	; ADD STARTING OFFSET AND MOVE TO T1
+	STRUUO	T1,		; SET NEW SL
+	  CAIA			; FAILED, ANALYZE ERROR
+	POPJ	P,		; RETURN
+
+	CAXN	T1,FSNPV%	; NOT PRIVILEGED?
+	  WARN	NPV,<Not privileged to set system search list>,,.POPJ##
+	WARN	SSF,<System search list definition failed>,,.POPJ##
+;Routine to CLEAR the definitions of all existing logical names.
+;The call is:
+;
+;		PUSHJ	P,CLRLNM
+;		 <always return here>
+
+CLRLNM:	TRACE$	CLRLNM		; TYPE DEBUGGING INFO
+CLRLN1:	SETZM	PTSLN+.PTLNM	; CLEAR NAME TO READ FIRST ONE
+	PUSHJ	P,GETNLN	; READ THE NEXT DEFINED NAME
+	  POPJ	P,		; GIVE UP ON ERROR
+	SKIPN	PTSLN+.PTLNM	; DONE IF NEXT NAME IS ZERO
+	  POPJ	P,		; SO RETURN
+	MOVX	T1,PT.UDF	; GET "UNDEFINE" BIT
+	MOVEM	T1,PTSLN+.PTLNF	; STORE IN FLAGS WORD
+	SETZM	PTSLN+.PTLSB	; ZERO NEXT WORD
+	SETZM	PTSLN+.PTLSB+1	;   AND NEXT TO INSURE DOUBLE ZERO TERMINATOR
+	MOVEI	T1,.PTLSB+1+1	; GET LENGTH OF BLOCK
+	MOVEM	T1,PTSLN+.PTFCN	; STORE LENGTH FOR SETLNM
+	PUSHJ	P,SETLNM	; UNDEFINE THIS ONE
+	  POPJ	P,		; GIVE UP IF WE GOT AN ERROR RETURN
+	JRST	CLRLN1		;   AND LOOP FOR ALL
+;Routine to define a new logical name or change and existing one.  Call
+;after setting up the logical name block at PTSLN and storing the length
+;of the block at PTSLN+.PTFCN.
+;The call is:
+;
+;		PUSHJ	P,SETLNM
+;		 <return here if error>
+;		 <return here if set succeeded>
+
+SETLNM:	TRACE$	SETLNM		; TYPE DEBUGGING INFO
+	MOVX	T1,PT.SEA!PT.UDF!PT.OVR ; GET MASK FOR IMPORTANT BITS
+	ANDM	T1,PTSLN+.PTLNF	; AND CLEAR ALL BUT THOSE BITS
+	MOVX	T1,.PTFSN	; FUNCTION TO DEFINE LOGICAL NAME
+	EXCH	T1,PTSLN+.PTFCN	; STORE IN BLOCK AND GET LENGTH
+	MOVSS	T1		; PUT INTO LEFT HALF
+	HRRI	T1,PTSLN	;   AND POINT AT THE BLOCK
+	PATH.	T1,		; DEFINE THE NAME
+	  CAIA			; FAILED, CHECK ERROR CODE
+	JRST	.POPJ1##	; RETURN SUCCESSFUL
+
+	SKIPL	T1		; FOR NEGATIVE ERROR CODES
+	 CAILE	T1,PTERLN	;   OR ONES GREATER THAN WE KNOW ABOUT
+E$$LNF:	  WARN	LNF,<Logical name definition failed>,,.POPJ##
+	JRST	@PTERTB(T1)	; PRINT APPROPRIATE MESSAGE
+
+PTERTB:	EXP	E$$LNF		; (0) DON'T KNOW ABOUT THIS ONE
+	EXP	E$$TMC		; (1) TOO MANY ENTRIES IN THIS LIST
+	EXP	E$$TMN		; (2) TOO MANY NAMES
+	EXP	E$$NND		; (3) ATTEMPT TO UNDEFINE A NON-EXISTENT NAME
+	EXP	E$$NFS		; (4) NO FUNNY SPACE
+	EXP	E$$ANE		; (5) ASSIGNED NAME EXISTS
+	EXP	E$$LNF		; (6) CAN'T GET HERE FROM THIS FUNCTION
+	EXP	E$$LNF		; (7) DITTO
+	EXP	E$$LNF		; (10) FILNAME REQUIRED FOR /COMMAND
+PTERLN==.-PTERTB
+
+E$$TMN:	WARN	TMN,<Too many defined logical names>,,.POPJ##
+E$$NFS:	WARN	NFS,<No per-process monitor-free-core>,,.POPJ##
+E$$NND:	WARN	NND,<Name not defined >,NOCRLF,SETLNT
+E$$ANE:	WARN	ANE,<ASSIGNed name already exists >,NOCRLF
+SETLNT:	MOVE	T1,PTSLN+.PTLNM	; GET THE NAME IN ERROR
+	PJRST	TYPNAM		; TYPE NAME AND RETURN
+;Routine to read the default path into the block starting at PTSDP.
+;The call is:
+;
+;		PUSHJ	P,GETCDP	; To read into PTSDP
+;		 <always return here>
+;
+;			-or-
+;
+;		PUSHJ	P,GETPTH	; To read into MYPATH
+;		 <always return here>
+
+GETCDP:	TRACE$	GETCDP		; TYPE DEBUGGING INFO
+	TXOE	F,FL.RDP	; ALREADY HAVE THE INFORMATION?
+	  POPJ	P,		; YES, JUST RETURN
+	SKIPA	T2,[PTSDP]	; PLACE TO PUT THE PATH
+GETPTH:	MOVEI	T2,MYPATH	; ALTERNATE PLACE TO PUT IT
+	MOVX	T1,.PTFRD	; FUNCTION TO READ CURRENT DEFAULT PATH
+	MOVEM	T1,.PTFCN(T2)	; STORE IN BLOCK
+	HRLI	T2,.PTMAX	; MAKE IT LEN,,ADDR
+	PATH.	T2,		; READ THE INFO INTO THE BLOCK
+	  ERROR	DPN,<Default path not available>,,PTHSCN
+	POPJ	P,		;   AND RETURN
+
+
+;Routine to read the additional path into the block starting at PRSAP.
+;The call is:
+;
+;		PUSHJ	P,GETCAP
+;		 <always return here>
+
+GETCAP:	TRACE$	GETCAP		; TYPE DEBUGGING INFO
+	TXOE	F,FL.RAP	; ALREADY HAVE THE INFORMATION?
+	  POPJ	P,		; YES, JUST RETURN
+	MOVX	T1,.PTFRL	; FUNCTION TO READ ADDITIONAL PATH
+	MOVEM	T1,PTSAP+.PTFCN	; STORE IN BLOCK
+	MOVX	T1,<.PTMAX,,PTSAP> ; POINT AT BLOCK
+	PATH.	T1,		; READ THE INFO INTO THE BLOCK
+	  ERROR	APN,<Additional path not available>,,PTHSCN
+	POPJ	P,		;   AND RETURN
+;Routine to read the definition of a specific logical name into the
+;block at PTSLN.  Call GETSLN to read the name in T1, GETNLN to read the
+;name after the one already in the block.
+;The call is:
+;
+;		MOVE	T1,logical name to read
+;		PUSHJ	P,GETSLN
+;		 <return here if no such name>
+;		 <return here with block at PTSLN>
+;
+;			-or-
+;
+;		PUSHJ	P,GETNLN
+;		 <return here if no such name>
+;		 <return here with block at PTSLN>
+
+GETSLN:	TRACE$	GETSLN,T1	; TYPE DEBUGGING INFO
+	MOVEM	T1,PTSLN+.PTLNM	; STORE NAME TO READ IN BLOCK
+	SKIPA	T1,[PT.RCN]	; SET "READ CURRENT NAME" FLAG
+GETNLN:	MOVEI	T1,0		; SET NO FLAGS
+	MOVEM	T1,PTSLN+.PTLNF	; STORE THE FLAGS IN THE BLOCK
+	MOVX	T1,.PTFRN	; FUNCTION TO READ LOGICAL NAMES
+	MOVEM	T1,PTSLN+.PTFCN	; STORE IN BLOCK
+	MOVX	T1,<.PTLLB,,PTSLN> ; POINT TO THE BLOCK
+	PATH.	T1,		; READ THE NAME
+	  POPJ	P,		; FAILED, PROPAGATE ERROR
+	JRST	.POPJ1##	; RETURN SUCCESS
+;Routine to determine if there is a path associated with the device of
+;the current logical name component.
+;The call is:
+;
+;		MOVEI	P1,Address of current scan block
+;		PUSHJ	P,FNDPTH
+;		 <always return here>
+;
+;Returns one of the following in T1:
+	.FPNON==0 ; if no path associated
+	.FPIPP==1 ; if device has an implied PPN (path block pointed to
+		  ; by PTHPTR)
+	.FPLNM==2 ; if device is a logical name and should be replaced
+		  ; with it's components (path block pointed to by LNMPTR)
+
+FNDPTH:	TRACE$	FNDPTH,P1	; TYPE DEBUGGING INFO
+	PUSH	P,[.FPNON]	; INITIALIZE RETURN VALUE
+	SKIPE	T1,PTHPTR	; ALREADY HAVE SPACE?
+	  JRST	FNDPT1		; YES
+	MOVX	T1,.PTMAX	; AMOUNT OF SPACE WE NEED
+	PUSHJ	P,GETCOR	; GET THAT MUCH
+	  JRST	E$$NEC		; NO CORE!!!
+	MOVEM	T1,PTHPTR	; SAVE FOR NEXT (MAYBE) CALL
+FNDPT1:	MOVE	T2,.FXDEV(P1)	; GET DEVICE FOR THIS COMPONENT
+	MOVEM	T2,.PTSTR(T1)	; STORE IN PATH. BLOCK
+	MOVEI	T2,(T1)		; COPY ADDRESS OF BLOCK
+	HRLI	T2,.PTMAX	; MAKE IT LEN,,ADDRESS
+	PUSHJ	P,DOPHYS	; EXECUTE .+1 WITH/WITHOUT UU.PHY
+	PATH.	T2,		; GET PATH FOR THIS NAME
+	  JRST	T1POPJ		; NONE, RETURN .FPNON
+	MOVE	T2,.PTSWT(T1)	; GET SWITCHES FOR THIS ONE
+	TXNN	T2,PT.IPP	; DEVICE HAVE AN IMPLIED PPN?
+	  JRST	T1POPJ		; NO, RETURN .FPNON
+	AOS	(P)		; YES, MAKE IT .FPIPP
+	MOVE	T3,.FXMOD(P1)	; GET FLAG BITS FOR THIS SCAN BLOCK
+	TXNN	T3,FX.PHY	; IF /PHYSICAL
+	 TXNN	T2,PT.DLN	;   OR THIS IS NOT A LOGICAL NAME,
+	  JRST	T1POPJ		;   RETURN .FPIPP
+	SKIPE	T1,LNMPTR	; ALREADY HAVE SPACE FOR A LOGICAL NAME?
+	  JRST	FNDPT2		; YES
+	MOVX	T1,.PTLLB	; AMOUNT OF SPACE WE NEED
+	PUSHJ	P,GETCOR	; GET THAT MUCH
+	  JRST	E$$NEC		; NO CORE!!
+	MOVEM	T1,LNMPTR	; SAVE FOR NEXT (MAYBE) CALL
+FNDPT2:	MOVE	T2,.FXDEV(P1)	; GET LOGICAL NAME TO READ
+	MOVEM	T2,.PTLNM(T1)	; STORE IN BLOCK
+	MOVX	T2,PT.RCN	; GET "READ CURRENT NAME" BIT
+	MOVEM	T2,.PTLNF(T1)	; STORE IN BLOCK
+	MOVX	T2,.PTFRN	; GET FUNCTION TO READ LOGICAL NAMES
+	MOVEM	T2,.PTFCN(T1)	; STORE IN BLOCK
+	HRLI	T1,.PTLLB	; MAKE IT LEN,,ADRESS
+	PATH.	T1,		; READ THE LOGICAL NAME
+	  JRST	T1POPJ		; CAN'T???...RETURN .FPIPP
+	AOS	(P)		; MAKE RETURN VALUE .FPLNM
+T1POPJ:	POP	P,T1		; RETURN VALUE IN T1 AS ADVERTISED
+	POPJ	P,		;   AND RETURN
+;Routine to read the current job search list.
+;The call is:
+;
+;		PUSHJ	P,GETJSL
+;		 <return here if we can't read it>
+;		 <return here if all OK with $SLCCT and $SLCPT OF JSLBLK setup>
+;
+;Note that this routine does not return a block that has the proper
+;header words that will allow a STRUUO to be done directly.
+
+GETJSL:	TRACE$	GETJSL		; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE1##	; SAVE P1
+	MOVE	T1,JSLBLK+$SLMAX ; GET MAX NUMBER OF STRS IN JSL
+	IMULI	T1,.DFJBL	; TIMES WORDS/BLOCK
+	PUSHJ	P,GETCOR	; GET ENOUGH CORE
+	  JRST	E$$NEC		; NO CORE, DIE
+	MOVEM	T1,JSLBLK+$SLCPT ; SAVE POINTER TO BLOCK
+	MOVEI	P1,(T1)		; POINT TO FIRST STR BLOCK
+	SETOM	SLBLK+.DFJNM	; SET NAME TO -1 TO GET FIRST STR
+GETJS1:	MOVX	T2,<.DFJST+1,,SLBLK> ; POINT TO JOBSTR BLOCK
+	JOBSTR	T2,		; GET NEXT STR IN SL
+	  WARN	RJS,<Can't read job search list>,,.POPJ##
+	SKIPN	T2,SLBLK+.DFJNM	; STOP ON THE FENCE
+	  JRST	.POPJ1##
+	AOJE	T2,.POPJ1##	; OR ON END OF LIST
+	MOVSI	T2,SLBLK+.DFJNM	; GET SOURCE ADDRESS
+	HRRI	T2,(P1)		;   AND DESTINATION ADDRESS
+	BLT	T2,.DFJBL-1(P1)	; MOVE TO STRUUO BLOCK
+	AOS	JSLBLK+$SLCCT 	; BUMP STR COUNT
+	ADDI	P1,.DFJBL	; BUMP STRUUO POINTER
+	JRST	GETJS1		;   AND LOOP FOR MORE
+;Routine to read the current system search list.
+;The call is:
+;
+;		PUSHJ	P,GETSSL
+;		 <return here if we can't read it>
+;		 <return here if all OK with $SLCCT and $SLCPT of SSLBLK setup>
+;
+;Note that this routine does not return a block that has the proper
+;header words that will allow a STRUUO to be done directly.
+
+GETSSL:	TRACE$	GETSSL		; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE1##	; SAVE P1
+	MOVE	T1,SSLBLK+$SLMAX ; GET MAX NUMBER OF STRS IN SSL
+	IMULI	T1,.DFJBL	; TIMES WORDS/BLOCK
+	PUSHJ	P,GETCOR	; GET ENOUGH CORE
+	  JRST	E$$NEC		; NO CORE, DIE
+	MOVEM	T1,SSLBLK+$SLCPT ; SAVE POINTER TO BLOCK
+	MOVEI	P1,(T1)		; POINT TO FIRST STR BLOCK
+	SETOM	SLBLK+.DFGNM	; SET NAME TO -1 TO GET FIRST STR
+GETSS1:	MOVX	T2,<.DFGST+1,,SLBLK> ; POINT TO GOBSTR BLOCK
+	GOBSTR	T2,		; GET NEXT STR IN SL
+	  WARN	RSS,<Can't read system search list>,,.POPJ##
+	SKIPN	T2,SLBLK+.DFGNM	; STOP ON THE FENCE
+	  JRST	.POPJ1##
+	AOJE	T2,.POPJ1##	; OR ON END OF LIST
+	MOVSI	T2,SLBLK+.DFGNM	; GET SOURCE ADDRESS
+	HRRI	T2,(P1)		;   AND DESTINATION ADDRESS
+	BLT	T2,.DFJBL-1(P1)	; MOVE TO STRUUO BLOCK
+	AOS	SSLBLK+$SLCCT 	; BUMP STR COUNT
+	ADDI	P1,.DFJBL	; BUMP STRUUO POINTER
+	JRST	GETSS1		;   AND LOOP FOR MORE
+	SUBTTL	Routines that interface with SCAN
+
+
+;Routine to allocate space for an input scan block for SCAN.
+;The call is:
+;
+;		PUSHJ	P,ALCINP
+;		 <always return here>
+;
+;Returns T1 = Address of scan block
+;	 T2 = Length of scan block
+
+ALCINP:	TRACE$	ALCINP		; TYPE DEBUGGING INFO
+	MOVX	T1,$FXLEN	; GET LENGTH OF A SCAN BLOCK
+	PUSHJ	P,GETCOR	; GET THAT MUCH
+	  JRST	E$$NEC		; NO CORE, DIE
+	SKIPN	SCNIFS		; THIS THE FIRST INPUT SPEC
+	  MOVEM	T1,SCNIFS	; YES, SAVE THE ADDRESS
+	SKIPE	T2,SCNILS	; IF THERE WAS A PREVIOUS BLOCK,
+	  HRRZM	T1,$FXLNK(T2)	;   STORE CURRENT ADDR IN LINK OF LAST
+	MOVEM	T1,SCNILS	; SAVE AS LAST ONE ALSO
+	MOVX	T2,<F.BGN,,0>	; GET SOURCE OF FILE SWITCHES
+	HRRI	T2,.FXLEN(T1)	;   AND DESTINATION IN SCAN BLOCK
+	BLT	T2,$FXLLS(T1)	; MOVE THEM TO THE SCAN BLOCK
+	MOVX	T2,$FXLEN	; RETURN LENGTH TO SCAN
+	POPJ	P,		;  AND RETURN
+;Routine to allocate space for an output scan block for SCAN.
+;The call is:
+;
+;		PUSHJ	P,ALCOUT
+;		 <always return here>
+;
+;Returns T1 = Address of scan block
+;	 T2 = Length of scan block
+
+ALCOUT:	TRACE$	ALCOUT		; TYPE DEBUGGING INFO
+	MOVX	T1,$FXLEN	; GET LENGTH OF SCAN BLOCK
+	PUSHJ	P,GETCOR	; GET THAT MUCH CORE
+	  JRST	E$$NEC		; NO CORE, DIE
+	SKIPN	SCNOFS		; THIS THE FIRST BLOCK ALLOCATED
+	  MOVEM	T1,SCNOFS	; YES, SAVE THE ADDRESS
+	SKIPE	T2,SCNOLS	; IF THERE WAS A PREVIOUS BLOCK,
+	  HRRZM	T1,$FXLNK(T2)	;   STORE CURRENT ADDR IN LINK OF LAST
+	MOVEM	T1,SCNOLS	; SAVE AS LAST ADDRESS ALSO
+	MOVX	T2,<F.BGN,,0>	; GET SOURCE OF FILE SWITCHES
+	HRRI	T2,.FXLEN(T1)	;   AND DESTINATION IN SCAN BLOCK
+	BLT	T2,$FXLLS(T1)	; MOVE THEM TO THE SCAN BLOCK
+	MOVX	T2,$FXLEN	; RETURN LENGTH FOR SCAN
+	POPJ	P,		;  AND RETURN
+
+E$$NEC:	ERROR	NEC,<Not enough core>,STOP
+;Routine to memorize sticky defaults.  These defaults are stored in the
+;area starting at P.BGN.
+;The call is:
+;
+;		PUSHJ	P,MEMSTK
+;		 <return here always>
+;
+;Returns after saving sticky defaults starting at P.BGN
+
+MEMSTK:	TRACE$	MEMSTK		; TYPE DEBUGGING INFO
+	MOVSI	T1,-F.LEN	; BUILD AOBJN POINTER TO SWITCH AREA
+MEMST1:	SETCM	T2,F.BGN(T1)	; GET NEXT SWITCH
+	JUMPE	T2,MEMST2	; SKIP IF NONE SPECIFIED
+	SETCAM	T2,P.BGN(T1)	; STORE IN STICKY DEFAULT AREA
+MEMST2:	AOBJN	T1,MEMST1	; LOOP FOR ALL SWITCHES
+	POPJ	P,		;  AND RETURN
+
+
+;Routine to apply sticky defaults.  These defaults are stored starting
+;at P.BGN and transferred to the area starting at F.BGN if and only if
+;the local switch is not specified and the sticky default was specified.
+;The call is:
+;
+;		PUSHJ	P,APLSTK
+;		 <return here always>
+
+APLSTK:	TRACE$	APLSTK		; TYPE DEBUGGING INFO
+	MOVSI	T1,-F.LEN	; BUILD AOBJN POINTER TO SWITCHES
+APLST1:	SETCM	T2,F.BGN(T1)	; GET VALUE OF NEXT SWITCH
+	JUMPN	T2,APLST2	; DON'T DEFAULT IF SPECIFIED
+	SETCM	T2,P.BGN(T1)	; GET STICKY DEFAULT
+	JUMPE	T2,APLST2	; SKIP IF NO STICKY DEFAULT
+	SETCAM	T2,F.BGN(T1)	; DEFAULT THE SWITCH
+APLST2:	AOBJN	T1,APLST1	; LOOP FOR ALL SWITCHES
+	POPJ	P,		;  AND RETURN
+;Routine to apply the SWITCH.INI defaults to the scan block. The words
+;in the scan block are defaulted if and only if the current value is
+;unspecified and the sticky default was specified.
+;The call is:
+;
+;		MOVEI	P1,address of scan block
+;		PUSHJ	P,MOVSTK
+;		 <return here always>
+
+MOVSTK:	TRACE$	MOVSTK		; TYPE DEBUGGING INFO
+	MOVSI	T1,-F.LEN	; BUILD AOBJN POINTER TO SWITCHES
+	MOVE	T2,P1		; COPY SCAN BLOCK ADDRESS
+MOVST1:	SETCM	T3,.FXLEN(T2)	; GET NEXT SWITCH FROM SCAN BLOCK
+	JUMPN	T3,MOVST2	; DON'T DO THIS ONE IF IT IS SPECIFIED
+	SETCM	T3,P.BGN(T1)	; GET STICKY DEFAULT
+	JUMPE	T3,MOVST2	; DON'T DO IT IF NOT SPECIFIED
+	SETCAM	T3,.FXLEN(T2)	; STORE STICKY DEFAULT IN BLOCK
+MOVST2:	AOS	T2		; BUMP SCAN BLOCK POINTER
+	AOBJN	T1,MOVST1	;   AND LOOP FOR ALL SWICHES
+	POPJ	P,		; RETURN WHEN DONE
+;Routine to clear the sticky default area starting at P.BGN.
+;The call is:
+;
+;		PUSHJ	P,CLRSTK
+;		 <always return here>
+
+CLRSTK:	TRACE$	CLRSTK		; TYPE DEBUGGING INFO
+	STORE	T1,P.BGN,P.END,-1 ; CLEAR ALL STICKY DEFAULTS
+	POPJ	P,		;  AND RETURN
+
+
+;Routine to clear the file specific switch area starting at F.BGN
+;The call is:
+;
+;		PUSHJ	P,CLRFIL
+;		 <always return here>
+
+CLRFIL:	TRACE$	CLRFIL		; TYPE DEBUGGING INFO
+	STORE	T1,F.BGN,F.END,-1 ; CLEAR THE SWITCH AREA
+	POPJ	P,		;  AND RETURN
+
+
+;Routine to clear all switch areas.
+;The call is:
+;
+;		PUSHJ	P,CLRALL
+;		 <always return here>
+
+CLRALL:	TRACE$	CLRALL		; TYPE DEBUGGING INFO
+	STORE	T1,SW.BGN,SW.END,-1
+	POPJ	P,
+;Routine to handle PSCAN of .PA< or .PA> construct
+;
+
+PTHMOD:	PUSHJ	P,CLRALL	; CLEAR ANSWERS
+	PUSHJ	P,CLRSTK	; CLEAR STICKY
+	PUSHJ	P,CLRFIL	; CLEAR FILE INFO
+	SETZM	S.UP		; FOR EASE OF USE
+PTHMD1:	CAIE	C,"<"		; STILL ANOTHER 'UP'?
+	  JRST	PTHMD2		; NO, CHECK FOR DOWN
+	AOS	S.UP		; YES, COUNT IT
+	PUSHJ	P,.TIAUC##	; GET NEXT CHARACTER
+	JRST	PTHMD1		; AND LOOP
+PTHMD2:	PUSHJ	P,.TINBC##	; SKIP POSSIBLE BLANKS
+	CAIE	C,">"		; START OF 'DOWN' LIST?
+	  JRST	PTHMD4		; NO, CHECK FOR SWITCHES
+PTHMD3:	PUSHJ	P,SFDADD	; YES, GET A LIST OF DESCENDERS
+	  JRST	PTHSC3		; ABORT TIME?
+	CAIE	C,","		; IF A LIST,
+	CAIN	C,"."		; OR ALTERNATE LIST SPECIFIER,
+	  JRST	PTHMD3		; KEEP PARSING (< BALANCE NEXT)
+	CAIN	C,">"		; ANOTHER DESCENDER IS ALSO VALID
+	  JRST	PTHMD3		; YES, LOOP ON
+PTHMD4:	PUSHJ	P,.TINBC##	; SKIP POSSIBLE BLANKS
+	JUMPLE	C,PTHMD5	; CLEAN UP ON EOL
+	CAIE	C,"/"		; START OF SWITCH?
+	  JRST	E.ILSC##	; NOPE
+	PUSHJ	P,.KEYWD##	; YES, DO SWITCH
+	  JRST	(T1)		; ERROR ROUTINE IS PASSED BACK
+	JRST	PTHMD4		; LOOP OVER SWITCHES
+PTHMD5:	MOVEI	T1,1		; SO DON'T TRY TO CALL US
+	PUSHJ	P,.CLRFL##	; CLEAR SCAN'S FILE BLOCK
+	PUSHJ	P,ALCINP	; FORCE THE EXPECTED BLOCK
+	PUSHJ	P,.GTSPC##	; COPY SCAN'S (EMPTY) BLOCK
+	JRST	PTHSC3		; AND PRETEND WE WERE TSCAN AFTER ALL
+
+;Routine to decide how to prompt for PSCAN
+;
+
+PPRMPT:	PUSHJ	P,.RUNCM##	; SEE IF /RUN OR /EXIT
+	JUMPN	T1,PTHSCN	; DID SOMETHING, TRY AGAIN
+	TXNE	F,FL.RSP	; HERE AFTER RESCAN?
+	  JRST	.MONRT##	; YES, DON'T BOTHER
+	HRRZI	T1,"*"		; TYPICAL PROMPT CHARACTER
+	SKPINL			; DEFEAT ^O
+	  JFCL			; DON'T CARE ABOUT RETURN
+	PJRST	PROMP1		; DO THE PROMPT
+;Routine to handle storage of SFDs to append to current path
+;
+
+SFDADD:	TRACE$	SFDADD		; TYPE DEBUGGING INFO
+SFDAD1:	PUSHJ	P,.NAMEW##	; GET NAME OF SFD TO DESCEND INTO
+	JUMPE	N,E$$BSI	; BLANK SFD ILLEGAL
+	AOJN	T2,E$$WPC	; WILDCARDS ILLEGAL IN PATH CHANGE
+	AOS	T1,SFDCNT	; GET NUMBER OF THIS SFD
+	CAILE	T1,5		; WILL IT FIT?
+	  JRST	E$$SDI		; NO
+	MOVEM	N,SFDALS-1(T1)	; YES, STORE IT (ZERO VS ONE ORIGIN)
+	CAIN	C,":"		; IS ANOTHER SFD COMING?
+	  JRST	SFDAD1		; YES, LOOP
+	PJRST	.SWDON##	; TELL SCAN ALL IS COPASETIC
+
+E$$BSI:	ERROR	BSI,<Blank SFD illegal in default path>,,PTHSCN
+E$$WPC:	ERROR	WPC,<Wildcards illegal in default path change>,,PTHSCN
+E$$SDI:	ERROR	SDI,<SFD depth illegal on /DOWN switch>,,PTHSCN
+;Common routines to process all search list switches.  SCAN calls the
+;switch specific routine preceding the search list block when one of
+;these switches is seen and that routine in turn calls us.
+;The calls are of the form:
+;
+;		MOVEI	T1,address of switch block
+;		PUSHJ	P,?SLSWT
+;		 <never return here>
+;		 <always return here to prevent SCAN from storing value>
+
+JSLSWT:	TXOA	F,FL.JLS	; SET JSL SWITCH SEEN FLAG
+SSLSWT:	TXOA	F,FL.SLS	; SET SSL SWITCH SEEN FLAG
+	SKIPA	N,[JSLBLK]	; GET POINTER TO JSL PARAMETER BLOCK
+	MOVEI	N,SSLBLK	; DITTO FOR SYSTEM SEARCH LIST
+	TRACE$	XSLSWT,T1	; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE2##	; SAVE P1-P2
+	PUSHJ	P,.PSH4T##	; SAVE T1-T4
+	MOVEI	P1,(T1)		; SAVE SWITCH BLOCK ADDRESS IN P1
+	MOVEI	P2,(N)		; SAVE SL PARAMETER BLOCK ADDRESS IN P2
+	MOVEI	T4,0		; START WITH NO MODIFIER BITS
+	PUSHJ	P,.SIXSW##	; GET STRUCTURE NAME
+	JUMPN	N,XSLSW1	; GO IF WE GOT A STR NAME
+	CAIE	C,"*"		; USER WANT ALL STRS IN CURRENT SL?
+	  JRST	E$$NSI		; NO, NULL STR IS AN ERROR
+	MOVX	N,SIXBIT/*/	; RETURN SIXBIT STAR AS STR NAME
+	PUSHJ	P,.TIALT##	; FLUSH THE STAR
+XSLSW1:	PUSH	P,N		; SAVE THE STR NAME FOR LATER
+XSLSW2:	CAIE	C,":"		; STR TERMINATED BY A COLON?
+	  JRST	XSLSW3		; NO, CAN'T BE ANY MODIFIERS
+	PUSHJ	P,.SIXSW##	; TRY TO GET A MODIFIER
+	SKIPN	T2,N		; FIND ONE?
+	  JRST	XSLSW3		; NO, MUST BE STR:,STR:,...
+	PUSH	P,T4		; SAVE MODIFIER BITS
+	MOVE	T1,[IOWD SLNTBL,SLNTAB] ; IOWD TO MODIFIER TABLE
+	PUSHJ	P,.LKNAM##	; LOOKUP NAME IN TABLE
+	  JRST	XSLSW4		; NOT FOUND, GIVE ERROR MESSAGE
+	POP	P,T4		; RESTORE MODIFER BITS
+	MOVEI	T1,-SLNTAB(T1)	; COMPUTE OFFSET IN TABLE
+	TSZ	T4,SLITAB(T1)	; CLEAR BIT IN P2 SPECIFIED BY FLAG
+	TDO	T4,SLITAB(T1)	; NOW SET ANY BITS NECESSARY
+	JRST	XSLSW2		; AND LOOP FOR NEXT
+
+XSLSW3:	POP	P,N		; RESTORE STR NAME
+	PUSHJ	P,STOXSL	; STORE NAME AND BITS
+	  JRST	E$$TMS		; BLOCK OVERFLOW
+	PUSHJ	P,.POP4T##	; RESTORE T1-T4
+	PJRST	.POPJ1##	; GIVE SKIP RETURN
+
+XSLSW4:	SKIPGE	T1		; T1 .GE. 0 IF AMBIGUOUS MODIFIER
+	ERROR	USM,<Unknown structure modifier >,NOCRLF,XSLSW5
+	ERROR	ASM,<Ambiguous structure modifier >,NOCRLF
+XSLSW5:	MOVE	T1,N		; GET BAD MODIFIER
+	PUSHJ	P,TYPNAM	; TYPE THE NAME IN SIXBIT
+	PJRST	PTHSCN		; AND GIVE UP
+
+E$$NSI:	ERROR	NSI,<Null structure illegal in search list switch>,,PTHSCN
+E$$TMS:	ERROR	TMS,<Too many structures specified in search list switch>,,PTHSCN
+;Routine to store a structure name and modifier bits in the next
+;available slot in the block for a search list switch.
+;The call is:
+;
+;		MOVE	N,str name to store
+;		MOVEI	P1,address of switch block (XXXBLK)
+;		MOVEI	P2,address of SL parameter block
+;		MOVEI	T4,Bits (NOWRITE, NOCREATE,...)
+;		PUSHJ	P,STOXSL
+;		 <return here if block overflowed>
+;		 <return here if all ok with name stored>
+
+STOXSL:	TRACE$	STOXSL,<N,T4,P1,P2> ; TYPE DEBUGGING INFO
+	SKIPE	T2,$SLSAB(P1)	; ALREADY HAVE A BLOCK?
+	  JRST	STOXS1		; YES
+	MOVE	T1,$SLMAX(P2)	; MAX NUMBER OF STRS IN SEARCH LIST
+	MOVEI	T2,0		; NO HEADER WORDS NECESSARY
+	PUSHJ	P,BLDAOB	; ALLOCATE THE CORE AND RETURN AOBJP PTR
+	MOVEM	T1,$SLSPT(P1)	; SAVE STARTING ADDRESS OF BLOCK
+STOXS1:	ADDX	T2,.DFJBL-1	; INCREMENT TO NEXT BLOCK-1
+	AOBJP	T2,.POPJ##	; PLUS ONE MORE IF NO OVERFLOW
+	MOVEM	T2,$SLSAB(P1)	; SAVE NEW AOBJP POINTER FOR NEXT TIME
+	MOVEM	N,.DFJNM(T2)	; SAVE STR NAME IN BLOCK
+	CAXN	N,SIXBIT/*/	; USER SPECIFY ALL STRUCTURES?/
+	  TXO	T4,SL.WLD	; YES, SET WILD STR FLAG
+	MOVEM	T4,.DFJST(T2)	; PLUS MODIFIER BITS
+	AOS	$SLSCT(P1)	; BUMP STR COUNT
+	PJRST	.POPJ1##	; GIVE SKIP RETURN
+
+
+;Routine to allocate and build an AOBJP pointer to a block of core for
+;a search list switch.
+;The call is:
+;
+;		MOVEI	T1,number of STR blocks needed
+;		MOVEI	T2,number of header words
+;		PUSHJ	P,BLDAOB
+;		  <always return here>
+;
+;Returns T1=address of first STR in block
+;	 T2=AOBJP pointer to first STR block
+
+BLDAOB:	TRACE$	BLDAOB,<T1,T2>	; TYPE DEBUGGING INFO
+	MOVNI	T3,(T1)		; SAVE -VE BLOCK COUNT FOR LATER
+	IMULI	T1,.DFJBL	; TIMES WORDS PER BLOCK
+	ADDI	T1,(T2)		; PLUS NUMBER OF HEADER WORDS
+	PUSHJ	P,GETCOR	; ALLOCATE THAT MUCH CORE
+	  PJRST	E$$NEC		; FAILED, DIE
+	ADDI	T1,(T2)		; POINT TO FIRST STR IN BLOCK
+	MOVEI	T2,-.DFJBL(T1)	; BUILD RH OF AOBJP POINTER
+	HRLI	T2,-1(T3)	; PLUS -<CNT+1> TO LH
+	POPJ	P,		; RETURN
+;Routine to print the prompt character on the TTY.
+;The call is:
+;
+;		MOVX	T1,prompt character or -1 for continuation
+;		PUSHJ	P,PROMPT	; From SCAN's prompt routine
+;		 <always return here>
+
+PROMPT:	TRACE$	PROMPT,T1	; TYPE DEBUGGING INFO
+	JUMPL	T1,PROMP1	; DON'T CHECK PSCAN CONFLICT IF CONTINUATION
+	TXOE	F,FL.PRM	; IF NOT FIRST PROMPT THIS TSCAN,
+	  JRST	PTHSCN		; RESTART SCAN (SO PRESCAN LEADING CHAR)
+	POPJ	P,		; ELSE JUST IGNORE (PSCAN ALREADY DID IT)
+PROMP1:	SKIPGE	T1		; CONTINUATION?
+	  MOVX	T1,"#"		;   YES, USE A "#"
+	SKPINL			; DEFEAT ^O
+	  JFCL			; DON'T CARE ABOUT RETURN
+	PUSHJ	P,W.TTY		; WRITE IT OUT
+	TXNN	F,FL.TOF	; TTY OPEN FAILED?
+	 OUTPUT	TTY,		; NO, MAKE SURE HE SEES IT
+	POPJ	P,		;   AND RETURN
+
+
+;Routine to close and release the TTY channel when we exit.
+;The call is:
+;
+;		PUSHJ	P,XITCLS	; From SCAN's exit routine
+;		 <always return here>
+
+XITCLS:	TRACE$	XITCLS,F	; TYPE DEBUGGING INFO
+	TXZ	F,FL.RSP	; CLEAR THIS BIT AFTER AN EXIT
+	TXNE	F,FL.TOF	; TTY OPEN SUCCEED?
+	  PJRST	.MNRET##	; NO, JUST RETURN
+	CLOSE	TTY,		; CLOSE THE TTY
+	RELEAS	TTY,		;   AND RELEASE THE CHANNEL
+	PUSHJ	P,.MNRET##	; RETURN TO SCAN
+	PJRST	PATH		; START OVER IF CONTINUE
+
+
+;Routine to output one character to the TTY.  Flushes the buffer on a
+;control character.
+;The call is:
+;
+;		MOVX	T1,character
+;		PUSHJ	P,W.TTY
+;		 <always return here>
+
+W.TTY:	TXNE	F,FL.TOF	; DID TTY OPEN FAIL?
+	  JRST	W.TTYC		; YES, DO TTCALLS
+	SOSG	TOBUF+.BFCTR	; ANY ROOM LEFT IN THE BUFFER
+	  OUTPUT TTY,		; NO, FLUSH THE BUFFER
+	IDPB	T1,TOBUF+.BFPTR	; STORE THE CHARACTER IN THE BUFFER
+	PUSH	P,T2		; GET A REGISTER TO USE
+	MOVEI	T2,1		; GET A BIT TO SHIFT
+	LSH	T2,(T1)		; SHIFT 1B35 BY VALUE OF CHARACTER
+	TDNE	T2,BRKTBL	; IS THIS A BREAK CHARACTER?
+	  OUTPUT TTY,		; YES, FLUSH THE BUFFER
+	POP	P,T2		; RESTORE T2
+	POPJ	P,		;   AND RETURN
+
+W.TTYC:	OUTCHR	T1		; TYPE THE CHARACTER
+	POPJ	P,		; AND RETURN TO SCAN
+	SUBTTL	Search list setup routines
+
+
+;Routine to initialize the static data in the search list switch
+;blocks.
+;The call is:
+;
+;		PUSHJ	P,INISLB
+;		  <always return here>
+
+INISLB:	TRACE$	INISLB		;TYPE DEBUGGING INFO
+	MOVE	T1,[PJSP T1,JSLSWT] ; GET INSTRUCTION TO STORE
+	MOVE	T2,JSBPTR	; GET AOBJN POINTER TO TABLE
+INISL1:	HRRZ	T3,0(T2)	; GET ADDRESS OF NEXT BLOCK
+	MOVEM	T1,$SLJSP(T3)	; SAVE INSTRUCTION
+	AOBJN	T2,INISL1	; LOOP FOR ALL BLOCKS
+	HRRI	T1,SSLSWT	; NOW DO THE SAME FOR THE SYS SL
+	MOVE	T2,SSBPTR	; GET AOBJN POINTER
+INISL2:	HRRZ	T3,0(T2)	; GET ADDRESS OF NEXT BLOCK
+	MOVEM	T1,$SLJSP(T3)	; SAVE INSTRUCTION
+	AOBJN	T2,INISL2	; LOOP FOR ALL
+	MOVE	T1,XSLMAX	; GET MAX SSL STRS,,MAX JSL STRS
+	HLRZM	T1,SSLBLK+$SLMAX ; SAVE SSL MAX
+	HRRZM	T1,JSLBLK+$SLMAX ;  AND JSL MAX
+	POPJ	P,		; RETURN
+
+
+;Routine to call the search list processing routine for each search list
+;block that has a non-zero STR count.
+;The call is:
+;
+;		MOVEI	P2,address of search list parameter block
+;		MOVE	P3,AOBJN pointer to block address table
+;		PUSHJ	P,CHKSLB
+;		  <always return here>
+
+CHKSLB:	TRACE$	CHKSLB,<P2,P3>	; TYPE DEBUGGING INFO
+CHKSL1:	HRRZ	P1,0(P3)	; GET ADDRESS OF NEXT SWITCH BLOCK
+	HLRZ	T1,0(P3)	; AND ADDRESS OF PROCESSING ROUTINE
+	SKIPE	$SLSCT(P1)	; THIS BLOCK HAVE A NON-ZERO COUNT?
+	  PUSHJ	P,(T1)		; YES, CALL ROUTINE
+	AOBJN	P3,CHKSL1	; LOOP FOR ALL BLOCKS
+	POPJ	P,		; RETURN
+;Routine to build a new job/system search list from the block built for
+;the /CREATE or /SCREATE switches.
+;The call is:
+;
+;		MOVEI	P1,address of switch block (XXXBLK)
+;		MOVEI	P2,address of SL parameter block
+;		PUSHJ	P,CHKCRX
+;		 <always return here>
+
+CHKCRX:	TRACE$	CHKCRX,<P1,P2>	; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE4##	; SAVE P1-P4
+	MOVN	P4,$SLNCT(P2)	; GET -COUNT IN ORIGINAL BLOCK (PROBABLY 0)
+	MOVEI	P3,0		; INDICATE FIRST CALL FOR GTNSTR
+CHKCR1:	PUSHJ	P,GTNSTR	; GET NEXT STR
+	  JRST	[MOVSI	T1,(P4)	; -COUNT TO LH OF T1
+		 HRR	T1,$SLNPT(P2) ; MAKE AOBJN POINTER TO BLOCK
+		 PJRST	ZROCMP	; COMPRESS ANY ZERO ENTRIES
+		]
+	PUSHJ	P,CHKSTR	; MAKE SURE WE CAN ADD IT
+	  JRST	CHKCR1		; CAN'T, IGNORE IT
+	MOVSI	T3,(P4)		; GET -COUNT OF STRS IN TOTAL BLOCK
+	HRR	T3,$SLNPT(P2)	; MAKE AN AOBJN POINTER TO BLOCK
+CHKCR2:	CAME	T1,.DFJNM(T3)	; ALREADY THERE?
+	  JRST	CHKCR4		; NO, CONTINUE
+	HRRZ	T4,.DFJST(T3)	; GET SL.WLD FOR OTHER STR
+	XORI	T4,(T2)		; XOR WITH SL.WLD FOR NEW STR
+	TXNN	T4,SL.WLD	; ILLEGAL IF BOTH ON OR BOTH OFF
+	  PUSHJ	P,E$$DPS	; SO TELL HIM
+	AND	T4,.DFJST(T3)	; NOW AND WITH OLD STR BIT
+	TXNN	T4,SL.WLD	; IF SET, CLEAR OLD AND ADD THIS ONE
+	  JRST	CHKCR1		; SINCE OTHER ONE WAS WILD
+	SETZM	.DFJNM(T3)	; PREVIOUS ONE WAS WILD, DELETE NAME
+	SOS	$SLNCT(P2)	; AND DECREMENT STR COUNT
+CHKCR4:	ADDX	T3,.DFJBL-1	; INCREMENT TO NEXT BLOCK-1
+	AOBJN	T3,CHKCR2	; LOOP FOR ALL
+	PUSHJ	P,STOSTR	; STORE IN NEXT SLOT IN NEW BLOCK
+	SUBI	P4,1		; DECREMENT -BLOCK COUNT
+	JRST	CHKCR1		; LOOP FOR NEXT
+;Routine to add any new structures to the job/system search list as
+;specified by the /ADD or /SADD switches.
+;The call is:
+;
+;		MOVEI	P1,address of switch block (XXXBLK)
+;		MOVEI	P2,address of SL parameter block
+;		PUSHJ	P,CHKADX
+;		 <always return here>
+
+CHKADX:	TRACE$	CHKADX,<P1,P2>	; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE3##	; SAVE P1-P3
+	TXON	F,FL.CSL	; ALREADY HAVE A NEW SEARCH LIST?
+	  PUSHJ	P,MOVCSL	; NO, MOVE CURRENT SL TO NEW BLOCK
+	MOVEI	P3,0		; INDICATE FIRST CALL TO GTNSTR
+CHKAD1:	PUSHJ	P,GTNSTR	; GET NEXT STR IN LIST
+	  POPJ	P,		; NONE LEFT, RETURN
+	PUSHJ	P,CHKSTR	; CHECK TO MAKE SURE WE CAN ADD IT
+	  JRST	CHKAD1		; CAN'T, IGNORE IT
+	MOVN	T3,$SLNCT(P2)	; GET CURRENT COUNT STRS IN SL
+	MOVSI	T3,(T3)		; MOVE TO LH
+	HRR	T3,$SLNPT(P2)	; MAKE AN AOBJN POINTER TO THAT
+CHKAD2:	CAMN	T1,.DFJNM(T3)	; SAME AS THE ONE HE WANTS TO ADD?
+	  JRST	[PUSHJ	P,E$$DPS ;TELL USER OF ERROR
+		 JRST	CHKAD1	;   AND IGNORE IT
+		]
+	ADDX	T3,.DFJBL-1	; BUMP BY ONE LESS THAN THE BLOCK LENGTH
+	AOBJN	T3,CHKAD2	; LOOP FOR NEXT EXISTING STR
+	PUSHJ	P,STOSTR	; STORE IN NEXT SLOT IN NEW BLOCK
+	JRST	CHKAD1		; LOOP FOR NEXT
+
+E$$DPS:	WARN	DPS,<Duplicate structure >,NOCRLF
+	PJRST	TYPSTR
+;Routine to remove any structures from the job/system search list as
+;specified by the /REMOVE or /SREMOVE switches.
+;The call is:
+;
+;		MOVEI	P1,address of switch block (XXXBLK)
+;		MOVEI	P2,address of SL parameter block
+;		PUSHJ	P,CHKRMX
+;		 <always return here>
+
+CHKRMX:	TRACE$	CHKRMX,<P1,P2>	; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE4##	; SAVE P1-P4
+	TXON	F,FL.CSL	; ALREADY HAVE A NEW SEARCH LIST?
+	  PUSHJ	P,MOVCSL	; NO, MOVE CURRENT SEARCH LIST TO NEW BLK
+	MOVN	P4,$SLNCT(P2)	; GET -COUNT OF STRS IN NEW SL
+	MOVSI	P4,(P4)		; MOVE TO LH
+	HRR	P4,$SLNPT(P2)	; MAKE IN AN AOBJN POINTER
+	PUSH	P,P4		; SAVE FOR LOOP
+	MOVEI	P3,0		; INDICATE FIRST CALL TO GTNSTR
+CHKRM1:	PUSHJ	P,GTNSTR	; GET NEXT STR IN LIST
+	  JRST	[POP	P,T1	; GET BACK ADDRESS OF BLOCK
+		 PJRST	ZROCMP	; COMPRESS ZERO ENTRIES AND RETURN
+		]
+	PUSHJ	P,CHKSTR	; MAKE SURE IT'S OK
+	  JRST	CHKRM1		; NOT, SO IGNORE IT
+	MOVE	P4,(P)		; REFRESH POINTER TO EXISTING LIST
+CHKRM2:	CAMN	T1,.DFJNM(P4)	; SAME AS THIS ONE IN EXISTING LIST?
+	  JRST	[SETZM	.DFJNM(P4)	; YES, ZAP THE NAME
+		 SOS	$SLNCT(P2)	; AND DECREMENT THE STR COUNT
+		 MOVE	T1,$SLNAB(P2)	; GET AOBJP POINTER FROM BLOCK
+		 SUB	T1,[1,,.DFJBL]	; BACKUP POINTER TO FIRST FREE SLOT
+		 MOVEM	T1,$SLNAB(P2)	; STORE BACK IN BLOCK
+		 JRST	CHKRM1		; CONTINUE WITH THE NEXT
+		]
+	ADDX	P4,.DFJBL-1	; BUMP EXISTING LIST POINTER
+	AOBJN	P4,CHKRM2	;   AND LOOP FOR ALL
+	PUSHJ	P,E$$SNS	; NOT THERE, TELL HIM
+	JRST	CHKRM1		; LOOP FOR NEXT
+
+E$$SNS:	WARN	SNS,<Structure not in search list >,NOCRLF
+	PJRST	TYPSTR		; TELL OF HIS ERROR
+;Routine to modify any structures in the job/system search list as
+;specified by the /MODIFY or /SMODIFY switches.
+;The call is:
+;
+;		MOVEI	P1,address of switch block
+;		MOVEI	P2,address of SL parameter block
+;		PUSHJ	P,CHKMDX
+;		 <always return here>
+
+CHKMDX:	TRACE$	CHKMDX,<P1,P2>	; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE4##	; SAVE P1-P4
+	TXON	F,FL.CSL	; ALREADY HAVE A NEW SEARCH LIST?
+	  PUSHJ	P,MOVCSL	; NO, MOVE CURRENT SEARCH LIST
+	MOVN	P4,$SLNCT(P2)	; GET -COUNT OF STRS IN NEW SL
+	MOVSI	P4,(P4)		; MOVE TO LH
+	HRR	P4,$SLNPT(P2)	; MAKE AN AOBJN POINTER
+	PUSH	P,P4		; SAVE FOR LOOP
+	MOVEI	P3,0		; INDICATE FIRST CALL TO GTNSTR
+CHKMD1:	PUSHJ	P,GTNSTR	; GET NEXT STR
+	  JRST	T1POPJ		; FLUSH STACK AND RETURN
+	TXNN	T2,SL.WLD	; THIS A WILD STR?
+	  JRST	CHKMD3		; NO, CONTINUE
+	MOVN	T3,$SLSCT(P1)	; GET -COUNT OF STRS IN THIS SWITCH
+	MOVSI	T3,(T3)		; MOVE TO LH
+	HRR	T3,$SLSPT(P1)	; MAKE AOBJN POINTER TO SWITCH LIST
+CHKMD2:	CAMN	T1,.DFJNM(T3)	; WILD STR SAME AS EXPLICIT STR IN LIST?
+	  JRST	CHKMD1		; YES, EXPLICIT STR OVERRIDES
+	ADDX	T3,.DFJBL-1	; INCREMENT TO NEXT BLOCK-1
+	AOBJN	T3,CHKMD2	; INCREMENT AGAIN AND LOOP
+CHKMD3:	PUSHJ	P,CHKSTR	; MAKE SURE IT'S OK
+	  JRST	CHKMD1		; BAD, IGNORE
+	MOVE	P4,(P)		; REFRESH AOBJN POINTER TO EXISTING SL
+CHKMD4:	CAMN	T1,.DFJNM(P4)	; MATCH WITH THIS ONE?
+	  JRST	[HRLZ	T1,T2	      ; GET VALID BITS FOR THIS STR
+		 ANDCAM	T1,.DFJST(P4) ; CLEAR IN THIS ENTRY
+		 HLLZ	T1,T2	      ; GET BITS SPECIFIED
+		 IORM	T1,.DFJST(P4) ; AND SET IN THIS ENTRY
+		 JRST	CHKMD1	; LOOP FOR NEXT
+		]
+	ADDX	P4,.DFJBL-1	; INCREMENT TO NEXT BLOCK-1
+	AOBJN	P4,CHKMD4	; INCREMENT AND LOOP IF MORE
+	PUSHJ	P,E$$SNS	; NO SUCH STR
+	JRST	CHKMD1		; LOOP FOR NEXT
+;Routine to get the next structure from the switch block being processed.
+;If a SIXBIT * is found as a structure name, the users current search
+;list is returned, one at a time in place of the *.
+;The call is:
+;
+;		MOVEI	P1,address of the switch block
+;		MOVEI	P2,address of the SL parameter block
+;		MOVEI	P3,0 on first call, previous value of P3
+;			     on successive calls
+;		PUSHJ	P,GTNSTR
+;		 <return here when list is exhausted>
+;		 <return here with next STR>
+;Returns T1=SIXBIT STR name
+;	 T2=corresponding modifier bits
+
+GTNSTR:	TRACE$	GTNSTR,<P1,P2,P3> ; TYPE DEBUGGING INFO
+	JUMPN	P3,GTNST1	; GO IF NOT FIRST CALL
+	MOVN	P3,$SLSCT(P1)	; GET -COUNT OF STRS IN INPUT BLOCK
+	MOVSI	P3,-1(P3)	; MOVE -<CNT+1> TO LH
+	HRR	P3,$SLSPT(P1)	; ADDRESS OF FIRST BLOCK TO RH
+	SUBI	P3,.DFJBL	; MAKE IT AN AOBJN POINTER
+GTNST1:	ADDX	P3,.DFJBL-1	; INCREMENT TO NEXT BLOCK-1
+	AOBJP	P3,GTNST2	; GO IF END OF LIST
+	MOVE	T1,.DFJNM(P3)	; GET NEXT STR NAME
+	SKIPE	T2,GTNSAV	; DOING CURRENT SL NOW?
+	 MOVE	T2,.DFJST(T2)	; YES, GET MODIFIER BITS FROM *, IF ANY
+	  TRNN	T2,-1-SL.WLD	; ANY BUT SL.WLD SET?
+	   IOR	T2,.DFJST(P3)	; NO, KEEP BITS FROM EXISTING STRUCTURE
+	CAXE	T1,SIXBIT/*/	; WANT CURRENT SEARCH LIST?
+	  PJRST	.POPJ1##	; NO, JUST RETURN IT
+	MOVEM	P3,GTNSAV	; SAVE CURRENT POINTER
+	MOVN	P3,$SLCCT(P2)	; GET -COUNT OF STRS IN CURRENT SL
+	MOVSI	P3,-1(P3)	; MOVE -<CNT+1> TO LH
+	HRR	P3,$SLCPT(P2)	; POINT TO FIRST STR BLOCK
+	SUBI	P3,.DFJBL	; MAKE IT AN AOBJP POINTER
+	JRST	GTNST1		; GET NEXT STR FROM CURRENT SL
+GTNST2:	SKIPN	P3,GTNSAV	; DOING CURRENT SL NOW?
+	  POPJ	P,		; NO, GIVE END-OF-LIST RETURN
+	SETZM	GTNSAV		; NO LONGER DOING CURRENT SL
+	JRST	GTNST1		; AND LOOP FOR NEXT
+;Routine to move the current search list into the new block being
+;built.
+;The call is:
+;
+;		MOVEI	P2,address of SL parameter block
+;		PUSHJ	P,MOVCSL
+;		  <always return here>
+
+MOVCSL:	TRACE$	MOVCSL,P2	; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE3##	; SAVE P1-P3
+	MOVN	P3,$SLCCT(P2)	; GET -COUNT OF STRS IN CURRENT SL
+	JUMPGE	P3,.POPJ##	; DONE IF NONE THERE
+	MOVSI	P3,(P3)		; MOVE TO LH
+	HRR	P3,$SLCPT(P2)	; MAKE AN AOBJN POINTER
+MOVCS1:	MOVE	T1,.DFJNM(P3)	; GET NAME OF NEXT STR
+	MOVE	T2,.DFJST(P3)	; GET MODIFIER BITS
+	PUSHJ	P,STOSTR	; STORE IT IN NEW BLOCK
+	ADDX	P3,.DFJBL-1	; INCREMENT TO NEXT BLOCK-1
+	AOBJN	P3,MOVCS1	; INCREMENT TO BLOCK AND LOOP
+	POPJ	P,		; RETURN
+
+
+;Routine to store a STR name and modifier bits in the next slot of
+;the new search list.
+;The call is:
+;
+;		MOVE	T1,STR name
+;		MOVE	T2,modifier bits
+;		MOVEI	P1,address of switch block
+;		MOVEI	P2,address of SL parameter block
+;		PUSHJ	P,STOSTR
+;		 <always return here>
+
+STOSTR:	TRACE$	STOSTR,<T1,T2,P1,P2> ; TYPE DEBUGGING INFO
+	MOVE	T3,$SLNAB(P2)	; GET AOBJP POINTER TO NEW BLOCK
+	ADDX	T3,.DFJBL-1	; INCREMENT TO NEXT BLOCK-1
+	AOBJP	T3,E$$TMS	; GIVE ERROR IF TOO MANY BLOCKS
+	MOVEM	T3,$SLNAB(P2)	; STORE BACK NEW POINTER
+	AOS	$SLNCT(P2)	; BUMP STR COUNT
+	MOVEM	T1,.DFJNM(T3)	; STORE NAME IN BLOCK
+	MOVEM	T2,.DFJST(T3)	; STORE THOSE ALSO
+	POPJ	P,		; RETURN
+;Routine to insure that a structure is available to be added to our
+;search list.  Handles conversion to real structure name.
+;The call is:
+;
+;		MOVE	T1,name of structure to check
+;		PUSHJ	P,CHKSTR
+;		 <return here if not available with message typed>
+;		 <return here if available to be added>
+;
+;Uses only T1
+;Returns T1=Real name of structure
+
+CHKSTR:	TRACE$	CHKSTR,T1	; TYPE DEBUGGING INFO
+	PUSHJ	P,.SAVE1##	; GET A REGISTER TO USE
+	MOVE	P1,T1		; SAVE THE STRUCTURE NAME
+	MOVEM	P1,DSCBLK+.DCNAM ; PUT NAME INTO DSKCHR BLOCK
+	DEVCHR	T1,		; GET THE DEVICE CHARACTERISTICS
+	TXNN	T1,DV.DSK	; MUST BE A DISK
+	  JRST	CHKST2		; NO, GO BITCH
+	TXNN	T1,DV.AVL	;   AND AVAILABLE TO OUR JOB
+	  WARN	SNA,<Structure not available >,NOCRLF,TYPSTR
+	MOVX	T1,<.DCSAJ+1,,DSCBLK> ; POINT TO BLOCK
+	DSKCHR	T1,		; GET DISK CHARACTERISTICS
+	  JRST	CHKST2		; FAILED, GO BITCH
+	TXNE	T1,DC.NNA	; NO NEW ACCESSES?
+	  WARN	NNA,<No new access allowed for structure >,NOCRLF,TYPSTR
+	TXNE	T1,DC.STS	; PACK MOUNTED?
+	  WARN	UST,<Unusable structure >,NOCRLF,TYPSTR
+	SKIPLE	T1,DSCBLK+.DCSAJ ; SINGLE ACCESS?
+	  JRST	[CAME	T1,.MYJOB## ; YES, BY MY JOB?
+		   WARN SAS,<Single access structure >,NOCRLF,TYPSTR
+		 JRST	.+1	; YES, CONTINUE
+		]
+	CAMN	P1,DSCBLK+.DCSNM ; THIS THE REAL STRUCTURE NAME?
+	  JRST	CHKST1		; YES
+	TELL	RST,,NOCRLF
+	MOVE	T1,P1		; GET NAME HE TYPED
+	PUSH	P,T2		; SAVE T2 ACROSS CALLS
+	PUSHJ	P,.TSIXN##	; TYPE IN SIXBIT
+	MOVEI	T1,[ASCIZ/ represents structure /]
+	PUSHJ	P,.TSTRG##	; TYPE THE STRING
+	MOVE	T1,DSCBLK+.DCSNM ; GET THE REAL NAME
+	PUSHJ	P,.TSIXN##	; TYPE IT IN SIXBIT
+	MOVEI	T1,[ASCIZ/]
+/]
+	PUSHJ	P,.TSTRG	; END THE LINE
+	POP	P,T2		; RESTORE T2
+CHKST1:	MOVE	T1,DSCBLK+.DCSNM ; GET THE REAL NAME TO RETURN
+	PJRST	.POPJ1##	;    AND RETURN SUCCESS
+
+CHKST2:	WARN	UDF,<Undefined structure >,NOCRLF,TYPSTR
+;Here to see if the str in PTSDP needs to be added to the JSL,
+;and to make sure that it does get added if necessary.
+;
+CHKDSK:	MOVE	T1,PTSDP	; GET THE STRUCTURE BACK
+	PUSHJ	P,CHKSTR	; SEE IF IT'S FOR REAL
+	  POPJ	P,		; NO, SKIP FURTHER CODE
+	MOVE	N,T1		; YES, SAVE A COPY
+	MOVEI	T2,T1		; POINT TO A SHORT JOBSTR BLOCK
+	JOBSTR	T2,		; IS IT IN OUR JSL AT ALL?
+	  JRST	CHKDS2		; NO, GO HANDLE THIS
+	SETZM	SLBLK		; START LOOKING AT THE FENCE
+	SETO	T2,		; FOR TERMINATION TESTS
+CHKDS1:	MOVE	T1,[3,,SLBLK]	; UUO POINTER
+	JOBSTR	T1,		; GET NEXT STR
+	  POPJ	P,		; ASSUME NO NEED TO ADD TO JSL
+	CAMN	N,SLBLK		; MATCH?
+	  JRST	CHKDS3		; YES, GO ADD TO ACTIVE SIDE OF LIST
+	CAME	T2,SLBLK	; HIT END OF LIST?
+	  JRST	CHKDS1		; NO, LOOP
+	 POPJ	P,		; YES, NO NEED TO CHANGE SINCE IN ACTIVE JSL
+CHKDS2:	TDZA	T4,T4		; IF NOT IN JSL, ASSUME NO MODIFIERS
+CHKDS3:	MOVE	T4,SLBLK+2	; ELSE ASSUME MODIFIERS FROM PASSIVE JSL
+	MOVEI	P1,ADJBLK	; ASSUME /ADD IS THE RIGHT THING TO DO
+	SKIPE	CRJBLK+$SLSCT	; WAS /CREATE TYPED?
+	  MOVEI	P1,CRJBLK	; YES, ADD TO /CREATE BLOCK
+	MOVEI	P2,JSLBLK	; ADDING TO JSL SWITCH VALUES
+	PUSHJ	P,STOXSL	; ADD TO THE SWITCH LIST
+	  PUSHJ	P,E$$TMS	; COMPLAIN IF TOO MANY STRUCTURES
+	TXO	F,FL.JLS	; NOTE SWITCH SETTING
+	TXNE	F,FL.LCG!FL.LST!FL.LJS ; WILL THE NEW JSL BE TYPED?
+	  POPJ	P,		; YES, RETURN WITHOUT ADDITIONAL TYPEOUT
+	TELL	ATJ,<Adding >,NOCRLF,.+1
+	MOVE	T1,N		; GET STR NAME
+	PUSHJ	P,.TSIXN##	; TYPE FOR USER
+	PUSHJ	P,.VERBO##	; GET MESSAGE BITS
+	TXNN	T1,JWW.FL!JWW.CN ; TYPE ANYTHING?
+	 JRST	CHKDS4		; NO, SKIP TEXT
+	MOVEI	T1,[ASCIZ/ to Job Search List/]
+	PUSHJ	P,.TSTRG##	; ADD INFO FOR USER
+CHKDS4:	PUSHJ	P,.TRBRK##	; CLOSE BRACKET
+	PJRST	.TCRLF##	; END LINE AND RETURN
+	SUBTTL	Miscellaneous routines
+
+
+;Routine to allocate a block of core.
+;The call is:
+;
+;		MOVEI	T1,number of words needed
+;		PUSHJ	P,GETCOR
+;		 <return here if no core available>
+;		 <return here if core allocated>
+;
+;	Returns T1 = Address of the start of the block
+
+GETCOR:	TRACE$	GETCOR,<T1,.JBFF,.JBREL> ; TYPE DEBUGGING INFO
+	PUSH	P,.JBFF		; SAVE CURRENT VALUE OF .JBFF
+	ADDB	T1,.JBFF	; BUMP BY LENGTH OF REQUESTED BLOCK
+	CAMG	T1,.JBREL	; > THAN WHAT WE HAVE?
+	  JRST	GETCO1		; NO, GO ZERO THE BLOCK
+	CORE	T1,		; REQUEST THE ADDITIONAL CORE
+	  JRST	[POP	P,.JBFF ; CAN'T GET IT, RESTORE .JBFF
+		 POPJ	P,	;  AND RETURN ERROR
+		]
+GETCO1:	SETZM	@(P)		; ZERO FIRST WORD OF BLOCK
+	HRRZ	T1,(P)		; GET ADDRESS OF FIRST WORD OF BLOCK
+	HRLI	T1,1(T1)	; MAKE IT ADDR+1,,ADDR
+	MOVSS	T1		; BLT POINTER IS ADDR,,ADDR+1
+	BLT	T1,@.JBFF	; BLT THROUGH CURRENT VALUE OF .JBFF
+	POP	P,T1		; RETURN ADDRESS TO USER
+	JRST	.POPJ1##	; RETURN SUCCESS
+
+
+;Routine to execute an instruction with or without UU.PHY depending
+;on the state of FX.PHY in the current scan block.
+;The call is:
+;
+;		MOVEI	P1,Address of current scan block
+;		PUSHJ	P,DOPHYS
+;		Instruction to execute
+;		 <Return here if instruction did not skip>
+;		 <Return here if instruction skipped>
+;Uses T3 and T4
+
+DOPHYS:	TRACE$	DOPHYS,P1	; TYPE DEBUG INFO
+	MOVE	T3,@0(P)	; GET INSTRUCTION TO EXECUTE
+	MOVE	T4,.FXMOD(P1)	; GET FLAG BITS FROM SCAN BLOCK
+	TXNE	T4,FX.PHY	; /PHYSICAL SET?
+	  TXO	T3,UU.PHY	; YES, SET PHYSICAL ONLY IN UUO
+	XCT	T3		; DO THE UUO
+	  CAIA			; PROPAGATE NON-SKIP
+	AOS	0(P)		; INCREMENT RETURN
+	JRST	.POPJ1##	; RETURN SKIP/NON-SKIP (AFTER INSTRUCTION)
+;Routine to check for wildcards in a directory. Handles [-] correctly.
+;[,] case must be handled by caller.
+;The call is:
+;
+;		MOVEI	P1,Address of scan block to check
+;		PUSHJ	P,CHKWLD
+;		 <return here if wildcards found in directory>
+;		 <return here if none found>
+
+CHKWLD:	TRACE$	CHKWLD,P1	; TYPE DEBUG INFO
+	TXNE	T1,FX.DPT	; [-]?
+	  JRST	[AOS	(P)	; YES, GIVE SKIP RETURN
+		 PJRST	SUBCDP	; AND GO HANDLE THAT CASE
+		]
+	TXNN	T1,FX.WXX	; ANYTHING WILD?
+	 AOS	(P)		; NO, GIVE SKIP RETURN
+	  POPJ	P,		; YES, GIVE NON-SKIP
+;Routine to substitute the current default path for the [-] case in the
+;scan block.
+;The call is:
+;
+;		MOVEI	P1,Address of scan block
+;		PUSHJ	P,SUBCDP
+;		 <always return here>
+
+SUBCDP:	TRACE$	SUBCDP,P1	; TYPE DEBUGGING INFO
+	SETZM	.FXDIR(P1)	; CLEAR FIRST WORD OF BLOCK
+	HRLZI	T1,.FXDIR(P1)	; POINT TO FIRST WORD
+	HRRI	T1,.FXDIR+1(P1)	;   AND NEXT WORD
+	BLT	T1,.FXDIR+<2*.FXLND>-1(P1) ; CLEAR THE BLOCK
+	MOVEI	T1,.FXDIR(P1)	; POINT TO PLACE TO STORE
+	MOVEI	T2,MYPATH+.PTPPN ;   AND PLACE TO GET IT FROM
+SUBCD1:	SKIPN	T3,(T2)		; SKIP IF NOT END OF LIST
+	  POPJ	P,		; RETURN WITH PATH SETUP
+	MOVEM	T3,(T1)		; STORE THE NEXT WORD
+	SETOM	1(T1)		; SET MASK
+	ADDI	T1,2		; BUMP OUTPUT POINTER
+	AOJA	T2,SUBCD1	; AND INPUT POINTER AND LOOP
+
+
+;Routine to setup the logical name flags in the PATH. block.
+;Call with PATH. block in PTSLN.
+;The call is:
+;		MOVEI	P1,Address of scan block
+;		PUSHJ	P,SETLNF
+;		 <always return here>
+
+SETLNF:	TRACE$	SETLNF		; TYPE DEBUGGING INFO
+	SKIPGE	$FXSEA(P1)	; USER TYPE /[NO]SEARCH HERE?
+	  JRST	SETLF2		; NO, CONTINUE ON
+	PUSHJ	P,GETCAP	; GET ADDITIONAL PATH (FOR /LIB)
+	SKIPE	T1,$FXSEA(P1)	; IF /NOSEARCH WAS SPECIFIED
+	 SKIPN	PTSAP+.PTPPN	;   OR NO /LIB EXISTS,
+	  JRST	SETLF1		;   SKIP THE MESSAGE
+	TELL	DOL,<Deleting old-style /LIB definition>
+	SETZM	PTSAP+.PTPPN	; CLEAR THE LIB PPN
+SETLF1:	DPB	T1,[POINTR PTSLN+.PTLNF,PT.SEA] ; STORE THE BIT IN THE SCAN BLOCK
+SETLF2:	SKIPL	T1,$FXOVE(P1)	; USER SAY /[NO]OVERRIDE HERE?
+	  DPB	T1,[POINTR PTSLN+.PTLNF,PT.OVR] ; YES, STORE VALUE
+	POPJ	P,		; RETURN
+;Routine to move the device and path for a logical name component from
+;the current scan block to the PATH. block being built for a logical
+;name definition.
+;The call is:
+;
+;		MOVEI	P1,Address of scan block
+;		MOVE	P2,AOBJP pointer to the PATH. block
+;		PUSHJ	P,INSSCB
+;		 <return here if AOBJP pointer runs out>
+;		 <return here if all OK>
+;
+;Returns with P2 updated.
+;
+;Note that this routine is VERY sensitive to the order of the PATH.
+;block.  If the format changes, this routine must change also.
+
+INSSCB:	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	SETZM	(P2)		; CLEAR NODE WORD (.PTNOD)
+	MOVE	T1,.FXDEV(P1)	; GET DEVICE FOR THIS COMPONENT
+	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	MOVEM	T1,(P2)		; STORE IN PATH. BLOCK (.PTLSL)
+	MOVE	T1,.FXNAM(P1)	; GET FILENAME FOR THIS COMPONENT
+	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	MOVEM	T1,(P2)		; STORE IN PATH. BLOCK (.PTFIL)
+	HLLZ	T1,.FXEXT(P1)	; GET EXTENSTION FOR THIS COMPONENT
+	AOBJP	P2,.POPJ##	; CHECK AGAIN
+	MOVEM	T1,(P2)		; STORE IN PATH. BLOCK (.PTEXT)
+	MOVEI	T2,.FXDIR(P1)	; POINT TO INPUT BLOCK
+	HRLI	T2,-.FXLND	; MAKE IT AN AOBJN POINTER
+INSSC1:	MOVE	T1,(T2)		; GET NEXT WORD OF PATH
+INSSC2:	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	MOVEM	T1,(P2)		; STORE IN OUTPUT BLOCK (.PTLPP-.PTLEL)
+	ADDI	T2,1		; SKIP THE MASK WORD IN THE SCAN BLOCK
+	JUMPE	T1,.POPJ1##	; RETURN AT END OF PATH
+	AOBJN	T2,INSSC1	; LOOP FOR ALL
+	MOVEI	T1,0		; GET A ZERO TERMINATOR FOR THE
+	JRST	INSSC2		; PATH BLOCK AND STORE IT
+;Routine to move the device and path for a logical name component from
+;the PATH. block returned by FNDPTH to the PATH. block being built for a
+;logical name definition.
+;The call is:
+;
+;		MOVE	P1,Address of scan block
+;		MOVE	P2,AOBJP pointer to output block
+;		PUSHJ	P,INSPTH
+;		 <return here if AOBJP pointer runs out>
+;		 <return here if all OK>
+;
+;Returns with P2 updated
+;
+;Note that this routine is VERY sensitive to the order of the PATH.
+;block.  If the format changes, this routine must change also.
+
+INSPTH:	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	SETZM	(P2)		; CLEAR NODE WORD (.PTNOD)
+	MOVE	T1,.FXDEV(P1)	; GET DEVICE NAME HE SPECIFIED
+	PUSHJ	P,DOPHYS	; EXECUTE .+1 WITH/WITHOUT UU.PHY
+	DEVNAM	T1,		; CONVERT TO REAL NAME
+	  MOVE	T1,.FXDEV(P1)	; NONE, USE HIS
+	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	MOVEM	T1,(P2)		; SAVE IN OUTPUT BLOCK (.PTLSL)
+	MOVE	T1,.FXNAM(P1)	; GET FILENAME
+	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	MOVEM	T1,(P2)		; STORE IN BLOCK (.PTFIL)
+	HLLZ	T1,.FXEXT(P1)	; GET EXTENSION FROM SCAN BLOCK
+	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	MOVEM	T1,(P2)		; STORE IN BLOCK (.PTEXT)
+	MOVE	T2,PTHPTR	; GET ADDRESS OF INPUT PATH. BLOCK
+	MOVEI	T2,.PTPPN(T2)	; POINT AT INPUT PATH STORAGE
+INSPT1:	MOVE	T1,(T2)		; GET NEXT WORD OF PATH
+	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	MOVEM	T1,(P2)		; STORE IN OUTPUT BLOCK (.PTLPP-.PTLEL)
+	JUMPE	T1,.POPJ1##	; RETURN AT END OF PATH
+	AOJA	T2,INSPT1	; BUMP INPUT POINTER AND LOOP
+;Routine to move the components of a logical name into the PATH. block
+;for a new logical name being built.  This is done when the user
+;specifies an existing logical name as a component of one being defined.
+;The call is:
+;
+;		MOVE	P1,Address of scan block
+;		MOVE	P2,AOBJP pointer to output block
+;		PUSHJ	P,INSLNM
+;		 <return here if AOBJP pointer runs out>
+;		 <return here if all OK>
+;
+;Returns with P2 updated
+;
+;Note that this routine is VERY sensitive to the order of the PATH.
+;block.  If the format changes, this routine must change also.
+
+INSLNM:	MOVE	T2,LNMPTR	; GET ADDRESS OF INPUT PATH. BLOCK
+	MOVEI	T2,.PTLSB(T2)	; POINT TO START OF COMPONENTS
+INSLN1:	SKIPN	T1,0(T2)	; LOOK FOR TWO WORD TERMINATOR
+	 SKIPE	1(T2)		; AT END OF BLOCK
+	  CAIA			; NOT FOUND, CONTINUE WITH THIS ONE
+	   JRST	.POPJ1##	; RETURN AT END OF BLOCK
+	HRLI	T2,-<.PTLSL-.PTNOD+1> ; MAKE AOBJN POITNER FOR 2 WORDS
+INSLN2:	MOVE	T1,(T2)		; GET NEXT WORD
+	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	MOVEM	T1,(P2)		; STORE IN BLOCK (.PTNOD-.PTLSL)
+	AOBJN	T2,INSLN2	; LOOP FOR ALL
+	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	MOVE	T1,.FXNAM(P1)	; GET FILENAME FROM NEW COMPONENT
+	MOVE	T3,(T2)		;   AND FILENAME FROM EXISTING COMPONENT
+	PUSHJ	P,OVRNAM	; FIGURE OUT WHICH ONE TO USE
+	MOVEM	T1,(P2)		; STORE IN BLOCK
+	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	HLLZ	T1,.FXEXT(P1)	; GET EXTENSION FROM NEW COMPONENT
+	HLLZ	T3,1(T2)	;  AND EXTENSION FROM EXISTING COMPONTENT
+	PUSHJ	P,OVRNAM	; FIGURE OUT WHICH ONE TO USE
+	MOVEM	T1,(P2)		; STORE IN BLOCK
+	ADDI	T2,<.PTEXT-.PTFIL+1> ; STEP PAST WORDS IN BLOCK
+INSLN3:	MOVE	T1,(T2)		; GET NEXT WORD OF PATH
+	AOBJP	P2,.POPJ##	; CHECK FOR BLOCK OVERFLOW
+	MOVEM	T1,(P2)		; STORE IN OUTPUT BLOCK
+	SKIPE	T1		; END OF PATH?
+	  AOJA	T2,INSLN3	; NO CONTINUE
+	AOJA	T2,INSLN1	; LOOP FOR NEXT COMPONENT
+;Routine to determine which filename or extension to insert into
+;the PATH. block being built if we are substituting the components
+;of an existing logical name into a logical name definition.  If
+;the component being defined has no value specified, we always
+;substitute the value from the existing logical name definition.
+;If the component being defined has a value specified, we only
+;overwrite it with the value from the existing definition if the
+;/OVERRIDE switch was specified.
+;The call is:
+;
+;		MOVE	T1,Value from component being defined
+;		MOVE	T3,Value from existing definition
+;		PUSHJ	P,OVRNAM
+;		 <return here with value to be used in T1>
+;Preserves T2.
+
+OVRNAM:	TRACE$	OVRNAM,<T1,T3>	; TYPE DEBUGGING INFO
+	JUMPE	T1,OVRNA1	; USE EXISTING VALUE IF NEW ONE NOT SPECIFIED
+	JUMPE	T3,.POPJ##	; USE NEW VALUE IF EXISTING ONE NOT SPECIFIED
+	MOVE	T4,PTSLN+.PTLNF ; GET FLAGS FOR THIS DEFINITION
+	TXNE	T4,PT.OVR	; /OVERRIDE SPECIFIED?
+OVRNA1:	  MOVE	T1,T3		; YES, FORCE EXISTING VALUE
+	POPJ	P,		; RETURN
+;Routine to type the name of the structure in error.
+;The call is:
+;
+;		PUSHJ	P,TYPSTR
+;		 <always return here>
+
+TYPSTR:	TRACE$	TYPSTR		; TYPE DEBUGGING INFO
+	MOVE	T1,DSCBLK+.DCNAM ; GET THE NAME HE TYPED
+;;	PJRST	TYPNAM		; FALL INTO TYPNAM
+
+
+;Routine to type a name in SIXBIT followed by a CRLF.
+;The call is:
+;
+;		MOVE	T1,name to type
+;		PUSHJ	P,TYPNAM
+;		  <always return here>
+
+TYPNAM:	TRACE$	TYPNAM,T1	; TYPE DEBUGGING INFO
+	PUSH	P,T2		; SAVE T2 (.TSIXN DESTROYS IT)
+	PUSHJ	P,.TSIXN##	; TYPE IN SIXBIT
+	POP	P,T2		; RESTORE T2
+	PJRST	.TCRLF##	; END LINE AND RETURN
+
+
+;Routine to compress the zero entries from a STRUUO block.
+;The call is:
+;
+;		MOVE	T1,AOBJN pointer to block
+;		PUSHJ	P,ZROCMP
+;		 <always return here>
+
+ZROCMP:	TRACE$	ZROCMP,T1	; TYPE DEBBUGGING INFO
+	MOVE	T2,T1		; COPY POINTER (USE T1 AS HOLE FINDER)
+				;	       (USE T2 AS NEXT FREE POINTER)
+ZROCM1:	SKIPN	(T1)		; NEXT ONE EMPTY?
+	  JRST	ZROCM2		; YES, JUST ADVANCE HOLE FINDER
+	HRLI	T3,(T1)		; GET SOURCE ADDRESS
+	HRRI	T3,(T2)		;   AND DESTINATION ADDRESS
+	BLT	T3,.DFJBL-1(T2)	; MOVE TO NEXT FREE BLOCK
+	ADDI	T2,.DFJBL	; ADVANCE NEXT FREE POINTER
+ZROCM2:	ADDI	T1,.DFJBL-1	; ALWAYS ADVANCE HOLE FINDER
+	AOBJN	T1,ZROCM1	; AND LOOP FOR ALL BLOCKS
+	POPJ	P,		; RETURN
+	SUBTTL	Message processing routines
+
+
+;Routines to print a fatal, warning, or informative message on the TTY.
+;All are called as follows:
+;
+;		PUSHJ	P,.XXX
+;		CAI	Code,[XWD Prefix,[Message]]
+;		<return here unless EO.STP specified>
+;
+;Where Code is the error option code (see EO.XXX)
+;      Prefix is the path error message prefix
+;      Message is the message to be printed
+
+.ERR:	TXO	F,FL.ERR	; SET FATAL ERROR FLAG
+	PUSHJ	P,.PSH4T##	; SAVE T1-T4
+	MOVX	T4,"?"		; GET ERROR CHARACTER
+	PJRST	ERRCOM		; JOIN COMMON ROUTINE
+
+.WARN:	TXO	F,FL.WRN	; SET WARNING MESSAGE FLAG
+	PUSHJ	P,.PSH4T##	; SAVE T1-T4
+	MOVX	T4,"%"		; GET ERROR CHARACTER
+	PJRST	ERRCOM		; JOIN COMMON ROUTINE
+
+.TELL:	TXO	F,FL.TEL	; SET INFO MESSAGE FLAG
+	PUSHJ	P,.PSH4T##	; SAVE T1-T4
+	MOVX	T4,"["		; GET ERROR CHARACTER
+;;	PJRST	ERRCOM		; JOIN COMMON CODE
+
+ERRCOM:	MOVSI	T1,'PTH'	; GET OUR MNEMONIC
+	HRRZ	T2,-4(P)	; GET ADDR OF CAI WORD (OFFSET FOR .PSH4T)
+	MOVE	T2,@(T2)	; GET PREFIX,,ADDR OF MESSAGE
+	HLR	T1,T2		; ADD PREFIX ERROR CODE
+	HRL	T2,T4		; PUT IN LEADING CHARACTER
+	PUSHJ	P,.ERMSG##	; LET SCAN DO THE WORK
+	LDB	T1,[POINT 4,@-4(P),12] ; GET CODE FROM AC FIELD OF CAI WORD
+	TXZE	F,FL.TEL	; WAS IT INFORMATIVE?
+	 CAXN	T1,EO.NCR	;   OR NO CRLF WANTED?
+	  CAIA			; YES, DON'T TYPE RIGHT BRACKET
+	   PUSHJ P,.TRBRK##	; PUT OUT A RIGHT BRACKET
+	LDB	T1,[POINT 4,@-4(P),12] ; GET CODE BACK
+	CAXG	T1,EO.MAX	; LARGER THAN MAX?
+	  JUMPN	T1,@[DOEXIT
+		     ERRCO1]-1(T1) ; DISPATCH BASED ON ERROR CODE
+	PUSHJ	P,.TCRLF##	; END MESSAGE WITH CRLF
+ERRCO1:	PUSHJ	P,.POP4T##	; RESTORE T1-T4
+	PJRST	.POPJ1##	; RETURN, SKIPPING CAI WORD
+
+DOEXIT:	PUSHJ	P,.MONRT##	; LET SCAN KILL THE PROGRAM
+	JRST	.-1		; NO CONTINUE
+	SUBTTL	Debug package
+
+
+;Routine to print debug information upon entry to a subroutine.
+;Assembled and called only if the switch DEBUG$ is non-zero.
+;The call is:
+;
+;		PUSHJ	P,.DEBUG	; From TRACE$ macro
+;		CAI	[SIXBIT/NAME/	; Routine name
+;			 EXP	LOC1	; Address of first loc
+;			 EXP	LOC2	; Address of second loc
+;			     :
+;			 EXP	LOCN	; Address of nth loc
+;			 XWD	-1,0]	; -1,,0 terminates block
+;		<always return here>
+IFN DEBUG$, <			; ASSEMBLE ONLY IF DEBUGGING
+.DEBUG:	MOVEM	16,DEBAC+16	; SAVE AC 16
+	MOVX	16,<0,,DEBAC>	; BUILD BLT POINTER
+	BLT	16,DEBAC+15	; SAVE ALL AC'S
+	HRRZ	P1,@0(P)	; GET ADDRESS OF CAI BLOCK
+	MOVEI	T1,[BYTE (7)76,76,40,0,0] ; TWO ANGLE BRACKETS AND A SPACE
+	PUSHJ	P,.TSTRG##	;TYPE IT
+	MOVE	T1,(P1)		; GET SIXBIT ROUTINE NAME
+	PUSHJ	P,.TSIXN##	; TYPE IN SIXBIT
+	MOVEI	T1,[ASCIZ/ called from PC /]
+	PUSHJ	P,.TSTRG##	; TYPE IT
+	HRRZ	T1,-1(P)	; GET PC OF CALLER OF SUBROUTINE
+	SUBI	T1,1		; MAKE IT POINT TO THE CALLER
+	MOVEI	P2,(T1)		; SAVE IN P2
+	PUSHJ	P,.TOCTW##	; TYPE IN OCTAL
+	MOVEI	T1,[ASCIZ/ = /]	; SEPARATOR
+	PUSHJ	P,.TSTRG##	; TYPE IT
+	PUSHJ	P,STSRCH	; FIND PC SYMBOLIC LOC AND TYPE IT
+	PUSHJ	P,.TCRLF##	; END THE LINE
+.DEBU1:	SKIPGE	1(P1)		; DONE ALL OF THEM YET?
+	  JRST	.DEBU2		; YES
+	MOVEI	T1,[ASCIZ/	C(/] ; PREFIX FOR LOCATION NAME
+	PUSHJ	P,.TSTRG##	; TYPE IT
+	MOVE	P2,1(P1)	; GET ADDRESS OF LOCATION
+	PUSHJ	P,STSRCH	; SEARCH SYMBOL TABLE FOR IT
+	MOVEI	T1,[ASCIZ/) = /]
+	PUSHJ	P,.TSTRG##	; TYPE SEPARATOR
+	CAIG	P2,16		; IS IT AN AC?
+	  MOVEI	P2,DEBAC(P2)	; YES, POINT AT AC BLOCK
+	MOVE	T1,(P2)		; GET VALUE OF ADDRESS
+	PUSHJ	P,.TXWDW##	; TYPE AS HALFWORDS
+	PUSHJ	P,.TCRLF##	; END THE LINE
+	AOJA	P1,.DEBU1	; BUMP CAI BLOCK POINTER AND LOOP
+.DEBU2:	MOVX	16,<DEBAC,,0>	; SETUP BLT POINTER TO RESTORE AC'S
+	BLT	16,16		;   AND DO SO
+	PJRST	.POPJ1##	; RETURN SKIPPING CAI WORD
+;Routine to search the symbol table for an address and print the
+;symbolic name of that address.  If no exact match is found, the closest
+;symbolic name plus offset from that name is printed.
+;The call is:
+;
+;		MOVEI	P2,Address to find
+;		PUSHJ	P,STSRCH
+;		 <always return here>
+
+STSRCH:	SKIPN	T2,.JBSYM	; HAVE A SYMBOL TABLE?
+	  JRST	[MOVEI	T1,(P2) ; NO, GET OCTAL VALUE OF ADDRESS
+		 PJRST	.TOCTW## ;  AND PRINT IT IN OCTAL
+		]
+	SETZB	P3,P4		; P3=CLOSEST ST PTR, P4=CLOSEST VALUE
+STSRC1:	MOVE	T1,1(T2)	; GET VALUE OF NEXT SYMBOL
+	CAML	T1,P4		; IF LESS THAN THE CLOSEST WE'VE SEEN
+	 CAILE	T1,(P2)		;   OR GREATER THAN THE ONE WE WANT,
+	  JRST	STSRC2		;  IGNORE IT
+	MOVEI	P3,(T2)		; SAVE POINTER TO CLOSEST ONE WE'VE SEEN
+	MOVE	P4,T1		;  PLUS VALUE OF THAT SYMBOL
+STSRC2:	AOBJP	T2,STSRC3	; QUIT WHEN WE RUN OUT OF SYMBOL TABLE
+	CAME	P2,T1		;  OR IF WE FIND AN EXACT MATCH
+	AOBJN	T2,STSRC1	; ELSE LOOP FOR NEXT SYMBOL
+STSRC3:	MOVE	T2,0(P3)	; GET RADIX50 NAME FOR THE SYMBOL
+	PUSHJ	P,PRDX50	;  AND PRINT IT
+	MOVEI	T1,(P2)		; GET ADDRESS WE WANTED TO FIND
+	SUB	T1,P4		; COMPUTE OFFSET FROM ADDRESS WE FOUND
+	JUMPE	T1,.POPJ##	; IF EXACT MATCH, QUIT NOW
+	PUSH	P,T1		; SAVE OFFSET
+	MOVEI	T1,"+"		; TO INDICATE OFFSET
+	PUSHJ	P,.TCHAR##	; PRINT THE PLUS
+	POP	P,T1		; RESTORE THE OFFSET
+	PJRST	.TOCTW##	; PRINT IT AND RETURN
+
+
+;Routine to print a radix 50 symbol on the terminal.  The
+;call is:
+;
+;		MOVE	T2,Symbol to print
+;		PUSHJ	P,PRDX50
+;		 <always return here>
+
+PRDX50:	MOVEI	T1,6		; NUMBER OF CHARS TO PRINT
+	TXZ	T2,17B3		; CLEAR CODE FROM SYMBOL TABLE
+	MOVEI	T4,0		; T4=REGISTER IN WHICH TO BUILD SIXBIT NAME
+PRDX51:	IDIVI	T2,50		; GET NEXT CHAR IN T3
+	ROT	T3,-1		; INDEX IN RH, HALFWORD FLAG IN 1B0
+	SKIPGE	T3		; SKIP IF CHARACTER IN LH OF RDX50T
+	 SKIPA	T3,RDX50T(T3)	; PICK UP RH CHARACTER
+	  MOVS	T3,RDX50T(T3)	; PICK UP LH CHARACTER
+	LSHC	T3,-6		; SHIFT INTO ACCUMULATED SIXBIT WORD
+	SOJG	T1,PRDX51	; LOOP FOR NEXT CHARACTER
+	MOVE	T1,T4		; GET ACCUMULATED SIXBIT EQUIVALENT
+	PJRST	.TSIXN##	; PRINT IN SIXBIT AND RETURN
+;Table of SIXBIT equivalent characters indexed by the RADIX 50
+;character set.
+
+RDX50T:	XWD	' ','0'		; SPACE, ZERO
+	XWD	'1','2'		; ONE, TWO
+	XWD	'3','4'		; THREE, FOUR
+	XWD	'5','6'		; FIVE, SIX
+	XWD	'7','8'		; SEVEN, EIGHT
+	XWD	'9','A'		; NINE, A
+	XWD	'B','C'		; B, C
+	XWD	'D','E'		; D, F
+	XWD	'F','G'		; F, G
+	XWD	'H','I'		; H, I
+	XWD	'J','K'		; J, K
+	XWD	'L','M'		; L, M
+	XWD	'N','O'		; N, O
+	XWD	'P','Q'		; P, Q
+	XWD	'R','S'		; R, S
+	XWD	'T','U'		; T, U
+	XWD	'V','W'		; V, W
+	XWD	'X','Y'		; X, Y
+	XWD	'Z','.'		; Z, PERIOD
+	XWD	'$','%'		; DOLLAR SIGN, PERCENT SIGN
+
+	$LOW
+DEBAC:	BLOCK	17		; AC SAVE AREA
+DEBALL:	EXP	0		; DEPOSIT NON-ZERO TO TYPE INFO
+	$HIGH
+>	; END IFN DEBUG$
+
+
+
+	END	PATH

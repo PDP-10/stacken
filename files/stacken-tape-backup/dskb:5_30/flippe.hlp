@@ -1,0 +1,26 @@
+DATORSPELET FLIPPER
+
+Flipper {r ett mellanting mellan ett flipperspel och ett
+programmeringsspr}k. Man kan b|rja anv{nda det som n}got
+som liknar ett flipperspel, och sedan kan man s} sm}ningom
+en sak i taget l{ra sig g|ra egna flipperbanor vilka
+s} sm}ningom alltmer kommer att likna datorprogram.
+
+Flipper passar b|r barn i }lder |ver 10 }r.
+
+KOMMANDON FR]N TANGENTBORDET:
+a = automatisk r|relse
+e = ett stegs r|relse
+d = deterministisk r|relse
+s = spara bilden i en fil
+b = b|rja om fr}n b|rjan
+o f|ljt av annan bokstav = tv{rtom
+h = hj{lptext
+
+KOMMANDON SOM KAN SKRIVAS P] SK#RMEN:
++ = studs med puff, po{ng och pip
+- = studs utan puff, po{ng, pip
+" = som - men kan puffas iv{g av bollen
+$ = som + men dubbel puff, bomben f|rsvinner
+
+	<Slut p} GAM:FLIPPER.HLP - 810220/JP>

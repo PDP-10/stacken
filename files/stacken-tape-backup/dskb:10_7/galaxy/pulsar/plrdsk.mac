@@ -1,0 +1,2253 @@
+	TITLE	PLRDSK - Disk Processing Module
+	SUBTTL	Author: Dave Cornelius/DC/DPM  3-Aug-83
+
+;
+;
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1975,1976,1977,1978,1979,
+;1980,1981,1982,1983,1984,1985,1986,1987.  ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+
+	SEARCH	GLXMAC			;Get the GALAXY library
+	SEARCH	PLRMAC			;SEARCH UNIVERSAL FILE
+	SEARCH	ORNMAC			;Get WTO symbols
+	SEARCH	QSRMAC			;For message block definitions
+	SEARCH	UFDPRM			;GET UFDSET SYMBOLS
+	PROLOG	(PLRDSK)		;SEARCH OTHER NEEDED FILES
+
+	%%UFDS==%%UFDS			;RECORD UFDSET VERSION
+
+;This module is responsible for all of the disk handling done
+;by the tape labeller for the MDA system.
+;It is responsible for reading home blocks, creating file structures,
+;and removing file structures from the system lists
+
+	GLOB	<G$TXTB,NUMBER>
+SUBTTL	Directory for PLRDSK
+
+;Until we find a better home for these symbols...
+;Byte definitions for the SPT pointers which hang off the UPBs
+; on a .FSDEF STRUUO
+;TALSIZ==^D13
+;TALPOS==^D12
+;CLASIZ==^D23
+;CLAPOS==^D35
+	SPTTAL==777740,,0		;# of free clusters described by SPT entry
+	SPTCLA==000037,,-1		;Cluster addr of this group
+
+UNVRSF==^D500				;Saftey factor hide 1 out of
+					;every UNVRSF blocks for safe keeping
+
+DSKTRY==^D10				;# times monitor should retry on error
+					;Should agree with definition in COMMOD
+
+RIBFIR==0
+RIBNAM==2
+RIBEXT==3
+
+SAFFIR==0
+
+;Define the fields and macros for dealing with PDP-11 packed ASCII
+	E11B1==377B17			;PDP-11 byte 1
+	E11B2==377B9			;PDP-11 byte 2
+	E11B3==377B35			;PDP-11 byte 3
+	E11B4==377B27			;PDP-11 byte 4
+	DEFINE	ASC11(A,B,C,D),<INSVL.("A",E11B1)!INSVL.("B",E11B2)!INSVL.("C",E11B3)!INSVL.("D",E11B4)>
+SUBTTL	D$HOM - Home block reader
+
+;This routine is analagous to L$MDC, in that it reads
+; the 'volume labels' from a drive on a particular unit.
+
+D$HOM::	PUSHJ	P,D$WLK			;Get hardware write locked status
+	STORE	S1,TCB.PT(B),TP.RWL	;Save in TCB so O$STAT will send it
+	PUSHJ	P,D$IHOM		;Read 'em
+	JUMPF	HOM.1			;Can't tell the sad story
+	HRRZ	BUF,TCB.HO(B)		;Get Addr-1 of hom block
+	AOS	BUF			;Point at home block itself
+	$SAVE	<T1,T2,T3,T4>		;Save the T acs
+	MOVE	S1,TCB.DV(B)		;Get the structure name
+	PUSHJ	P,GETDCH		;Do a DSKCHR
+	JUMPF	.RETF			;Couldn't?... Oh well
+	LSH	S1,-3			;Shift to get at the unit type
+	ANDI	S1,7			;Isolate it
+	MOVE	S2,HOMUTP(BUF)		;And the type it belongs on
+	CAMN	S1,S2			;Are they the same?
+	 JRST	HOM.2			;Yes, continue
+	$WTO	(<Volume ^W/HOMHID(BUF)/>,<Volume type does not match drive type.^M^JRemount structure on correct drive type.>,TCB.OB(B),$WTFLG(WT.SJI))
+	JRST	HOM.1			;Return false
+	
+HOM.2:	MOVE	T1,HOMHID(BUF)		;Get the HOMe ID (volid)
+	MOVE	T2,HOMNXT(BUF)		;Get volid of next volume in str
+	MOVE	T3,HOMLUN(BUF)		;Get logical unit # of this pack
+	MOVE	T4,HOMSNM(BUF)		;And get structure name
+	MOVE	S1,HOMOPP(BUF)		;Get owner PPN
+	MOVEM	S1,TCB.OW(B)		;Save it
+;	$WTO	(<Volume ^W/HOMHID(BUF)/ mounted>,<Unit ^D/HOMLUN(BUF)/ of file structure ^W/HOMSNM(BUF)/
+;Previous volume in file structure:^W/HOMPRV(BUF)/
+; Next    volume in file structure:^W/HOMNXT(BUF)/>,,$WTFLG(WT.SJI))
+	PUSHJ	P,O$STAT##		;Send the status to MDA
+	PUSHJ	P,D$RELE		;Close the device
+	$RETT
+;Here if we can't read the HOMe blocks
+HOM.1:	MOVX	S1,TS.NTP		;Get fake offline bit
+	IORM	S1,TCB.ST(B)		;Save in TCB
+	PUSHJ	P,O$STAT##		;Tell MDA the bad news
+	PUSHJ	P,D$RELE		;Can't, give back the space
+	$RETF
+SUBTTL	D$IHOM - Internal home block reader
+;This routine does the same thing an on-line request to read
+; home blocks does, except that it does not report the results
+; to MDA
+
+D$IHOM::
+	PUSHJ	P,D$UPEN		;Get the Unit tied to a channel
+	JUMPF	.RETF			;Can't, that's too bad
+	MOVX	S1,HOMEB1		;Code for first home block
+	PUSHJ	P,D$RHOM		;Read that home block
+	JUMPT	.RETT			;Got it, so use it
+	MOVX	S1,HOMEB2		;Can't, try the other guy
+	PUSHJ	P,D$RHOM		;Read that home block
+	JUMPT	RHOM.1			;Got that one!
+	MOVE	S1,TCB.DV(B)		;Get the unit name
+	PUSHJ	P,GETDCH		;Get disk characteristics
+	  SKIPF				;Strange
+	SKIPN	S1,G$BLOK##+.DCSNM	;Get structure name (if any)
+	SKIPA	S2,[[ITEXT (<>)]]	;Not part of a structure
+	MOVEI	S2,HOMITX		;Point to a long story
+	$WTO	(<Can't read either HOM block>,<^I/(S2)/>,TCB.OB(B),$WTFLG(WT.SJI))
+	$RETF
+
+HOMITX:	ITEXT	(<
+Unit ^W/TCB.DV(B)/ belongs to structure ^W/S1/ which is currently mounted.
+The structure may still be usable for reading files. Should ^W/S1/
+be dismounted or the system crash, it probably cannot be mounted
+again due to the state of the HOM blocks.>)
+
+
+;Here if only the second block can be read
+RHOM.1:	$WTO	(<Error reading first HOM block>,,TCB.OB(B),$WTFLG(WT.SJI))
+	$RETT
+SUBTTL	D$RHOM - Read a particular home block
+
+;This routine will read a particular home block from a unit
+;Call with the drive open, its data block adr in B.
+;S1/ Code specifying which home block to read
+
+;Returns true if the specified block can be read without errors,
+; and is indeed a home block
+;Otherwise, it returns FALSE
+
+D$RHOM:
+	MOVE	S2,TCB.HO(B)		;Get the IOWD to do the read
+	PUSHJ	P,D$GUNB		;Read the particular block from the unit
+	JUMPF	.RETF			;Can't... too bad
+	HRRZ	BUF,TCB.HO(B)		;Get the buffer addr
+	AOS	BUF			;Adjust for IOWD
+	MOVE	S2,HOMNAM(BUF)		;Get this block's name
+	MOVE	S1,HOMCOD(BUF)		;Get unlikely code word
+	CAXN	S2,<SIXBIT/HOM/>	;Is this a HOM block?
+	CAXE	S1,CODHOM		;Does it match XXX?
+	JRST	RHM.1			;No, complain
+	MOVE	S1,[ASC11(T,O,P,S)]	;PDP11 ASCII for TOPS
+	MOVE	S2,[ASC11(-,1,0, )]	;PDP11 ASCII for -10
+	CAMN	S1,HOMVSY(BUF)		;Is this a real TOPS-10
+	CAME	S2,HOMVSY+1(BUF)	; pack?
+	JRST	RHM.2			;No, go complain
+	SKIPN	HOMREF(BUF)		;Looks like HOM block, need refreshing?
+	$RETT				;No, its a winner!
+	$WTO	(<Volume ^W/HOMHID(BUF)/>,<Structure ^W/HOMSNM(BUF)/ needs refreshing>,TCB.OB(B),$WTFLG(WT.SJI))
+	$RETF				;Needs refreshing!
+
+;Here if the HOM block doesn't say HOM, and XXX
+RHM.1:	$WTO	(<HOM block consistency failure>,,TCB.OB(B),$WTFLG(WT.SJI))
+	$RETF
+
+;Here if the pack is not a TOPS-10 pack
+RHM.2:	$WTO	(<Not a TOPS-10 pack>,<HOM block system type is ^7/HOMVSY(BUF),E11B1/^7/HOMVSY(BUF),E11B2/^7/HOMVSY(BUF),E11B3/^7/HOMVSY(BUF),E11B4/^7/HOMVSY+1(BUF),E11B1/^7/HOMVSY+1(BUF),E11B2/^7/HOMVSY+1(BUF),E11B3/^7/HOMVSY+1(BUF),E11B4/^7/HOMVSY+2(BUF),E11B1/^7/HOMVSY+2(BUF),E11B2/^7/HOMVSY+2(BUF),E11B3/^7/HOMVSY+2(BUF),E11B4/>,TCB.OB(B),$WTFLG(WT.SJI))
+	$RETF
+SUBTTL	D$GUNB - Get a particular block from a unit
+
+;This routine will read a certain logical block from an open unit
+; Call with drive data block in B, desired logical block # in S1.
+; S2/ IOWD to do the input
+
+D$GUNB:
+	$SAVE	<P1>
+	STKVAR	<<CMDLST,2>>		;1 command, 0 termination word
+	MOVE	P1,S1			;Preserve the desired block
+	MOVEM	S2,CMDLST		;Save the command
+	SETZM	1+CMDLST		;Terminate the list
+	PUSHJ	P,D$UPEN		;Make sure the unit is open
+	JUMPF	.RETF			;Can't get it!
+	MOVEI	S2,CMDLST		;Get addr of command list
+	STORE	S2,TCB.FI(B),RHMASK	;Save IOWD ptr in the 2nd word (IO status)
+	LOAD	S1,TCB.FU(B),TF.DVH	;Get the channel number
+	STORE	S1,P1,SU.SCH		;Save in correct place in SUSET wd
+	SUSET.	P1,			;Position to the desired block
+	$RETF				;Can't
+	MOVX	S1,.FOINP		;Code to do an input
+	PUSHJ	P,D$FILS		;Read the block
+	JUMPF	.RETF			;Can't!
+	$RETT
+SUBTTL	D$WUNB - Read a particular block from a unit
+
+; This routine will write a block on a unit
+; Call:	MOVE	S1, block number
+;	MOVE	S2, IOWD to do output
+;	PUSHJ	P,D$WUNB
+;
+; TRUE return:	block written
+; FALSE return:	failed, TS.HWP set in TCB if hardware write protected
+;
+D$WUNB:	$SAVE	<P1>			;Save P1
+	STKVAR	<<CMDLST,2>>		;1 command, 0 termination word
+	MOVE	P1,S1			;Preserve the desired block
+	MOVEM	S2,CMDLST		;Save the command
+	SETZM	1+CMDLST		;Terminate the list
+	PUSHJ	P,D$UPEN		;Make sure the unit is open
+	  JUMPF	.RETF			;Can't get it!
+	MOVEI	S2,CMDLST		;Get addr of command list
+	STORE	S2,TCB.FI(B),RHMASK	;Save IOWD pointer
+	LOAD	S1,TCB.FU(B),TF.DVH	;Get the channel number
+	STORE	S1,P1,SU.SCH		;Save in correct place in SUSET wd
+	TXO	P1,SU.SOT		;Lite the 'position for output' bit
+	SUSET.	P1,			;Position to the desired block
+	  $RETF				;Can't
+	MOVX	S1,.FOOUT		;Code to do an input
+	PUSHJ	P,D$FILS		;Write the block
+	  JUMPF	.RETF			;Can't!
+	$RETT
+SUBTTL	D$GFSB - Read a particular logical block from a file structure
+
+;Call -
+;	S1/	Desired structure block #
+;	B/	Structure TCB adrs
+;Return-
+;	TRUE -
+;	With the required block of the file structure in
+;	the HOMe block area for this structure TCB
+;	FALSE - I/O errors
+
+D$GFSB:
+	$SAVE	<P1,P2,P3>
+	MOVE	P3,B			;Preserve TCB adr
+	MOVE	P1,S1			;Copy the input to a safe place
+	PUSHJ	P,D$MBLK		;Get some space to read into
+	IDIV	P1,TCB.BU(B)		;Convert to unit #, relative block #
+	CAML	P1,TCB.NV(B)		;Is it in range 0 to #units-1?
+	$RETF				;No, Cant read from non-ex unit!
+	ADDI	P1,TCB.DU(B)		;Look into list of unit names
+	MOVE	S1,0(P1)		;Get this (new) unit name
+	PUSHJ	P,G$FTCB##		;Get the data block for this unit
+	JUMPT	GFSB.1			;Got it, so use it
+	MOVE	T1,0(P1)		;Can't find it, so make one
+	SETZB	T2,T3			;Clear job #, ppn
+	PUSHJ	P,G$MTCB##		;Make it up
+GFSB.1:	MOVEM	P2,TCB.AC+S1(B)		;Save arg 1 - block number
+	MOVE	S1,TCB.HO(P3)		;Read into OUR (structure) home block
+	MOVEM	S1,TCB.AC+S2(B)		;Save as arg 2 - IOWD
+	MOVEI	S1,D$GUNB		;Routine to run
+	MOVE	S2,B			;In this unit TCB
+	MOVE	B,P3			;Get back to our TCB
+	PUSHJ	P,G$PREQ##		;Get the work done
+	JUMPF	.RETF			;Couldn't hack it
+	$RETT
+SUBTTL	RDSAT - Read a (SAT) block from a unit
+
+;This routine will read any logical block from a particular unit
+;The block will be read into the caller's TCB.SA area
+;Call -
+;	S1/	SIXBIT unit name
+;	S2/	block # to read
+;	B/	TCB setup
+;Returns -
+;	S1/	addrs of block (TCB.SA)
+
+RDSAT:
+	$SAVE	<P1,P2,P3>
+	DMOVE	P1,S1			;Preserve unit, block #
+	MOVE	P3,B			;And caller's TCB, too
+	PUSHJ	P,G$FTCB##		;Find the desired unit
+	JUMPT	RDSA.1			;Got it
+	MOVE	T1,P1			;Can't find it,
+	SETZB	T2,T3			;Make a new one
+	PUSHJ	P,G$MTCB##		;Set it up
+RDSA.1:	MOVEM	P2,TCB.AC+S1(B)		;Set arg 1 - block number
+	MOVE	S1,TCB.SA(P3)		;Set arg 2 - IOWD to destination
+	MOVEM	S1,TCB.AC+S2(B)		;Put in unit TCB
+	MOVEI	S1,D$GUNB		;Routine to run - Get Unit Block
+	MOVE	S2,B			;TCB to run - unit TCB
+	MOVE	B,P3			;Get back to caller's TCB
+	PUSHJ	P,G$PREQ##		;Wait for the work to be done
+	JUMPF	.RETF			;Can't do it. quit now.
+	HRRZ	S1,TCB.SA(B)		;Wins, set ptr to data
+	AOJA	S1,.RETT		;And leave
+SUBTTL	D$ROHM - Read the HOM block for a different unit
+
+;This routine will request that the HOM blocks of a unit other
+; than the current TCB be read.
+;Call -
+;	S1/	Unit name whose HOMe blocks are to be read
+;Returns T/F
+
+D$ROHM:
+	$SAVE	<P1,P2>
+	MOVE	P1,B			;Save our TCB
+	MOVE	P2,S1			;Save the unit name
+	PUSHJ	P,G$FTCB##		;Find the unit's TCB
+	JUMPT	ROHM.1			;Got it... keep going
+	MOVE	T1,P2			;Not there, make one
+	SETZB	T2,T3			;No job #, or owner
+	PUSHJ	P,G$MTCB##		;Make it up
+ROHM.1:	MOVEI	S1,D$IHOM		;Routine to run - home block reader
+	MOVE	S2,B			;Aim at this (new) unit TCB
+	EXCH	B,P1			;Get back to our (str) TCB
+	PUSHJ	P,G$PREQ##		;Wait for the read to finish
+	JUMPF	.RETF			;Couldn't hack it
+	MOVE	S1,TCB.HO(P1)		;Aim at the block just read
+	AOJA	S1,.RETT		;Undo IOWD, give true to caller
+SUBTTL	D$UPEN - Open a disk unit
+
+;This routine will set up a channel upon which we can do disk I/O
+;Call -
+;	B/	TCB adrs
+;Returns FALSE if we can't open a channel for this unit
+
+D$UPEN:	LOAD	TF,TCB.IO(B),TI.OPN	;Is it already open?
+	JUMPN	TF,.RETT		;Yes, that's all we have to do!
+	MOVE	S1,TCB.DV(B)		;Get the unit name
+	PUSHJ	P,GETDCH		;GET DISK CHARACTERISTICS
+	MOVE	S1,TCB.DV(B)		;GET THE UNIT NAME AGAIN
+	DEVNAM	S1,			;PRIMARY PORT?
+	  MOVE	S1,G$BLOK##+.DCALT	;IT WAS AN ALTERNATE PORT
+	MOVEM	S1,TCB.DN(B)		;Put it in the FILOP. block
+	MOVX	S1,FO.ASC		;Get the ext chan bit
+	MOVEM	S1,TCB.FU(B)		;That's all we know, now.
+	MOVX	S1,.IODMP		;Dump mode I/O
+	STORE	S1,TCB.FI(B),RHMASK	;Save in FILOP. block
+	MOVX	S1,.FOSIO		;Read the file in super I/O
+	PUSHJ	P,D$FILS		;Get the device
+	JUMPF	.RETF			;Can't get it, so quit
+	ZERO	TCB.FU(B),FO.ASC	;Don't ask for a channel again
+	PUSHJ	P,D$MBLK		;Setup up the I/O blocks
+	MOVX	S1,TI.OPN		;Get the open bit
+	IORM	S1,TCB.IO(B)		;Lite in satus word
+	MOVEI	S1,PS.RDO!PS.RDH	;Trap off-line and hung device
+	PUSHJ	P,I$PICD##		;Connect device to PSI system
+	  $RETIF			;FALSE?
+	$RETT				;Return
+SUBTTL	D$MBLK - Make up the I/O blocks for disks
+
+;This routine will get space for the dump mode
+; I/O blocks required to read/write the HOME blocks, SAT blocks, RIBs
+; If the blocks already exists, then this routine just $RETTs
+;Call -
+;	B/	TCB adrs
+;Returns -
+;	TRUE, always
+
+D$MBLK:
+	SKIPN	S1,TCB.HO(B)		;Already exists?
+	PUSHJ	P,MBLOCK		;Get one block
+	MOVEM	S1,TCB.HO(B)		;Save as home block
+
+	SKIPN	S1,TCB.SA(B)		;Already exists?
+	PUSHJ	P,MBLOCK		;Get another
+	MOVEM	S1,TCB.SA(B)		;Save as SAT block
+
+	SKIPN	S1,TCB.RI(B)		;Already exists?
+	PUSHJ	P,MBLOCK		;Get another
+	MOVEM	S1,TCB.RI(B)		;Save RIB block
+	$RETT
+
+MBLOCK:	MOVEI	S1,BLKLEN		;One block's worth of data
+	$CALL	M%GMEM			;The a block of data
+	MOVEI	S1,-1(S2)		;Aim at the buffer, IOWD style
+	HRLI	S1,-BLKLEN		;Make counter for IOWD
+	$RETT
+SUBTTL	D$SDEF - Structure definition
+
+;This routine will take a request from MDA and define
+; a structure to the Monitor
+;The required inputs (from the TCB) are:
+;	TCB.NV	# of units in the structure
+;	TCB.FS	Structure name to be defined (might not agree
+;			with HOM block definition) in SIXBIT
+;	TCB.DU	Contains the SIXBIT unit names
+;	TCB.OW	Contains PPN of owner of structure
+
+D$SDEF::
+	$SAVE	<P1,P2>
+	PUSHJ	P,D$MSTR		;Get the STRUUO blocks set up
+	PUSHJ	P,FILSTP		;Fill in the structure param block
+					;And get a retrieval AOBJN ptr for SAT
+	JUMPF	SDEF.3			;Can't... too bad
+	MOVN	P1,TCB.NV(B)		;Get - # of units
+	MOVSS	P1			;To LH for AOBJN
+	HRRI	P1,TCB.DU(B)		;Aim at list of unit names
+	SETZ	P2,			;Set unit counter to 0
+
+SDEF.1:					;Note - S1 is (still) setup with
+					;AOBJN ptr to SAT RIB
+	MOVE	S2,0(P1)		;Get the next unit id
+	MOVE	T1,P2			;Copy the unit number
+	PUSHJ	P,FILUNP		;Fill the unit param block for that one
+	JUMPF	SDEF.3			;Can't... too bad
+	AOS	P2			;Bump the unit number
+	AOBJN	P1,SDEF.1		;Do each of the units
+	PUSHJ	P,CHKEOF		;Make sure RIB ptr in S1 points to EOF
+	JUMPF	SDEF.3			;It doesn't
+	PUSHJ	P,ADJTAL		;Adjust the structure totals
+	JUMPF	SDEF.3			;Can't... too bad
+	MOVE	S1,TCB.SP(B)		;Aim at the work
+	STRUUO	S1,			;Define this structure
+	JRST	SDEF.2			;Can't... give up
+	PUSHJ	P,RELUNI		;Clean up the TCBs
+	SETZ	S1,			;Assume not write-locked
+	MOVX	S2,TS.HWP		;Get write-locked bit
+	TDNE	S2,TCB.SF(B)		;Is it?
+	MOVX	S1,.MTWLK		;Yes
+	HRRI	S1,%MOUNT		;Ack type - MOUNT
+	MOVX	S2,TS.BOP		;Get bad owner PPN flag
+	TDNE	S2,TCB.SF(B)		;Is it set?
+	HRRI	S1,%MNTNO		;Yes
+	MOVE	S2,TCB.DV(B)		;Get file structure name
+	PUSHJ	P,O$ACK##		;Tell MDA str is up!
+	$RETT
+
+SDEF.2:	MOVE	S2,[XWD -STRELN,STRETB]	;Aim at the error conversion table
+	PUSHJ	P,D$MAPE		;Map the number into readable text
+	$WTO	(<Structure ^W/TCB.DV(B)/ cannot be mounted>,<STRUUO (.FSDEF) failed. ^I/0(S2)/>,,$WTFLG(WT.SJI))
+SDEF.3:	PUSHJ	P,RELUNI		;Clean up the TCBs
+	MOVX	S1,%MOUNT		;Ack type - MOUNT
+	MOVE	S2,TCB.DV(B)		;Get file structure name
+	PUSHJ	P,O$NAK##		;Tell MDA tough breakee!
+	$RETF
+SUBTTL	RELUNI - Release the units used to build a FS
+
+;This routine will release each drive used to mount a structure.
+;It will also give back the storage for each of the unit TCBs
+;Call with Str TCB in B.
+
+RELUNI:	$SAVE	<P1,P2>
+	MOVN	P1,TCB.NV(B)		;Get neg # of drives
+	MOVSS	P1			;To LH
+	HRRI	P1,TCB.DU(B)		;Aim at drive name list
+	MOVE	P2,B			;Save the str TCB adr
+RELU.1:	MOVE	S1,0(P1)		;Get next drive name
+	PUSHJ	P,G$FTCB##		;Get that unit TCB
+	JUMPF	RELU.2			;Can't!! very strange
+	MOVEI	S1,D$RELE		;Routine to run on that TCB
+	MOVE	S2,B			;Run on unit TCB
+	PUSH	P,B			;Save Unit TCB adr
+	MOVE	B,P2			;Call on str TCB
+	PUSHJ	P,G$PREQ##		;Release the unit
+	POP	P,S1			;Get unit TCB adr
+	PUSHJ	P,G$DTCB##		;And give back that unit's storage
+RELU.2:	AOBJN	P1,RELU.1		;Do 'em all
+	$RETT
+SUBTTL	FILSTP - Fill in structure parameter block
+
+;This routine will set up some of the arguments to
+; the STRUUO .FSDEF structure paramter block
+;This routine will also read in the SAT.
+; the SAT data space for the structure TCB.
+; It will return an AOBJN pointer to those retrieval
+; pointers in S1.
+;If the RIB for SAT.SYS can't be found... FILSTP returns FALSE
+;Call with the TCB addr for the structure in B
+;Returns TRUE if the stuff was setup.  FALSE if there were I/O errors, etc
+
+FILSTP:	$SAVE	<P1,P2,P3>
+	MOVE	S1,TCB.SP(B)		;Aim at the STRUUO ptr block
+	HRRZ	P1,.FSNST(S1)		;And at the str parameter block
+;Fill in some of the easy things in the str parameter block
+	MOVE	S1,TCB.DV(B)		;Get the desired structure name
+	MOVEM	S1,.FSSNM(P1)		;Put that in the str param block
+	MOVE	S1,TCB.NV(B)		;Get the number of units
+	MOVEM	S1,.FSSNU(P1)		;Mark in the str param block
+	MOVEI	S1,DSKTRY		;Get # times to recal on error
+	MOVEM	S1,.FSSTR(P1)		;Tell monitor to try that many times
+	MOVE	S1,TCB.OW(B)		;Get the structure owner's PPN
+	MOVEM	S1,.FSPPN(P1)		;Save in str param block
+
+;Compute STRHGH, STRBPU, STRSIZ, etc
+	SETZB	P2,P3			;Clear total # of blocks
+					;And biggest unit
+	MOVN	T1,TCB.NV(B)		;Get - # of units
+	MOVSS	T1			;Build AOBJN ptr
+	HRRI	T1,TCB.DU(B)		;Aim at the unit list
+FILS.1:	MOVE	S1,0(T1)		;Get this unit name
+	PUSHJ	P,GETSIZ		;Find out how many block on this unit
+	JUMPF	.RETF			;Can't find out, quit!
+	ADD	P2,S1			;Accumulate this unit's contribution
+	CAMGE	P3,S1			;Is this a new maximum blocks/unit?
+	MOVE	P3,S1			;Yes, save it!
+	AOBJN	T1,FILS.1		;Account for each unit in the str
+	MOVEM	P2,.FSSSZ(P1)		;Save # of blocks on this str
+	MOVEM	P3,.FSSBU(P1)		;Save size of largest unit in str
+	MOVEM	P3,TCB.BU(B)		;Save # blocks/unit for Get FSB
+	IMUL	P3,TCB.NV(B)		;Compute highest (referenceable) block
+	SOS	P3			;(They start at 0!)
+	MOVEM	P3,.FSSHL(P1)		;Save in Str par block
+;	PJRST	STRHOM			;Get the rest of the stuff from the HOM block
+SUBTTL	STRHOM - Read in the HOM block for structure info
+
+;This routine will read the HOM block from one of the units in
+; the structure being built, and extract any structure-specific
+; info from the HOM block.  This info will be stored
+; in the str parm block off the caller's TCB
+;This routine will also read in the RIB for SAT.SYS, and
+; store the entire RIB in TCB.RI(B). An AOBJN ptr to
+; the retrieval pointers is returned in S1.
+;Enter with addr of structure parameter block in P1
+
+;(Fall into STRHOM from FILSTP)
+STRHOM:
+	MOVE	S1,TCB.DU(B)		;Get the first unit's name
+	PUSHJ	P,D$ROHM		;Read that unit's home block
+	JUMPF	.RETF			;Couldn't
+	MOVE	T1,S1			;Aim at this HOM block
+	SKIPN	G$SETS##		;Monitor support disk sets feature?
+	JRST	STHM.2			;No
+	LDB	S1,[POINT HOSSET,HOMSET(T1),HONSET] ;Get set number
+	JUMPE	S1,STHM.2		;Jump if part of the "ALL" set
+	CAILE	S1,^D36			;Part of a numbered set?
+	JRST	STHM.1			;No, must be part of the "NO" set
+	MOVNI	S2,-1(S1)		;Get the set number, zero based
+	MOVX	S1,1B0			;Get bit zero
+	LSH	S1,(S2)			;Position to the appropriate bit
+	TDNE	S1,G$SETN##		;Should this structure be mounted?
+	JRST	STHM.2			;Yes
+STHM.1:	MOVX	S1,TS.OSN		;Did operator say /OVERRIDE-SET-NUMBER?
+	TDNN	S1,TCB.SF(B)		;...
+	JRST	STRH.5			;No, straight out error
+	$WTO	(<Structure ^W/TCB.DV(B)/>,<Overriding disk set number>,,$WTFLG(WT.SJI))
+STHM.2:	MOVE	T2,TCB.SP(B)		;Aim at the STRUUO arg block
+	MOVE	T2,.FSNST(T2)		;And now at the str parm block
+	MOVE	T3,[XWD -FSTLEN,FSTABL]	;Aim at the conversion table
+	PUSHJ	P,MOVALU		;Move the stuff from the HOM to
+					; the str parm block
+	MOVE	S1,HOMOPP(T1)		;Get owner PPN from HOM block
+	MOVE	S2,.FSPPN(P1)		;Get owner PPN from QUASAR
+	PUSHJ	P,PPNCHK		;Check for PPN mismatch
+	SKIPT				;Was there a mismatch?
+	SETZM	.FSPPN(P1)		;Yes - clear owner PPN
+	MOVE	S1,HOMMFD(T1)		;Get str blk # of MFD rib
+	PUSHJ	P,D$GFSB		;Get that block of the file str
+	JUMPF	STRH.1			;Can't
+	MOVE	S1,TCB.HO(B)		;Aim at our HOM block
+	AOS	S1			;Undo IOWD
+	MOVE	S2,RIBNAM(S1)		;Get the file name
+	HLRZ	TF,RIBEXT(S1)		;And the extension
+	CAMN	S2,G$MFDP##		;Is the name [1,1]?
+	CAIE	TF,(SIXBIT/UFD/)	;Yes, is the extension UFD?
+	JRST	STHR.2			;No to either, bad RIB
+	ADD	S1,RIBFIR(S1)		;Point at first retr ptr
+	SETOM	.FSSML(P1)		;Assume multiple retrieval ptr
+	SKIPE	2(S1)			;If 2nd ptr is empty, only 1 ptr
+	SETZM	.FSSML(P1)		;No multilple retr ptr for MFD
+	MOVE	S1,HOMSAT(T1)		;Get str blk # of SAT rib
+	PUSHJ	P,D$GFSB		;Read in the RIB for SAT.SYS
+	JUMPF	STRH.3			;Can't
+	HRL	S2,TCB.HO(B)		;Get addr of our HOM blk
+	HRR	S2,TCB.RI(B)		;And addr of RIB blk
+	AOBJP	S2,.+1			;Bump to undo IOWD
+	HRRZ	S1,S2			;Make another copy of destination
+	BLT	S2,BLKLEN-1(S1)		;Move the SAT RIB into our RIB space
+	MOVS	S2,RIBNAM(S1)		;Get file name
+	HLRZ	TF,RIBEXT(S1)		;And get extension
+	CAIN	S2,(SIXBIT/SAT/)	;Is this file SAT.
+	CAIE	TF,(SIXBIT/SYS/)	; SYS?
+	JRST	STRH.4			;Can't?!?!
+	ADD	S1,RIBFIR(S1)		;Aim at the first ret ptr
+	MOVE	S2,0(S1)		;Get Unit change pointer to first SAT
+	MOVEM	S2,1(S1)		;Fudge so we don't see first RIB pointer
+	$RETT
+
+	;CONTINUED ON NEXT PAGE
+	;CONTINUED FROM PREVIOUS PAGE
+
+SUBTTL	STRHOM error routines
+
+;This code handles any errors which might be encountered trying
+;	to read the HOM blocks to get to SAT.SYS
+
+;Here if the HOMMFD points to the boonies,
+;	or we can't read RIB for the MFD
+STRH.1:	MOVEI	S1,[ASCIZ/Can't find RIB for MFD/]
+	PJRST	STRH.9			;Complain
+
+;Here if [1,1].MFD (according to HOMMFD) is not RIB for the MFD
+STHR.2:	MOVEI	S1,[ASCIZ/HOMMFD does not point to RIB for MFD/]
+	PJRST	STRH.9			;Complain
+
+;Here if HOMSAT points to the boonies,
+;	or we can't read the RIB for SAT.SYS
+STRH.3:	MOVEI	S1,[ASCIZ/Can't find RIB for SAT.SYS/]
+	PJRST	STRH.9			;Complain
+
+;Here if SAT.SYS (according to the RIB) is not SAT.SYS
+STRH.4:	MOVEI	S1,[ASCIZ/HOMSAT does not point to RIB for SAT.SYS/]
+	PJRST	STRH.9			;Complain
+
+;Here if structure belongs to a disk set not mounted to this system
+STRH.5:	MOVEI	S1,[ASCIZ /Structure belongs to a disk set not mounted to this system/]
+;	PJRST	STRH.9			;Fall thru
+
+STRH.9:	$WTO	(<Structure ^W/TCB.DV(B)/ cannot be mounted>,<^T/0(S1)/>,,$WTFLG(WT.SJI))
+	$RETF
+SUBTTL	Check for owner PPN mismatch
+
+
+; Check for an owner PPN mismatch
+; Call:	MOVE	S1, HOM block PPN
+;	MOVE	S2, STRUUO block PPN
+;	PUSHJ	 P,PPNCHK
+;
+; TRUE return:	PPNs OK
+; FALSE return:	PPN mismatch, TCB.OB(B) set, operator notified
+;
+PPNCHK:	MOVX	TF,TS.BOP		;GET BAD OWNER PPN FLAG
+	ANDCAM	TF,TCB.SF(B)		;CLEAR IT
+	SKIPE	S1			;ALLOW ZERO FOR COMPATIBILITY WITH OLD
+	CAMN	S1,S2			; DISKS. PPN WHAT QUASAR THINKS IT IS?
+	$RETT				;YES - THEN ALL IS WELL
+	$SAVE	<P1,P2,P3,P4>		;SAVE SOME ACS
+	PUSH	P,[-1]			;SO WE KNOW WHEN TO STOP
+	PUSH	P,S1			;SAVE PPN FROM HOM BLOCKS
+	PUSH	P,[[ASCIZ |The HOM blocks indicate|]]
+	PUSH	P,S2			;SAVE PPN FROM STRUUO BLOCK
+	PUSH	P,[[ASCIZ |QUASAR claims|]]
+	PUSHJ	P,G$TXTI##		;INITIALIZE THE TEXT BUFFER
+
+PPNC.1:	POP	P,P1			;GET TEXT
+	JUMPL	P1,PPNC.3		;DONE?
+	POP	P,P2			;GET PPN
+	MOVEI	S1,[ITEXT (<there is no owner PPN>)] ;INCASE NO PPN
+	JUMPE	P2,PPNC.2		;IS THERE A PPN?
+	MOVEI	S1,[ITEXT (<the owner is [^I/(P3)/,^I/(P4)/]>)] ;ITEXT BLOCK
+	MOVEI	P3,[ITEXT (<^O/P2,LHMASK/>)] ;ASSUME OCTAL PROJECT #
+	HLRE	S2,P2			;GET THE PROJECT NUMBER
+	CAMN	S2,[-1]			;IS IT WILD?
+	MOVEI	P3,[ITEXT (<*>)]	;YES
+	MOVEI	P4,[ITEXT (<^O/P2,RHMASK/>)] ;ASSUME OCTAL PROGRAMMER #
+	HRRE	S2,P2			;GET THE PROGRAMMER NUMBER
+	CAMN	S2,[-1]			;IS IT WILD?
+	MOVEI	P4,[ITEXT (<*>)]	;YES
+
+PPNC.2:	$TEXT	(G$TYPE##,<^T/(P1)/ ^I/(S1)/>) ;DISPLAY A LINE OF TEXT
+	JRST	PPNC.1			;LOOP
+
+PPNC.3:	$TEXT	(G$TYPE##,<Clearing owner PPN^M^J^0>)
+	$WTO	(<Structure ^W/TCB.DV(B)/ - owner PPN mismatch>,<^T/G$TXTB/>,,$WTFLG(WT.SJI))
+	MOVX	S1,TS.BOP		;GET BAD OWNER PPN FLAG
+	IORM	S1,TCB.SF(B)		;SET IT
+	$RETF				;RETURN
+SUBTTL	HOM- to Structure transfer table
+
+;Conversion table for HOM block offsets to str parm block offsets
+FSTABL:
+	XWD	HOMGAR,.FSSRQ		;Guaranteed quota
+	XWD	HOMOVR,.FSSOD		;Overdraw blocks
+	XWD	HOMPT1,.FSSMP		;1st retrieval ptr for MFD
+	XWD	HOMUN1,.FSSUN		;Logical unit number for MFD
+	XWD	HOMBSC,.FSSBC		;Blocks/supercluster
+	XWD	HOMSCU,.FSSSU		;Superclusters/unit
+	XWD	HOMCNP,.FSSCC		;Byte ptr to retrieval cluster count fld
+	XWD	HOMCKP,.FSSCK		;Byte ptr to retrieval checksum fld
+	XWD	HOMCLP,.FSSCA		;Byte ptr to retrieval cluster adrs fld
+	XWD	HOMPVS,.FSPVT		;Private structure flag
+	XWD	HOMCRS,.FSSCR		;Block # in str for CRASH.EXE
+	XWD	HOMK4C,.FSK4C		;K FOR CRASH.EXE
+	XWD	400000+SETPTR,.FSSET	;Disk set number
+	FSTLEN==.-FSTABL
+
+	MSTROF==.FSSET			;Maximum offset used in block
+
+;Byte pointers
+
+SETPTR:	POINT	HOSSET,HOMSET(T1),HONSET
+SUBTTL	FILUNP - Fill in unit parameter blocks
+
+;This routine will fill in the unit parameter blocks for a particular
+; unit in a structure.
+;Call -
+;	S1/	AOBJN ptr to retrieval pointers for the SAT blocks
+;		on this structure.
+;	S2/	SIXBIT Unit name eg RPA3
+;	T1/	Logical unit # in str
+;Returns -
+;	TRUE -
+;	S1/ Updated AOBJN ptr to retrieval ptrs.
+;	FALSE - I/O errors
+
+FILUNP:
+	$SAVE	<P1,P2,P3,P4>
+;UNIT - logical unit number (arg T1)
+;PCLADR - Pointer to cluster adrs in a retrieval pointer
+;PCLNUM - Pointer to cluster count in a retrieval pointer
+	STKVAR	<UNIT,PCLADR,PCLNUM>
+
+	DMOVE	P3,S1			;Preserve the ptr to the retrv ptrs
+	MOVEM	T1,UNIT			;Save logical unit number
+;Build the str- dependent pointers to cluster count and adrs in a
+;	retrieval pointer.  Note: Use of these pointers assumes a
+;	valid retrieval pointer in S1!!
+	MOVE	S1,TCB.SP(B)		;Get the STRUUO pointer
+	HRRZ	S1,.FSNST(S1)		;Get to the str param block
+	MOVEI	S2,S1			;Aim the pointers at S1
+	HLL	S2,.FSSCC(S1)		;Make cluster count pointer
+	MOVEM	S2,PCLNUM		;Save for extracting count from ret ptr
+	HLL	S2,.FSSCA(S1)		;Make cluster adrs pointer
+	MOVEM	S2,PCLADR		;Save..to get adr from ptr in S1
+
+;Fill in some of the easy pieces of the UPB
+	MOVE	P1,T1			;Get the unit # again
+	ADD	P1,TCB.SP(B)		;Aim part way down the STRUUO block
+	HRRZ	P1,.FSNUN(P1)		;And get the adrs of the desired UPB
+	MOVEM	P4,.FSUNM(P1)		;This unit parm blk for this unit
+	MOVE	S1,TCB.DV(B)		;Get the str name we're making
+	MOVE	S2,UNIT			;For this unit number
+	PUSHJ	P,LOGUNI		;Make a logical unit name
+	MOVEM	S1,.FSULN(P1)		;Save the FS log unit name
+
+;Then use the HOM block to fill in some more
+	MOVE	S1,P4			;Get SIXBIT unit name
+	PUSHJ	P,D$ROHM		;Read that guy's home block (again)
+	JUMPF	.RETF			;Can't, so quit
+	MOVE	P2,S1			;Save pointer to HOM block
+	MOVE	S2,UNIT			;Get logical unit number
+	PUSHJ	P,CHKHOM		;Make sure we're on the right pack
+	JUMPF	.POPJ			;Things don't look good
+	MOVE	T1,P2			;Aim at the source block
+	MOVE	T2,P1			;Aim at the destination block (UPB)
+	MOVE	T3,[XWD -UNILEN,UNITAB]	;Aim at the conversion table
+	PUSHJ	P,MOVALU		;Transfer stuff from HOM to UPB
+
+	;CONTINUED ON NEXT PAGE
+	;CONTINUED FROM PREVIOUS PAGE
+
+	MOVE	S1,TCB.SF(B)		;Get status flags from TCB
+	SETZ	S2,			;Start with no bits
+	TXNE	S1,TS.HWP		;Is unit hardware-write-protected?
+	TXO	S2,FS.UWL		;Yes, set universal write-lock bit
+	TXNE	S1,TS.OSN		;Did they say /OVERRIDE-SET-NUMBER?
+	TXO	S2,FS.UNC		;Yes, don't cache monitor I/O then
+	MOVEM	S2,.FSUDS(P1)		;Save status bits for STRUUO
+	MOVE	S1,P4			;Get the unit name
+	PUSHJ	P,GETSIZ		;Get # of block on this unit
+	JUMPF	.RETF			;Can't. quit
+	IDIV	S1,HOMBPC(P2)		;Convert to # of clusters
+	SOS	S1			;Down by one
+	IDIV	S1,HOMSPU(P2)		;Get # of clusters in this SAT
+	MOVEM	S1,.FSUCS(P1)		;Save clusters/SAT
+	AOS	.FSUCS(P1)		;Bump it
+	IDIVI	S1,^D36			;Figure words/SAT
+	AOS	S1			;bump that
+	MOVEM	S1,.FSUWS(P1)		;Save wds/SAT in UPB
+	MOVE	S1,TCB.SL(B)		;Get list handle for SPT tables
+	$CALL	L%LAST			;Get to end of list
+	JUMPT	FILU.1			;Wins, tack ours on
+	CAXE	S1,EREOL$		;No, lost because list empty?
+SATR.E:	STOPCD	(CAS,HALT,,<Can't Append to SPT list>)
+FILU.1:	MOVE	S1,TCB.SL(B)		;Get back the list handle
+	MOVE	S2,HOMSPU(P2)		;Get # SATs on this unit
+	$CALL	L%CENT			;Tack this SPT onto the list
+	SKIPT				;Win?
+	PUSHJ	P,SATR.E		;No, die
+	HRL	S2,HOMSPU(P2)		;Make a counted pointer
+	MOVEM	S2,.FSUSP(P1)		;Make the UPB point to the SPT
+	MOVN	P4,HOMSPU(P2)		;Get - SATs on this unit
+	MOVSS	P4			;To LH
+	HRRI	P4,0(S2)		;Make AOBJN ptr to SPT
+
+;At this point, things look like:
+;P1/	adr of Unit Parameter Block
+;P2/	HOM block for this unit
+;P3/	AOBJN for SAT retrieval ptrs (in str TCB's TCB.RI)
+;P4/	AOBJN for SPT table for this UPB
+
+	AOBJP	P3,SATERR		;Get next retrieval pointer
+	SKIPN	S1,0(P3)		;Get it
+	JRST	SATERR			;Better not be EOF!
+	LDB	S2,PCLNUM		;Extract # of clusters from S1
+	JUMPN	S2,SATERR		;We expect a unit change pointer
+	ANDI	S1,77			;Mask to new unit number
+	CAME	S1,UNIT			;SAT block on this unit?
+	JRST	SATERR			;No, funny SAT-RIB
+
+	;CONTINUED ON NEXT PAGE
+	;CONTINUED FROM PREVIOUS PAGE
+
+;Now loop over each SAT retrieval pointer, accumulating total free space
+; described by that SAT.  Each SAT retrieval pointer points to a cluster
+; of which only the first block is used.  This (SAT) block is a bit map
+; for free clusters on part of this unit.  We read each SAT, and
+; count the number of unused clusters.
+
+SATRET:	AOBJP	P3,SATERR		;Get next retrieval pointer
+	MOVE	S1,0(P3)		;Get it
+	LDB	S2,PCLNUM		;Get # of clusters in this group
+	JUMPE	S2,SATERR		;Better not be unit change pointer
+	LDB	S2,PCLADR		;Get addrs of that group (SAT block)
+	STORE	S2,0(P4),SPTCLA		;Aim the SPT ptr at the SAT
+	IMUL	S2,.FSUBC(P1)		;Convert to block addrs
+	MOVE	S1,.FSUNM(P1)		;Get this unit name
+	PUSHJ	P,RDSAT			;Read in this SAT block
+	JUMPF	.RETF			;Can't, too bad
+	MOVN	S2,.FSUWS(P1)		;Get # words used in a SAT
+	HRLI	S1,(S2)			;Make AOBJN ptr to bit map
+	HRRI	S1,SAFFIR(S1)		;Point at first word
+	PUSHJ	P,ZBITS			;Count the unused clusters
+	STORE	S1,0(P4),SPTTAL		;Make SPT see this many
+	IMUL	S1,.FSUBC(P1)		;Convert free clusters to free blocks
+	ADDM	S1,.FSUTL(P1)		;Add that to total free on unit
+	AOBJN	P4,SATRET		;Do all the SATs on this unit
+	MOVE	S1,P3			;Get updated AOBJN to SAT retr ptrs
+	$RETT				;Return that to caller
+
+;Here if things look bad while decoding the SAT-RIB or SAT itself
+SATERR:	SKIPA	S1,UNIT			;GET UNIT FROM STKVAR'ED LOC
+SATBAD:	MOVE	S1,P2			;GET UNIT FROM P2 (CHKEOF ENTRY POINT)
+	$WTO	(<Volume ^W/.FSUID(P1)/>,<Logical unit ^O/S1/ of file structure ^W/TCB.DV(B)/
+SAT-RIB or SAT on this pack has bad format>,,$WTFLG(WT.SJI))
+	$RETF
+
+;Transfer table for moving things from HOM block to Unit Paramter Block
+UNITAB:
+	XWD	HOMHID,.FSUID		;Pack (unit, volume) ID
+	XWD	HOMLUN,.FSULU		;Logical unit number in FS
+	XWD	HOMGRP,.FSUGP		;# consecutive block to try on out
+	XWD	HOMBPC,.FSUBC		;Blocks per cluster
+	XWD	HOMSIC,.FSUSC		;# of SATs in core
+	XWD	HOMSPU,.FSUSU		;# of SATs on this unit
+	XWD	HOMSLB,.FSUSB		;1st block to swap on
+	XWD	HOMK4S,.FSUKS		;#K for Swap
+	UNILEN==.-UNITAB
+
+	MUNIOF==.FSUKS			;Biggest offset used in unit param block
+SUBTTL	ADJTAL - Adjust free space totals
+
+;This routine is used after most of the structure and unit
+; parameter blocks have been set up.  It calculates the total
+; free blocks on the structure, and adjusts this total by
+; the safety factor.
+;Call -
+;	Str TCB in B, with UPB lists set up.
+
+ADJTAL:
+	$SAVE	<P1,P2,P3>
+	SETZ	P1,			;Clear structure total
+	MOVE	P2,TCB.NV(B)		;Get the number of units
+	MOVE	S1,TCB.UL(B)		;Get the Unit parm blk list handle
+	$CALL	L%FIRST			;Start at the first unit
+ADJT.1:	SKIPT				;Don't hit end of list!
+	STOPCD	(ULS,HALT,,<Unit parameter list is short>)
+	MOVE	P3,S2			;Save UPB adr
+	MOVE	S1,.FSUNM(P3)		;Get the unit name
+	PUSHJ	P,GETSIZ		;Find out how many blocks on this unit
+	MOVE	S2,.FSUKS(P3)		;Get # K for swap on this pack
+	LSH	S2,3			;Convert K (1024.) to Blocks (128.)
+	SUB	S1,S2			;Don't use swapping blocks for safety
+	IDIVI	S1,UNVRSF		;Hide one out of every UNVRSF blocks
+	CAILE	S1,^D500		;But not more than 500
+	MOVEI	S1,^D500		;per pack
+	MOVNS	S1			;Get ready for subtract
+	ADDB	S1,.FSUTL(P3)		;Remove the saftey blocks
+	ADD	P1,S1			;Accumulate total free on structure
+	SOJLE	P2,ADJT.2		;Get out after all units done
+	MOVE	S1,TCB.UL(B)		;Get the Unit parm blk list handle
+	$CALL	L%NEXT			;Get the next UPB
+	JRST	ADJT.1			;Account for this one's contribution
+
+ADJT.2:	MOVE	S1,TCB.SP(B)		;Get pointer to STRUUO block
+	MOVE	S1,.FSNST(S1)		;Get pointer to str parm block
+	MOVEM	P1,.FSSTL(S1)		;Save total free on structure
+	$RETT
+SUBTTL	CHKHOM - Check HOMe block for structure paramters
+
+;This routine makes sure that the anticipated pack is on
+; the units suggested by MDA.
+; If they're not, a message is given to the operator, and
+; the caller gets FALSE
+;Call -
+;	S1/	Addrs of HOM block for this unit
+;	S2/	Logical unit number
+;	B/	Structure TCB addrs
+;Return -
+;	TRUE -	Things look good in the HOM block
+;	FALSE -	There are some inconsistencies (OPR notified)
+
+CHKHOM:	MOVE	TF,S2			;Copy logical unit number
+	ADDI	TF,TCB.VL(B)		;Aim at the volume ID (HOM ID) list
+	MOVE	TF,@TF			;Get the current HOM block name
+
+	;First, make sure the volume ID has not changed
+
+	CAMN	TF,HOMHID(S1)		;Does it match?
+	JRST	CHKH.1			;Yes, keep going
+	$WTO	(<Structure ^W/TCB.DV(B)/ cannot be mounted>,<^W/TCB.DV(B)/^O/S2/ HOM block ID is ^W/HOMHID(S1)/, should be ^W/TF/>,,$WTFLG(WT.SJI))
+	$RETF
+
+	;Next, check the logical unit number in the HOM block
+
+CHKH.1:	CAMN	S2,HOMLUN(S1)		;Does HOM logical unit match ours?
+	JRST	CHKH.2			;Yes, keep going!
+	MOVE	TF,S2			;Get expected logical unit number
+	ADDI	TF,TCB.DU(B)		;Aim at current unit name
+	MOVE	TF,@TF			;Get the current unit name
+	$WTO	(<Structure ^W/TCB.DV(B)/ cannot be mounted>,<Unit ^W/TF/ (^W/TCB.DV(B)/^O/S2/) 
+HOM block logical unit number is ^O/HOMLUN(S1)/>,,$WTFLG(WT.SJI))
+	$RETF
+CHKH.2:	$RETT
+SUBTTL	CHKEOF - Make sure RIB retrieval ptrs finished
+
+;Call with (exhausted) AOBJN to SAT retrieval ptrs.
+;Returns FALSE if ptr isn't aimed at EOF
+;True otherwise
+
+CHKEOF:
+	AOBJP	S1,SATBAD		;Bypass redundant RIB pointer
+	AOBJP	S1,SATBAD		;And get to termination word
+	SKIPE	0(S1)			;Are we at EOF?
+	JRST	SATBAD			;No, bad format
+	$RETT				;Yes, say true!
+
+SUBTTL	LOGUNI - Make a logical unit name
+
+;This routine takes the structure name in S1, and the
+; logical unit number in S2. It returns the logical unit name in S1
+; Taken from OMOUNT
+
+LOGUNI:
+	TRNE	S1,77			;Make sure that the loop stops!
+	$RETT				;Let the monitor handle any problems
+	$SAVE	<P1>			;Save a reg
+	MOVE	P1,[POINT 6,S1]		;Get a pointer to the FS name
+LOGU.1:	ILDB	TF,P1			;Get next char of str name
+	JUMPN	TF,LOGU.1		;Valid char... try next
+	ADDI	S2,'0'			;Convert log unit # to SIXBIT
+	DPB	S2,P1			;Change trailing space to unit #
+	$RETT
+
+SUBTTL	MOVALU - Data transfer routines
+
+;MOVALU - Move values from places in one block to 
+; different places in another block
+;Call with T1/source block addrs, T2/destination block addrs
+;	T3/AOBJN ptr to table of XWD srcoff,dstoff
+;Preserves T1,T2, Clobbers T3
+;Taken from OMOUNT
+
+MOVALU:	HLRZ	S1,0(T3)		;Get offset for fetch
+	TRZE	S1,400000		;A byte to load?
+	JRST	MOVAL1			;Yes
+	ADDI	S1,0(T1)		;Relocate from fetch addrs
+	HRRZ	S2,0(T3)		;Get offset for store
+	ADDI	S2,0(T2)		;Relocate to store
+	MOVE	S1,0(S1)		;Get the data
+	MOVEM	S1,0(S2)		;Store it
+	AOBJN	T3,MOVALU		;Do all the data
+	$RETT
+
+;Here to move a byte - address of byte pointer in S1, already
+;indexed by T1.
+
+MOVAL1:	HRRZ	S2,0(T3)		;Get offset for store
+	ADDI	S2,0(T2)		;Relocate to store
+	LDB	S1,0(S1)		;Get the data
+	MOVEM	S1,0(S2)		;Store it
+	AOBJN	T3,MOVALU		;Do all the data
+	$RETT
+SUBTTL	ZBITS - Count Number of 0 bits in a block of words
+
+;CALL	S1=AOBJ PTR TO WORDS WHOSE BITS TO COUNT
+;RET+0	ALWAYS--S1=NO. OF 0 BITS
+;Taken from OMOUNT
+
+ZBITS:	$SAVE	<P1,P2>
+	MOVE	S2,S1			;Copy the AOBJN ptr
+	TDZA	S1,S1			;COUNT BITS IN S1
+ZBITS1:	AOBJP	S2,.RETT		;BUMP WD PTR
+	SETCM	P1,(S2)			;GET COMP. OF WORD
+	JUMPE	P1,ZBITS1		;SKIP WDS WITH ALL 1'S
+
+ZBITS2:	SETCA	P1,			;COUNT LEADING 0'S
+	JFFO	P1,ZBITS3
+	ADDI	S1,^D36			;MUST HAVE BEEN ALL 0'S
+	JRST	ZBITS1
+ZBITS3:	SETCA	P1,
+	ADDI	S1,(P2)			;ADD COUNT TO S1
+	LSH	P1,(P2)			;SHIFT OFF 1'S
+	JFFO	P1,ZBITS4
+	JRST	ZBITS1			;FINISHED WITH THIS WORD
+ZBITS4:	LSH	P1,(P2)
+	JRST	ZBITS2
+SUBTTL	Get disk characteristics
+
+
+
+; Here to get disk characteristics from the monitor
+; Call:	MOVE	S1, sixbit unit or str name
+;	PUSHJ	P,GETDCH
+;
+; TRUE return:	S1:= DSKCHR AC, G$BLOK:= DSKCHR block
+; FALSE return:	You lose
+;
+	CHKLN	(BLOKLN,.DCMAX)		;Req'd length of the block
+
+GETDCH:	MOVEM	S1,G$BLOK##+.DCNAM	;STORE ARGUMENT
+	MOVE	S1,[.DCMAX,,G$BLOK##]	;SET UP UUO
+	DSKCHR	S1,			;GET DISK CHARACTERISTICS
+	  SKIPA				;CAN'T
+	$RETT				;RETURN
+	$WTO	(<PULSAR error>,<DSKCHR UUO for ^W/G$BLOK+.DCNAM/ failed>,,$WTFLG(WT.SJI))
+	$RETF				;RETURN
+SUBTTL	GETSIZ - Find out size of a unit in 128 wd blocks
+
+;This routine will ask the monitor how many blocks can be written
+; on a particular unit.
+;Call -
+;	S1/ SIXBIT unit name
+;Return - T/F, Size in blocks in S1
+
+GETSIZ:	PUSHJ	P,GETDCH		;GET DISK CHARACTERISTICS
+	  $RETIF			;RETURN IF DSKCHR FAILED
+	MOVE	S1,G$BLOK##+.DCUSZ	;GET SIZE
+	$RETT				;RETURN
+SUBTTL	D$MSTR - Co-routine to make structure definition blocks
+
+;This routine will allocate the space required for the
+; structure parameter blocks and the
+; unit parameter block(s) for the .FSDEF (define structure)
+; STRUUO.
+;It is a co-routine, so that the caller may be careless
+; about exit procedures: all the blocks will be returned
+; when the caller returns.
+;Call with the number of units, structure name, and
+; drive name(s) in the TCB.
+;Returns with the TCB pointing to the STRUUO arg block,
+; the structure parameter block, and the
+; list handle of the unit parameter blocks,
+; and the list handle of the unit SAT list in the TCB
+;Always returns TRUE
+
+D$MSTR:
+	LOAD	S1,TCB.NV(B)		;Get the number of units
+	ADDI	S1,.FSNUN		;Get enuf for code, ptr to str blk
+	HRLZ	T1,S1			;Save length of block
+	$CALL	M%GMEM			;Get the space for the pointer block
+	HRR	T1,S2			;Count the block
+	MOVEM	T1,TCB.SP(B)		;Save STRUUO pointer
+	MOVX	S1,.FSDEF		;Function code to define a structure
+	MOVEM	S1,.FSFCN(T1)		;Identify this UUO block
+
+;Make a structure parameter block
+	MOVX	S1,MSTROF+1		;Length of block - (biggest offset +1)
+	$CALL	M%GMEM			;Get the space
+	HRLI	S2,MSTROF+1		;Count the block
+	MOVEM	S2,.FSNST(T1)		;Aim the UUO pointer block at this block
+
+;Make the lists for the UPBs and SPTs
+	$CALL	L%CLST			;Make a list
+	MOVEM	S1,TCB.UL(B)		;Save its handle (Unit param blk list)
+	$CALL	L%CLST			;Make another list for SAT ptr tables
+	MOVEM	S1,TCB.SL(B)		;Save that guy, too!
+
+;Make the Unit parameter blocks
+	MOVN	S1,TCB.NV(B)		;Get the number of units again
+	HRL	T1,S1			;Count for the AOBJN
+	ADDI	T1,.FSNUN		;And aim at the first pointer slot
+
+MSTR.1:	MOVE	S1,TCB.UL(B)		;Get the list handle again
+	MOVEI	S2,MUNIOF+1		;Size of the block
+	$CALL	L%CENT			;Add this UPB to the list
+	HRLI	S2,MUNIOF+1		;Size of the block
+	MOVEM	S2,0(T1)		;Aim the pointer block at this UPB
+	AOBJN	T1,MSTR.1		;Make as many as we need
+
+	POP	P,S1			;Get return addrs off stack
+	PUSHJ	P,0(S1)			;Call the caller
+					;When caller returns.. fall thru
+	;CONTINUED ON NEXT PAGE
+	;CONTINUED FROM PREVIOUS PAGE
+;Here after caller (of D$MSTR) has 'returned'
+	PUSH	P,TF			;Save T/F so we can return it on up
+	MOVE	T1,TCB.SP(B)		;Get the ptr to the STRUUO block
+	HLRZ	S1,.FSNST(T1)		;Get the length of the block
+	HRRZ	S2,.FSNST(T1)		;Get the addr of that block
+	$CALL	M%RMEM			;Give back the space
+	MOVE	S1,TCB.UL(B)		;Get the list handle for the UPB list
+	$CALL	L%DLST			;Give back all those blocks
+	MOVE	S1,TCB.SL(B)		;Get the list handle for the SPT list
+	$CALL	L%DLST			;Give any of those back, too
+	SETZM	TCB.UL(B)		;No list handle
+	SETZM	TCB.SL(B)		;None for SPTs, either
+	POP	P,TF			;Get back the caller's T/F
+	$RET
+SUBTTL	D$RELE - Release and clean up after use of a disk
+
+;This routine will return bufferspace and close the channel
+;associated with a disk unit
+
+D$RELE:	PUSHJ	P,I$PIRD##		;Remove device from PSI system
+	MOVEI	S1,BLKLEN		;Size of the I/O block
+	HRRZ	S2,TCB.HO(B)		;Aim at the home block
+	SKIPE	S2			;If none, don't bother
+	PUSHJ	P,RELE.2		;Give back the space
+
+	MOVEI	S1,BLKLEN		;Size of the I/O block
+	HRRZ	S2,TCB.SA(B)		;Aim at the SAT block
+	SKIPE	S2			;If none, don't bother
+	PUSHJ	P,RELE.2		;Give back the space
+
+	MOVEI	S1,BLKLEN		;Size of the I/O block
+	HRRZ	S2,TCB.RI(B)		;Aim at the RIB block
+	SKIPE	S2			;If none, don't bother
+	PUSHJ	P,RELE.2		;Give back the space
+
+	LOAD	S1,TCB.IO(B),TI.OPN	;Is the drive open on a channel?
+	JUMPE	S1,RELE.1		;No, skipe the release
+	LOAD	S1,TCB.FU(B),TF.DVH	;Get channel #
+	RESDV.	S1,			;RELEASE, But don't write anything!
+	JFCL				;Oh well!
+	ZERO	TCB.IO(B),TI.OPN	;No longer open!
+RELE.1:	SETZM	TCB.FU(B)		;Clean out any junk
+	SETZM	TCB.HO(B)		;Be neat
+	SETZM	TCB.SA(B)		;Be neat
+	SETZM	TCB.RI(B)		;Be neat
+	$RETT
+
+;Here to de-fudge an IOWD, and give back some space
+RELE.2:	AOS	S2			;Undo the IOWD
+	$CALL	M%RMEM			;Give it away
+	$RET
+	SUBTTL	D$WLK - See if a disk unit is write enabled/locked
+
+; This routine will tell whether a given disk unit is hardware write
+; protected. Beleive it or not, there is at least one disk controller
+; that won't tell the monitor the write locked/enabled status of the
+; drive. If you guessed the RP20 controller, you're right! So we've
+; dreamed up this kludge to program around the hardware's ignorance.
+; We'll read and write back out one block on the unit we're checking.
+; If the write fails (not due to hard disk errors, etc.) then it must
+; be write locked. Block 3 has been chosen since it is an unused block
+; on standard DECsystem-10 disks.
+; Call:	MOVE	B, TCB address
+;	PUSHJ	P,D$WLK
+;
+; On return, S1:= 1 if the drive is locked, 0 of it is enabled
+;
+; In the event of hard read/write errors, etc. we'll assume write enabled.
+;
+D$WLK:	PUSHJ	P,D$UPEN		;OPEN A CHANNEL
+	  JUMPF	WLK.1			;CAN'T
+	MOVEI	S1,3			;BLOCK 3
+	MOVE	S2,TCB.HO(B)		;USE HOM BLOCK BUFFER
+	PUSHJ	P,D$GUNB		;READ THE BLOCK
+	  JUMPF	WLK.1			;CAN'T
+	MOVE	S1,TCB.SF(B)		;GET STR FLAGS
+	TXO	S1,TS.HWC		;LITE HWP CHECKING BIT
+	TXZ	S1,TS.HWP		;AND CLEAR UNIT WRITE PROTECTED BIT
+	MOVEM	S1,TCB.SF(B)		;UPDATE FLAGS
+	MOVEI	S1,3			;BLOCK 3
+	MOVE	S2,TCB.HO(B)		;USE THE HOM BLOCK BUFFER
+	PUSHJ	P,D$WUNB		;TRY TO WRITE THE BLOCK BACK OUT
+	  JUMPF	WLK.1			;CAN'T
+
+WLK.1:	MOVX	S1,TS.HWC		;GET HWP CHECK FLAG
+	ANDCAM	S1,TCB.SF(B)		;CLEAR IT IN THE STR FLAG WORD
+	MOVX	S1,TS.HWP		;GET HWP BIT
+	TDNN	S1,TCB.SF(B)		;IS STR HARDWARE WRITE PROTECTED?
+	TDZA	S1,S1			;WRITE-ENABLED
+	MOVEI	S1,1			;WRITE-LOCKED
+	POPJ	P,			;RETURN
+SUBTTL	Process search list changes -- JSL entry
+
+
+; This routine will handle all job search list changes for a user
+; Call:	MOVE	M, message address
+;	PUSHJ	P,D$SLCH
+;
+D$SLCH::$SAVE	<P1,P2>			;SAVE P1 AND P2
+	MOVEI	P1,UFDBLK		;GET .UFDOP ARGUMENT BLOCK ADDRESS
+	PUSHJ	P,UFDJSL		;SET UP BLOCK FOR JSL CHANGE
+	  JUMPF	SLCH.F			;CAN'T
+	MOVEI	S1,(P1)			;POINT TO THE BLOCK
+	SETZ	P2,			;INDICATE ALL'S WELL SO FAR
+	PUSHJ	P,.UFD##		;PERFORM UFD OPERATIONS
+SLCH.F:	  SETO	P2,			;FAILED SOMEWHERE
+	MOVEI	S1,.CHNUL		;GET A NULL
+	PUSHJ	P,G$TYPE##		;TERMINATE THE TEXT
+	MOVX	S1,%ADSTR		;ASSUME ADD STR ACK CODE
+	LOAD	S2,.UFFLG(P1),UF.FNC	;GET FUNCTION CODE
+	CAIN	S2,.UFDMO		;DISMOUNTING?
+	MOVX	S1,%RMSTR		;YES - GET A DIFFERENT ACK CODE
+	MOVE	S2,.UFSTR(P1)		;GET STR NAME
+	JUMPN	P2,SLCH.E		;ANY ERRORS?
+	PUSHJ	P,O$ACKU##		;NO - ACK THE USER
+	$RETT				;RETURN
+
+SLCH.E:	PUSHJ	P,O$NCKU##		;SEND NAK
+	$RETF				;RETURN
+
+
+UFDBLK:	BLOCK	.UFSIZ			;ARGUMENT BLOCK FOR UFDSET
+SUBTTL	Process search list changes -- SSL entry
+
+
+; These routines will handle all system search list changes
+; Call:	MOVE	S1, structure name
+;	PUSHJ	P,D$ASSL	;To add str to SSL
+;	PUSHJ	P,D$RSSL	;To remove str from SSL
+;
+D$ASSL::SKIPA	S2,[FL.ADD]		;GET ADD TO SSL FLAG
+D$RSSL::MOVEI	S2,FL.REM		;GET REMOVE FROM SSL FLAG
+	$SAVE	<P1,P2,P3,P4>		;SAVE SOME ACS
+	MOVE	P1,S1			;COPY STR NAME
+	MOVEI	P2,SL.SSL		;IT'S THE SYSTEM SEARCH LIST
+	MOVE	P3,S2			;GET ADD/REMOVE FLAG
+	PUSHJ	P,CHKSSL		;ALREADY IN OR OUT OF SSL?
+	CAIN	P3,FL.ADD		;ADDING?
+	JUMPT	D$NOTS			;IT IS, DUMB OPR
+	CAIN	P3,FL.REM		;REMOVING?
+	JUMPF	D$NOTS			;ITS NOT, DUMB OPR
+	MOVE	S1,P1			;GET STR NAME
+	MOVE	S2,P3			;GET FLAG
+	PUSHJ	P,UFDSSL		;SET UP UFDSET CALL FOR SSL CHANGE
+	MOVEI	S1,UFDBLK		;POINT TO ARGUMENT BLOCK
+	PUSHJ	P,.UFD##		;PERFORM SEARCH LIST CHANGES
+	  JFCL				;IGNORE ERRORS
+	JUMPF	.RETT			;CAN'T, MESSAGE PRINTED
+	PJRST	D$DONE			;FINISH UP
+SUBTTL	Process search list changes -- Set up JSL argument block
+
+
+UFDJSL:	SETZM	(P1)			;CLEAR THE FIRST WORD
+	MOVSI	S1,(P1)			;GET STARTING ADDRESS
+	HRRI	S1,1(P1)		;MAKE A BLT POINTER
+	BLT	S1,.UFSIZ-1(P1)		;CLEAR THE ARGUMENT BLOCK
+
+UFDJ.1:	MOVE	S2,.OFLAG(M)		;GET MESSAGE FLAG WORD
+	MOVX	S1,INSVL.(.UFMNT,UF.FNC) ;ASSUME MOUNT FUNCTION
+	TXNE	S2,ASL.RM		;REMOVE BIT ON?
+	MOVX	S1,INSVL.(.UFDMO,UF.FNC) ;YES - GET DISMOUNT FUNCTION
+	TXNE	S2,ASL.AR		;WANT ALWAYS RECOMPUTE DISK USAGE?
+	TXO	S1,UF.ARD		;YES
+	TXNE	S2,ASL.NR		;WANT NEVER RECOMPUTE DISK USAGE?
+	TXO	S1,UF.NRD		;YES
+	TXNE	S2,ASL.PS		;WANT PASSIVE SEARCH LIST?
+	TXO	S1,UF.PSL		;YES
+	TXNE	S2,ASL.SA		;WANT SINGLE ACCESS?
+	TXO	S1,UF.SIN		;YES
+	TXNE	S2,ASL.NQ		;NO QUOTA ENFORCEMENT?
+	TXO	S1,UF.NOQ		;YES
+	MOVEM	S1,.UFFLG(P1)		;SAVE FLAGS AND FUNCTION CODE
+	SETZ	S1,			;CLEAR FILE STRUCTURE STATUS BITS
+	TXNE	S2,ASL.WL		;WANT NOWRITE?
+	TXO	S1,DF.SWL		;YES
+	TXNE	S2,ASL.NC		;WANT NOCREATE?
+	TXO	S1,DF.SNC		;YES
+	MOVEM	S1,.UFSTS(P1)		;SAVE STATUS WORD
+UFDJ.2:	MOVEI	S1,.BLDSN		;GET A BLOCK TYPE
+	PUSHJ	P,O$FNDBL##		;FIND IT
+	  $RETIF			;CAN'T
+	MOVE	S2,.BLDNM(S1)		;GET STR NAME
+	MOVEM	S2,.UFSTR(P1)		;SAVE IT
+	MOVE	S2,.BLDOW(S1)		;GET PPN
+	MOVEM	S2,.UFPPN(P1)		;SAVE IT
+	LOAD	S1,.OFLAG(M),ASL.JB	;GET THE JOB NUMBER
+	MOVEM	S1,.UFJOB(P1)		;SAVE IT
+	SETOM	.UFPRO(P1)		;DEFAULT PROTECTION CODE
+	SETOM	.UFDED(P1)		;DEFAULT DIRECTORY EXPIRATION DATE
+	SETOM	.UFQTF(P1)		;DEFAULT FCFS QUOTA
+	SETOM	.UFQTO(P1)		;DEFAULT LOGGED-OUT QUOTA
+	SETOM	.UFQTR(P1)		;DEFAULT RESERVED QUOTA
+	MOVE	S1,.UFSTR(P1)		;GET STR NAME
+	MOVE	S2,UFDBLK+.UFPPN	;GET PPN
+	PUSHJ	P,Q$QOTA##		;TRY TO READ QUOTAS
+	  JUMPF	UFDJ.4			;NO QUOTAS IN AUXACC.SYS OR QUOTA.SYS
+	MOVEM	S1,.UFQTR(P1)		;SAVE RESERVED QUOTA
+	MOVEM	S2,.UFQTF(P1)		;SAVE FCFS QUOTA
+	MOVEM	T1,.UFQTO(P1)		;SAVE LOGGED-OUT QUOTA
+
+UFDJ.3:	PUSHJ	P,G$TXTI##		;INITIALIZE THE ACK/NAK TEXT BUFFER
+	MOVEI	S1,UFDTYO		;GET TYPEOUT ROUTINE ADDRESS
+	MOVEM	S1,.UFTYO(P1)		;SAVE IT
+	$RETT				;RETURN
+;Here when the user had no quotas
+
+UFDJ.4:	MOVE	S1,.UFPPN(P1)		;WHO ARE WE DOING THIS FOR
+	CAMN	S1,G$FFAP##		;THE OPR?
+	JRST	UFDJ.3			;YES, LET IT PASS
+	MOVE	S1,.UFSTR(P1)		;GET THE STRUCTURE NAME
+	PUSHJ	P,GETDCH		;GET DSKCHR INFORMATION FOR STRUCTURE
+	  $RETIF			;ERROR, DON'T ALLOW MOUNTING
+	TXNN	S1,DC.PRV		;PRIVATE STRUCTURE?
+	JRST	UFDJ.3			;NO, LET THEM HAVE IT
+	MOVE	S1,G$BLOK##+.DCOWN	;GET OWNER PPN
+	HLRE	S2,S1			;GET PROJECT, EXTEND SIGN
+	CAMN	S2,[-1]			;WILD PROJECT?
+	HLL	S1,.UFPPN(P1)		;YES, PLUG IN REQUESTOR'S PROJECT
+	HRRE	S2,S1			;GET PROGRAMMER, EXTEND SIGN
+	CAMN	S2,[-1]			;WILD PROGRAMMER?
+	HRR	S1,.UFPPN(P1)		;YES, PLUG IN REQUESTOR'S PROGRAMMER
+	CAMN	S1,.UFPPN(P1)		;IS THIS GUY THE STRUCTURE OWNER?
+	JRST	UFDJ.3			;YES, ALLOW HIM TO MOUNT IT
+	PUSHJ	P,G$TXTI##		;INITIALIZE ACK/NAK BUFFER
+	$TEXT	(G$TYPE##,<[No quotas for ^W/.UFSTR(P1)/:^P/.UFPPN(P1)/]>)
+	$RETF				;PUNT THEM
+SUBTTL	Process search list changes -- Set up SSL argument block
+
+
+UFDSSL:	PUSH	P,S1			;SAVE STR NAME
+	MOVE	S1,[UFDBLK,,UFDBLK+1]	;SET UP BLT
+	SETZM	UFDBLK			;CLEAR FIRST WORD
+	BLT	S1,UFDBLK+.UFSIZ-1	;CLEAR UFDSET ARGUMENT BLOCK
+	MOVX	S1,INSVL.(.UFASL,UF.FNC) ;ASSUME ADD TO SSL FUNCTION
+	CAIN	S2,FL.REM		;REMOVE?
+	MOVX	S1,INSVL.(.UFRSL,UF.FNC) ;YES - GET REMOVE FROM SSL FUNCTION
+	MOVEM	S1,UFDBLK+.UFFLG	;SAVE IN FLAG/FUNCTION WORD
+	POP	P,UFDBLK+.UFSTR		;SAVE STR NAME
+	PUSHJ	P,G$TXTI##		;INITIALIZE THE ACK/NAK TEXT BUFFER
+	MOVEI	S1,UFDTYO		;GET TYPEOUT ROUTINE ADDRESS
+	MOVEM	S1,UFDBLK+.UFTYO	;SAVE IT
+	$RETT				;RETURN
+SUBTTL	Process search list changes -- Text routines
+
+
+UFDTYO:	PUSHJ	P,UFDCHK		;CHECK FOR ERROR THE OPR SHOULD SEE
+	HRRZ	S1,UFDBLK+.UFPFX	;GET THE PREFIX
+	CAIE	S1,'MNT'		;IS THIS THE FINAL MOUNT MESSAEG
+	CAIN	S1,'DMO'		;OR THE DISMOUNT MESSAGE?
+	POPJ	P,			;IGNORE IT
+	CAIN	S1,'RDU'		;RECOMPUTING MESSAGE?
+	POPJ	P,			;IGNORE IT
+
+UFDT.1:	MOVE	S1,UFDBLK+.UFTXT	;POINT TO TEXT BUFFER
+	HRLI	S1,(POINT 7,)		;MAKE A BYTE POINTER
+	PUSH	P,S1			;SAVE IT
+	HLRZ	S1,UFDBLK+.UFPFX	;GET SEVERITY CHARACTER
+	SKIPA				;SKIP FIRST TIME THROUGH
+
+UFDT.2:	ILDB	S1,(P)			;GET A CHARACTER
+	JUMPE	S1,UFDT.3		;DONE?
+	PUSHJ	P,G$TYPE##		;STORE IT AWAY
+	JRST	UFDT.2			;LOOP
+
+UFDT.3:	POP	P,(P)			;PHASE STACK
+	MOVEI	S1,"]"			;ASSUME AN INFORMATIONAL MESSAGE
+	HLRZ	S2,UFDBLK+.UFPFX	;GET SEVERITY CHARACTER AGAIN
+	CAIN	S2,"["			;WAS IT?
+	PUSHJ	P,G$TYPE##		;YES - TERMINATE MESSAGE PROPERLY
+	MOVEI	S1,.CHCRT		;GET A <CR>
+	PUSHJ	P,G$TYPE##		;TYPE IT
+	MOVEI	S1,.CHLFD		;GET A <LF>
+	PJRST	G$TYPE##		;TYPE IT AND RETURN
+SUBTTL	Process job search list changes -- Special error checking
+
+
+; Check to see if the error returned might be of some interest to
+; the operator. If so, WTO the message to him.
+;
+UFDCHK:	SKIPN	S1,UFDBLK+.UFERR		;GET THE ERROR CODE (IF ANY)
+	POPJ	P,				;RETURN
+	MOVE	S2,[-UFDELN,,UFDETB]		;SET UP AOBJN POINTER
+	CAME	S1,(S2)				;A MATCH?
+	AOBJN	S2,.-1				;SEARCH THE TABLE
+	SKIPL	S2				;FOUND ONE?
+	POPJ	P,				;NOPE
+	MOVEI	S1,UFDTXJ			;ASSUME A JOB REQUEST
+	SKIPN	UFDBLK+.UFJOB			;CHECK IT
+	MOVEI	S1,UFDTXS			;SSL REQUEST
+	$WTO	(<PULSAR error>,<^I/UFDTXT/>,,$WTFLG(WT.SJI))
+	POPJ	P,				;RETURN
+
+UFDTXJ:	ITEXT	(<job ^D/UFDBLK+.UFJOB/ ^P/UFDBLK+.UFPPN/>)
+UFDTXS:	ITEXT	(<a system search list change>)
+UFDTXT:	ITEXT	(<Fatal return from UFDSET %^V/[%%UFDS]/
+Processing a request for ^I/(S1)/
+Structure = ^W/UFDBLK+.UFSTR/
+Flags = ^O12R0/UFDBLK+.UFFLG/, Function = ^O/UFDBLK+.UFFLG,UF.FNC/
+Error code = ^O/UFDBLK+.UFERR/; ^T/@UFDBLK+.UFTXT/>)
+
+
+; Table of UFDSET error codes that might interest the operator
+;
+UFDETB:	EXP	UFIDV%, UFISN%, UFIOE%, UFCAD%, UFLFU%, UFRFU%
+	EXP	UFCRS%, UFIFC%, UFEFU%, UFCCS%, UFCSO%, UFCSS%
+UFDELN==.-UFDETB
+SUBTTL	Read a search list
+
+
+; Read a search list
+; Call:	MOVE	S1, job number for job S/L or zero for system S/L
+;	PUSHJ	P,D$RDSL
+;
+; TRUE return:	S1:= S/L block address
+; FALSE return:	Error message sent to OPR
+;
+GETSL::
+D$RDSL::MOVEI	S2,.FSDSL		;GET FUNCTION CODE
+	MOVEM	S2,G$OSL##+.FSFCN	;SAVE IT
+	MOVEM	S1,G$OSL##+.FSDJN	;SAVE JOB NUMBER
+	SETZM	G$OSL##+.FSDPP		;CLEAR PPN WORD
+	SETZM	G$OSL##+.FSDFL		;CLEAR FLAG WORD
+	MOVEI	S2,G$OSL##+.FSDSO	;POINT TO FIRST STR BLOCK
+
+	MOVEM	S1,G$BLOK##+.DFGJN	;SAVE JOB NUMBER
+	SETZM	G$BLOK##+.DFGPP		;NO PPN
+	SETOM	G$BLOK##+.DFGNM		;START WITH THE FIRST STRUCTURE
+
+RDSL.1:	MOVE	S1,[.DFGST+1,,G$BLOK##]	;SET UP UUO
+	GOBSTR	S1,			;GET THE NEXT STRUCTURE IN S/L
+	  JRST	RDSL.E			;FAILED
+	MOVSI	S1,G$BLOK##+.DFGNM	;POINT TO ARGUMENTS RETURNED
+	HRRI	S1,(S2)			;BUILD BLT POINTER
+	BLT	S1,.DFJBL-1(S2)		;COPY THEM
+	ADDI	S2,.DFJBL		;POINT TO NEXT STR BLOCK
+	MOVE	S1,G$BLOK##+.DFGNM	;GET LAST STR RETURNED
+	AOJN	S1,RDSL.1		;LOOP IF NOT END OF S/L
+	MOVEI	S1,G$OSL##		;GET S/L BLOCK ADDRESS
+	POPJ	P,			;RETURN
+
+RDSL.E:	MOVE	S2,[XWD -GOBELN,GOBETB]	;POINT AT THE ERROR CODE MAPPING TABLE
+	PUSHJ	P,D$MAPE		;CONVERT IT
+	$WTO	(<Error reading search list for job ^D/G$BLOK+.DFGJN/>,<GOBSTR UUO failed. ^I/0(S2)/>,,$WTFLG(WT.SJI))
+	$RETF
+	SUBTTL	D$UNLC - Unload a disk unit
+
+;This routine will unload a given disk drive.  Generally,
+; it could be called at any time, but specifically, it
+; is used only at the request of MDA.
+;Call -
+;	B/	Disk TCB adrs
+
+D$UNLC::
+	SETOM	G$UNL##			;Set the 'unloading' flag for T$OFLN
+	LOAD	S2,TCB.DV(B)		;Get the device name
+	MOVE	S1,[XWD .DUUNL,S2]	;Aim at the argument block
+	DISK.	S1,			;Unload the unit
+	SKIPA				;Can't,, see why
+	JRST	[SETZM	G$UNL##		;Done!, Clear the unloading flag
+		$RETT]
+	SETZM	G$UNL##			;Clear our flag
+	CAXN	S1,DUUNU%		;Lost because 'no can unload'?
+	$RETT				;Yes, keep moving
+	MOVE	S2,[XWD -DUUNLN,DUUNTB]	;Aim at conversion table
+	PUSHJ	P,D$MAPE		;Convert the error number
+	$WTO	(<Can't unload>,<DISK. (.DUUNL) failed. ^I/0(S2)/>,TCB.OB(B),$WTFLG(WT.SJI))
+	$RETF				;Bye!
+	SUBTTL	D$SREM - Remove a file structure from the system
+
+;This routine is called in TCB context to remove
+; a file structure from the monitor's tables
+; If there is anything that should be called to the operator's attention,
+; then the TCB will block, asking the operator for confirmation
+;Call -
+;	B/	TCB addrs, TCB set up from MDA message (ie drive names, etc)
+;Returns -
+;	A message to MDA indicating success/failure of the dismount
+
+D$SREM::
+	PUSHJ	P,REMCHK		;Check for safe structure removal
+	JUMPF	SREM.4			;Problems with that, quit
+	PUSHJ	P,REMUNI		;Do any unit specific actions first
+	JUMPF	SREM.4			;Problems there, tell bad news
+SREM.1:	MOVEI	S1,.FSREM		;Code to remove structure
+	MOVE	S2,TCB.DV(B)		;Get the file structure name
+	MOVE	TF,[XWD 2,S1]		;Aim at the argument block
+	STRUUO	TF,			;Get rid of it
+	JRST	SREM.2			;Can't, see why
+	MOVX	S1,%DSMNT		;Ack code - dismount
+;	MOVE	S2,S2			;Structure name
+	PUSHJ	P,O$ACK##		;Tell MDA the good news
+	$RETT
+
+;Here if we're having trouble dismounting the structure
+SREM.2:	CAXE	TF,FSUNA%		;Lost because units not idle?
+	JRST	SREM.3			;No, complain a little
+	PUSHJ	P,G$OJOB##		;See if anyone else would like to run
+	JRST	SREM.1			;And try again
+
+;Here If we just can't get rid of it
+SREM.3:	MOVE	S1,TF			;Copy the error code
+	MOVE	S2,[XWD -STRELN,STRETB]	;Aim at the conversion table
+	PUSHJ	P,D$MAPE		;Convert to error text
+	$WTO	(<Structure ^W/TCB.DV(B)/ cannot be dismounted>,<STRUUO (.FSREM) failed. ^I/0(S2)/>,,$WTFLG(WT.SJI))
+SREM.4:	MOVX	S1,%DSMNT		;Ack code - dismount
+	MOVE	S2,TCB.DV(B)		;Structure name
+	PUSHJ	P,O$NAK##		;Tell MDA the bad news!
+	$RETT
+SUBTTL	REMCHK - Check for safe structure removal
+
+;This routine will check properties of a file structure about
+; to be removed for properties which may cause problems on
+; a dismount.  The operator is asked for confirmation.
+;The following properties are checked:
+;	1)	In system search list
+;	2)	Queueing structure
+;	3)	STRLST.SYS
+;	4)	In crash dump list
+;	5)	0 Mount count
+;Call -
+;	B/	Structure TCB addrs
+;Returns -
+;	TRUE if FS is OK to go!
+;	FALSE if not (OPR said no, perhaps)
+
+REMCHK:	$SAVE	<P1,P2,P3>		;Preserve some regs
+	PUSHJ	P,G$TXTI##		;Initialize text buffer
+	MOVE	S1,[BYTE (7) 15,15,15,15,12] ;Magic to make
+	MOVEM	S1,G$TXTB##		;The WTO/WTOR buffer
+	AOS	G$TXTP##		;Look pretty
+	MOVE	P1,[XWD -CHKFLN,CHKFTB]	;Aim at the table
+	SETZ	P2,			;No flags yet
+	LOAD	S1,TCB.SF(B),TS.NCK	;OPR said /NOCHECK?
+	SKIPE	S1			;Did s/he?
+	MOVX	P2,CHKF.N		;Yes, note it
+CHKFL:	MOVE	S1,TCB.DV(B)		;Get the file structure name
+	HLRZ	S2,0(P1)		;Get next check routine pointer
+	MOVE	S2,0(S2)		;Get flags,, routine adrs
+	TDNE	S2,P2			;OPR want /NOCHECK and this attribute
+	JRST	CHKF.2			; would touch str? Yes, skip attr check
+	PUSHJ	P,0(S2)			;Check the next parameter
+	JUMPF	CHKF.2			;No problem, keep going
+CHKF.1:	HRRZ	S2,(P1)			;Get ITEXT pointer
+	$TEXT	(G$TYPE##,<^I/(S2)/>)	;Store some text
+CHKF.2:	AOBJN	P1,CHKFL		;Do each parameter
+	MOVN	P1,TCB.NV(B)		;Get negative number of units
+	MOVSS	P1			;To LH
+	HRRI	P1,TCB.DU(B)		;Aim at the unit list
+CHKF.3:	MOVE	P3,[XWD	-CHKULN,CHKUTB] ;Set up AOBJN pointer to unit checks
+CHKF.4:	MOVE	S1,(P1)			;Get a unit name
+	HLRZ	S2,0(P3)		;Get next check routine pointer
+	MOVE	S2,0(S2)		;Get flags,, routine adrs
+	TDNE	S2,P2			;OPR want /NOCHECK and this attribute
+	JRST	CHKF.5			; would touch str? Yes, skip attr check
+	PUSHJ	P,0(S2)			;Check the next parameter
+	JUMPF	CHKF.5			;No problem, keep going
+	HRRZ	S2,(P3)			;Get ITEXT address
+	$TEXT	(G$TYPE##,<^W/(P1)/ ^I/(S2)/>)	;Store some text
+CHKF.5:	AOBJN	P3,CHKF.4		;Loop for each check
+CHKF.6:	AOBJN	P1,CHKF.3		;Loop for each unit
+	SKIPN	G$TXTB##+1		;We put anything in the buffer ?
+	$RETT				;No - return quietly
+	MOVX	S1,TS.NCK		;Get the /NOCHECK bit
+	TDNE	S1,TCB.SF(B)		;Operator request it ?
+	JRST	CHKF.7			;Yes
+	MOVEI	S1,[ITEXT (<^T/G$TXTB/>)] ;Point to the text buffer
+	MOVEI	S2,[ITEXT (<Type 'RESPOND ^I/number/ ABORT' to not dismount structure ^W/TCB.DV(B)/
+Type 'RESPOND ^I/number/ PROCEED' to remove structure ^W/TCB.DV(B)/ anyway>)]
+	PUSHJ	P,O$SERT##		;See if OK to procceed
+	$RET				;Return T/F to caller
+CHKF.7:	$WTO	(<Removing structure ^W/TCB.DV(B)/ may cause problems>,<^T/G$TXTB/^M^JProceeding...>,TCB.OB(B),$WTFLG(WT.SJI))
+	$RETT				;Keep on going
+; A table of check routine addresses and their corresponding error messages
+; Each routine will be called with the structure name in S1
+
+	DEFINE X(ROUT,TEXT,FLAG),<XWD [FLAG+ROUT],[ITEXT(TEXT)]>
+
+	CHKF.N==1B0		;Flag for attributes which would touch str
+
+CHKFTB:	X	CHKSSL,<In system search list>
+	X	CHKQUE,<Contains queues>
+	X	CHKCAT,<Contains a system catalog (STRLST.SYS)>,CHKF.N
+	X	CHKCDL,<In crash dump list>
+	X	CHKKLF,<Contains a KL10 front-end file system>,CHKF.N
+	X	CHKKSF,<Contains a KS10 front-end file system>,CHKF.N
+	X	CHKMNC,<Mount count = ^D/S1/>
+	X	CHKNRQ,<Number of queue requests = ^D/S1/>
+	CHKFLN==.-CHKFTB		;Table length
+
+
+;A table of unit check routine addrs and the corresponding error messages.
+; Each routine will be called with SIXBIT unit name in S1.
+CHKUTB:	X	INASL ,<is in active swapping list>
+	CHKULN==.-CHKUTB		;Length of table
+	SUBTTL	REMUNI - Remove all units from the active swapping list
+
+;This routine will remove ALL units in a structure from the
+; active swapping list.  It does so regardless of whether those
+; units are in the list or not.  The caller should have
+; checked for and dealt with this possiblity.
+;Call -
+;	B/	Structure TCB addrs
+;Returns -
+;	TRUE - All units removed
+;	FALSE - something went wrong
+
+REMUNI:
+	$SAVE	<P1>
+	MOVX	S1,TS.NCK		;Get OPR /NOCHECK bit
+	TDNE	S1,TCB.SF(B)		;OPR doesn't want to touch disk?
+	$RETT				;Yes, assume all units out!
+	MOVN	P1,TCB.NV(B)		;Get neg # of units in str
+	MOVSS	P1			;To LH
+	HRRI	P1,TCB.DU(B)		;Aim at the list of unit names
+REMU.1:	MOVE	S1,0(P1)		;Get next unit name
+	PUSHJ	P,REMSWP		;Move the swap space off!
+	JUMPF	REMU.E			;Can't, go complain
+	AOBJN	P1,REMU.1		;Do 'em all
+	$RETT
+
+;Here if we can't move swap away from some unit
+REMU.E:	MOVE	S2,[XWD -ERRSLN,ERRSWP]	;Aim at the conversion table
+	PUSHJ	P,D$MAPE		;Map into text
+	$WTO	(<Can't remove unit ^W/0(P1)/ from active swapping list>,<DISK. UUO (.DUSWP) ^I/0(S2)/>,,$WTFLG(WT.SJI))
+	$RETF
+	SUBTTL	INASL - See if a unit is in the active swapping list
+
+;This routine will tell if a given unit is in the active swapping list
+;Call -
+;	S1/	SIXBIT unit name
+;Returns -
+;	TRUE -
+;		S1/	Position of the unit in the active swap list
+;	FALSE - it's not in the ASL
+;
+D$PASL::
+INASL:	PUSHJ	P,GETDCH		;GET DISK CHARACTERISTICS
+	  $RETIF			;RETURN IF DSKCHR FAILED
+	LOAD	S2,S1,DC.TYP		;GET UNIT TYPE
+	CAIE	S2,.DCTPU		;PHYSICAL UNIT?
+	$RETF				;NOPE
+	SKIPGE	S1,G$BLOK##+.DCPAS	;GET POSITION IN THE ASL
+	$RETF				;NOT IN THE ASL
+	$RETT				;IN THE ASL
+	SUBTTL	CHKKLF - See if unit is SY0: to RSX20F
+
+;This routine will ask the monitor if a unit is in use
+; as the system pack by RSX20F, the KL10 front end.
+;Call -
+;	S1/	SIXBIT unit name
+;Returns -
+;	TRUE - In use by -20F
+;	FALSE - Not in use as system pack by KL10 FE
+
+CHKKLF:	SETZM	G$BLOK##+.DCXSF		;JUST IN CASE OLD MONITOR
+	MOVEI	S2,%KL10		;GET A PROCESSOR TYPE
+	CAME	S2,G$CPU##		;SAME AS THE ONE WE'RE RUNNING ON?
+	$RETF				;NO
+	PUSHJ	P,GETDCH		;GET DISK CHARACTERISTICS
+	  $RETIF			;CAN'T - ASSUME NO FE
+	LOAD	S1,G$BLOK##+.DCXSF,DC.FES ;GET FRONT-END STATUS FOR THIS UNIT
+	JUMPN	S1,CHKKL1		;IF STATUS IS KNOWN, USE THAT INSTEAD
+	SKIPE	G$BLOK##+.DCALT		;DUAL PORTED DISK?
+	$RETF				;YES - THAN THE FE CAN'T HAVE A PORT
+	MOVE	S1,G$BLOK##+.DCNAM	;GET STR NAME BACK
+	MOVSI	S2,'FE '		;KL10 FRONT-END FILE SYSTEM FILE NAME
+	PUSHJ	P,OPNSYS		;TRY TO READ THAT FILE
+	$RET				;If that wins say true (catalog exists)
+					;If it loses, there's no catalog!
+					;Don't do PJRST here, or we'll carry
+					; the buffers around for a while
+
+CHKKL1:	CAXN	S1,.DCFEN		;DEFINITELY NOT AN FE PACK?
+	$RETF				;ROGER, NO SWEAT HERE
+	CAXE	S1,.DCFEB		;THE UNIT -20F WAS BOOTED FROM?
+	$RETF				;NO, GUESS THIS IS OK, ALTHO WE MIGHT
+					; WANT A WARNING IN THIS CASE
+	$RETT				;PROBABLY SHOULDN'T PLAY WITH THIS
+SUBTTL	CHKKSF - See if unit is part of a KS10 front-end file system
+
+;This routine will ask the monitor if a unit is in use
+; as the system pack by the KS10 front-end file system.
+;Call -
+;	S1/	SIXBIT unit name
+;Returns -
+;	TRUE - In use by KS10 front-end
+;	FALSE - Not in use as system pack by KS10 FE
+;
+CHKKSF:	SETZM	G$BLOK##+.DCXSF		;JUST IN CASE OLD MONITOR
+	MOVEI	S2,%KS10		;GET A PROCESSOR TYPE
+	CAME	S2,G$CPU##		;SAME AS THE ONE WE'RE RUNNING ON?
+	$RETF				;NO
+	PUSHJ	P,GETDCH		;GET DISK CHARACTERISTICS
+	  $RETIF			;CAN'T - ASSUME NO FE
+	LOAD	S1,G$BLOK##+.DCXSF,DC.FES ;GET FRONT-END STATUS FOR THIS UNIT
+	JUMPN	S1,CHKKS1		;IF STATUS IS KNOWN, USE THAT INSTEAD
+	$SAVE	<P1,P2>			;Save some ACs
+	MOVEI	P1,G$BLOK		;Put the FOB here
+	MOVEI	P2,G$BLOK+FOB.MZ	;Put the FD here
+	MOVE	S1,G$BLOK##+.DCNAM	;Get the structure name
+	MOVEM	S1,.FDSTR(P2)		;Store the structure name
+	MOVEI	S1,^D36			;Byte size - full word
+	MOVEM	S1,FOB.CW(P1)		;Save in FOB
+	MOVEI	S1,FOB.MZ(P1)		;Aim at the FD space
+	MOVEM	S1,FOB.FD(P1)		;Point the FOB at the FD
+	MOVE	S1,[FDMSIZ,,0]		;Get length of this FD
+	MOVEM	S1,.FDLEN(P2)		;Count this FD
+	MOVE	S1,['KS10FE']		;File name
+	MOVEM	S1,.FDNAM(P2)		;Store it
+	MOVX	S1,'BIN   '		;Extension
+	MOVEM	S1,.FDEXT(P2)		;Store it
+	MOVE	S1,[6,,2020]		;Get the funny UFD
+	MOVEM	S1,.FDPPN(P2)		;Save that...
+	MOVEI	S1,FOB.MZ		;Length of the FOB
+	MOVE	S2,P1			;Point to FOB
+	$CALL	F%IOPN			;Open it up
+	  $RETIF			;Return if can't find file
+	$CALL	F%REL			;Give back the file handle
+	$RETT				;Return
+
+CHKKS1:	CAXN	S1,.DCFEN		;DEFINITELY NOT AN FE PACK?
+	$RETF				;ROGER, NO SWEAT HERE
+	CAXE	S1,.DCFEB		;THE UNIT SYSTEM WAS BOOTED FROM?
+	$RETF				;NO
+	$RETT				;PROBABLY SHOULDN'T PLAY WITH THIS
+	SUBTTL	CHKCAT - See if a structure is has a catalog
+
+;This routine will look for the exsitence of a system catalog
+; on a structure about to be removed.
+; Today, since the definition of a system catalog is fuzzy,
+; it just checks for STR:STRLST.SYS[1,4], as the catalog
+;Call -
+;	S1/	Structure name
+;Returns -
+;	TRUE - there is a catalog
+;	FALSE - there is no catalog
+
+CHKCAT:
+	$SAVE	<P1>
+	MOVE	P1,S1			;Save the structure name
+	PUSHJ	P,CHKSSL		;Is the str in the system search list?
+	JUMPF	.POPJ			;No, any catalog would be useless
+	MOVE	S1,P1			;Yes, get back structure name
+	MOVE	S2,[SIXBIT/STRLST/]	;Catalog name is STRLST
+	PUSHJ	P,OPNSYS		;Try to read that file
+	$RET				;If that wins say true (catalog exists)
+					;If it loses, there's no catalog!
+					;Don't do PJRST here, or we'll carry
+					; the buffers around for a while
+	SUBTTL	OPNSYS - Coroutine to Open/Close a system file
+
+;This routine will set things up to read the quota file from a particular
+; structure.  It is a coroutine, so the caller can be sloppy about
+; exit procedures.
+;Call - 
+;	S1/	SIXBIT structure name
+;	S2/	SIXBIT file name
+;		(Extension is .SYS, UFD is [1,4])
+;Returns - T/F
+;	TRUE -  IFN for reading file in S1
+
+OPNSYS:
+	PUSH	P,S1			;Save str name
+	PUSH	P,S2			;Save file name
+	MOVEI	S1,FDMSIZ+FOB.MZ	;Space for an FD and a FOB
+	$CALL	M%GMEM			;Get that room
+	MOVEI	S1,^D36			;Byte size - full word
+	STORE	S1,FOB.CW(S2),FB.BSZ	;Save in FOB
+	MOVEI	S1,FOB.MZ(S2)		;Aim at the FD space
+	STORE	S1,FOB.FD(S2)		;Point the FOB at the FD
+	POP	P,.FDNAM(S1)		;Put in the file name
+	POP	P,.FDSTR(S1)		;Put in the file structure name
+	EXCH	S2,0(P)			;Get Caller's addr, save FOB, FD
+	PUSH	P,S2			;Save return adr again
+	MOVE	S2,S1			;Aim at the FD
+	MOVEI	S1,FDMSIZ		;Get length of this FD
+	STORE	S1,.FDLEN(S2),FD.LEN	;Count this FD
+	MOVX	S1,<SIXBIT/SYS/>	;Get extension
+	MOVEM	S1,.FDEXT(S2)		;And save that
+	MOVE	S1,G$SYSP##		;Get system UFD
+	MOVEM	S1,.FDPPN(S2)		;Save that...
+	MOVEI	S1,FOB.MZ		;Length of the FOB
+	MOVE	S2,-1(P)		;Get addr, but leave it on stack
+	$CALL	F%IOPN			;Open it up
+	JUMPF	OPNS.E			;Can't, go clean up
+	POP	P,S2			;Get callers adrs
+	PUSH	P,S1			;Save the IFN
+	PUSHJ	P,0(S2)			;Call the caller (with TRUE in TF)
+	EXCH	S1,0(P)			;Save Return S1, Get back IFN
+	PUSH	P,TF			;Save TF
+	PUSH	P,S2			;And S2
+	$CALL	F%REL			;Give back the file handle
+	MOVEI	S1,FOB.MZ+FDMSIZ	;Size of the space
+	MOVE	S2,-3(P)		;Addr of space obtained
+	$CALL	M%RMEM			;Give it back
+	POP	P,S2			;Get back S2
+	POP	P,TF			;And T/F
+	POP	P,S1			;And S1
+	POP	P,0(P)			;Throw away the old space adrs
+	$RET				;Return
+
+	;CONTINUED ON NEXT PAGE
+	;CONTINUED FROM PREVIOUS PAGE
+
+;Here if we can't open the file.  2 elements on stack:
+;	0(P)/	caller's addrs
+;	-1(P)	Addr of FOB, FD space
+OPNS.E:
+	POP	P,S2			;Get back caller's addr
+	EXCH	S2,0(P)			;Save it, get addr of FOB, FD
+	MOVEI	S1,FOB.MZ+FDMSIZ	;Get size of space obtained
+	$CALL	M%RMEM			;Give back the space
+	$RETF
+	SUBTTL	CHKMNC - Check for other users of a file structure
+
+;This routine is used to make sure there are no users of a
+; file structure about to be removed from the system.
+;Call -
+;	S1/	Structure name
+;Returns -
+;	S1:= mount count and
+;	TRUE - There are other users of the structure
+;	FALSE - No other users (mount count is 0)
+;
+CHKMNC:	PUSHJ	P,GETDCH		;GET DISK CHARACTERISTICS
+	  SKIPF				;CAN'T - ASSUME NO OTHER USERS
+	SKIPN	S1,G$BLOK##+.DCSMT	;ARE THERE OTHER USERS?
+	$RETF				;NO
+	$RETT				;YES
+SUBTTL	CHKNRQ - See if queue requests require this structure
+
+
+; This routine will complain to the operator if the number of queue requests
+; (supplied to us by QUASAR) is non-zero. It indicates the how many requests
+; will be needing the structure that the operator is trying to remove.
+; Call:	MOVE	S1, structure name
+;
+; Returns:
+;	S1:= number of requests and
+;	TRUE  - There is at least one request
+;	FALSE - There are no requests
+;
+CHKNRQ:	LOAD	S1,TCB.SF(B),TS.NRQ	;GET NUMBER OF REQUESTS
+	SKIPE	S1			;NON-ZERO?
+	$RETT				;YES - COMPLAIN
+	$RETF				;RETURN
+	SUBTTL	CHKQUE - See if file structure is Queue structure
+
+;This routine checks to see if a file structure about to be
+; removed contains queues
+;Call -
+;	S1/	Structure name
+;Returns -
+;	TRUE - There are queues on that structure
+;	FALSE - No queues on str
+
+CHKQUE:	MOVX	S2,%LDQUS		;Ask each time we need it
+	GETTAB	S2,			; Since it might be changed by QUASAR
+	  $RETT				;Error, be safe and assume its QUESTR
+	CAME	S1,S2			;Is this the queueing str?
+	$RETF				;No, say so
+	$RETT				;Yes, say that instead
+
+	SUBTTL	CHKCDL - See if a structure is in the crash dump list
+
+;This routine will tell whether a file structure is in the
+; crash dump list.
+;Call -
+;	S1/	Structure name in SIXBIT
+;Returns -
+;	TRUE -
+;		S1/	Position of this str in the crash dump list
+;	FALSE - Str in not in CDL
+;
+D$PCDL::
+CHKCDL:	PUSHJ	P,GETDCH		;GET DISK CHARACTERISTICS
+	  $RETIF			;CAN'T - ASSUME NOT IN CRASH DUMP LIST
+	LOAD	S2,S1,DC.TYP		;Get the argument type
+	CAXE	S2,.DCTFS		;Was it a file str name?
+	$RETF				;No, .DCPSD won't be valid
+	SKIPGE	S1,G$BLOK##+.DCPSD	;Yes, is this str in the SDL
+	$RETF				; .LT. 0, Not in SDL
+	$RETT				;Yes, Give back the position number
+	SUBTTL	CHKSSL - See if a structure is in the system search list
+
+;This routine tells whether a file structure about to be removed is
+; in the system search list.
+;Call -
+;	S1/	Structure name
+;Returns -
+;	TRUE - Structure is in SSL
+;	FALSE - Str is not in SSL
+
+	CHKLN	(BLOKLN,<.DFGST+1>)	;Req'd length of the block
+
+CHKSSL:
+	SETZM	G$BLOK##+.DFGJN		;0 job number -- look at SSL
+	SETZM	G$BLOK##+.DFGPP		;And no PPN, either
+	MOVEM	S1,G$BLOK##+.DFGNM	;Put structure name in GOBSTR block
+	MOVSI	S1,.DFGST+1		;Length of the block
+	HRRI	S1,G$BLOK##		;Addr of block
+	GOBSTR	S1,			;Lookup str in SSL
+	 CAXE	S1,DFGIF%		;Lost because bad str name?
+	$RETT				;In there! tell caller
+	$RETF				;Not there, tell caller
+	SUBTTL	D$DILS - Do a short FILOP on a TCB
+
+;Call -
+;	S1/	Function code
+;Returns -
+;	True- function wins
+;	False - function lost
+
+D$FILS:	STORE	S1,TCB.FU(B),RHMASK	;Save desired function
+	MOVE	S2,S1			;Save it here also
+	HRRI	S1,TCB.FB(B)		;Aim at the FILOP block in the TCB
+	HRLI	S1,FLPLEN		;And setup the (short) length
+	CAIE	S2,.FOINP		;Are we doing I/O?
+	 CAIN	S2,.FOOUT		;  .  .  .
+	  HRLI	S1,2			;Yes, shoren the arg block to lenght
+	FILOP.	S1,			;Do the desired function
+	  SKIPA				;Can't - investigate
+	$RETT				;Wins, tell the caller
+	MOVEI	TF,PS.RDO!PS.RDH	;Device off-line or hung?
+	TDZN	TF,TCB.PI(B)		;Is that what happened?
+	$RETF				;Must be a real I/O error
+	MOVEI	TF,PS.RDH		;Get hung device bit
+	TDNE	TF,TCB.PI(B)		;Was it a hung device?
+	JRST	DSKHNG			;Complain about hung device
+	MOVX	TF,TS.HWP		;Get HWP bit
+	TDNE	TF,TCB.SF(B)		;Unit set to HWP at interrupt level?
+	$RETF				;Yes
+	MOVX	S1,TS.NTP		;Get no disk present bit
+	IORM	S1,TCB.ST(B)		;Set it so we know the disk isn't there
+	PUSHJ	P,O$STAT##		;Tell the operator
+	JRST	DSKKIL			;Kill off the TCB
+
+DSKHNG:	$WTO	(<Hung device>,,TCB.OB(B),$WTFLG(WT.SJI))
+DSKKIL:	PUSHJ	P,D$RELE		;Clean up
+	MOVX	S1,TS.KIL		;Get kill bit
+	IORM	S1,TCB.ST(B)		;Lite so we flush this TCB
+	PUSHJ	P,G$NJOB##		;Go away
+	STOPCD	(RKD,HALT,,<Running a killed disk TDB>)
+	SUBTTL	REMSUN - REMOVE A UNIT FROM THE ACTIVE SWAPPING LIST
+
+;This routine will remove a specified unit from the active
+; swapping list, and inform the operator that it was done
+;Call -
+;	S1/	SIXBIT unit name
+;	M	Incoming message adrs (with ack code)
+;Returns -
+;	TRUE
+
+D$RSUN::
+	$SAVE	<P1,P2,P3,P4>		;Some work space
+	MOVE	P1,S1			;Protect the unit name
+	DMOVE	P2,[EXP SL.ASL,FL.REM]	;List is ASL, Removing
+	PUSHJ	P,INASL			;Is unit in the list now?
+	JUMPF	D$NOTS			;Not in there, complain
+	MOVE	S1,P1			;Get back unit name
+	PUSHJ	P,REMSWP		;Get it out
+	SKIPF				;Can't, see why
+	PJRST	D$DONE			;Ack the OPR
+	MOVE	S2,[XWD -ERRSLN,ERRSWP]	;Aim at the table
+	PJRST	D$ERRP			;Try to say what happened
+
+	SUBTTL	REMSWP - GET A UNIT OUT OF THE ASL
+
+;Call -
+;	S1/	SIXBIT unit name
+;Returns -
+;	TRUE - swap space moved
+;	FALSE -	DISK. error code in S1
+
+REMSWP:	MOVE	S2,S1			;Move the input arg over
+	MOVE	S1,[XWD .DUSWP,S2]	;Aim at the arguments
+	DISK.	S1,			;Move it off
+	$RETF				;Cant
+	$RETT				;Done
+SUBTTL	D$ASUN - Add a unit to active swap list and tell OPR
+
+;Call -
+;	S1/	SIXBIT unit name
+;Returns -
+;	TRUE, ALWAYS
+
+D$ASUN::
+	$SAVE	<P1,P2,P3,P4>		;Some space
+	MOVE	P1,S1			;Preserve the input
+	DMOVE	P2,[EXP SL.ASL,FL.ADD]	;List is ASL, Adding
+	PUSHJ	P,INASL			;See if its in already
+	JUMPT	D$NOTS			;It is, Dumb OPR
+	MOVE	S1,P1			;Get back the input arg
+	PUSHJ	P,ADDSWP		;Add it to the ASL
+	SKIPF				;Can't, see why
+	PJRST	D$DONE			;Finish up
+	MOVE	S2,[XWD -ERASLN,ERASWP]	;Aim at the table
+	PJRST	D$ERRP			;Try to say what happened
+SUBTTL	ADDSWP - Add one unit to the active swap list
+
+;This routine takes a unit name in S1 and tries to add that unit
+; to the active swap list.
+;If it can,  then it returns TRUE.
+;If it can't, it returns FALSE, with the DISK. UUO error code in S1
+ADDSWP:
+	MOVE	S2,S1			;Move the input arg
+	MOVE	S1,[XWD .DUASW,S2]	;Add unit in S1 to active swap
+	DISK.	S1,			;Put it in
+	$RETF				;Cant
+	$RETT				;Wins
+	SUBTTL	D$ACDL - ADD A STR TO THE CRASH DUMP LIST
+
+;CALL -
+;	S1/	SIXBIT STR NAME
+;RETURNS -
+;	ACK TO THE OPR WHO DID IT
+
+D$ACDL::
+	$SAVE	<P1,P2,P3,P4>
+	MOVE	P1,S1			;Save the str name
+	DMOVE	P2,[EXP SL.CDL,FL.ADD]	;List is CDL, Removing
+	PUSHJ	P,CHKCDL		;Is it in already?
+	JUMPT	D$NOTS			;Yes, complain
+	MOVE	S1,[XWD .DUASD,P1]	;Aim at the argument
+	DISK.	S1,			;Add it
+	SKIPA				;Can't, see why
+	PJRST	D$DONE			;Finish up
+	MOVE	S2,[XWD -ERACLN,ERACDL]	;Aim at the error table
+	PJRST	D$ERRP			;Tell what happened
+	SUBTTL	D$RCDL - REMOVE A STR FROM THE CRASH DUMP LIST
+
+;CALL -
+;	S1/	SIXBIT STR NAME
+;RETURNS -
+;	ACK TO THE OPR WHO DID IT
+
+D$RCDL::
+	$SAVE	<P1,P2,P3,P4>
+	MOVE	P1,S1			;Save the str name
+	DMOVE	P2,[EXP SL.CDL,FL.REM]	;List is CDL, removing
+	PUSHJ	P,CHKCDL		;Is it in now?
+	JUMPF	D$NOTS			;No, dumb OPR
+	MOVE	S1,[XWD .DURSD,P1]	;Aim at the argument
+	DISK.	S1,			;Take it out
+	 SKIPA				;Can't, see why
+	PJRST	D$DONE			;Finish up
+	MOVE	S2,[XWD -ERRCLN,ERRCDL]	;Aim at the table
+	PJRST	D$ERRP			;Say what happened
+	SUBTTL	EXIT routines for the system list manipulators
+
+;these routines assume many accumulators setup:
+;	S2/	Addr of error ITEXT
+;	P1/	SIXBIT structure or unit name
+;	P2/	List handle, SL.xxx
+;	P3/	0 for Adding, 1 for Removing
+;	P4/	Addr of ITEXT for message
+;	M/	Adrs of incoming message
+
+;Here if there is an error
+;	S1/	UUO error code
+;	S2/	-length of translation table,,addr of table
+;		table has form: XWD code,[ASCIZ/explanation/]
+D$ERRP:
+	PUSHJ	P,D$MAPE		;Get the descriptive ITEXT
+	MOVEI	P4,[ITEXT(<Could not be ^T/@ADRMTB(P3)/>)] ;Aim at the problem
+	PJRST	D$ACK			;Go type that
+
+;Here if the str/uni is already in during an add, or not in
+;	during a remove
+D$NOTS:	MOVEI	P4,[ITEXT(<Is ^T/@NOTTAB(P3)/ in>)]
+	JRST	D$NOER			;And don't add an error text
+
+D$DONE:	MOVEI	P4,[ITEXT(<^T/@ADRMTB(P3)/>)] ;Say that it's done
+D$NOER:	MOVEI	S2,[ITEXT(<>)]		;No error suffix text
+
+D$ACK:	MOVEM	P1,OBJBLK+OBJ.UN	;Save object unit name
+	$ACK	(<^I/0(P4)/ ^T/@LSTAB-SL.TMN(P2)/>,<^I/0(S2)/>,OBJBLK,.MSCOD(M))
+	$RETT
+
+LSTAB:	[ASCIZ/System Search List/]
+	[ASCIZ/Crash Dump List/]
+	[ASCIZ/Active Swapping List/]
+
+NOTTAB:	[ASCIZ/already/]
+	[ASCIZ/not/]
+
+ADRMTB:		FL.ADD==.-ADRMTB	;Offset for adding things
+	[ASCIZ/Added to/]
+		FL.REM==.-ADRMTB	;Offset for removing things
+	[ASCIZ/Removed from/]
+
+OBJBLK:	$BUILD	(OBJ.SZ)		;An object block
+	$SET	(OBJ.TY,,.OTMNT)	;A mount object
+;	$SET	(OBJ.UN,,0)		;Filled in at runtime
+	$SET	(OBJ.ND,,0)		;No node
+	$EOB
+	SUBTTL	D$MAPE - Map an error code
+
+;This routine will map the error code for any UUO failure into
+; an ITEXT describing the error.
+;Call -
+;	S1/	UUO error code
+;	S2/	-Length,,adrs of error table
+;		Table has the form:
+;			error code,,[ASCIZ/explanation/]
+;Returns -
+;	ITEXT in S2 describing the error
+;		NB, this ITEXT may use S1 to hold values, etc!!
+;		Thus, the ITEXT must be used as is, and not DMOVEd to
+;		the Ps, or such.
+
+D$MAPE:	JUMPGE	S2,ERRP.2		;Quit if we have no explaination
+MAPE.1:	HLRE	TF,0(S2)		;Get this entry's error code
+	CAME	TF,S1			;Is this the one?
+	AOBJN	S2,MAPE.1		;No, try the next
+	JUMPL	S2,ERRP.2		;Go if we found a match
+	MOVEI	S2,[ITEXT(<Reason: (Unknown) error code ^O/S1/>)]
+	$RETT				;All set
+
+;Here if there is a match
+ERRP.2:	HRRZ	S1,0(S2)		;Pick up the explanation
+	MOVEI	S2,[ITEXT(<Reason: ^T/0(S1)/>)]	;Point to the error
+	$RETT				;Got it
+	SUBTTL	Error code mapping tables
+
+;These tables all map specific UUO or specific UUO function error
+; codes into meaningful text.  They are set up for use by D$MAPErr
+
+
+;Table for mapping errors on DISK. .DUSWP function (remove unit from ASL)
+ERRSWP:	XWD	DUOIP%,[ASCIZ!Channel or controller off-line in progress!]
+	XWD	DUOSK%,[ASCIZ!No such controller!]
+	XWD	DUOSS%,[ASCIZ!Not enough swapping space if this pack removed!]
+	XWD	DUOIS%,[ASCIZ!Unit in a file structure cannot be put off-line!]
+	XWD	DUOES%,[ASCIZ!Not enough space for IOWDs!]
+	XWD	DUOPI%,[ASCIZ!Unit contains IPCF pages!]
+
+	ERRSLN==.-ERRSWP		;Length of remove from swap error table
+
+
+;Table for mapping errors from DISK. .DUASW (Add a swapping unit)
+ERASWP:	XWD	DUANU%,[ASCIZ!No such unit!]
+	XWD	DUAAI%,[ASCIZ!Unit already in Active Swapping List!]
+	XWD	DUASF%,[ASCIZ!Monitor swap table is full!]
+	XWD	DUAN4%,[ASCIZ!Blocks/cylinder not mulitple of 4!]
+	XWD	DUANS%,[ASCIZ!No swapping space (file SWAP.SYS) on pack!]
+	ERASLN==.-ERASWP		;Table length
+
+
+;Table for mapping errors from DISK. .DUACD (Add a crash structure)
+ERACDL:	XWD	DUDND%,[ASCIZ!No such structure!]
+	XWD	DUDNC%,[ASCIZ!No crash space on structure!]
+	XWD	DUDAD%,[ASCIZ!Structure already in the crash dump list!]
+	XWD	DUDDF%,[ASCIZ!Crash dump list is full!]
+	ERACLN==.-ERACDL		;Table length
+
+
+;Table for errors from DISK. .DURCD (remove from crash dump list)
+ERRCDL:	XWD	DUDNS%,[ASCIZ!Structure not in Crash Dump List!]
+	ERRCLN==.-ERRCDL		;Table length
+
+;Table for errors from DISK. .DUUNL (Unload a disk unit)
+DUUNTB:	XWD	DUUIU%,[ASCIZ!Illegal Unit name!]
+	XWD	DUUNI%,[ASCIZ!File structure not idle!]
+	XWD	DUUNU%,[ASCIZ!Device cannot be unloaded!]
+	DUUNLN==.-DUUNTB		;Table length
+
+;Table for errors from the GOBSTR UUO
+GOBETB:	XWD	DFGIF%,[ASCIZ!Illegal file structure name!]
+	XWD	DFGPP%,[ASCIZ!Job number and PPN do not match!]
+	XWD	DFGNP%,[ASCIZ!Insufficient privileges!]
+	XWD	DFGLN%,[ASCIZ!Incorrect argument block length!]
+	GOBELN==.-GOBETB		;Table length
+
+;Table for errors from the STRUUO
+STRETB:	XWD	FSILF%,[ASCIZ!Illegal function code!]
+	XWD	FSSNF%,[ASCIZ!One or more of the file structures not found!]
+	XWD	FSSSA%,[ASCIZ!One or more of the file structures in single access!]
+	XWD	FSILE%,[ASCIZ!Illegal entries in the argument block!]
+	XWD	FSTME%,[ASCIZ!Too many entries in the search list!]
+	XWD	FSUNA%,[ASCIZ!One or more of the units is not available!]
+	XWD	FSPPN%,[ASCIZ!Job number and PPN do not match!]
+	XWD	FSMCN%,[ASCIZ!Mount count is greater than 1!]
+	XWD	FSNPV%,[ASCIZ!Insufficient privileges!]
+	XWD	FSFSA%,[ASCIZ!File structure already exists!]
+	XWD	FSILL%,[ASCIZ!Illegal argument block length!]
+	XWD	FSNFS%,[ASCIZ!System file structure space full!]
+	XWD	FSNCS%,[ASCIZ!No free core for data blocks!]
+	XWD	FSUNF%,[ASCIZ!Unknown unit specified!]
+	XWD	FSRSL%,[ASCIZ!File structure repeated in search list definition!]
+	XWD	FSASL%,[ASCIZ!File structure contains units in Active Swapping List!]
+	XWD	FSISN%,[ASCIZ!Illegal file structure name; more than 4 characters!]
+	STRELN==.-STRETB		;Table length
+
+
+;Table for generic errors from file operations
+FILETB:
+	FILELN==.-FILETB		;Table length
+	SUBTTL	LOKUFD - Lock the UFD
+
+;This routine, actually a co-routine, gets the UFD interlock
+; for a particular STR:[p,pn], and unlocks the UFD when the caller
+; returns
+;If the interlock cannot be obtained, the OPR gets an error message,
+; and the caller proceeds.
+;Call -
+;	S1/	SIXBIT file structure name
+;	S2/	[p,pn]
+;Returns - 
+;	TRUE	always
+;		Stack modified so caller's return will unlock the UFD
+
+	LOKCNT==^D10			;Seconds to wait for interlock to clear
+
+LOKUFD:
+	PUSHJ	P,LOKU.1		;Get the interlock
+	EXCH	S1,0(P)			;Save the str name, Get return addr
+	PUSH	P,S2			;Save the ppn
+	PUSHJ	P,0(S1)			;Call the caller
+	EXCH	S2,0(P)			;Save return S2, get ppn
+	EXCH	S1,-1(P)		;Save return s1, get str name
+	PUSH	P,TF			;Save return T/F
+	PUSHJ	P,LOKU.3		;Clear the interlock
+	POP	P,TF			;Get back TF
+	POP	P,S2			;Get back S2
+	POP	P,S1			;Get back S1
+	$RET				;Return from caller
+
+;Here to get the UFD interlock
+LOKU.1:	$SAVE	<P1>			;Save a reg
+	MOVEI	P1,LOKCNT		;Get the retry counter
+LOKU.2:	MOVX	TF,.FSULK		;Get the function code-UFD interlock
+	PUSHJ	P,LOKU.4		;Do the work
+	JUMPT	.POPJ			;Got it, return
+	SOJLE	P1,LOKU.E		;Quit when counter expires
+	PUSH	P,P1			;Save the count
+	MOVEI	P1,1			;1 second
+	SLEEP	P1,			;Wait a sec
+	POP	P,P1			;Get back count
+	JRST	LOKU.2			;And try again
+
+;Here to clear the UFD interlock
+LOKU.3:	MOVX	TF,.FSUCL		;Function to clear interlock
+	PUSHJ	P,LOKU.4		;Do the work
+	JUMPT	.POPJ			;Wins
+	JRST	LOKE.1			;Complain
+
+;Here to pull the STRUUO
+LOKU.4:	$SAVE	<P1>			;Save a reg
+	MOVX	P1,<XWD 3,TF>		;Aim at the input args
+	STRUUO	P1,			;Do it
+	 $RETF				;Can't
+	$RETT				;Can
+
+;Here if there are problems doing the work
+LOKU.E:	MOVEI	TF,[ASCIZ/set/]		;Say what we can't do
+	SKIPA				;Enter the output code
+LOKE.1:	MOVEI	TF,[ASCIZ/clear/]	
+	EXCH	S1,TF			;Swap str name, error text
+	$WTO	(<Error on structure ^W/TF/>,<Can't ^T/@S1/ UFD interlock for ^U/S2/>,,$WTFLG(WT.SJI))
+	EXCH	S1,TF			;GET BACK STR NAME
+	$RETF				;Can't
+SUBTTL	End
+
+
+	END

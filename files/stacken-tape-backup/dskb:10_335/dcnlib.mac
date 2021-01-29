@@ -1,0 +1,402 @@
+TITLE DCNLIB -- DECnet library for MAISRV/SMTSND
+SUBTTL BCQ/1987-09-07 14:02:26
+
+	SEARCH GLXMAC, ORNMAC, JOBDAT
+	SALL
+	.DIRECTIVE FLBLST
+	.TEXT "/NOINITIAL"
+	PROLOG DCNLIB
+	
+;Version components.
+	DCNEDT==0		;Edit level.
+	DCNWHO==0		;Last hacker.
+	DCNMIN==0		;Minor version number.
+	DCNVER==0		;Major version number.
+
+;Entry Points in this module
+ENTRY N$INIT			;Initialize DCNLIB library.
+
+ENTRY N$PASV			;Open a passive (listening) connection.
+ENTRY N$ACC			;Accept a connection.
+ENTRY N$CDAT			;Read Connection data.
+
+ENTRY N$PSI			;Set PSI reason mask.
+ENTRY N$STS			;Read link status.
+ENTRY N$ERR			;Convert error number to string.
+
+ENTRY N$READ			;Read a buffer from network.
+ENTRY N$WRT			;Write a buffer to network.
+
+ENTRY N$REJ			;Send a reject.
+ENTRY N$DISC			;Send disconnect.
+ENTRY N$REL			;Release a DECnet channel.
+
+	.TEXT "/SYMSEG:LOW/LOCALS"
+
+	SUBTTL Data Storage
+
+DEFINE ERRMSG(TXT) <
+	[ASCIZ/TXT/]>
+
+;NSP error codes
+DCNERR:	ERRMSG	<Unknown DECnet error code 0>
+	ERRMSG	<Argument error>
+	ERRMSG	<Allocation failure>
+	ERRMSG	<Bad channel>
+	ERRMSG	<Bad format type>
+	ERRMSG	<Connect block format error>
+	ERRMSG	<Interrupt data too long>
+	ERRMSG	<Illegal flow control mode>
+	ERRMSG	<Illegal function>
+	ERRMSG	<Job quota exhausted>
+	ERRMSG	<Link quota exhausted>
+	ERRMSG	<No connect data to read>
+	ERRMSG	<Percentage input out of bounds>
+	ERRMSG	<No privileges>
+	ERRMSG	<Segment size too big>
+	ERRMSG	<Unknown node name>
+	ERRMSG	<Unexpected state: Unspecified>
+	ERRMSG	<Wrong number of arguments>
+	ERRMSG	<Function called in wrong state>
+	ERRMSG	<Connect block length error>
+	ERRMSG	<Process block length error>
+	ERRMSG	<String block length error>
+	ERRMSG	<Unexpected state:  Disconnect sent>
+	ERRMSG	<Unexpected state:  Disconnect confirmed>
+	ERRMSG	<Unexpected state:  No confidence>
+	ERRMSG	<Unexpected state:  No link>
+	ERRMSG	<Unexpected state:  No communication>
+	ERRMSG	<Unexpected state:  No resources>
+	ERRMSG	<Connect rejected>
+	ERRMSG	<Rejected or disconnected by object>
+	ERRMSG	<No resources>
+	ERRMSG	<Unrecognized node name>
+	ERRMSG	<Remote node shut down>
+	ERRMSG	<Unrecognized object>
+	ERRMSG	<Invalid object name format>
+	ERRMSG	<Object too busy>
+	ERRMSG	<Abort by network management>
+	ERRMSG	<Abort by object>
+	ERRMSG	<Invalid node name format>
+	ERRMSG	<Local node shut down>
+	ERRMSG	<Access control rejection>
+	ERRMSG	<No response from object>
+	ERRMSG	<Node unreachable>
+	ERRMSG	<No link>
+	ERRMSG	<Disconnect complete>
+	ERRMSG	<Image field too long>
+	ERRMSG	<Unspecified reject reason>
+	ERRMSG	<Bad flag combination>
+	ERRMSG	<Address check>
+
+	$DATA ZERBEG,0		;Start of data area zeroed at startup.
+	$DATA NSPBLK,.NSAA3+1	;NSP. Argument block.
+	$DATA CONBLK,.NSCUD+1	;Connect block.
+	$DATA SRCBLK,.NSDPN+1	;Source block.
+	$DATA DSTBLK,.NSDPN+1	;Destination block.
+	$DATA STRBLK,^D10	;String block.
+	$DATA ZEREND,0		;End of data area zeroed at startup.
+
+	SUBTTL Network Routines -- N$INIT Initialize Network Library
+;*
+;* Accepts	No Arguments
+;*
+
+N$INIT:	$SAVE <T1>		;Save what we'll clobber.
+	
+	SETZM ZERBEG		;Wipe data area.
+	MOVE T1,[ZERBEG,,ZERBEG+1]
+	BLT T1,ZEREND-1
+	
+	$RETT			;Return to caller.
+
+	SUBTTL Network Routines -- N$PASV Open a passive/listening link.
+;*
+;* Accepts	No Arguments.
+;*
+;* Returns in	S1 / DECnet channel number.
+;*
+
+N$PASV:	$SAVE <P1>		;Save what we'll clobber.
+	
+	MOVE P1,S1		;Save argument.
+	
+	MOVE S1,[.NSFEP,,3]	;Function and length.
+	MOVEM S1,NSPBLK+.NSAFN
+	SETZM NSPBLK+.NSACH	;No channel/status yet.
+	MOVEI S1,CONBLK		;Get pointer to connect block.
+	MOVEM S1,NSPBLK+.NSAA1
+	
+	MOVEI S1,4		;Length of connect block.
+	MOVEM S1,CONBLK+.NSCNL
+	SETZM CONBLK+.NSCND	;Accept connect from any node.
+	SETZM CONBLK+.NSCSD	;Accept connect from any source.
+	MOVEI S1,DSTBLK		;Destination block.
+	MOVEM S1,CONBLK+.NSCDD
+	
+	MOVEI S1,3		;Length of destination block.
+	MOVEM S1,DSTBLK+.NSDFL
+	MOVEI S1,0		;Format type 0 (DECnet System Program).
+	MOVEM S1,DSTBLK+.NSDFM
+	MOVEM P1,DSTBLK+.NSDOB	;Object number.
+	
+	MOVEI S1,NSPBLK		;Start a passive link.
+	NSP. S1,
+	 $RETF			; Go complain.
+	
+	HRRZ S1,NSPBLK+.NSACH	;Get channel assigned to us.
+
+	$RETT			;Return to caller.
+
+	SUBTTL Network Routines -- N$ACC Accept a connection.
+;*
+;* Accepts in	S1 / DECnet channel number.
+;*
+;* Returns with	S1 / DECnet channel number.
+;*
+
+N$ACC:	$SAVE <P1>
+	
+	MOVE P1,S1		;Save channel.
+	
+	MOVE S1,[.NSFAC,,2]
+	MOVEM S1,NSPBLK+.NSAFN
+	MOVEM P1,NSPBLK+.NSACH
+	MOVEI S1,NSPBLK
+	NSP. S1,		;Send connect confirm.
+	 $RETF			; Failed.
+
+	MOVE S1,P1
+
+	$RETT			;Ok.
+
+	SUBTTL Network Routines -- N$CDAT Read connect data
+;*
+;* Accepts in	S1 / DECnet channel number.
+;*
+;* Returns with	S1 / DECnet channel number.
+;*		S2 / Bytepointer (8-bit) to node name.
+;*
+
+N$CDAT:	$SAVE <P1>		;Save what we'll clobber.
+
+	MOVE P1,S1
+	
+	MOVE S1,[NS.WAI+XWD .NSFRI,3]
+	MOVEM S1,NSPBLK+.NSAFN
+	MOVEM P1,NSPBLK+.NSACH
+	MOVEI S1,CONBLK		;Connect block.
+	MOVEM S1,NSPBLK+.NSAA1
+	
+	MOVEI S1,2		;Length of connect block.
+	MOVEM S1,CONBLK+.NSCNL
+	MOVEI S1,STRBLK
+	MOVEM S1,CONBLK+.NSCND
+	
+	MOVEI S1,3		;Number of words.
+	MOVEM S1,STRBLK
+	SETZM STRBLK+1
+	SETZM STRBLK+2
+	
+	MOVEI S1,NSPBLK		;Read the connect data.
+	NSP. S1,
+	 $RETF			; Fail!
+	
+	MOVE S1,P1		;Get back channel number.
+	MOVE S2,[POINT 8,STRBLK+1] ;Build pointer.
+
+	$RETT
+
+	SUBTTL Network Routines -- N$PSI Set PSI mask
+;*
+;* Accepts in	S1 / DECnet channel number.
+;*		S2 / PSI Mask to set.
+;*
+;* Returns with	S1 / DECnet channel number.
+;*
+
+N$PSI:	$SAVE <P1,P2>		;Save what we'll clobber.
+	
+	DMOVE P1,S1		;Save argument.
+
+	MOVE S1,[.NSFPI,,3]	;Set PSI reason mask for channel.
+	MOVEM S1,NSPBLK+.NSAFN
+	MOVEM P1,NSPBLK+.NSACH	;Save channel number.
+	MOVEM P2,NSPBLK+.NSAA1	;Save PSI mask.
+	
+	MOVEI S1,NSPBLK
+	NSP. S1,		;Set the mask.
+	 $RETF		; Complain!
+	
+	MOVE S1,P1
+
+	$RETT
+
+	SUBTTL Network Routines -- N$READ Read a record from network
+;*
+;* Accepts in	S1 / DECnet channel number.
+;*		S2 / Max number of bytes to read.
+;*		T1 / Bytepointer to buffer.
+;*		T2 / -1 to wait for message, 0 fall thru if no data.
+;*
+;* Returns in	S1 / Number of bytes actually read
+;*		S2 / Updated byte pointer.
+;*
+;* If there is no data available, N$READ will dismiss the current
+;* process until there is data available to read.
+;*
+
+N$READ:	$SAVE <T3,P1,P2>	;Save what we'll clobber.
+
+	DMOVE P1,S1		;Save arguments.
+	
+	MOVE T3,[.NSFDR,,4]	;Read a message.
+	PUSHJ P,N$STS		;Get link status.
+	$RETIF
+	TXNN S2,NS.NDA		;Any data available?
+	 SKIPN T2		; No, are we supposed to wait?
+	  SKIPA			;  Not waiting, or message available.
+	   TXO T3,NS.WAI	;   Yes, wait for message.
+	
+	MOVEM T3,NSPBLK+.NSAFN
+	MOVEM P1,NSPBLK+.NSACH	;Save channel number.
+	MOVEM P2,NSPBLK+.NSAA1	;Max number of bytes.
+	MOVEM T1,NSPBLK+.NSAA2	;Bytepointer to buffer.
+	
+	MOVEI S1,NSPBLK
+	NSP. S1,		;Read the data from message.
+	 $RETF			; Return FALSE.
+	
+	MOVE S1,P2		;Get original byte count.
+	SUB S1,NSPBLK+.NSAA1	;Get actual number of bytes read.
+	MOVE S2,NSPBLK+.NSAA2	;Get updated byte pointer.
+
+	$RETT			;Return TRUE.
+
+	SUBTTL Network Routines -- N$WRT Write data to network
+;*
+;* Accepts in	S1 / DECnet channel.
+;*		S2 / Number of bytes to write.
+;*		T1 / Byte pointer to buffer.
+;*		T2 / NS.EOM flag.
+;*
+;* Returns with S1 / Number of bytes actually written.
+;*		S2 / Updated byte pointer.
+;*
+
+N$WRT:	$SAVE <P1,P2>		;Save what we'll clobber
+	
+	DMOVE P1,S1		;Save input arguments.
+
+	MOVE S1,[NS.WAI+XWD .NSFDS,4] ;Set up to send data.
+	TDO S1,T2		;Set possible extra flags.
+	MOVEM S1,NSPBLK+.NSAFN
+	MOVEM P1,NSPBLK+.NSACH	;Save DECnet channel number.
+	MOVEM P2,NSPBLK+.NSAA1	;Save byte count.
+	MOVEM T1,NSPBLK+.NSAA2	;Save byte pointer.
+	
+	MOVEI S1,NSPBLK
+	NSP. S1,		;Send the data.
+	 $RETF
+	
+	MOVE S1,P1		;Get original byte count.
+	SUB S1,NSPBLK+.NSAA1	;Get number of bytes actually sent.
+	MOVE S2,NSPBLK+.NSAA2	;Get updated byte pointer.
+	
+	$RETT			;Return to caller.
+
+	SUBTTL Network Routines -- N$REJ Reject a Connect received
+;*
+;* Accepts in	S1 / DECnet channel number.
+;*
+
+N$REJ:	$SAVE <S1>		;Save what we'll clobber.
+	
+	MOVEM S1,NSPBLK+.NSACH	;Save channel number.
+	MOVE S1,[NS.WAI+XWD .NSFRJ,2]
+	MOVEM S1,NSPBLK+.NSAFN	;Function code.
+	MOVEI S1,NSPBLK
+	NSP. S1,		;Send the reject.
+	 $RETF
+	
+	$RETT
+
+	SUBTTL Network Routines -- N$DISC Send Disconnect
+;*
+;* Accepts in	S1 / DECnet channel number.
+;*
+;* Returns in	S1 / DECnet channel number.
+;*
+
+N$DISC:	$SAVE <S1>		;Save S1.
+	
+	MOVEM S1,NSPBLK+.NSACH	;Save channel number.
+	MOVE S1,[XWD .NSFSD,2]
+	MOVEM S1,NSPBLK+.NSAFN
+	MOVEI S1,NSPBLK
+	NSP. S1,
+	 $RETF
+	
+	$RETT
+
+	SUBTTL Network Routines -- N$REL Close network link to remote system
+;*
+;* Accepts in	S1 / DECnet channel number.
+;*
+;* Returns with	S1 / DECnet channel number.
+;*
+
+N$REL:	$SAVE <P1>		;Save what we'll clobber.
+	
+	MOVE P1,S1
+
+	MOVE S1,[.NSFRL,,2]	;And then release the link.
+	MOVEM S1,NSPBLK+.NSAFN
+	MOVEM P1,NSPBLK+.NSACH
+
+	MOVEI S1,NSPBLK		;Release the link.
+	NSP. S1,
+	 $RETF
+	
+	MOVE S1,P1
+
+	$RETT
+
+	SUBTTL Network Routines -- N$STS Get link status
+;*
+;* Accepts in	S1 / DECnet channel number.
+;*
+;* Returns with	S1 / DECnet channel number.
+;*		S2 / Link status.
+;*
+
+N$STS:	$SAVE <P1>		;Save what we'll clobber.
+
+	MOVE P1,S1
+
+	MOVE S1,[.NSFRS,,2]
+	MOVEM S1,NSPBLK+.NSAFN
+	MOVEM P1,NSPBLK+.NSACH
+
+	MOVEI S1,NSPBLK
+	NSP. S1,		;Get the link status.
+	 $RETF
+	
+	MOVE S1,P1
+	MOVE S2,NSPBLK+.NSACH
+	
+	$RETT			;Back to caller.
+
+	SUBTTL Network Routines -- N$ERR Convert error number to string.
+;*
+;* Accepts in	S1 / NSP. error code.
+;*
+;* Returns with	S1 / NSP. error code.
+;*		S2 / Bytepointer to error text.
+;*
+
+N$ERR:	MOVE S2,DCNERR(S1)	;Get pointer to text.
+	HRLI S2,(POINT 7,)	;Build bytepointer.
+	$RETT			;Return to caller.
+
+END

@@ -1,0 +1,77 @@
+TITLE	LINES - Node_line mapping for WHO
+
+	RIM10
+	LOC	0
+
+	SALL				;FOR CLEAN LISTINGS
+	.DIRECT	FLBLST			;FOR CLEANER LISTINGS
+
+
+;		Assembly instructions
+;
+;	.COMPILE STD:LINES.INI=INI:LINES.MAC
+
+
+; ***********************************************************************
+; * The node table must be in strict alphabetical order.		*
+; * The line tables must be in strict numeric order.			*
+; ***********************************************************************
+
+	NAMSIZ==^D19			;MAXIMUM LENGTH OF A NAME STRING
+
+
+; Macro to define the node index block
+;
+DEFINE	$INDEX	(NODES),<
+	IRP	NODES,<			;;REPEAT FOR ALL NODES
+		XLIST			;;SUPPRESSS LISTING
+		SIXBIT	/NODES/		;;STORE NODE IDENTIFIER
+		LIST			;;TURN ON LISTING
+		EXP	NODES		;;POINT TO START OF DATA BASE
+	>				;;END OF IRP
+>					;;END OF $INDEX MACRO
+
+
+; Macro to define the line entries
+;
+DEFINE	$LINE	(NUM,NAM),<
+	EXP	NUM			;;STORE LINE NUMBER
+	XLIST				;;SUPRESS LISTING
+	XX==.				;;REMEMBER LOCATION
+	ASCIZ	|NAM|			;;STORE ASCIZ NAME
+	ZZ=<NAMSIZ+4>/5-<.-XX>		;;GET WHATS LEFT
+	IFL	ZZ,<PRINTX ? 'NAM is too long>
+	BLOCK	ZZ			;;FILL IN THE SPACE
+	LIST				;;TURN ON LISTING
+>					;;END OF $LINE MACRO
+SUBTTL	Index block
+
+
+; Assemble the index block here
+;
+INDEX:	$INDEX	(DN87,KL10)
+	0
+SUBTTL	Node DN87
+
+
+DN87:	$LINE	(000,<CTY>)
+	-1
+SUBTTL	Node KL10
+
+
+KL10:	$LINE	(000,<Klinik for CPU0>)
+	$LINE	(001,<DL to CPU0/DTE1>)
+	$LINE	(002,<DL to CPU0/DTE2>)
+	$LINE	(003,<DL to CPU0/DTE3>)
+	$LINE	(004,<Klinik for CPU1>)
+	$LINE	(005,<DL to CPU1/DTE1>)
+	$LINE	(007,<DL to CPU1/DTE2>)
+	$LINE	(010,<DL to CPU1/DTE3>)
+	$LINE	(360,<System>)
+	$LINE	(361,<CPU1 CTY>)
+	$LINE	(362,<CPU0 CTY>)
+	-1
+SUBTTL	End
+
+
+	END

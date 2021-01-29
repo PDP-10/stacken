@@ -1,0 +1,24 @@
+MATRIX TIC-TAC-TOE
+
+
+Matrix tic-tac-toe is played on a ten  by  ten  matrix  in  a  manner
+similar  to  ordinary  tic-tac-toe.  The player and the computer will
+alternately place a move at one of the matrix coordinates. Each  will
+try  to  place  five moves in a row to effect a win.  The player will
+always be given the first move.  This forces  the  computer  to  play
+defensively and gives the player a reasonable probability of winning.
+There are 192 win combinations on the board. Good luck.
+
+
+The available moves are:
+
+	(A0-J9)	-Board coordinates at which the player wishes to place
+		 his move.
+	EXIT	-Terminates the game.
+	RESTART	-Clears the board and restarts the game.
+
+To start playing type:
+
+.RUN GAM:MATTAC
+
+	<End of HLP:MATTAC.HLP  771206>

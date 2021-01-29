@@ -1,0 +1,23 @@
+/SCAN
+P11:=DSKB:[10,7,ANF10]		!ANF sources
+SCUMS:= DSKB:[10,7,MON,SCUMS]	!Accumulated FILCOMs (your area)
+CTLS:=DSKB:[10,7,MON,CTLS]	!Source control files (from tape)
+UNSUP:=DSKB:[10,7,UNSMON]	!Unsupported monitor sources (from Customer Sup. tape)
+MON:/SEARCH=DSKB:[10,7,MON],CTLS:,P11:,UNSUP:	!Standard sources (from tape)
+DDT:=DSKB:[10,7,DDT]		!Where to pick up DDT
+BTS:=DSKB:[10,7,BOOT]		!Where to pick up BOOT
+LOGS:= DSKB:[10,7,MON]		!Where to leave tracks (your area)
+BASE:=DSKB:[10,7,MON]		!Updated sources(your area)
+!<*>! FGEN areas, used to produce TOPS10.REL (your areas)
+KL:=DSKB:[10,7,MON,KL]		!KL monitor TOPS10.REL
+KLF:=DSKB:[10,7,MON,KLF]	!KL monitor with FTMP=0
+KS:=DSKB:[10,7,MON,KS]		!KS monitor
+!<*>! Build areas, used to produce MON.EXE
+A:=DSKB:[10,7,MON,KL,A]		!1322 standard S/A monitor
+B:=DSKB:[10,7,MON,KL,B]		!1322 no networks S/A monitor
+L:=DSKB:[10,7,MON,KL,L]		!1026/1042/1322 standard monitor
+P:=DSKB:[10,7,MON,KL,P]		!2476 standard monitor
+Q:=DSKB:[10,7,MON,KL,Q]		!2476/1322 standard monitor
+F:=DSKB:[10,7,MON,KLF,F]	!2476 FTMP=0 monitor
+S:=DSKB:[10,7,MON,KS,S]		!4097 standard monitor
+/RUN:SYS:DECLARE/TMPFIL:DCL:"@BUILDS.DCL"/RUNOFF

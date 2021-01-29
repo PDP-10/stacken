@@ -1,0 +1,202 @@
+	TITLE	MONITR -- Print information about the running monitor
+	SUBTTL	G.M. Uhler/GMU
+
+
+;COPYRIGHT (C) 1979,1980,1981,1982,1983 BY
+;DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+;
+;
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+;ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+;INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+;COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+;OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+;TRANSFERRED.
+;
+;THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+;AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+;CORPORATION.
+;
+;DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+;SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+
+
+	SEARCH	JOBDAT,MACTEN,SCNMAC,UUOSYM
+	.DIRECTIVE .XTABM,FLBLST
+	.TEXT "REL:SCAN/SEARCH"
+	SALL		;Clean up listing
+
+
+;Show versions of universal files
+
+	%%JOBD==%%JOBD
+	%%MACT==%%MACT
+	%%SCNM==%%SCNM
+	%%UUOS==%%UUOS
+
+
+	MONVER==1	;DEC version
+	MONMIN==0	;DEC minor version
+	MONEDT==0	;DEC edit number
+	MONWHO==0	;Who last edited
+
+	TWOSEG
+	RELOC	400000
+	LOC	.JBVER
+	VRSN.	(MON)	;Version number to job data area
+	RELOC
+	SUBTTL	Symbol definitions
+
+
+;AC definitions
+
+	F==0		;Flags
+	T1==1		;First of four temporaries
+	T2==2
+	T3==3
+	T4==4
+	P1==5		;First of four preserved registers
+	P2==6
+	P3==7
+	P4==10
+	N==P3		;SCAN convention
+	C==P4		;SCAN convention
+	P==17		;PDL pointer
+
+	ND	.PDLEN,20	;Length of PDL
+	SUBTTL	Start of program
+
+
+MONITR:	JFCL			;Ignore CCL entry
+	RESET			;Clear the world
+	MOVE	P,[IOWD .PDLEN,PDL] ;Setup PDL
+	MOVEI	T1,0		;No typeout address
+	PUSHJ	P,.TYOCH##	;  (Let SCAN OUTCHR)
+	MOVSI	T1,-5		;Number of words in monitor name
+MONIT1:	MOVX	T2,%CNFG0	;Get base for GETTAB
+	HRLI	T2,(T1)		;Offset by correct amount
+	GETTAB	T2,		;Get next word
+	  PJSP	T1,GTBERR	;Failed
+	MOVEM	T2,MONNAM(T1)	;Store in block
+	AOBJN	T1,MONIT1	;Loop for all
+	MOVX	T1,%CNDT0	;GETTAB for first word of system build date
+	GETTAB	T1,		;Get it
+	  PJSP	T1,GTBERR	;Failed
+	MOVEM	T1,SYSDAT	;Store it
+	MOVX	T1,%CNDT1	;GETTAB for second word
+	GETTAB	T1,		;Get it
+	  PJSP	T1,GTBERR	;Failed
+	MOVEM	T1,SYSDAT+1	;Store it
+	MOVEI	T1,[ASCIZ/
+Monitor name: /]
+	PUSHJ	P,.TSTRG##	;Type message
+	MOVEI	T1,MONNAM	;Point to monitor name
+	PUSHJ	P,.TSTRG##	;Type it
+	MOVEI	T1,[ASCIZ/
+Monitor build date: /]
+	PUSHJ	P,.TSTRG##
+	MOVEI	T1,SYSDAT	;Point at system build date
+	PUSHJ	P,.TSTRG##	;Type it
+	MOVEI	T1,[ASCIZ/
+Monitor version: /]
+	PUSHJ	P,.TSTRG##	;Type message
+	MOVX	T1,%CNVER	;GETTAB for monitor version
+	GETTAB	T1,		;Get it
+	  PJSP	T1,GTBERR	;Failed
+	PUSHJ	P,.TOCTW##	;Type it
+	MOVEI	T1,[ASCIZ\
+Monitor load date/time: \]
+	PUSHJ	P,.TSTRG##	;Type message
+
+
+				;Continued on the following page
+				;Continued from the previous page
+
+
+	MOVX	T1,%CNDTM	;GETTAB for current universal date/time
+	GETTAB	T1,		;Get it
+	  PJSP	T1,GTBERR	;Failed
+	MOVX	T2,%CNSUP	;GETTAB for system uptime
+	GETTAB	T2,		;Get it
+	  PJSP	T1,GTBERR	;Failed
+	MOVX	T3,%CNTIC	;GETTAB for tics/second
+	GETTAB	T3,		;Get it
+	  PJSP	T1,GTBERR	;Failed
+	IMULI	T2,^D1000	;Convert uptime from
+	IDIV	T2,T3		;  tics to milliseconds
+	PUSH	P,T2		;Save for later
+	MUL	T2,[1,,0]	;And then from milliseconds to
+	DIV	T2,[^D24*^D60*^D60*^D1000] ;  universal date/time
+	SUB	T1,T2		;Compute UDT of monitor load
+	PUSHJ	P,.TDTTM##	;Type it
+	MOVEI	T1,[ASCIZ/
+Monitor uptime: /]
+	PUSHJ	P,.TSTRG##	;Type message
+	POP	P,T1		;Get back uptime
+	PUSHJ	P,.TTIME##	;Type it
+
+
+				;Continued on the following page
+				;Continued from the previous page
+
+
+	MOVEI	T1,[ASCIZ/
+File from which monitor was loaded: /]
+	PUSHJ	P,.TSTRG##	;Type message
+	MOVX	T1,%CNMBS	;GETTAB for device name
+	GETTAB	T1,		;Get it
+	  PJSP	T1,GTBERR	;Failed
+	PUSHJ	P,.TSIXN##	;Type it
+	PUSHJ	P,.TCOLN##	;Add a colon
+	MOVX	T1,%CNMBF	;GETTAB for filename
+	GETTAB	T1,		;Get it
+	  PJSP	T1,GTBERR	;Failed
+	PUSHJ	P,.TSIXN##	;Type it
+	MOVEI	T1,"."		;Add a
+	PUSHJ	P,.TCHAR##	;  dot
+	MOVX	T1,%CNMBX	;GETTAB for extension
+	GETTAB	T1,		;Get it
+	  PJSP	T1,GTBERR	;Failed
+	PUSHJ	P,.TSIXN##	;Type it
+	MOVX	T1,%CNMBD	;GETTAB for PPN
+	GETTAB	T1,		;Get it
+	  PJSP	T1,GTBERR	;Failed
+	MOVEM	T1,PTHBLK+.PTPPN ;Store in path block
+	MOVSI	T2,-5		;Setup for SFD loop
+MONIT2:	MOVSI	T1,(T2)		;Move offset to LH(T1)
+	ADDX	T1,%CNSF1	;Include apropriate GETTAB argument
+	GETTAB	T1,		;Get it
+	  PJSP	T1,GTBERR	;Failed
+	MOVEM	T1,PTHBLK+.PTPPN+1(T2) ;Store in path block
+	SKIPE	T1		;Done if zero word
+	AOBJN	T2,MONIT2	;Loop for all
+	SETZM	PTHBLK+.PTPPN+2(T2) ;Insure zero word terminator
+	MOVE	T1,[TS.DRP,,PTHBLK+.PTPPN] ;Point at block, it's a path
+	PUSHJ	P,.TDIRB##	;Type it
+MONIT3:	PUSHJ	P,.TCRLF##	;End the line
+	MONRT.			;Exit quietly
+	JRST	MONITR		;Loop if CONTINUE
+
+
+;Here on GETTAB failure
+
+GTBERR:	PUSH	P,T1		;Save the PC
+	MOVEI	T1,[ASCIZ/
+?GETTAB failure at PC /]
+	PUSHJ	P,.TSTRG##	;Type the message
+	POP	P,T1		;Restore the PC
+	MOVEI	T1,-2(T1)	;Back it up and clear the flags
+	PUSHJ	P,.TOCTW##	;Type it
+	JRST	MONIT3		;Quit
+	SUBTTL	Data areas
+
+
+	RELOC
+
+MONNAM:	BLOCK	5		;Monitor name
+SYSDAT:	BLOCK	2		;System build date
+PTHBLK:	BLOCK	.PTMAX		;PATH. block
+PDL:	BLOCK	.PDLEN		;PDL
+
+
+	END	MONITR

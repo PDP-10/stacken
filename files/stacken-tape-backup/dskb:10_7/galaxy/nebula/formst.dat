@@ -1,0 +1,54 @@
+$! 		FORMSTYPE.DAT: a file of types of print forms.
+$! 			MUST BE RESIDENT IN SYS$MANAGER
+$! *************************************************************************************************
+$! This is a data file that records the names of legal forms and equates them to a form number.
+$! 
+$! Modified  8-Nov-83 by Paul Kyzivat to add definitions for the xerox 8700.
+$! Modified  4-Apr-84 by Paul Kyzivat to add white and blue card stock.
+$! Modified 30-Aug-84 by Paul Kyzivat to reformat and reassign numbers in preparation for V4.
+$! 
+$! The following number assignment system is used in this file:
+$! 	0-49	used for defaults and random forms unrelated to the 8700 printers.
+$! 	50-74	forms for the 8700 with simplex/duplex not explicitly in the form name.
+$!	75-99	undefined
+$! 	100-124	alternate form names for the 8700, not fitting any other category.
+$!	125-149	undefined
+$! 	150-174	same as 50-74, but explicitly SIMPLEX.
+$!	175-199	undefined
+$! 	200-224	same as 50-75, but explicitly DUPLEX.
+$!	225-255	undefined
+$! 
+$! This file can be made compatible with V4 by changing each leading "%" to "$ DEFINE/FORM".
+$! 
+$! This file is also processed by the 8700 symbiont.  It utilizes the "stock" name to associate
+$! a form with its internal data about the form.  It also checks the "desc" field for the presence
+$! of the words "SIMPLEX" or "DUPLEX" to determine whether to image both sides of the form.
+$! If these fields are not found, defaults prevail.
+$! 
+% NORMAL		  0				! actual paper type depends on printer type
+% DEFAULT		  0				! actual paper type depends on printer type
+% NARROW		  1				! for narrow, 80 column paper on a line printer
+% PLAIN			 50 /stock=PLAIN 		/desc="Plain white unpunched paper (DUPLEX)"
+% PARCHMENT		 51 /stock=PARCHMENT 		/desc="Parchment paper (SIMPLEX)"
+% PLAIN_YELLOW		 52 /stock=PLAIN_YELLOW 	/desc="Yellow paper (DUPLEX)"
+% CARD_YELLOW		 53 /stock=CARD_YELLOW 		/desc="Yellow card stock (DUPLEX)"
+% CARD_WHITE		 54 /stock=CARD_WHITE 		/desc="White card stock (DUPLEX)"
+% CARD_BLUE		 55 /stock=CARD_BLUE 		/desc="Blue card stock (DUPLEX)"
+% 3_HOLE		 56 /stock=3_HOLE	 	/desc="White 3-hole paper, holes OUT (DUPLEX)"
+% SIMPLEX		100 /stock=3_HOLE_SIMPLEX 	/desc="White 3-hole paper, holes IN (SIMPLEX)"
+% DUPLEX		101 /stock=3_HOLE	 	/desc="White 3-hole paper, holes OUT (DUPLEX)"
+% CARD			102 /stock=CARD_WHITE 		/desc="White card stock (DUPLEX)"
+% SIMPLEX_PLAIN		150 /stock=PLAIN 		/desc="Plain white unpunched paper (SIMPLEX)"
+% SIMPLEX_PARCHMENT	151 /stock=PARCHMENT 		/desc="Parchment paper (SIMPLEX)"
+% SIMPLEX_PLAIN_YELLOW	152 /stock=PLAIN_YELLOW 	/desc="Yellow paper (SIMPLEX)"
+% SIMPLEX_CARD_YELLOW	153 /stock=CARD_YELLOW 		/desc="Yellow card stock (SIMPLEX)"
+% SIMPLEX_CARD_WHITE	154 /stock=CARD_WHITE 		/desc="White card stock (SIMPLEX)"
+% SIMPLEX_CARD_BLUE	155 /stock=CARD_BLUE 		/desc="Blue card stock (SIMPLEX)"
+% SIMPLEX_3_HOLE	156 /stock=3_HOLE_SIMPLEX 	/desc="White 3-hole paper, holes IN (SIMPLEX)"
+% DUPLEX_PLAIN		200 /stock=PLAIN 		/desc="Plain white unpunched paper (DUPLEX)"
+% DUPLEX_PARCHMENT	201 /stock=PARCHMENT 		/desc="Parchment paper (DUPLEX)"
+% DUPLEX_PLAIN_YELLOW	202 /stock=PLAIN_YELLOW 	/desc="Yellow paper (DUPLEX)"
+% DUPLEX_CARD_YELLOW	203 /stock=CARD_YELLOW 		/desc="Yellow card stock (DUPLEX)"
+% DUPLEX_CARD_WHITE	204 /stock=CARD_WHITE 		/desc="White card stock (DUPLEX)"
+% DUPLEX_CARD_BLUE	205 /stock=CARD_BLUE 		/desc="Blue card stock (DUPLEX)"
+% DUPLEX_3_HOLE		206 /stock=3_HOLE	 	/desc="White 3-hole paper, holes OUT (DUPLEX)"

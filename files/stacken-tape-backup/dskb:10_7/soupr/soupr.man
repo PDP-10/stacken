@@ -1,0 +1,639 @@
+
+
+
+
+
+
+
+
+
+
+
+
+                         CHAPTER 1
+
+                        INTRODUCTION
+
+
+
+     SOUPR  (SOftware  Update  Package   Revisited)   is   a
+collection of three programs: COMPAR, UPDATE, and MERGE. The
+following is a brief description of  each  program.  A  more
+detailed explanation can be found in the help files.
+
+1. COMPAR
+
+          The input to COMPAR consists of  two  ASCII  files
+     known  as  the base file and the user file. COMPAR will
+     compare the two files and create a correction file. The
+     correction  file details how the user file differs from
+     the base file. The command format is:
+
+     .R COMPAR
+     *cor-file=base-file,user-file/switches
+
+2. UPDATE
+
+          COMPAR and  UPDATE  are  inverse  operations.  The
+     input   to  UPDATE  consists  of  a  base  file  and  a
+     correction file. UPDATE will reconstruct the user file.
+     The command format is:
+
+     .R UPDATE
+     *user-file=base-file,cor-file/switches
+
+3. MERGE
+
+          The input to MERGE consists of several  correction
+     files.  MERGE  will merge them into a single correction
+     file. The command format is:
+
+     .R MERGE
+     *cor-file=cor-file/switches,cor-file/switches...
+INTRODUCTION                                        Page 1-2
+
+
+     SOUPR is designed to fulfill two functions:
+
+1.   Vendors very  rarely  rewrite  programs  from  scratch.
+     Quite  frequently  when  a  new version of a program is
+     released,  it  differs  only  slightly  from  the   old
+     version.  In  such cases it is wasteful to distribute a
+     complete copy of the program. A better  approach  would
+     be  to  distribute  only  those portions of the program
+     that have been altered. To do this the vendor would use
+     COMPAR  to compare the old version with the new version
+     and create a correction file. The correction file would
+     be  distributed  to  the customers. The customers would
+     use UPDATE to reconstruct the program from  their  copy
+     of the old version.
+
+2.   Many installations modify vendor  software.  Each  time
+     the  vendor  releases  a  new version of a program, the
+     installation must recode the local  features.  A  quick
+     way  to  do  this  is  to  use  COMPAR  to  create  two
+     correction files: one with the local features, and  one
+     with  the  vendor's  new  features.  The two correction
+     files can then be merged into a single correction  file
+     with  MERGE.  Finally, UPDATE is used to generate a new
+     source file.
+
+
+
+
+
+
+
+
+
+
+
+
+                         CHAPTER 2
+
+                 FORMAT OF THE SOURCE FILE
+
+
+
+     Although SOUPR is normally used with assembly language,
+this is not a restriction. SOUPR may be used with any source
+file. In fact, SOUPR may be used with any  ASCII  file.  The
+file  is  not  parsed  in any way. Binary files (such as REL
+files and SAVE files) may not be used.
+
+     Each line in the  source  file  is  identified  by  the
+notation  "n/m".  Where  n  is the line number, and m is the
+page number.
+
+     A line is an arbitrary  sequence  of  ASCII  characters
+terminated  by a break character. The break character itself
+is considered to be  part  of  the  line.  In  the  case  of
+consecutive  break  characters, each character is considered
+to be a seperate line. The following are defined to be break
+characters:
+
+          12   LF   Line Feed
+          13   VT   Vertical Tab
+          14   FF   Form Feed
+          32   ^Z   control Z
+          33   ESC  ESCape
+
+
+     A page is an arbitrary sequence of lines terminated  by
+a  form  feed.  The form feed itself is considered to be the
+last character of the last line of the previous page.  Since
+form  feeds  are usually preceded by <CR><LF>, the form feed
+is usually the only character in its line.
+
+     SOUPR will ignore the line sequence  numbers  generated
+by SOS.
+
+
+
+
+
+
+
+
+
+
+
+
+                         CHAPTER 3
+
+               FORMAT OF THE CORRECTION FILE
+
+
+
+     Each line in the  correction  file  is  prefixed  by  a
+special  character. This character determines which of three
+categories the line falls into:
+
+1.   Commands  to  SOUPR  (see  below).  All  commands   are
+     prefixed by a space (ASCII 40).
+
+2.   Text to be acted upon by the  commands.  Each  line  of
+     text  is  prefixed  by a tab (ASCII 11). Except for its
+     use as a delimiter, the tab is ignored.
+
+3.   In the event that a line fails to be prefixed by either
+     a  space  or  a  tab, the line is regarded as text. The
+     first character, whatever it may be, is  considered  to
+     be part of the text.
+
+
+
+     SOUPR supports five types of commands:
+
+1.    DELETE n/m ;comment
+             text
+
+          Delete text starting at line n of page m. The text
+     to  be  deleted  follows  immediately  after the DELETE
+     command, and continues until a space is encountered  in
+     column  one (i.e. another command). If the text at line
+     n of page m in the base file is different from the text
+     in  the correction file, UPDATE will flag the condition
+     as an error.
+
+2.    INSERT n/m ;comment
+             text
+
+          Insert text just before line n of page m. The text
+     to  be  inserted  follows  immediately after the INSERT
+     command, and continues until a space is encountered  in
+     column one.
+
+3.    REPLACE n/m ;comment
+FORMAT OF THE CORRECTION FILE                       Page 3-2
+
+
+             text1
+      WITH
+             text2
+
+          At line n of page  m  replace  text1  with  text2.
+     Text1  follows  immediately  after the REPLACE command,
+     and continues until a space is  encountered  in  column
+     one.  This  line  will  be  the WITH auxiliary command.
+     Text2 follows immediately after the WITH  command,  and
+     continues  until  a space is encountered in column one.
+     If the text at line n of page m in  the  base  file  is
+     different  from  text1  in  the correction file, UPDATE
+     will flag the condition as an error.
+
+4.    SUM n ;comment
+
+          Where n is a rotate add one checksum of  the  base
+     file.  While  processing  the  base  file,  UPDATE will
+     recompute this checksum. If the value  does  not  match
+     that  stored  in  the correction file, UPDATE will flag
+     the condition as an error. Hence a  user  is  prevented
+     from  accidentally  using  the  correction file with an
+     incorrect version of the base file. MERGE will type  an
+     error  message  if  a user attempts to merge correction
+     files with different checksums. The SUM  command  marks
+     end of file.
+
+5.    ;comment
+
+          Ignored.
+
+
+                            NOTE
+
+               All  keywords  (e.g.   DELETE,
+               INSERT,   REPLACE,  WITH,  and
+               SUM) may be abbreviated to the
+               smallest    unambiguous   form
+               (currently one letter).
+
+
+
+     MERGE goes to a great deal of trouble to make conflicts
+easy to resolve. The begining and ending of each conflict is
+clearly labeled and numbered. For example, a section of  the
+correction file might appear as:
+
+ ;***BEGINING OF CONFLICT 3***
+ DEL 66/5
+                 JRST    FOO
+ REP 66/5
+                 JRST    FOO
+ WIT
+         ;FALL TO ROUTINE FOO
+ ;***END OF CONFLICT 3***
+FORMAT OF THE CORRECTION FILE                       Page 3-3
+
+
+The programmer can quickly see that both patches  attempted.
+to  do the same thing, they merely did it in different ways.
+The object was to remove the JRST at line 66 of page 5.  The
+first  patch  tried  the straightforward approach, it merely
+deleted the line. The second patch attempted to replace  the
+line  with  a  comment.  But  MERGE doesn't realize that the
+patches are equivalent. MERGE will type  a  warning  message
+that  conflicts  exist.  The  programmer  must  type out the
+correction file and study the conflicts. In  this  case,  he
+merely  decides which patch he wishes to use and removes the
+other. This sort of "conflict", by the way, is quite common.
+It's  nice  to  know that even when conflicts do occur, they
+are usually easy to resolve.
+
+
+
+
+
+
+
+
+
+
+
+
+                         CHAPTER 4
+
+                          EXAMPLES
+
+
+
+                   Example one - Comerge
+
+     A.MAC is a vendor program. A certain  installation  has
+added  a new feature to the program. The improved version is
+called B.MAC . The vendor has just released a new version of
+the  program  called  C.MAC . The installation would like to
+add the same feature to C.MAC . The resulting  version  will
+be called D.MAC . This can be accomplished as follows:
+
+.TYPE A.MAC
+        TITLE   DECO
+        T1=1
+        T2=T1+1
+        P=17
+DECO::  IDIVI   T1,^D10
+        PUSH    P,T2
+        SKIPE   T1
+        PUSHJ   P,.-3
+        POP     P,T1
+        ADDI    T1,"0"
+        OUTCHR  T1
+        POPJ    P,
+        END
+
+.TYPE B.MAC
+        TITLE   DECO
+        T1=1
+        T2=T1+1
+        P=17
+DECO::  IDIVI   T1,^D10
+        HRLM    T2,(P)
+        SKIPE   T1
+        PUSHJ   P,.-3
+        HLRZ    T1,(P)
+        ADDI    T1,"0"
+        OUTCHR  T1
+        POPJ    P,
+        END
+
+EXAMPLES                                            Page 4-2
+comerge
+
+
+.TYPE C.MAC
+        TITLE   DECO
+        T1=1
+        T2=T1+1
+        P=17
+DECO::  JUMPGE  T1,.+3
+        OUTCHR  ["-"]
+        MOVNS   T1
+        IDIVI   T1,^D10
+        PUSH    P,T2
+        SKIPE   T1
+        PUSHJ   P,.-3
+        POP     P,T1
+        ADDI    T1,"0"
+        OUTCHR  T1
+        POPJ    P,
+        END
+
+.RUN COMPAR
+*AB=A,B
+AB.COR=A.MAC,B.MAC
+*AC=A,C
+AC.COR=A.MAC,C.MAC
+*^C
+
+.TYPE AB.COR
+ REP 6/1
+                PUSH P,T2
+                SKIPE T1
+                PUSHJ P,.-3
+                POP P,T1
+ WIT
+                HRLM T2,(P)
+                SKIPE T1
+                PUSHJ P,.-3
+                HLRZ T1,(P)
+ SUM 179838
+
+.TYPE AC.COR
+ REP 5/1
+        DECO::  IDIVI T1,^D10
+ WIT
+        DECO::  JUMPGE T1,.+3
+                OUTCHR ["-"]
+                MOVNS T1
+                IDIVI T1,^D10
+ SUM 179838
+
+.RUN MERGE
+*AD=AB,AC
+AD.COR=AB.COR,AC.COR
+*^C
+
+EXAMPLES                                            Page 4-3
+comerge
+
+
+.TYPE AD.COR
+ REP 5/1
+        DECO::  IDIVI T1,^D10
+ WIT
+        DECO::  JUMPGE T1,.+3
+                OUTCHR ["-"]
+                MOVNS T1
+                IDIVI T1,^D10
+ REP 6/1
+                PUSH P,T2
+                SKIPE T1
+                PUSHJ P,.-3
+                POP P,T1
+ WIT
+                HRLM T2,(P)
+                SKIPE T1
+                PUSHJ P,.-3
+                HLRZ T1,(P)
+ SUM 179838
+
+.RUN UPDATE
+*D=A,AD
+D.MAC=A.MAC,AD.COR
+*^C
+
+.TYPE D.MAC
+        TITLE   DECO
+        T1=1
+        T2=T1+1
+        P=17
+DECO::  JUMPGE  T1,.+3
+        OUTCHR  ["-"]
+        MOVNS   T1
+        IDIVI   T1,^D10
+        HRLM    T2,(P)
+        SKIPE   T1
+        PUSHJ   P,.-3
+        HLRZ    T1,(P)
+        ADDI    T1,"0"
+        OUTCHR  T1
+        POPJ    P,
+        END
+EXAMPLES                                            Page 4-4
+comerge
+
+
+                  Example two - Conflicts
+
+     A user wishes to apply two  corrections  files  (AB.COR
+and  AC.COR)  to a single base file (A.MAC). But some of the
+patches conflict with each other. The user may  resolve  the
+conflicts as follows:
+
+.TYPE A.MAC
+        TITLE   BP
+        T1=1
+        C=10
+        P=17
+BP::    CAMN    C,[15]
+        INCHWL  C
+        MOVEI   T1,1
+        LSH     T1,(C)
+        TDNE    T1,[1400012000]
+        POPJ    P,
+        HALT
+        END
+
+.TYPE AB.COR
+ REP 5/1
+        BP::    CAMN C,[15]
+ WIT
+        BP::    CAIN C,15
+ REP 9/1
+                TDNE T1,[1400012000]
+ WIT
+                TDNE T1,[1400016000]
+ SUM 238801
+
+.TYPE AC.COR
+ REP 9/1
+                TDNE T1,[1400012000]
+ WIT
+                TDNE T1,[1400012200]
+ REP 11/1
+                HALT
+ WIT
+                JRST ERROR##
+ SUM 238801
+
+.R MERGE
+*AD=AB,AC
+AD.MAC=AB.COR,AC.COR
+%MERFLT 1 CONFLICT
+*^C
+
+.TYPE AD.COR
+ REP 5/1
+        BP::    CAMN C,[15]
+ WIT
+        BP::    CAIN C,15
+EXAMPLES                                            Page 4-5
+conflicts
+
+
+ ;***BEGINNING OF CONFLICT 1***
+ REP 9/1
+                TDNE T1,[1400012000]
+ WIT
+                TDNE T1,[1400012200]
+ REP 9/1
+                TDNE T1,[1400012000]
+ WIT
+                TDNE T1,[1400016000]
+ ;***END OF CONFLICT 1***
+ REP 11/1
+                HALT
+ WIT
+                JRST ERROR##
+ SUM 238801
+
+.TECO AD.COR
+*S***$0LKFS122$162$L5KEX$$
+
+.TYPE AD.COR
+ REP 5/1
+        BP::    CAMN C,[15]
+ WIT
+        BP::    CAIN C,15
+ REP 9/1
+                TDNE T1,[1400012000]
+ WIT
+                TDNE T1,[1400016200]
+ REP 11/1
+                HALT
+ WIT
+                JRST ERROR##
+ SUM 238801
+
+.R UPDATE
+*D=A,AD
+D.MAC=A.MAC,AD.COR
+*^C
+
+.TYPE D.MAC
+        TITLE   BP
+        T1=1
+        C=10
+        P=17
+BP::    CAIN    C,15
+        INCHWL  C
+        MOVEI   T1,1
+        LSH     T1,(C)
+        TDNE    T1,[1400016200]
+        POPJ    P,
+        JRST    ERROR##
+        END
+
+
+
+
+
+
+
+
+
+
+
+
+                         CHAPTER 5
+
+                        CONDITIONALS
+
+
+
+     One of the most  powerful  features  of  SOUPR  is  the
+conditionals  facility. To use this facility each command in
+the correction file is  labeled  with  a  sixbit  name.  The
+correction  file  is  then regarded as a library of patches.
+Each patch is refered to by name. The user may specify which
+patches from the library are to be used.
+
+     Labels are placed at the end of a  statement,  and  are
+preceded by a semicolon. E.G.:
+
+ INS 3/4 ;XYZBUG SPR#3141
+
+Those of you who are familiar with MACRO will recognize  the
+label  as  a  cross between a comment and a TITLE. The label
+resembles a comment in that it may contain  any  information
+that  the user feels would be helpful. The label resembles a
+TITLE in that the first word is taken as  the  name  of  the
+module.  Thus in the example above, the name of the patch is
+"XYZBUG". The following is a list of  data  that  one  might
+wish to include in a comment:
+
+1. Patch name
+2. SPR number
+3. MCO/PCO number
+4. Edit number
+5. Brief description
+
+     Labels are added to patches by using the  /NAME  switch
+in COMPAR. The switch has two forms:
+
+/NAME:"string"
+/NAME:foo
+
+The former is used to specify an entire string. The later is
+used to specify just a sixbit name.
+
+     The following is a list  of  switches  used  to  select
+which  patches  from the library are to be used. Both UPDATE
+and MERGE have each of the switches:
+CONDITIONALS                                        Page 5-2
+
+
+
+/NCLUDE:x           Processing includes only  those  patches
+                    labeled with x. Wildcards are legal. The
+                    default is * (i.e. include all patches).
+/NCLUDE:(x,y,...)   Specifies  a  list  of  patches  to   be
+                    included
+/UNCLUD             Unlabeled patches  are  always  included
+                    (default)
+/UXCLUD             Unlabeled patches are always excluded
+/XCLUDE:x           Processing   excludes   those    patches
+                    labeled with x
+/XCLUDE:(x,y,...)   Specifies  a  list  of  patches  to   be
+                    excluded
+
+Examples:
+1.   To create a labeled patch:
+
+     .R COMPAR
+     *cor-file=base-file,user-file/NAME:foo
+
+2.   To apply a single patch:
+
+     .R UPDATE
+     *user-file=base-file,cor-file/NCLUDE:foo
+
+3.   To apply all but a single patch:
+
+     .R UPDATE
+     *user-file=base-file,cor-file/XCLUDE:foo
+
+4.   To add a new patch to the library:
+
+     .R MERGE
+     *new-library=old-library,new-patch
+
+5.   To remove a patch from the library:
+
+     .R MERGE
+     *new-library=old-library/XCLUDE:foo
+
+6.   To extract a patch from the library:
+
+     .R MERGE
+     *cor-file=library/NCLUDE:foo

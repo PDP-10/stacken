@@ -1,0 +1,1065 @@
+MODULE CEX (					!DISPLAY MCB COMM/EXEC INFO
+		IDENT = '003120',
+		LANGUAGE (BLISS16, BLISS36)
+		) =
+BEGIN
+!
+!
+!
+! COPYRIGHT (C) 1978 BY
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+! COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: MDA
+!
+! ABSTRACT:
+!
+!
+! THIS MODULE CONTAINS THE COMM/EXEC DATA BASE ANALYSIS ROUTINES
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 23-AUG-78
+!
+! MODIFIED BY:
+!
+!	Alan D. Peckham, 11-Jul-80: VERSION 3
+! 01	- Rewritten for MCB V3.0
+! 07	- New signalling data and re-organized process descriptor.
+! 08    - Eliminate SLT data base dumps.
+! 09    - Adapt for new CEXCOM features.
+! 11    - Add call to NMLMCB analyzer.
+! 12    - Minis:
+!          Display last event logged.
+!          Display Comm/Exec statistics.
+!--
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    BFP : novalue,                              !Buffer pool display
+    CBP : novalue,                              !CCB/buffer pool display
+    CEX : NOVALUE,				!DISPLAY COMM/EXEC DATA BASE
+    DMPBYT : NOVALUE,				!DUMP BYTE VALUE INTO 3 CHAR FIELD
+    DMPPIX : NOVALUE,				!DUMP PROCESS INDEX
+    EXV : novalue,                              !Exception vector display
+    FREE_POOLS : NOVALUE,			!DISPLAY THE FREE BUFFER POOLS
+    PDB : novalue,				!DISPLAY A Process descriptor
+    SLT : NOVALUE;				!DISPLAY A SLT ENTRY
+
+!
+! INCLUDE FILES:
+!
+
+library 'MDACOM';				!MDA common definitions.
+
+library 'RSXLIB';				!RSX structure definitions.
+
+library 'MCBLIB';				!MCB definitions
+
+library 'CEXLIB';				!CEX structure definitions.
+
+!
+! MACROS:
+!
+!	None
+!
+! EQUATED SYMBOLS:
+!
+
+$CEX_BFPDEF
+$CEX_CBPDEF
+$CEX_CCBDEF
+$CEX_EXVDEF
+$CEX_ITBDEF
+$CEX_PDTDEF
+$CEX_PNMDEF
+$CEX_SLTDEF
+$CEX_SYNDEF
+
+!
+! OWN STORAGE:
+!
+!	None
+!
+! EXTERNAL REFERENCES:
+!
+
+EXTERNAL ROUTINE
+    CHKMCH,					!CHECK IF MECHANISM VECTOR IS VALID
+    GETBYT,					!GET A BYTE FROM THE DUMP FILE
+    GETWRD,					!GET A WORD FROM THE DUMP FILE
+    MAPAPR : NOVALUE,				!SET MAPPING REGISTER
+    MAPKNL : NOVALUE,				!Map to kernel space.
+    PUTBUF : NOVALUE,				!EDIT AND DISPLAY BUFFER
+    PUTCCB : NOVALUE,				!EDIT AND DISPLAY CCB
+    BITLS : NOVALUE,				!IDENTIFY BITS AND EDIT INTO ASCII
+    BYTSM : NOVALUE,				!IDENTIFY AND EDIT BYTE INTO ASCII
+    PHYAD : NOVALUE,				!Display 18-bit physical address
+    SBTTL : NOVALUE,				!SET LIST FILE SUB-TITLE
+    SKIP : NOVALUE,				!Put a blank line on the listing file.
+    VMADMP : NOVALUE,
+    $CBOSG,
+    $C5TA,					!Convert Radix-50 to ASCII
+    $CBTA,					!General convert binary to ASCII.
+    $EDMSG;
+
+EXTERNAL
+    FLAGS : BITVECTOR [M_MAX_BITS];
+
+ROUTINE BFP (BFP_ADR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY INFORMATION ON THE SPECIFIED PDV
+!
+!
+! FORMAL PARAMETERS:
+!
+!	PDV_NUM					!NUMBER OF PDV TO DISPLAY
+!	PDV_ADR					!ADDRESS OF PDV TO DISPLAY
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! NO ROUTINE VALUE
+!
+! SIDE EFFECTS
+!
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+    PUTLN (1, CH$ASCIZ ('%4SSIZE: %D.  ALLOCATED: %D.  FREE: %D.  FAILURES: %D.'),
+           GETWRD (.BFP_ADR + FL$OFFSET (BFP$H_SIZE)),
+           GETWRD (.BFP_ADR + FL$OFFSET (BFP$H_ALLOCATED)),
+           GETWRD (.BFP_ADR + FL$OFFSET (BFP$H_FREE_COUNT)),
+           GETWRD (.BFP_ADR + FL$OFFSET (BFP$G_ALLOCATION_FAILURES)));
+    end;					!OF BFP
+ROUTINE CBP (CBP_ADR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY INFORMATION ON THE SPECIFIED PDV
+!
+!
+! FORMAL PARAMETERS:
+!
+!	PDV_NUM					!NUMBER OF PDV TO DISPLAY
+!	PDV_ADR					!ADDRESS OF PDV TO DISPLAY
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! NO ROUTINE VALUE
+!
+! SIDE EFFECTS
+!
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+    PUTLN (1, CH$ASCIZ ('%4SSIZE: %D.  ALLOCATED: %D.  FREE: %D.  FAILURES: %D.'),
+           GETWRD (.CBP_ADR + FL$OFFSET (CBP$H_SIZE)),
+           GETWRD (.CBP_ADR + FL$OFFSET (CBP$H_ALLOCATED)),
+           GETWRD (.CBP_ADR + FL$OFFSET (CBP$H_FREE_COUNT)),
+           GETWRD (.CBP_ADR + FL$OFFSET (CBP$G_ALLOCATION_FAILURES)));
+    begin
+
+    local
+         INDEX,
+         REQUESTS;
+
+    if (REQUESTS = GETWRD (.CBP_ADR + FL$OFFSET (CBP$H_REQUESTS))) neq 0
+    then
+        PUTLN (0, CH$ASCIZ ('%4SREQUESTS: %D.  NEXT PROCESS: %R (%O)'),
+               .REQUESTS,
+               PROCESS_NAME (INDEX = GETBYT (GETWRD (GETWRD (.CBP_ADR + FL$OFFSET (CBP$A_NEXT_PROCESS)))
+                                             + FL$OFFSET (PDT$B_INDEX))), .INDEX);
+
+    end;
+    end;					!OF CBP
+GLOBAL ROUTINE CEX : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!	None
+!
+! NO FORMAL PARAMETERS
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	None
+!
+! SIDE EFFECTS
+!
+!	None
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	ADR;
+
+    IF .FLAGS [M_CEX_CTXT]
+    THEN
+	BEGIN
+	SBTTL (CH$ASCIZ ('COMM/EXEC DATA BASE'));	!Set our sub-title
+
+	IF NOT SYMBOL_TABLE ('RSX11S', 'CEXCOM') THEN RETURN;
+
+	PUTLN (1,
+	    (IF (ADR = GETWRD (SYMBOL ('.CEXDP'))) EQL 0 THEN CH$ASCIZ ('PROCESSING IN MCB')
+             ELSE IF .ADR<15, 1> THEN CH$ASCIZ ('PROCESSING IN RSX')
+             ELSE CH$ASCIZ ('PROCESSING MCB INTERRUPT')));
+	ADR = GETWRD (SYMBOL ('.CRPIX'));
+	PUTLN (1, CH$ASCIZ ('CURRENT PROCESS: %R (%O)'), 	!edit pattern
+	    PROCESS_NAME (.ADR<0, 7>), .ADR);
+
+	!
+	! Display buffer pool information
+	!
+
+        begin
+        PUTLN (2, CH$ASCIZ ('RESOURCE POOLS:'));
+        PUTLN (1, CH$ASCIZ ('  CCB/BUFFER POOLS:'));
+        CBP (SYMBOL ('.CCBTB'));
+        CBP (SYMBOL ('.RDBTB'));
+
+        if (ADR = GETWRD (SYMBOL ('.CORTA'))) neq 0
+        then
+            begin
+
+            local
+                 CNT;
+
+            PUTLN (1, CH$ASCIZ ('  BUFFER POOLS:'));
+            CNT = min (GETWRD (SYMBOL ('.CORNM')), 10);
+
+            do
+              begin
+              BFP (.ADR);
+              ADR = .ADR + BFP$K_LENGTH^1;
+              end
+            while (CNT = .CNT - 1) nequ 0;
+
+            end;
+
+        end;
+
+	!+
+	! Are we on the fork queue ?
+	!-
+
+
+	!+
+	! Check for scheduled CCBs.
+	!-
+
+	IF (ADR = GETWRD (SYMBOL ('.SYNQH'))) NEQ 0
+	THEN
+	    BEGIN
+
+	    LOCAL
+		SYNCH_COUNT;
+
+	    PUTLN (1, CH$ASCIZ ('  PROCESS SYNCHRONIZATION QUEUE:'));
+	    SYNCH_COUNT = CEX_MAX_PDV %(for present)%;
+
+	    DO
+		BEGIN
+
+		IF (SYNCH_COUNT = .SYNCH_COUNT - 1) LSS 0
+		THEN
+		    EXITLOOP (PUTLN (1, CH$ASCIZ (WARNING, 'TOO MANY SYNCH BLOCKS')));
+
+		PUTLN (1, CH$ASCIZ ('	ADDRESS: %P  PIX: %O  DISPATCH ADDRESS: %P'), .ADR,
+		    GETBYT (GETWRD (.ADR + FL$OFFSET (SYN$A_PROCESS)) + FL$OFFSET (PDT$B_INDEX)),
+                    GETWRD (.ADR + FL$OFFSET (SYN$A_DISPATCH)));
+		END
+	    UNTIL (ADR = GETWRD (.ADR)) EQL 0;
+
+	    END;
+
+	FLAGS [M_BUF] = 1;
+
+	IF (ADR = GETWRD (SYMBOL ('.CBLQH'))) NEQ 0
+	THEN
+	    BEGIN
+
+	    LOCAL
+		CCB_COUNT;
+
+	    PUTLN (1, CH$ASCIZ ('  CCBS SCHEDULED TO LOWER PROCESSES:'));
+	    CCB_COUNT = CEX_MAX_CCB;
+
+	    DO
+		BEGIN
+
+		IF (CCB_COUNT = .CCB_COUNT - 1) LSS 0
+		THEN
+		    EXITLOOP (PUTLN (1, CH$ASCIZ (WARNING, 'TOO MANY CCBS IN QUEUE')));
+
+		PUTCCB (1, .ADR, 0);
+		END
+	    UNTIL (ADR = GETWRD (.ADR)) EQL 0;
+
+	    END;
+
+	IF (ADR = GETWRD (SYMBOL ('.CBHQH'))) NEQ 0
+	THEN
+	    BEGIN
+
+	    LOCAL
+		CCB_COUNT;
+
+	    PUTLN (1, CH$ASCIZ ('  CCBS SCHEDULED TO HIGHER PROCESSES:'));
+	    CCB_COUNT = CEX_MAX_CCB;
+
+	    DO
+		BEGIN
+
+		IF (CCB_COUNT = .CCB_COUNT - 1) LSS 0
+		THEN
+		    EXITLOOP (PUTLN (1, CH$ASCIZ (WARNING, 'TOO MANY CCBS IN QUEUE')));
+
+		PUTCCB (1, .ADR, 0);
+		END
+	    UNTIL (ADR = GETWRD (.ADR)) EQL 0;
+
+	    END;
+
+
+	!+
+	! Miscellaneous information
+	!-
+
+	BEGIN
+	PUTLN (2, CH$ASCIZ ('POWER FAIL COUNT: %M.'), GETWRD (SYMBOL ('.PWRFL')));
+	PUTLN (1, CH$ASCIZ ('SAVED RSX APR6 MAPPING: %O'), GETWRD (SYMBOL ('.RSXMP')));
+	PUTLN (1, CH$ASCIZ ('RANDOM NUMBER SEED: %P %P'), GETWRD (ADR = SYMBOL ('.RND')), GETWRD (.ADR + 2));
+        begin
+
+        local
+            CNT;
+
+        PUTLN (1, CH$ASCIZ ('EVENT LOGGING BUFFER: %P  LENGTH: %O'),
+               (ADR = GETWRD (SYMBOL ('.LOGPT'))), (CNT = GETBYT (.ADR - 1)));
+
+        if not .FLAGS [M_CEX_DUMP] then CNT = GETBYT (.ADR);
+
+        if .CNT neq 0
+        then
+            begin
+            SKIP (1);
+            VMADMP (.ADR, .ADR, .ADR + .CNT + 1);
+            end;
+
+        end;
+	END;
+
+	!+
+	! BLISS condition handling
+	!-
+
+	BEGIN
+	PUTLN (2, CH$ASCIZ ('BLISS CONDITION HANDLING'));
+
+	IF DEFINED (ADR = SYMBOL ('.MEXV1'))
+	THEN
+	    BEGIN
+	    PUTLN (1, CH$ASCIZ ('  PRIMARY EXCEPTION VECTOR:'));
+            EXV (.ADR);
+	    END;
+
+	IF DEFINED (ADR = SYMBOL ('.MEXV2'))
+	THEN
+	    BEGIN
+	    PUTLN (1, CH$ASCIZ ('  SECONDARY EXCEPTION VECTOR:'));
+            EXV (.ADR);
+	    END;
+
+	IF DEFINED (ADR = SYMBOL ('.MEXVL'))
+	THEN
+	    BEGIN
+	    PUTLN (1, CH$ASCIZ ('  LAST CHANCE EXCEPTION VECTOR:'));
+            EXV (.ADR);
+	    END;
+
+	IF DEFINED (ADR = SYMBOL ('.MEXVD'))
+	THEN
+	    BEGIN
+	    PUTLN (1, CH$ASCIZ ('  DUMP EXCEPTION VECTOR:'));
+            EXV (.ADR);
+	    END;
+
+	IF DEFINED (ADR = SYMBOL ('.MCHVC'))
+	THEN
+	    BEGIN
+
+	    LOCAL
+		FRAME,
+		HANSP,
+		LOW_FRAME,
+                MCH_COUNT,
+		NEW_FRAME;
+
+	    PUTLN (1, CH$ASCIZ ('  MECHANISM VECTOR CHAIN:'));
+	    LOW_FRAME = (FRAME = GETWRD (SYMBOL ('$IGREG')));
+	    HANSP = GETWRD (SYMBOL ('$HANSP'));
+            MCH_COUNT = CEX_MAX_MCH;
+
+ 	    if (ADR = CHKMCH()) neq 0
+            then
+	    WHILE (ADR = GETWRD (.ADR)) NEQ 0 DO
+		BEGIN
+                begin
+
+                local
+                     LEVEL;
+
+                if (MCH_COUNT = .MCH_COUNT - 1) lss 0
+                then
+                    exitloop PUTLN (1, CH$ASCIZ (WARNING, 'TOO MANY ENTRIES IN MECHANISM VECTOR CHAIN'));
+
+                LEVEL = GETWRD (.ADR + SYMBOL ('M.LVL'));
+		PUTLN (1, CH$ASCIZ ('%4SMECHANISM ADDRESS: %P  LINK: %P  LEVEL: %O'),
+		    .ADR, GETWRD (.ADR + SYMBOL ('M.MCH')), .LEVEL <0, 16, 1>);
+                end;
+		PUTLN (0, CH$ASCIZ ('%4SSIGNAL ADDRESS: %P'),
+		    GETWRD (.ADR + SYMBOL ('M.SIG')));
+		PUTLN (0, CH$ASCIZ ('%4SR0: %P  APR5: %O'),
+		    GETWRD (.ADR + SYMBOL ('M.R0')),
+		    GETWRD (.ADR + SYMBOL ('M.AR5')));
+		PUTLN (0, CH$ASCIZ ('%4SCURRENT FRAME: %P  UNWIND FRAME: %P  LOCALS OFFSET: %O'),
+		    .FRAME, (NEW_FRAME = GETWRD (.ADR + SYMBOL ('M.FRM'))), .HANSP);
+
+		IF (FRAME = .NEW_FRAME) NEQ 0 AND LSS16 (.FRAME, .LOW_FRAME)
+		THEN
+		    LOW_FRAME = .FRAME;
+
+		HANSP = GETWRD (.ADR + SYMBOL ('M.HSP'));
+		ADR = .ADR + SYMBOL ('M.MCH');
+		END;
+
+	    IF (ADR = .LOW_FRAME) NEQ 0
+	    THEN
+		BEGIN
+		PUTLN (1, CH$ASCIZ ('  FRAME LIST:'));
+
+		WHILE (ADR = GETWRD (.ADR)) NEQ 0 DO
+		    PUTLN (1, CH$ASCIZ ('%4SADDRESS: %P  DISPATCH: %P  BASE FOR LOCALS: %P'),
+		    .ADR, GETWRD (.ADR + 4), GETWRD (.ADR + 2));
+
+		END;
+
+	    END;
+
+	END;
+
+	!+
+	! Dump the system common
+	!-
+
+	IF .FLAGS [M_CEX_DUMP]
+	THEN
+	    BEGIN
+	    PUTLN (2, CH$ASCIZ ('  GLOBAL DATA REGION (.CEBEG THRU .CEEND)'));
+	    SKIP (1);
+	    VMADMP ((ADR = SYMBOL ('.CEBEG')), .ADR, SYMBOL ('.CEEND'));
+	    END;
+
+	!+
+	! Now go through the processes and display the info in
+	! the process descriptor table.
+	!-
+
+	BEGIN
+	SBTTL (CH$ASCIZ ('MCB PROCESSES'));
+
+	incr PDT from SYMBOL ('.PDBVB') to SYMBOL ('.PDBVE') - 2 by 2 do
+
+            if (ADR = GETWRD (.PDT)) neq 0 then PDB (.ADR);
+
+	END;
+
+	!+
+	! Time to display the info in the system line table
+	!-
+
+	BEGIN
+
+	BIND
+	    NUM_SLTS = GETWRD (SYMBOL ('.SLTNM'));
+
+	SBTTL (CH$ASCIZ ('SYSTEM LINES'));
+	ADR = GETWRD (SYMBOL ('.SLTTA')) - SLT$K_LENGTH^1;
+
+	DECR index FROM NUM_SLTS TO 1 DO
+	    SLT (ADR = .ADR + SLT$K_LENGTH^1);
+
+	END;
+	END;
+
+!+
+! Dump free pool addresses if asked
+!-
+
+    IF .FLAGS [M_CEX_FREE]
+    THEN
+	BEGIN
+
+	IF NOT SYMBOL_TABLE ('RSX11S', 'CEXCOM') THEN RETURN;
+
+	FREE_POOLS ();
+	END;
+
+!+
+! Now dump the individual data bases
+!-
+
+    IF .FLAGS [M_CEX_PDVS]
+    THEN
+
+	IF SYMBOL_TABLE ('CEXCOM')
+	THEN
+	    BEGIN
+
+	    EXTERNAL ROUTINE
+		NMLMCB : NOVALUE;		!NML data base analyzer.
+
+	    NMLMCB ();
+	    END;
+
+    END;					!OF CEX
+
+ROUTINE DMPBYT (BUF_PTR_ADR, PAT_PTR_ADR, PRM_LST_ADR_ADR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! The next parameters are:
+!	VALUE
+!
+! FORMAL PARAMETERS:
+!
+!	..BUF_PTR_ADR				!Pointer to output buffer.
+!	..PAT_PTR_ADR				!Pointer to pattern string.
+!	..PRM_LST_ADR_ADR			!Pointer to next parameter.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LITERAL
+	FLAG1 = 3^11 + 1^10 + 1^9 + 8;
+
+    LOCAL
+	PRM_LST : REF VECTOR,
+	VALUE;
+
+    PRM_LST = ..PRM_LST_ADR_ADR;
+    VALUE = .PRM_LST [0];
+    .PRM_LST_ADR_ADR = PRM_LST [1];
+    $CBTA (.BUF_PTR_ADR, .VALUE, FLAG1)
+    END;					!End of DMPBYT
+ROUTINE DMPPIX (BUF_PTR_ADR, PAT_PTR_ADR, PRM_LST_ADR_ADR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! The next parameters are:
+!	VALUE
+!
+! FORMAL PARAMETERS:
+!
+!	..BUF_PTR_ADR				!Pointer to output buffer.
+!	..PAT_PTR_ADR				!Pointer to pattern string.
+!	..PRM_LST_ADR_ADR			!Pointer to next parameter.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LITERAL
+	FLAG1 = 3^11 + 1^10 + 1^9 + 8;
+
+    LOCAL
+	PRM_LST : REF VECTOR,
+	VALUE;
+
+    PRM_LST = ..PRM_LST_ADR_ADR;
+    VALUE = .PRM_LST [0];
+    .PRM_LST_ADR_ADR = PRM_LST [1];
+
+    if .VALUE lss GETWRD (SYMBOL ('.PDBNM')) and
+        GETWRD (SYMBOL ('.PDBVB') + .VALUE^1) neq 0
+    THEN
+	$C5TA (.BUF_PTR_ADR, PROCESS_NAME (.VALUE))
+    ELSE
+	$CBTA (.BUF_PTR_ADR, .VALUE, FLAG1)
+
+    END;					!End of DMPPIX
+ROUTINE EXV (EXV_ADR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY INFORMATION ON THE SPECIFIED PDV
+!
+!
+! FORMAL PARAMETERS:
+!
+!	PDV_NUM					!NUMBER OF PDV TO DISPLAY
+!	PDV_ADR					!ADDRESS OF PDV TO DISPLAY
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! NO ROUTINE VALUE
+!
+! SIDE EFFECTS
+!
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    begin
+
+    local
+         DSP,
+         LVL;
+
+    LVL = GETWRD (.EXV_ADR + FL$OFFSET (EXV$G_LEVEL));
+
+    if (DSP = GETWRD (.EXV_ADR + FL$OFFSET (EXV$A_DISPATCH))) neq 0
+    then
+        PUTLN (1, CH$ASCIZ ('%4SADDRESS: %P  LEVEL: %O  PIX: %O  DISPATCH: %P  ENABLE DATA: %P'),
+               .EXV_ADR, .LVL <0, 16, 1>,
+               GETBYT (GETWRD (.EXV_ADR + FL$OFFSET (EXV$A_PROCESS)) + FL$OFFSET (PDT$B_INDEX)),
+               .DSP, GETWRD (.EXV_ADR + FL$OFFSET (EXV$A_ENABLE_DATA)))
+    else
+        PUTLN (1, CH$ASCIZ ('%4SADDRESS: %P  LEVEL: %O  DISABLED'),
+               .EXV_ADR, .LVL <0, 16, 1>);
+
+    end;					!OF EXV
+ROUTINE FREE_POOLS : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	ADR,
+	BIAS;
+
+    BIND
+	CCB_LINE1 = CH$ASCIZ ('%4SADDRESS  OWN  PIX LIX  DST SRC  FNC    MOD'),
+	CCB_LINE2 = CH$ASCIZ ('%4S-------  ---  --- ---  --- ---  ---    ---'),
+	CCB_LINE3 = CH$ASCIZ ('%5S%P%14T%@%19T%@%23T%@%28T%@%32T%@%37T%@%44T%@'),
+	SDB_LINE1 = CH$ASCIZ ('%4S BIAS  ADDRESS OWNER  DATA'),
+	SDB_LINE2 = CH$ASCIZ ('%4S------ ------- ----- ------'),
+	SDB_LINE3 = CH$ASCIZ ('%4S%P  %P%20T%@%26T%P'),
+	CCB_FNC = BYTE_LIST ((FC_AST, 'FC.AST'), (FC_XME, 'FC.XME'), (FC_RCE, 'FC.RCE'), (FC_KIL, 'FC.KIL'),
+		(FC_CTL, 'FC.CTL'), (FC_TIM, 'FC.TIM'), (FC_XCP, 'FC.XCP'), (FC_RCP, 'FC.RCP'),
+		(FC_KCP, 'FC.KCP'), (FC_CCP, 'FC.CCP')),
+	CCB_MOD_AST = BYTE_LIST (),
+	CCB_MOD_XME = BYTE_LIST (),
+	CCB_MOD_RCE = BYTE_LIST ((FM_DAT, 'FM.DAT'), (FM_RTN, 'FM.RTN')),
+	CCB_MOD_KIL = BYTE_LIST ((FM_KIL, 'FM.KIL'), (FM_CRA, 'FM.CRA'), (FM_XKL, 'FM.XKL')),
+	CCB_MOD_CTL = BYTE_LIST ((FM_STR, 'FM.STR'), (FM_STP, 'FM.STP'), (FM_SET, 'FM.SET'),
+		(FM_GET, 'FM.GET')),
+	CCB_MOD_TIM = BYTE_LIST ((FM_STM, 'FM.STM'), (FM_LTM, 'FM.LTM'), (FM_PWF, 'FM.PWF'),
+		(FM_PIN, 'FM.PIN')),
+	CCB_MOD_XCP = CCB_MOD_XME,
+	CCB_MOD_RCP = BYTE_LIST (),
+	CCB_MOD_KCP = CCB_MOD_KIL,
+	CCB_MOD_CCP = CCB_MOD_CTL,
+	CCB_MOD_FCN_BAD = BYTES_LIST (),
+	CCB_MOD = UPLIT (CCB_MOD_AST, CCB_MOD_XME, CCB_MOD_RCE, CCB_MOD_KIL,
+	    CCB_MOD_CTL, CCB_MOD_TIM, CCB_MOD_XCP, CCB_MOD_RCP, CCB_MOD_KCP,
+	    CCB_MOD_CCP, CCB_MOD_FCN_BAD) : VECTOR [11];
+
+    SBTTL (CH$ASCIZ ('COMM/EXEC FREE BUFFER POOLS'));
+    MAPKNL ();
+    FLAGS [M_BUF] = 0;
+
+    !+
+    ! Display the free CCB pool.
+    !-
+
+    BEGIN
+
+    LOCAL
+	CCB_COUNT;
+
+    PUTLN (2, CH$ASCIZ ('FREE CCBS QUEUED IN THE POOL:'));
+    PUTLN (1, CCB_LINE1);
+    PUTLN (0, CCB_LINE2);
+    ADR = SYMBOL ('.CCBTB') + FL$OFFSET (CBP$A_QUEUE_FIRST);
+    CCB_COUNT = CEX_MAX_CCB;
+
+    WHILE (ADR = GETWRD (.ADR)) NEQ 0 DO
+	BEGIN
+
+	LOCAL
+	    FNC;
+
+	IF (CCB_COUNT = .CCB_COUNT - 1) LSS 0 THEN EXITLOOP (PUTLN (1, CH$ASCIZ (WARNING, 'TOO MANY CCBS')));
+
+	PUTLN (0, CCB_LINE3, .ADR,
+            DMPPIX, GETBYT (.ADR + FL$OFFSET (CCB$B_OWNER_PROCESS_INDEX)),
+            DMPPIX, GETBYT (.ADR + FL$OFFSET (CCB$B_PROCESS_INDEX)),
+            DMPBYT, GETBYT (.ADR + FL$OFFSET (CCB$B_LINE_INDEX)),
+            DMPPIX, GETBYT (GETWRD (.ADR + FL$OFFSET (CCB$A_DESTINATION_PROCESS))
+                            + FL$OFFSET (PDT$B_INDEX)),
+            DMPPIX, GETBYT (GETWRD (.ADR + FL$OFFSET (CCB$A_SOURCE_PROCESS))
+                            + FL$OFFSET (PDT$B_INDEX)),
+            BYTSM, CCB_FNC,
+	    (FNC = GETBYT (.ADR + FL$OFFSET (CCB$B_FUNCTION))),
+            BYTSM, .CCB_MOD [MINU ((IF .FNC THEN 19 ELSE .FNC), 19)^-1],
+               GETBYT (.ADR + FL$OFFSET (CCB$B_MODIFIER)));
+	END;
+
+    END;
+
+    !+
+    ! Display the free SDB pool.
+    !-
+
+    BEGIN
+
+    LOCAL
+	SDB_COUNT;
+
+    PUTLN (2, CH$ASCIZ ('FREE SDBS QUEUED IN THE POOL:'));
+    PUTLN (1, SDB_LINE1);
+    PUTLN (0, SDB_LINE2);
+    ADR = GETWRD (SYMBOL ('.CORTA'));
+    BIAS = GETWRD (.ADR + FL$OFFSET (BFP$W_QUEUE_FIRST_BIAS));
+    ADR = GETWRD (.ADR + FL$OFFSET (BFP$A_QUEUE_FIRST_ADDR));
+    SDB_COUNT = CEX_MAX_SDB;
+
+    while .ADR neq 0 do
+	begin
+
+	IF (SDB_COUNT = .SDB_COUNT - 1) LSS 0 THEN EXITLOOP (PUTLN (1, CH$ASCIZ (WARNING, 'TOO MANY SDBS')));
+
+	MAPAPR (6, .BIAS);
+	PUTLN (0, SDB_LINE3, .BIAS, .ADR, DMPPIX,
+            GETBYT (GETWRD (.ADR + FL$OFFSET (BFH$A_PROCESS)) + FL$OFFSET (PDT$B_INDEX)),
+	    .ADR + BFH$K_LENGTH^1);
+	BIAS = GETWRD (.ADR + FL$OFFSET (BFH$W_BIAS));
+	ADR = GETWRD (.ADR + FL$OFFSET (BFH$A_ADDRESS));
+	end;
+
+    END;
+
+    !+
+    ! Display the free RDB pool.
+    !-
+
+    BEGIN
+
+    LOCAL
+	RDB_COUNT;
+
+    PUTLN (2,
+	(IF DEFINED (ADR = SYMBOL ('.RDBQH')) THEN CH$ASCIZ ('FREE RDBS QUEUED IN THE POOL:') ELSE (ADR =
+	    SYMBOL ('.RDBSH'); CH$ASCIZ ('FREE RDBS STACKED IN THE POOL:'))));
+    PUTLN (1, CCB_LINE1);
+    PUTLN (0, CCB_LINE2);
+    ADR = SYMBOL ('.RDBTB') + FL$OFFSET (CBP$A_QUEUE_FIRST);
+    RDB_COUNT = CEX_MAX_RDB;
+
+    WHILE (ADR = GETWRD (.ADR)) NEQ 0 DO
+	BEGIN
+
+	LOCAL
+	    FNC;
+
+	IF (RDB_COUNT = .RDB_COUNT - 1) LSS 0 THEN EXITLOOP (PUTLN (1, CH$ASCIZ (WARNING, 'TOO MANY RDBS')));
+
+	PUTLN (0, CCB_LINE3, .ADR,
+            DMPPIX, GETBYT (.ADR + FL$OFFSET (CCB$B_OWNER_PROCESS_INDEX)),
+            DMPPIX, GETBYT (.ADR + FL$OFFSET (CCB$B_PROCESS_INDEX)),
+            DMPBYT, GETBYT (.ADR + FL$OFFSET (CCB$B_LINE_INDEX)),
+            DMPPIX, GETBYT (GETWRD (.ADR + FL$OFFSET (CCB$A_DESTINATION_PROCESS))
+                            + FL$OFFSET (PDT$B_INDEX)),
+            DMPPIX, GETBYT (GETWRD (.ADR + FL$OFFSET (CCB$A_SOURCE_PROCESS))
+                            + FL$OFFSET (PDT$B_INDEX)),
+            BYTSM, CCB_FNC,
+	    (FNC = GETBYT (.ADR + FL$OFFSET (CCB$B_FUNCTION))),
+            BYTSM, .CCB_MOD [MINU ((IF .FNC THEN 19 ELSE .FNC), 19)^-1],
+               GETBYT (.ADR + FL$OFFSET (CCB$B_MODIFIER)));
+	END;
+
+    END;
+    END;					!End of FREE_POOLS
+ROUTINE PDB (PD_ADR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY INFORMATION ON THE SPECIFIED PDV
+!
+!
+! FORMAL PARAMETERS:
+!
+!	PDV_NUM					!NUMBER OF PDV TO DISPLAY
+!	PDV_ADR					!ADDRESS OF PDV TO DISPLAY
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! NO ROUTINE VALUE
+!
+! SIDE EFFECTS
+!
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	ADR,
+	STATUS;
+
+    BIND
+	PD_STATUS_BITS = FIELD_LIST (
+            (PDT$V_LONG_TIMER, 'Long timer'),
+            (PDT$V_CCB_REQUESTED, 'CCB requested'),
+            (PDT$V_RDB_REQUESTED, 'RDB requested'),
+            (PDT$V_KILL_PROCESS, 'Kill process'));
+
+    STATUS = GETWRD (.PD_ADR + %fieldexpand (PDT$V_FLAGS, 0)^1);
+    begin
+
+    local
+        INDEX;
+
+    INDEX = GETBYT (.PD_ADR + FL$OFFSET (PDT$B_INDEX));
+    PUTLN (2, CH$ASCIZ ('PROCESS: %R (%O)  ADDRESS: %P  FLAGS: %@'),
+        PROCESS_NAME (.INDEX), .INDEX,
+        .PD_ADR, BITLS, PD_STATUS_BITS, .STATUS);
+    end;
+    PUTLN (0, CH$ASCIZ ('  BIAS: %O  DISPATCH: %P'),
+        GETWRD (.PD_ADR + FL$OFFSET (PDT$W_CODE_BIAS)),
+        GETWRD (.PD_ADR + FL$OFFSET (PDT$A_CODE_DISPATCH)));
+
+    if (ADR = GETWRD (.PD_ADR + FL$OFFSET (PDT$A_DATA_ADDRESS))) neq 0
+    then
+	PUTLN (0, CH$ASCIZ ('  DATA BASE: %O,%P'),
+	    GETWRD (.PD_ADR + FL$OFFSET (PDT$W_DATA_BIAS)), .ADR);
+
+    if FL$SET (.STATUS, PDT$V_UCB_INCLUDED)
+    then
+	PUTLN (0, CH$ASCIZ ('  UCB DATA BASE ADDRESS: %P'),
+	    GETWRD (.PD_ADR + FL$OFFSET (PDT$A_UCB)));
+
+    IF .FLAGS [M_CEX_DUMP]
+    THEN
+	BEGIN
+	SKIP (1);
+	VMADMP (0, .PD_ADR, .PD_ADR + PDT$K_LENGTH^1);
+	END;
+
+    TRUE
+    END;					!OF PDB
+ROUTINE SLT (SLT_ADR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DISPLAY NODE IDENTIFICATION, BUFFER STATISTICS AND POOLS,
+!	AND THE PENDING CCBS TO BE PROCESSED.
+!
+!
+! FORMAL PARAMETERS:
+!
+!	SLT_ADR					!ADDRESS OF SLT TO DISPLAY
+!	SLT_NUM					!NUMBER OF SLT TO DISPLAY
+!
+! IMPLICIT INPUTS:
+!
+! IMPLICIT OUTPUTS:
+!
+! ROUTINE VALUE:
+!
+!	TRUE IF ALL INFORMATION WAS ACCESSABLE
+!	OTHERWISE FALSE
+!
+! SIDE EFFECTS
+!
+!	SETS LISTING OUTPUT SUBTITLE
+!	DISPLAYS INFORMATION ON LISTING DEVICE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	INDEX;
+
+    begin
+
+    local
+        BUF_ADR,
+	NAME_BUF : CH$SEQUENCE (32, 8),
+        NAME_LNG,
+        NAME_PTR;
+
+    BUF_ADR = GETWRD (.SLT_ADR + FL$OFFSET (SLT$A_DEVICE));
+    NAME_PTR = ch$ptr (NAME_BUF,, 8);
+    NAME_LNG = GETBYT (.BUF_ADR);
+
+    decr INDEX from .NAME_LNG to 1 do
+        ch$wchar_a (GETBYT (BUF_ADR = .BUF_ADR + 1), NAME_PTR);
+
+    PUTLN (1, CH$ASCIZ ('SYSTEM LINE # %M.  ADDRESS: %P  NAME: %#E'),
+        GETBYT (.SLT_ADR + FL$OFFSET (SLT$B_LINE_INDEX)), .SLT_ADR,
+        .NAME_LNG, ch$ptr (NAME_BUF,, 8));
+    end;
+    PUTLN (0, CH$ASCIZ ('  CONTROLLER: %O  UNIT: %O'),
+        GETBYT (.SLT_ADR + FL$OFFSET (SLT$B_CONTROLLER)),
+	GETBYT (.SLT_ADR + FL$OFFSET (SLT$B_UNIT)));
+
+    if (INDEX = GETBYT (.SLT_ADR + FL$OFFSET (SLT$B_LLC_PROCESS_INDEX))) neq 0
+    then
+	begin
+	PUTLN (0, CH$ASCIZ ('  LLC: %R (%O)'), PROCESS_NAME (.INDEX), .INDEX);
+	end
+    else
+	begin
+	PUTLN (0, CH$ASCIZ ('  LLC: none'));
+	end;
+
+    if (INDEX = GETBYT (.SLT_ADR + FL$OFFSET (SLT$B_DLC_PROCESS_INDEX))) neq 0
+    then
+	begin
+	PUTLN (0, CH$ASCIZ ('  DLC: %R (%O)'), PROCESS_NAME (.INDEX), .INDEX);
+	end
+    else
+	begin
+	PUTLN (0, CH$ASCIZ ('  DLC: none'));
+	end;
+
+    if (INDEX = GETBYT (.SLT_ADR + FL$OFFSET (SLT$B_DDM_PROCESS_INDEX))) neq 0
+    then
+	begin
+	PUTLN (0, CH$ASCIZ ('  DDM: %R (%O)'), PROCESS_NAME (.INDEX), .INDEX);
+	end
+    else
+	begin
+	PUTLN (0, CH$ASCIZ ('  DDM: none'));
+	end;
+
+    if .FLAGS [M_CEX_DUMP]
+    then
+	begin
+	SKIP (1);
+	VMADMP (0, .SLT_ADR, .SLT_ADR + SLT$K_LENGTH^1);
+	end;
+
+    TRUE
+    end;					!OF SLT
+END
+
+ELUDOM

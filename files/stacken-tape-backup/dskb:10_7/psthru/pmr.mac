@@ -1,0 +1,881 @@
+	Universal	PMR - Routine to do Poor Man's Routing
+
+;PMR is a subroutine which may be called in lieu of a NSP. enter
+;active function.
+;Call:
+
+;		MOVE	T1,[flags,,NSP. arg block]
+;		PUSHJ	P,PMR##
+;		  <fail return>
+;		<success return>
+;
+;On the fail return, LH(T1) will have an error code (see ECOD section in CREF)
+;If applicable, the right half of T1 will contain the UUO error code.
+;If PMR$RMR is set (see below) the error code will ALWAYS have in the
+;right half the error for the first direct connection (file and other
+;errors if routing was tried are lost).
+;
+;The .REL file produced by this source, PMR.REL, must be loaded with the
+;main program in library search mode.  This can be done by using a .REQUEST
+;(as opposed to a .REQUIRE) pseudo-op in MACRO in the source for the main
+;program, or one may use the /SEARCH switch to LINK when loading the
+;program.  An unresolved global reference will result if the file is
+;loaded in a mode other than library search mode.
+;
+;The flags you can use are:
+;
+	PMR$SERR==:400000,,0		;Suppress all messages
+;If you do not set this flag, then PMR will output messages to the
+;controlling TTY: which indicate the path being taken and success or failure.
+;If you set it, the messages are suppressed.
+;
+	PMR$RMR==:200000,,0		;Rich man's routing
+;If you set this flag, PMR will ALWAYS try to connect directly to the
+;target node using your argument block.  If it is not set, it will do
+;so only if the direct route is listed in the routing table.  Note that
+;if your block is non-blocking and the NSP. UUO skips (which for non-blocking
+;does not indicate that the connection has been established), then PMR
+;will not try to route.  This is also true if the direct route is listed
+;in the routing table and is tried (it also uses your block then).
+;
+
+	PMR$DCN==100000,,0		;Use PATHological name for host file
+;If you set this flag, PMR will look on device DCN: for the DNHOST.TXT file.
+;If you do not set this flag, it will look on SYS:.
+
+	.TEXT	^/EXCLUDE:PMR^
+	PRGEND				;End of PMR universal section
+	Title	PMR - Routine to do Poor Man's Routing
+
+	Subttl	Definitions/KBY
+
+	SEARCH	UUOSYM			;Get nice symbols
+	SEARCH	PMR
+	ENTRY	PMR			;So find in library search mode
+	TWOSEG	400000
+	RELOC	400000
+
+;ACs:
+
+	F=0
+	T1=1
+	T2=2
+	T3=3
+	T4=4				;temp ACs
+	C=5				;Character I/O
+	NOD=6				;AC to hold the desired node name
+	A=7				;The pointer to the arg block
+	P=17				;PDL
+
+;Left half flags are the flags passed from the user as defined
+;in the universal file
+;Right half (local) flags:
+
+FL$DIR==1				;This is a direct connection
+FL$ACI==2				;Access control information
+FL$P1==4				;Pass 1 through string copy
+FL$ALI==10				;Direct alias in effect
+FL$P2==20				;Pass 2 through error processor
+
+	OPDEF	PJRST	[JRST]
+
+	IFNDEF	ALSLEN,<ALSLEN==^D10>	;Size of the alias table
+	IFNDEF	PMRSIZ,<PMRSIZ==200>	;Maximum size of PMR string
+	Subttl	Initialization
+
+PMR::
+	PUSH	P,ECOD			;Current ECOD
+	PUSH	P,.JBFF			;Save .JBFF
+	PUSH	P,ACBLK			;Save current AC block pointer
+	PUSH	P,FLPBLK+.FOFNC		;Current FILOP. channel
+	PUSH	P,FAILCT		;Current failure count
+	PUSH	P,0			;Save AC 0
+	HRRM	P,ACBLK			;Save current AC block pointer
+	HRRI	0,1(P)
+	HRLI	0,1			;Where to start saving
+	ADJSP	P,20-2			;Don't save 0 or 17
+	BLT	0,(P)			;Save ACs
+	MOVEI	T2,T1
+	HRLM	T2,ACBLK		;Initialize pointer
+	MOVE	T2,[XWD HGHLOW,LOWLOW]	;Init the LOWSEG
+	BLT	T2,LOWLOW+$LWLEN-1	;From the highseg copy
+	HLLZ	F,T1			;Put flags in F
+	HRRZS	T1			;Clear flags now
+	PUSHJ	P,USRADR		;Check in case it's an AC
+	HRRZS	A,T1			;Point to arg block
+	TLNN	F,(PMR$RMR)		;Are we to always do a direct connect?
+	  JRST	NORMR			;No
+	TRO	F,FL$DIR		;This is really direct
+	NSP.	T1,			;Try to do it
+	  TRNA				;Failed
+	JRST	RETURN			;Won, return now
+	  HRLM	T1,ECOD			;Store UUO error code
+	MOVE	T2,[NS.WAI!<.NSFRL,,.NSACH+1>]
+	MOVEI	T1,(A)			;Point to arg block again
+	EXCH	T2,.NSAFN(T1)		;Save old, do what we want
+	NSP.	T1,			;Release stale channel
+	  JFCL
+	MOVEM	T2,.NSAFN(A)		;Restore user's block
+NORMR:	TLNN	F,(PMR$DCN)		;Look on DCN:?
+	  JRST	NODCN			;No
+	MOVSI	T1,'DCN'
+	MOVEM	T1,FLPBLK+.FODEV	;Set device to be DCN: then
+NODCN:	SETZM	BUFHDR			;Be sure no stale buffer ptrs
+	SETZM	BUFHDR+1
+	SETZM	BUFHDR+2
+	PUSHJ	P,SETUP			;Find out some things about caller
+	MOVE	T1,[FLPLEN,,FLPBLK]
+	FILOP.	T1,			;Look up
+	  JRST	NOFIL			;Failed
+	SETZM	ALSTBL			;Zap the ALIAS table
+	MOVE	T1,[ALSTBL,,ALSTBL+1]
+	BLT	T1,ALSTBL+ALSLEN-1
+	Subttl	Scan for matching node name
+
+SCNNOD:	PUSHJ	P,GETTKN		;Get a token
+	  JRST	ECOD1			;Failed, EOF or error
+	CAIN	C,"="			;Is this an alias definition?
+	  JRST	[PUSHJ	P,DEFALS	;Yes, go see about defining it then
+		 JRST	SCNND1	]	;Done
+	CAME	T1,NOD			;Is it the desired node?
+	PUSHJ	P,ALIAS			;Or is it an alias?
+	  JRST	TRYRTE			;Yes, try this route
+SCNND1:	PUSHJ	P,EATEOL		;No, eat this line
+	  JRST	ECOD1			;Not found
+	JRST	SCNNOD			;Check for another line
+	Subttl	Return to user
+
+;Here to restore ACs and return to user
+
+RTZER:	SUBI	T1,ECOD0+1		;Get the error code
+	TLNN	F,(PMR$RMR)		;If not rich-man's forced...
+	HRRM	T1,ECOD			;Save for return
+	TLNE	F,(PMR$SERR)		;Suppress errors?
+	  JRST	RTZER2			;No messages
+	SKIPN	T1,FAILCT		;Do any routing at all?
+	  JRST	RTZER3
+	OUTSTR	[ASCIZ/Connection failed after  /]
+	PUSHJ	P,DECOUT
+	OUTSTR	[ASCIZ/ routing attempt/]
+	SOSE	FAILCT			;Destroy it now
+	OUTCHR	["s"]
+	OUTSTR	[ASCIZ/]
+/]
+RTZER2:	PUSHJ	P,RELCHN		;Release the channel
+	PUSHJ	P,RSTACS		;Restore users's ACs
+	POP	P,FAILCT		;Restore old failure count
+	POP	P,FLPBLK+.FOFNC		;Restore channel
+	POP	P,ACBLK			;Restore old ACBLK pointer
+	POP	P,.JBFF			;Restore .JBFF
+	MOVS	T1,ECOD			;Get the error code
+	POP	P,ECOD			;Previous error
+	POPJ	P,
+
+;Here if no routing at all:
+
+RTZER3:	TLNE	F,(PMR$RMR)		;If forced rich man's, then it's
+	  JRST	RTZER2			;The caller's responsibility
+	OUTSTR	[ASCIZ/
+[Node /]
+	MOVE	T2,NOD
+	PUSHJ	P,NODOUT
+	OUTSTR	[ASCIZ/ has no routing table entries]
+/]
+	JRST	RTZER2			;And finish up
+
+;Here if we couldn't find DNHOST.TXT
+
+NOFIL:	TLNN	F,(PMR$DCN!PMR$SERR)	;Want error?
+	 OUTSTR	[ASCIZ/
+%Can't find SYS:DNHOST.TXT
+/]					;Assume he knows what he's doing
+					;if file not found on DCN:
+	TLNN	F,(PMR$RMR)		;Always return RMR error code
+	HRLM	T1,ECOD			;Store UUO error code
+	JRST	ECOD0			;Store an error code
+
+RETURN:	SKIPE	T1,NSPBLK+.NSACH	;Get channel if any
+	  MOVEM	T1,.NSACH(A)		;Set it for him to see too
+	PUSHJ	P,RELCHN
+	TLNE	F,(PMR$SERR)
+	  JRST	NOOK			;No OK message
+	TRNE	F,FL$ALI			;Alias?
+	  JRST	DOOK			;Yes, do message
+	TRNE	F,FL$DIR		;Is this a direct connection?
+	TLNN	F,(PMR$RMR)		;By rich man's routing?
+DOOK:	  OUTSTR	[ASCIZ/ connect OK]
+/]
+NOOK:	PUSHJ	P,RELCHN
+	PUSHJ	P,RSTACS
+	POP	P,FAILCT		;Restore old failure count
+	POP	P,FLPBLK+.FOFNC		;Previous channel
+	POP	P,ACBLK			;Restore AC block pointer
+	POP	P,.JBFF			;Restore .JBFF
+	POP	P,ECOD			;Previous error code
+	PJRST	CPOPJ1			;Give good return
+
+RSTACS:	HRLI	0,-<20-2>(P)		;Start of BLT
+	HRRI	0,1
+	BLT	0,16			;Restore ACs
+	POP	P,0			;Put address in 0
+	ADJSP	P,-<20-2>		;POP off all junk
+	EXCH	0,(P)			;Restore 0
+	POPJ	P,			;Return to caller
+
+RELCHN:	MOVEI	T1,.FOREL
+	HRRM	T1,FLPBLK+.FOFNC
+	MOVE	T1,[.FOFNC+1,,FLPBLK]
+	FILOP.	T1,
+	  JFCL
+	POPJ	P,
+	Subttl	Try this routing path
+
+;Note that T1 (preserved) contains the final destination node name
+
+TRYRTE:
+	TRO	F,FL$DIR		;Default assume this is direct
+	TRZ	F,FL$ALI		;Default no aliases
+	CAIN	C,","			;Terminated by comma?
+	  JRST	ROUTE0			;Yes, more to follow
+	CAME	T1,NOD			;Desired node?
+	  TRO	F,FL$ALI		;No, must be alias
+	JRST	ROUTE3			;Continue
+ROUTE0:	MOVE	T4,[NS.WAI!<.NSFEA,,.NSAA1+1>]	;Set function in case not
+	MOVEM	T4,NSPBLK+.NSAFN
+	MOVE	T4,[POINT 8,NODNAM,35]	;Initialize byte pointer
+	SETZB	T3,T2			;Also counter and SIXBIT name
+ROUTE1:	PUSHJ	P,DSKCHR		;Get character from file
+	  JRST	SCNND1			;No more
+	CAIN	C,":"			;End of node name?
+	  JRST	ROUTE2			;Yes
+	IDPB	C,T4			;Put character in
+	LSH	T2,6			;Also build SIXBIT name
+	MOVEI	C,'0'-"0"(C)		;for comparison
+	ADDI	T2,(C)
+	AOJA	T3,ROUTE1		;Count character and continue
+
+ROUTE2:	HRLM	T3,NODNAM+.NSASL	;Set node name length
+	TLNE	T2,770000		;Left justify sixbit name
+	  JRST	.+3
+	LSH	T2,6
+	JRST	.-3
+	MOVEI	T3,NSPCNC		;Set up connect block
+	MOVEM	T3,NSPBLK+.NSAA1	;..
+	MOVEI	T3,NSPBLK		;Point to our block
+	EXCH	T2,T1			;Switch destinations
+	CAME	T2,T1			;Unless this is the destination
+	PUSHJ	P,ALIAS			;Or is an alias
+ROUTE3:	  SKIPA	T3,A			;Get pointer to his args if direct
+	TRZA	F,FL$DIR		;Not a direct connection
+	TRNN	F,FL$ALI		;Alias?
+	  JRST	ROUTE7			;Not direct or not alias
+	PUSH	P,[POINT 8,NODNAM,35]	;Point to name
+	PUSH	P,[POINT 6,T1,]		;Point to SIXBIT version
+	MOVSI	T4,-6			;Maximum number of characters
+ROUTE4:	ILDB	C,(P)			;Get character
+	JUMPE	C,ROUTE5		;Done
+	MOVEI	C,"0"-'0'(C)		;Get character
+	IDPB	C,-1(P)
+	AOBJN	T4,ROUTE4		;Count character and continue
+ROUTE5:	HRRZS	T4			;Clear left half
+	HRLM	T4,NODNAM		;Store character count
+	MOVEI	T4,7(T4)		;Round up, include count
+	LSH	T4,-2			;Divide by four
+	HRRM	T4,NODNAM		;Store word count
+	ADJSP	P,-2			;Fix stack
+	MOVEI	C,NODNAM		;Point to our name
+	MOVE	T4,.NSAA1(T3)		;Address of connect block
+	EXCH	T4,T1			;For USRADR
+	PUSHJ	P,USRADR
+	EXCH	T1,T4
+	PUSH	P,.NSCND(T4)		;Save current address
+	MOVEM	C,.NSCND(T4)		;Point to our block
+ROUTE7:	EXCH	T2,T1			;Switch back
+	TRNE	F,FL$ALI			;Alias involved?
+	  JRST	ROUTE8			;Yes, always do
+	TLNE	F,(PMR$RMR)		;Direct?
+	TRNN	F,FL$DIR		;And is this direct?
+	  SKIPA				;No, proceed
+	JRST	SCNND1			;Else already tried this
+ROUTE8:	TLNE	F,(PMR$SERR)
+	  JRST	DOENAC			;Do enter active
+	SKIPN	FAILCT			;If have already done this
+	  OUTSTR [ASCIZ/[Attempting a connection...routing:
+/]
+	PUSHJ	P,NODOUT		;Output node name (in T2)
+DOENAC:	NSP.	T3,			;Do the NSP.
+	  JRST	CNCFAL			;The connect failed, see about errors
+	TRNN	F,FL$ALI		;Alias?
+	  JRST	DOENA1			;No
+	MOVE	T4,.NSAA1(A)		;Point to connect block
+	EXCH	T4,T1
+	PUSHJ	P,USRADR
+	EXCH	T4,T1
+	POP	P,.NSCND(T4)		;Restore original name
+DOENA1:	TRNE	F,FL$DIR		;Direct connection?
+	  JRST	RETURN			;Yes
+	SETZM	PSTBUF			;Zap the buffer
+	MOVE	T4,[PSTBUF,,PSTBUF+1]
+	BLT	T4,PSTBUF+<PMRSIZ/4>-1
+	MOVE	T4,[POINT 8,PSTBUF,]	;Point to this buffer
+	MOVEM	T4,NSPBLK+.NSAA2
+	MOVEI	T3,1			;Count "^A"
+	IDPB	T3,T4			;And put it in
+	MOVE	T2,[POINT 7,PTHBUF,]	;String for output
+	MOVEM	T2,PTHPTR
+	TROA	F,FL$P1			;Set P1
+STRLOP:	PUSHJ	P,DSKCHR
+	TRNE	F,FL$P1
+	  SKIPA
+	JRST	BADFMT
+	CAIN	C,":"			;Is character a ":"
+	  JRST	ISCOLN			;Yes
+	TRNE	F,FL$P1			;Is it pass1?
+	  JRST	BADFMT			;No, lose
+	JRST	NOTP1			;Treat as normal character
+ISCOLN:	PUSHJ	P,DSKCHR		;And is this one too?
+	  JRST	BADFMT
+	CAIE	C,":"			;??
+	  JRST	BADFMT
+	PUSHJ	P,DSKCHR		;Get next character
+	  JRST	BADFMT
+	CAIN	C,15			;<CR>
+	  JRST	HAVSTR			;Yes, done
+	TRZE	F,FL$P1			;Is this first time through?
+	  JRST	NOTP1			;No
+	MOVEI	T2,":"			;Put "::" in then
+	IDPB	T2,T4
+	IDPB	T2,T4
+	IDPB	T2,PTHPTR
+	IDPB	T2,PTHPTR		;Same thing to PTHBUF
+	MOVEI	T3,2(T3)		;Count them up
+NOTP1:	IDPB	C,T4			;Put character in buffer
+	IDPB	C,PTHPTR
+	AOJA	T3,STRLOP
+
+HAVSTR:	MOVE	C,[POINT 7,PTHBUF,]	;See if really did something
+	CAME	C,PTHPTR
+	TLNE	F,(PMR$SERR)		;Output path?
+	  JRST	NOPTH			;No
+	MOVEI	C,":"			;Finish off the path
+	IDPB	C,PTHPTR
+	IDPB	C,PTHPTR
+	SETZ	C,
+	IDPB	C,PTHPTR		;..
+	OUTSTR	PTHBUF			;Output the path string
+NOPTH:	TRNN	F,FL$ACI		;Any ACI?
+	  JRST	NOACI			;No
+	MOVEI	T3,2(T3)		;Include quotes
+	MOVEI	C,""""
+	IDPB	C,T4			;Put one in
+	MOVE	T1,.NSAA1(A)		;Get the connect block
+	PUSHJ	P,USRADR
+	SKIPE	T1,.NSCUS(T1)		;If a user name
+	PUSHJ	P,CPYBLK		;Copy it
+	PUSHJ	P,CPYSPC		;Put space in
+	MOVE	T1,.NSAA1(A)
+	PUSHJ	P,USRADR
+	MOVE	T2,.NSCNL(T1)		;Get length
+	CAIL	T2,.NSCPW+1		;Is there a password there?
+	SKIPN	T1,.NSCPW(T1)
+	  SKIPA
+	PUSHJ	P,CPYBLK		;Copy password as required
+	PUSHJ	P,CPYSPC		;Add the space in
+	MOVE	T1,.NSAA1(A)
+	PUSHJ	P,USRADR
+	MOVE	T2,.NSCNL(T1)
+	CAIL	T2,.NSCAC+1
+	SKIPN	T1,.NSCAC(T1)
+	  SKIPA
+	PUSHJ	P,CPYBLK		;Copy account
+	PUSHJ	P,CPYSPC
+	MOVE	T1,.NSAA1(A)
+	PUSHJ	P,USRADR
+	MOVE	T2,.NSCNL(T1)
+	CAIL	T2,.NSCUD+1
+	SKIPN	T1,.NSCUD(T1)		;Copy user data
+	  SKIPA
+	PUSHJ	P,CPYBLK
+	PUSHJ	P,CPYSPC
+	MOVEI	C,""""
+	IDPB	C,T4
+
+NOACI:	MOVEI	T3,4(T3)		;Add in for '::""'
+	MOVEI	C,":"
+	IDPB	C,T4
+	IDPB	C,T4
+	MOVEI	C,""""
+	IDPB	C,T4
+	PUSH	P,T1			;Save T1
+	MOVE	T1,.NSAA1(A)		;Point to connect block again
+	PUSHJ	P,USRADR
+	MOVEI	T2,(T1)
+	MOVE	T2,.NSCDD(T2)		;Point to destination descriptor
+	SKIPE	.NSDFM(T2)		;Get object type
+	  JRST	FMT12			;Format one or two
+	MOVE	T1,.NSDOB(T2)		;Get the number
+	PUSHJ	P,MAKNUM		;Make a number
+	MOVEI	C,"="
+	IDPB	C,T4			;Final thing
+	AOJ	T3,			;Count the character
+FINOBJ:	POP	P,T1
+	MOVEI	C,""""
+	IDPB	C,T4
+	MOVEM	T3,NSPBLK+.NSAA1		;Set count
+	MOVE	T3,[NS.WAI!NS.EOM!<.NSFDS,,.NSAA2+1>]	;Set argument
+	MOVEM	T3,NSPBLK+.NSAFN
+	MOVEI	T3,NSPBLK		;Send the string
+	NSP.	T3,
+	  JRST	PSTFAL			;Failed
+	TRZ	F,FL$P2			;Not pass 2
+REDERR:	MOVE	C,NSPBLK+.NSAFN		;Save last status
+	MOVE	T3,[NS.WAI!<.NSFDR,,.NSAA2+1>]
+	MOVEM	T3,NSPBLK+.NSAFN
+	MOVE	T3,[POINT 7,PSTBUF,]
+	MOVEM	T3,NSPBLK+.NSAA2
+	MOVEI	T3,PMRSIZ
+	MOVEM	T3,NSPBLK+.NSAA1
+	MOVEI	T3,NSPBLK
+	NSP.	T3,
+	  JRST	ERRDON			;Done if nothing
+	MOVE	T4,[POINT 7,PSTBUF,]
+	MOVEI	T3,PMRSIZ
+	SUB	T3,NSPBLK+.NSAA1		;Count of characters
+	TROE	F,FL$P2				;Pass2?
+	  JRST	[JUMPLE	T3,REDERR		;See about more data
+		 TLNE	C,(NS.EOM)		;EOM on last message?
+		 OUTSTR	CRLF			;Didn't supply this
+		 JRST	OUTERR		]	;Output this
+	SOJL	T3,BADMSG			;If no characters in msg
+	ILDB	C,T4
+	SOJE	C,RETURN
+	TLNE	F,(PMR$SERR)
+	  JRST	ERRDON				;It is done then
+	JUMPE	T3,ERRDON
+						;Fall through into error handler
+	Subttl	Error handlers
+
+;from previous page:  remote node returned a message
+OUTERR:	ILDB	C,T4
+	OUTCHR	C
+	SOJG	T3,OUTERR			;Continue outputting
+	JRST	REDERR				;Continue reading the error
+
+;Here if a bad message returned from another PSTHRU
+
+BADMSG:	TLNN	F,(PMR$SERR)
+	 OUTSTR	[ASCIZ/%Bad message returned from PSTHRU/]
+	JRST	ERRDON
+
+;Here on bad format found in DNHOST.TXT
+
+BADFMT:	TLNN	F,(PMR$SERR)
+	OUTSTR	[ASCIZ/%Bad format found in SYS:DNHOST.TXT
+/]
+	JRST	ERRDON
+
+;Here for connection failure
+
+CNCFAL:	TRNN	F,FL$ALI			;Alias?
+	  JRST	CNCFA1			;No
+	MOVE	T4,.NSAA1(A)		;Must be using his block
+	EXCH	T4,T1
+	PUSHJ	P,USRADR
+	EXCH	T1,T4
+	POP	P,.NSCND(T4)		;So restore his node name
+CNCFA1:	TLNE	F,(PMR$SERR)
+	  JRST	ERRDON
+	OUTSTR	[ASCIZ/Connection failed:  /]
+DOERR:	OUTSTR	@DCNERR(T3)
+
+;Here is where most per-line errors come (except BAD FORMAT)
+
+ERRDON:	TLNN	F,(PMR$SERR)
+	OUTSTR	[CRLF:	ASCIZ/
+/]
+	AOS	FAILCT			;Increment the failure count
+	MOVE	T3,[NS.WAI!<.NSFRL,,.NSACH+1>]
+	MOVEM	T3,NSPBLK
+	MOVEI	T3,NSPBLK
+	NSP.	T3,
+	  JFCL				;Get rid of old channels
+	JRST	SCNND1
+;Here if connect went OK, but the send of the PSTHRU string failed
+
+PSTFAL:	TLNE	F,(PMR$SERR)		;Output messages?
+	  JRST	ERRDON			;No
+	OUTSTR	[ASCIZ/Can't send PSTHRU string: /]
+	JRST	DOERR
+
+;Routine to handle format 1 type objects.  Format 2 is unsupported
+;but will come here also
+
+FMT12:
+	MOVE	T1,[POINT 7,[ASCIZ/TASK=/],]
+	ILDB	C,T1
+	JUMPE	C,.+3
+	IDPB	C,T4
+	AOJA	T3,.-3
+	MOVE	T1,.NSDPN(T2)
+	PUSHJ	P,USRADR
+	HLRZ	T2,.NSASL(T1)
+	HRLI	T1,(POINT 8,,35)
+	JUMPE	T2,FINOBJ
+	ILDB	C,T1
+	IDPB	C,T4
+	AOJ	T3,
+	SOJG	T2,.-3
+	JRST	FINOBJ
+	Subttl	Search alias table
+
+;***STRANGE CONVENTION****
+;Returns CPOPJ if an alias, CPOPJ1 if not
+
+ALIAS:	PUSH	P,T2
+	MOVSI	T2,-ALSLEN
+CHKALS:	SKIPN	ALSTBL(T2)
+	  JRST	T2POJ1			;Can't match if there isn't any
+	CAMN	T1,ALSTBL(T2)		;Does it match?
+	  JRST	T2POPJ			;Yes, it's an alias
+	AOBJN	T2,CHKALS		;No, check next
+T2POJ1:	AOS	-1(P)
+T2POPJ:	POP	P,T2
+	POPJ	P,
+	Subttl Conditionally define an alias
+
+;Enter with NOD=Desired node name
+;Enter with T1=node name just scanned
+;Exit with alias defined in table if the next token scanned
+;is the desired node name
+
+DEFALS:	MOVE	T4,T1			;Save where it won't get corrupted
+	PUSHJ	P,GETTKN		;Get a token from the file
+	  SETZ	T1,			;Be sure it won't match
+	CAMN	T4,NOD			;Is this the one we want?
+	  EXCH	T1,T4			;Yes
+	CAME	T1,NOD			;Desired node?
+	  POPJ	P,			;No, return
+	MOVSI	T1,-ALSLEN		;AOBJN pointer to table
+ALSLP:	CAMN	T4,ALSTBL(T1)		;Table entry match?
+	  POPJ	P,			;Yes, already defined
+	SKIPE	ALSTBL(T1)		;Any entry there?
+	  AOBJN	T1,ALSLP		;Yes, look for another
+	JUMPGE	T1,ALSFUL		;No more entries; full
+	MOVEM	T4,ALSTBL(T1)
+	POPJ	P,
+
+ALSFUL:	TLNN	F,(PMR$SERR)		;Suppress error messages
+	OUTSTR	[ASCIZ/
+%ALIAS table is full
+/]
+	POPJ	P,
+	Subttl	Subroutines
+
+;Routine to see if the address supplied in T1 is a user AC.
+;If so, point T1 to the corresponding saved AC
+
+USRADR:	CAIG	T1,17		;Is it an AC?
+	  MOVEI	T1,@ACBLK	;Yes, translate it
+	POPJ	P,
+
+;Return next token from file:  return with terminating character in "C"
+;Return with token (in sixbit) in T1
+;Return CPOPJ1 if found something, CPOPJ if error, EOF, etc.
+
+GETTKN:	SETZ	T1,		;Zap the accumlating AC
+TKNLP:	PUSHJ	P,DSKCHR	;Get a character from the file
+	  POPJ	P,		;No more
+	CAIL	C,"a"		;Lower case?
+	CAILE	C,"z"		;??
+	  SKIPA			;no
+	MOVEI	C,"A"-"a"(C)	;Translate
+	CAIL	C,"0"		;Lower bound
+	CAILE	C,"Z"		;Must be in this range
+	  JRST	HAVTKN		;Else lose
+	CAILE	C,"9"
+	CAIL	C,"A"		;And can't be in this range
+	  SKIPA
+	JRST	HAVTKN
+	LSH	T1,6		;Else include
+	ADDI	T1,'0'-"0"(C)	;Include new character
+	JRST	TKNLP
+
+HAVTKN:	JUMPE	T1,CPOPJ1	;Done
+	TLNE	T1,770000	;Left justify it
+	  JRST	CPOPJ1		;It is
+	LSH	T1,6
+	JRST	.-3		;Continue to do so
+
+
+;Routine to eat until end of line in file
+
+
+EATEOL:	PUSHJ	P,DSKCHR
+	  POPJ	P,		;EOF
+	CAIE	C,"	"	;<TAB>
+	CAIN	C,15		;<CR>
+	  JRST	EATEOL		;Eat following <LF>**Must be Present**
+	CAIL	C," "		;Control character?
+	  JRST	EATEOL		;No
+	AOS	(P)
+	POPJ	P,		;Return
+
+;Routine to find the desired node name amongst the connect block
+;and set up the ACI flag appropriately
+
+SETUP:	SETZ	NOD,				;Zap the node name
+	MOVE	T1,.NSAA1(A)			;Point to connect block
+	PUSHJ	P,USRADR			;Check it
+	MOVEI	T3,(T1)
+	HRRZ	T4,.NSCNL(T3)			;Get length of connect block
+	CAIGE	T4,.NSCND+1			;Must be at least this
+	  POPJ	P,				;Return with NOD zapped
+	CAIGE	T4,.NSCSD+1			;Source descriptor?
+	  JRST	NOCSD				;No
+	MOVE	T1,.NSCSD(T3)			;Yes, get it
+	PUSHJ	P,USRADR			;Relocate if AC
+	MOVEM	T1,NSPCNC+.NSCSD		;And make it ours
+NOCSD:	MOVE	T1,.NSCND(T3)			;String block pointer
+	PUSHJ	P,USRADR			;Relocate
+	CAIGE	T4,.NSCUS+1			;Can there be any ACI?
+	  JRST	[TRZ	F,FL$ACI		;No
+		 JRST	ACICKD	]
+	MOVEI	T2,.NSCUS(T3)			;Mininum arg to check
+	ADDI	T3,(T4)				;Max arg to check
+	PUSH	P,T1				;Save T1
+CHKACI:	CAIG	T3,(T2)
+	  JRST	ACICKZ				;Finished
+	SKIPN	T1,-1(T3)			;Pointer there?
+	  SOJA	T3,CHKACI			;No
+	PUSHJ	P,USRADR			;Make a user address
+	MOVE	T1,(T1)				;Get data counts
+	TLNN	T1,-1				;Any characters?
+	  SOJA	T3,CHKACI			;No, check next arg
+	TROA	F,FL$ACI			;...
+ACICKZ:	TRZ	F,FL$ACI			;No ACI
+	POP	P,T1				;Restore T1
+ACICKD:	HLRZ	T2,.NSASL(T1)			;Number of chars
+	HRLI	T1,(POINT 8,,35)		;Make byte pointer
+NODLP:	SOJL	T2,NDJSTF			;Justify it and return
+	ILDB	C,T1
+	LSH	NOD,6
+	ADDI	NOD,'0'-"0"(C)
+	JRST	NODLP
+
+NDJSTF:	JUMPE	NOD,CPOPJ
+	TLNE	NOD,770000
+	  POPJ	P,
+	LSH	NOD,6
+	JRST	.-3
+
+
+;Routine to get the next character from the disk file
+;Assume the FILOP block is set as for the file open
+
+
+DSKCHR:	SOSGE	BUFHDR+.BFCNT			;More characters left?
+	  JRST	DOIN				;No, input another buffer
+	ILDB	C,BUFHDR+.BFPTR			;Get next character
+	AOS	(P)				;Give good return
+	POPJ	P,
+
+DOIN:	PUSH	P,T1				;Save T1
+	MOVEI	T1,.FOINP			;Get function
+	HRRM	T1,FLPBLK+.FOFNC		;Set the function
+	MOVE	T1,[.FOFNC+1,,FLPBLK]
+	FILOP.	T1,				;Input a block
+	  JRST	TPOPJ				;Failed
+	POP	P,T1
+	JRST	DSKCHR
+
+;Routine to output decimal number in T1.  Destroys T1, T2
+
+DECOUT:	IDIVI	T1,^D10
+	HRLM	T2,(P)
+	SKIPE	T1
+	PUSHJ	P,DECOUT
+	HLRZ	T1,(P)
+	MOVEI	T1,"0"(T1)
+	OUTCHR	T1
+	POPJ	P,
+
+;Routine to output SIXBIT node name followed by ::.
+;Node name in T2.  All ACs respected
+
+NODOUT:	PUSH	P,T1
+	PUSH	P,T2
+NODLUP:	SETZ	T1,
+	LSHC	T1,6
+	MOVEI	T1,"0"-'0'(T1)
+	OUTCHR	T1
+	JUMPN	T2,NODLUP
+	OUTSTR	[ASCIZ/::/]
+	POP	P,T2
+	POP	P,T1
+	POPJ	P,
+
+;Routine to put number in T1 into ACI string counted by T3 and
+;pointed to by T4.  Destroys T1,T2,C
+
+MAKNUM:	IDIVI	T1,^D10
+	HRLM	T2,(P)
+	SKIPE	T1
+	PUSHJ	P,MAKNUM
+POPNUM:	HLRZ	C,(P)
+	MOVEI	C,"0"(C)
+	IDPB	C,T4
+	AOJ	T3,
+	POPJ	P,
+
+;Routine to copy the block pointed to by T1.  Updates T3,T4, destroys
+;T1, T2, and C
+
+CPYBLK:	PUSHJ	P,USRADR
+	HLRZ	T2,.NSASL(T1)			;Get character count
+	JUMPE	T2,CPOPJ			;Done if none
+	ADDI	T3,(T2)				;Update counts
+	HRLI	T1,(POINT 8,,35)		;Make byte pointer
+	ILDB	C,T1
+	IDPB	C,T4
+	SOJG	T2,.-2				;Copy it
+	POPJ	P,
+
+;Routine to put a space in the string pointed to by T4, updating
+;count in T3.  Destroys C
+
+CPYSPC:	MOVEI	C," "
+	IDPB	C,T4
+	AOJA	T3,CPOPJ			;Count it and return
+
+;Returns
+
+TPOPJ1:	POP	P,T1
+CPOPJ1:	AOSA	(P)
+TPOPJ:	POP	P,T1
+CPOPJ:	POPJ	P,
+	Subttl	Error code returns
+
+;ECODx routines to set up an error code
+
+ECOD0:	JSP	T1,RTZER	;File SYS:DNHOST.TXT not found
+ECOD1:	JSP	T1,RTZER	;End-of-file reached with no successful path
+	Subttl	Message table
+
+	DEFINE	ERRMSG(TEXT)<
+	[ASCIZ/'TEXT'/]
+>
+
+DCNERR:	ERRMSG	<Unknown DECnet error code 0>
+	ERRMSG	<Argument error>
+	ERRMSG	<Allocation failure>
+	ERRMSG	<Bad channel>
+	ERRMSG	<Bad format type>
+	ERRMSG	<Connect block format error>
+	ERRMSG	<Interrupt data too long>
+	ERRMSG	<Illegal flow control mode>
+	ERRMSG	<Illegal function>
+	ERRMSG	<Job quota exhausted>
+	ERRMSG	<Link quota exhausted>
+	ERRMSG	<No connect data to read>
+	ERRMSG	<Percentage input out of bounds>
+	ERRMSG	<No privileges>
+	ERRMSG	<Segment size too big>
+	ERRMSG	<Unknown node name>
+	ERRMSG	<Unexpected state: Unspecified>
+	ERRMSG	<Wrong number of arguments>
+	ERRMSG	<Function called in wrong state>
+	ERRMSG	<Connect block length error>
+	ERRMSG	<Process block length error>
+	ERRMSG	<String block length error>
+	ERRMSG	<Unexpected state:  Disconnect sent>
+	ERRMSG	<Unexpected state:  Disconnect confirmed>
+	ERRMSG	<Unexpected state:  No confidence>
+	ERRMSG	<Unexpected state:  No link>
+	ERRMSG	<Unexpected state:  No communication>
+	ERRMSG	<Unexpected state:  No resources>
+	ERRMSG	<Connect rejected>
+	ERRMSG	<Rejected or disconnected by object>
+	ERRMSG	<No resources>
+	ERRMSG	<Unrecognized node name>
+	ERRMSG	<Remote node shut down>
+	ERRMSG	<Unrecognized object>
+	ERRMSG	<Invalid object name format>
+	ERRMSG	<Object too busy>
+	ERRMSG	<Abort by network management>
+	ERRMSG	<Abort by object>
+	ERRMSG	<Invalid node name format>
+	ERRMSG	<Local node shut down>
+	ERRMSG	<Access control rejection>
+	ERRMSG	<No response from object>
+	ERRMSG	<Node unreachable>
+	ERRMSG	<No link>
+	ERRMSG	<Disconnect complete>
+	ERRMSG	<Image field too long>
+	ERRMSG	<Unspecified reject reason>
+	ERRMSG	<Bad flag combination>
+	ERRMSG	<Address check>
+	Subttl	Impure storage
+
+	;First, layout that impure code which must be initialized
+
+	RELOC	0
+LOWLOW:
+	RELOC
+
+HGHLOW:	PHASE	LOWLOW			;It will go later
+NSPCNC:	.NSCDD+1			;Only specify up to destination
+	NODNAM				;Address of node name block
+	Z				;Filled in at run time (source)
+	DSTNPD				;Destination NPD
+
+DSTNPD:	.NSDOB+1
+	Z				;Format type zero
+	EXP	.OBPST			;PSTHRU object
+
+NODNAM:	3				;Number of words
+	BLOCK	2			;in NODE name string block
+
+FLPBLK:	FO.PRV!FO.ASC!.FORED		;Use privs (if I have them),,lookup
+	.IOASC				;ASCII mode
+	SIXBIT/SYS/			;Default using SYS:
+	0,,BUFHDR			;Input buffer header
+	Z				;Standard number of buffers
+	LKPBLK				;Lookup block
+	Z
+	Z
+	FLPLEN==.-FLPBLK
+
+LKPBLK:	SIXBIT/DNHOST/
+	SIXBIT/TXT/
+	Z
+	Z
+
+ECOD:	Z				;Error code to return
+FAILCT:	Z				;Failure count
+
+	DEPHASE
+
+	$LWLEN==.-HGHLOW
+	XLIST	;LIT
+	LIT	;DUMP LITERALS IN HS
+	LIST
+
+	RELOC	0
+
+LOWLOW:	BLOCK	$LWLEN			;Allow space for initialized LOWSEG
+
+
+BUFHDR:	BLOCK	3
+
+ALSTBL:	BLOCK	ALSLEN
+
+NSPBLK:	BLOCK	.NSAA3+1		;Full size block (just in case)
+
+PSTBUF:	BLOCK	PMRSIZ/4
+
+PTHPTR:	BLOCK	1
+PTHBUF:	BLOCK	PMRSIZ/5+1
+
+ACBLK:	BLOCK	1			;For pointer to current AC block
+
+	END

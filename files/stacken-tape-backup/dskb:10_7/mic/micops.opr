@@ -1,0 +1,498 @@
+
+
+
+                   UNIVERSITY OF YORK - COMPUTING CENTRE
+
+
+                               MIC - MICOPS.
+
+
+                           MIC OPERATIONS MANUAL
+
+
+                                april 1983
+
+              Reflects features of version 11C(1223) of MIC.
+
+
+                           Author: J. D. Service
+
+
+                                   NOTE
+
+               This document is based on the original (1975)
+               MIC   Operations   Manual,   written  at  the
+               Hatfield Polytechnic.
+
+
+MIC Operations Manual                                                Page 2
+UNIVERSITY OF YORK COMPUTING SERVICE - April 1983
+
+
+                                 Contents.
+
+
+        1.       Introduction.
+
+        2.       Starting MIC up.
+
+        3.       MIC run time message.
+
+        4.       Operator information.
+
+        5.       Stopping MIC.
+
+        6.       Restarting MIC
+
+        7.       Operator control of COJOBS.
+
+        8.       Operator information on COJOBS.
+
+
+                                  Index.
+MIC Operations Manual                                                Page 3
+INTRODUCTION
+
+
+1.0  INTRODUCTION
+
+MIC is a stand alone program which runs detached  on  a  DECsystem-10,  and
+provides a Macro Interpreted Command language (or job control language) for
+terminals and batch users.  A full description of MIC functions and uses is
+contained in the "MIC USER'S GUIDE".
+
+In a similar fashion to DAEMON, MIC requires to be started by the operator,
+but thereafter it requires little operator intervention.
+
+
+
+2.0  STARTING MIC UP
+
+As has already been stated MIC must be started up by the operator at system
+startup  time.  In order to do this the operator need simply type (assuming
+"MIC.EXE" is on SYS:):-
+
+.R MIC
+
+                MIC - VERSION 12C(1213)
+
+DETACHING
+.
+
+The above assumes the operator to be logged in as [1,2] and that MIC is not
+already  running.   Conveniently,  MIC  may  be  started  by the OPSER auto
+command file which is run at system startup.   The  following  sequence  of
+commands performs this function.
+
+:SLOG
+:DEF MIC=
+R MIC
+K/F
+
+
+                                   NOTE
+
+               If MIC is already running  when  "R  MIC"  is
+               typed  by  the operator, MIC will detect this
+               and return to monitor mode.
+
+
+
+
+It is most convenient to run MIC via the start up file SYSJOB.INI which is
+typed on FRCLIN.  MIC may be started by including
+
+LOGIN
+MIC
+
+in SYSJOB.INI
+MIC Operations Manual                                                Page 4
+STARTING MIC UP
+
+
+2.1  Start Up Problems
+
+Possible problems that may be detected by MIC at startup time (i.e.  On  an
+"R MIC") are:
+
+a)  If the ATTACH UUO fails when MIC attempts to "DETACH" then the message
+
+%CAN'T DETACH 
+
+will be output.  If this error occurs MIC will continue to run successfully
+(attached), but a systems programmer should be advised as soon as possible.
+
+b)  If MIC is run under a monitor without software interrupts the message
+
+[(MIC)-%(NOPSI) PSI UUO FAILED - MIC WILL USE APRENB UUO - CONTINUING ]
+
+
+This error requires MIC to be rebuilt to use the  alternative  APRENB  UUO,
+however  until  that is done MIC will run success- fully but auto restarts,
+as  described  in  section  3.3,  will  not  be  performed  for  all  error
+conditions.
+
+
+As these errors  are  unlikely  to  occur  in  a  running  MIC  no  further
+information is given here.
+
+
+
+3.0  MIC RUN TIME MESSAGES.
+
+Several MIC messages may be output on the system's OPR terminal when MIC is
+running.  All of these messages have the form
+
+[(MIC) - (code) <text>]
+
+where
+
+code    - is a code internal to MIC to assist in debugging MIC problems.
+<Text> - is the actual message.
+
+
+
+3.1  [(MIC) - (NOMSTR) MIC Not Running - Please Initialise]
+
+
+
+This message is output if any user types a DO  (or  "/")  command  and  the
+system  operator  has  not started MIC.  This message (which also rings the
+OPR bells) will be output every time any user types a  MIC  command,  until
+the operator starts MIC up.  The users will receive the message
+
+?(NOMSTR) MIC not running - please try again 
+
+and will immediately return to monitor mode.
+MIC Operations Manual                                                Page 5
+MIC RUN TIME MESSAGES.
+
+
+3.2  [(MIC) - (CORERR) - CORE UUO Failed - Continuing]
+
+This message is output when MIC attempts to  expand  its  core  and  fails.
+(Fifty  attempts  are  made  between  occurrences  of  this message).  This
+problem is non-fatal and implies that no new MIC processes may  be  started
+(i.e.  No DO (or "/") commands) until:-
+
+a) Cormax is increased.
+b) A running process terminates.
+
+As MIC normally requires a small core allocation this message  is  unlikely
+to  occur.   If it should occur the most likely cause is indiscriminate use
+of recursive (or nested) Macro commands.
+
+
+
+3.3  [(MIC) - (MICRSH) MIC HAS CRASHED - RESTARTING]
+
+
+
+MIC HAS DETECTED SOME ERROR IN ITSELF WHICH MAKES IT IMPOSSIBLE TO CONTINUE
+RUNNING.  NORMALLY THIS WILL BE PRECEDED BY THE NORMAL SYSTEM MESSAGE
+
+
+ ?ERROR.  IN DETACHED JOB n MIC
+ ?PC OUT OF BOUNDS AT USER PC ADDR nnnnnn
+
+
+ which will be output on the OPR terminal.  After the output of  the  crash
+ message  MIC  will  attempt  to  restart  itself.   This  is done by first
+ performing a LOOKUP and RENAME on SYS:MIC.SHR, in order to ensure  that  a
+ fresh  copy  of  MIC is read in from disk.  MIC then performs a RUN UUO on
+ SYS:MIC.SHR.  Once the new copy of MIC is up and running it  detects  that
+ it was started from a detached job, and proceeds to check all lines to see
+ if any were running MIC when it crashed.  If any  lines  are  found,  they
+ have their MIC word cleared and the message
+
+ [(MIC) - MASTER PROCESS ERROR - JOB ABORTED]
+
+ will be displayed on their terminal.
+ Should MIC fail to restart itself (e.G.  A LOOKUP, or RENAME failure)  the
+ message
+
+ [(MIC)-?(NORSTR) CAN'T RESTART]
+
+ will be output and the operator must restart MIC manually as described  in
+ section 6.
+
+ note:-
+
+ 1).  The auto restart only exists in MIC versions 5(35) and later.
+
+ 2).  Auto restarts will be attempted for the following error conditions
+MIC Operations Manual                                                Page 6
+MIC RUN TIME MESSAGES.
+
+
+        Illegal UUO.
+        Illegal Memory reference.       ***
+        Address Check.
+        Arithmetic Exception.
+        Pdl overflow.                   ***
+        Non-ex.  Memory.                ***
+        External Condition.
+
+ Those marked with an "***" are the only ones which will  be  used  if  the
+ APRENB UUO is used.  
+
+
+
+ 4.0  OPERATOR INFORMATION.
+
+ The operator may obtain information on  the  MIC  master  process  by  the
+ normal system programs (systat etc), and also by the command
+
+ .MIC STATUS
+
+
+
+
+
+
+
+
+
+ where:-
+
+
+ PROCESSES - is the number of MIC processes currently in use.
+
+ WAITING - is the number of MIC processes waiting for a process area  (I.E.
+ For MIC to expand core).  (Debugging feature).
+
+ LOCK.  - is the state of the master/slave interlock
+        (Debugging feature.)
+
+ MASTER - is the MIC master process job no.
+
+ CMDTOT - is the no.  Of MIC process which have been run
+
+ NO.  - Is the process number.
+
+ MODE - is the state of that process.
+
+ LINE - is the line no.  Of the owner of that process.
+
+ MACRO - is the name of the MIC macro running on that process.
+
+ ARGS - are the arguments to that process.
+                                    NOTE
+
+     1) Should master be 0 MIC is not running.
+
+
+
+
+
+ 5.0  STOPPING MIC
+
+ Should the  operator  wish  to  stop  MIC  he  should  use  the  following
+ procedure:-
+
+
+ .ATT n [1,2] ;  where n is the job no.  of the master process FROM JOB m
+
+ .HALT
+ .K/F
+
+ This procedure is not advised when processes are active, as the associated
+ TTY lines may be left in an undefined state.
+
+
+
+ 6.0  RESTARTING MIC
+
+ Should the operator need to restart MIC after stopping it  or  some  other
+ problem he need simply type - 
+
+
+ .PROTECT SYS:MIC.EXE <166> ;  in order to force a fresh copy from disk
+
+ .R MIC If this procedure is followed any currently running process will be
+ superceeded  and  all  new  users will use the new MIC.  The existing copy
+ will continue to run but no new users will be able to access it.
+
+
+
+ 7.0  OPERATOR CONTROL OF COJOBS.
+
+ An option to MIC is the COJOB feature which allows the user to run his MIC
+ macros  as  a  separate  job.  Further details are contained in the "COJOB
+ USERS GUIDE".
+
+ Several control commands are built in to MIC  to  allow  the  operator  to
+ control  the availability of cojobs on the system.  These commands require
+ the USER to be [1,2] to execute them.
+
+
+
+ 7.1  Operator Control Of COJOB Numbers
+
+ A command is provided to allow the operator to govern the number of COJOBS
+ available.  Type
+
+ .MIC SET CJREQ n
+
+ where n is the maximum number of COJOB'S required - a value between 0  and
+MIC Operations Manual                                                Page 8
+OPERATOR CONTROL OF COJOBS.
+
+
+ 16.
+
+
+
+                                    NOTE
+
+
+     1) MIC does not react to a change in the number of required cojobs
+     immediately,  but  waits  until no MIC processes are active.  This
+     means that there may be some delay in this command taking effect.
+
+
+     2) This value is intially 4, however this is a parameter which may
+     be reset when MIC is built.
+
+
+
+
+
+ 7.2  CONTROL OF THE DEFAULT RUN-TIME OF COJOBS.
+
+ This is provided by the command.
+
+ .MIC SET DEFTIM n
+
+ where n is the number of seconds which a COJOB will  be  allowed  to  run.
+ The USER may override this by the /TIME switch in his COJOB request.
+
+
+
+                                    NOTE
+
+     If this value is set to -1 then there will be  no  time  limit  on
+     COJOBS.
+
+
+
+
+
+ 7.3  Control Of The Maximum Run-time Of COJOBS.
+
+ The system operator may also govern  the  maximum  run-time  available  to
+ COJOB users by the command - 
+
+ .MIC SET MAXTIM n
+
+ where n is the maximum number of seconds which a COJOB will be allowed  to
+ set in its "/TIME" switch.
+
+
+                                    NOTE
+
+     A value of -1 means no limit.
+
+
+MIC Operations Manual                                                Page 9
+OPERATOR CONTROL OF COJOBS.
+
+
+ 7.4  Control Of The Availability Of COJOBS.
+
+ The system operator may govern the availability of COJOBS to all users, or
+ some group of users by the following commands.
+
+
+ .MIC SET NO DATASET
+ Dataset lines may not now use COJOBS.
+
+ .MIC SET NO REMOTE
+ Remote users may not now use COJOBS.
+
+ .MIC SET NO REMSTA
+ Users at remote stations may not now use COJOBS.
+
+ .MIC SET NO PTYCJB
+ COJOBS may not now be started from a PTY.
+
+ .MIC SET NO COJOBS 
+ Nobody may now use COJOBS.
+
+
+                                    NOTE
+
+     The default is that COJOBS are available to all.
+
+
+
+
+
+ 8.0  COJOB MESSAGES TO THE SYSTEM OPERATOR.
+
+ The COJOB facility in MIC may give rise to a message on the opr  terminal.
+ This has the form:-
+
+ [COJOB <name> (macroname) logging error code n - continuing]
+
+ where <name> is the COJOB name as described in the COJOB documentation.
+
+ N is the error code returned in a LOOKUP or ENTER UUO, block.
+
+ This error occurs when a running COJOB is  unable  to  "log"  a  block  of
+ output  in  the  logfile  specified  by the user.  This is normally a user
+ error, e.g.  Over quota or similar, and requires no operator intervention.
+
+
+
+ 9.0  OPERATOR INFORMATION ON COJOBS.
+
+ If the COJOB option is supported by MIC the "status" command will give the
+ operator some extra information.
+
+
+ .MIC STATUS
+MIC Operations Manual                                               Page 10
+OPERATOR INFORMATION ON COJOBS.
+
+
+ where most of the extra information is self explanatory.
+
+ The only unexplained extra value is the one given in  brackets  after  the
+ cmdtot, this extra figure is a count of the number of COJOBS run.
+                                                               Page Index-1
+
+
+
+                                   INDEX
+
+
+
+
+ Availability of COJOBS  . . . . . . . 9
+
+ CAN'T DETACH  . . . . . . . . . . . . 4
+ COJOB Messages to the System Operator  9
+ COJOB numbers . . . . . . . . . . . . 7
+ CORERR  . . . . . . . . . . . . . . . 5
+
+ LOGGING ERROR . . . . . . . . . . . . 5
+
+ Maximum Run-time  . . . . . . . . . . 8
+ MIC SET DEFTIM  . . . . . . . . . . . 8
+ MICRSH  . . . . . . . . . . . . . . . 5
+
+ NOMSTR  . . . . . . . . . . . . . . . 4
+ NOPSI . . . . . . . . . . . . . . . . 4
+
+ Operator Control of COJOBS  . . . . . 7
+ Operator Information  . . . . . . . . 6
+ Operator Information on COJOBS  . . . 9
+
+ Restarting MIC  . . . . . . . . . . . 7
+ Run Time Messages . . . . . . . . . . 4
+
+ Start up Problems . . . . . . . . . . 4
+ Starting MIC up.  . . . . . . . . . . 3
+ Stopping MIC  . . . . . . . . . . . . 7
+

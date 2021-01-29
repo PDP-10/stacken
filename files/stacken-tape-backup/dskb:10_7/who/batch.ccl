@@ -1,0 +1,13 @@
+/INITIAL:(-
+"            Batch status on ",DAY,", ",DATE," at ",TIME,CRLF,-
+"     System ",SERIAL," ",NAME,VERSION," node ",NODENA,"(",NODENU,")",CRLF,-
+"   Uptime = ",UPTIME,"  Schedule = ",SCHEDULE," ",BATNUM,"running out of ",BATMAX,"(",BATMIN,"reserved)",CRLF,CRLF,-
+"Job  User  name       PPN       Line   What        Size       State   Runtime",-
+CRLF)-
+/HEADING:("Batch controllers:") /FOOTING:(SPACE:1) /PROGRAM:BATCON, -
+/HEADING:("Batch jobs:") /FOOTING:(SPACE:1) /BATCH -
+/FORMAT:(JOB:3:R," ",NAME:12," ",PRJNUM:6:RIGHT,",",PRGNUM:6:LEFT," ",TTY:6,-
+" ",PROGRAM:6," ",CORE:16," ",WSCODE:6," ",RUNTIME:8,CRLF,-
+"    Time:",LIMIT:8:R,"  Core:",BATCOR:3:R,"  Stream:",BATSTR:2:R,-
+"  WTO:",WTO:4:L,"  Location:",LOCATION:3:R) -
+/DPY:5

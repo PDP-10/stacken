@@ -1,0 +1,375 @@
+	TITLE	QSRCV5 - Convert master queues
+	SUBTTL	Universals
+
+IF1,<PRINTX [Requires version 5 QSRMAC.UNV file called QSRMV5.UNV] > 
+
+	SEARCH	GLXMAC
+	SEARCH	QSRMV5			; Get version 5 QSRMAC
+
+
+	PROLOG	QSRCV5			; Generate GLXLIB info
+
+	%%.QV5==:%%.QSR			; Define version 5 QSRMAC version
+
+	EXTERN	EQBUFF			; Make the buffer accessible
+	SUBTTL	REDQV5 - Read a version 5 EQ block
+
+; This routine will read a version 5 EQ block into the low segment
+;data storage.
+
+REDQV5::MOVE	S1,EQBUFF+.EQITN	; Get the internal task name
+	MOVEM	S1,EQITN##		; Save it
+	LOAD	S1,.ROBTY+.EQROB+EQBUFF ; Get the object type
+	MOVE	S2,OBJTAB(S1)		; Convert to device name
+	JUMPE	S2,.RETF		; If no device, punt
+	LOAD	S1,.ROBAT+.EQROB+EQBUFF,RO.ATR	; Get the attributes
+	CAXN	S1,%SITGO		; SITGO stream?
+	 MOVX	S1,<SIXBIT |FFS|>	; Yes, get the other name
+	CAXN	S1,%LOWER		; Lower case?
+	 MOVX	S1,<SIXBIT |LL|>	; Get the correct name
+	CAXN	S1,%UPPER		; Upper case?
+	 MOVX	S1,<SIXBIT |LU|>	; Yes, get the name
+	STORE	S2,EQRDV##		; Store the request device
+	MOVE	S1,EQBUFF+.EQROB+.ROBTY	; Get the type
+	MOVEM	S1,EQROB##+.ROBTY	; Store it
+	MOVE	S1,EQBUFF+.EQROB+.ROBAT	; Get the attributes
+	MOVEM	S1,EQROB##+.ROBAT	; Store them
+	MOVE	S1,EQBUFF+.EQROB+.ROBND	; Get the node name
+	MOVEM	S1,EQROB##+.ROBND	; STore it
+	MOVE	S1,EQBUFF+.EQROB+.ROBUA	; Get the user attributes
+	MOVEM	S1,EQROB##+.ROBUA	; STore it
+	MOVE	S1,EQBUFF+.EQJOB	; Get the job name
+	MOVEM	S1,EQJOB##		; Save it
+	LOAD	S1,.EQSEQ+EQBUFF,EQ.SEQ	; Get the sequence
+	MOVEM	S1,EQSEQ##		; Save it
+	LOAD	S1,.EQSEQ+EQBUFF,EQ.PRV	; Get the 'creator priv'ed' bit
+	MOVEM	S1,EQPRV##		; Save it
+	LOAD	S1,.EQSEQ+EQBUFF,EQ.SPL	; Get the spooled bit
+	MOVEM	S1,EQSPL##		; Save it
+	LOAD	S1,.EQSEQ+EQBUFF,EQ.PRI	; Get the priority
+	MOVEM	S1,EQPRI##		; Store it
+	LOAD	S1,.EQSPC+EQBUFF,EQ.PRO	; Get the request protection
+	MOVEM	S1,EQPRO##		; Save it
+	LOAD	S1,.EQSPC+EQBUFF,EQ.NUM	; Get the number of files
+	MOVEM	S1,EQNUM##		; Store it
+	LOAD	S1,.EQAFT+EQBUFF	; Get the after time
+	MOVEM	S1,EQAFT##		; Store it
+	GETLIM	S1,+.EQLIM+EQBUFF,DEPN	; Get the dependency count
+	MOVEM	S1,EQDEP##		; Store it
+	GETLIM	S1,+.EQLIM+EQBUFF,UNIQ	; Get the uniqueness
+	MOVEM	S1,EQUNI##		; Save it
+	GETLIM	S1,+.EQLIM+EQBUFF,REST	; Get the non-restart
+	MOVEM	S1,EQNRS##		; Save it
+	GETLIM	S1,+.EQLIM+EQBUFF,OUTP	; Get the output type
+	MOVEM	S1,EQOUT##		; Store it
+	GETLIM	S1,+.EQLIM+EQBUFF,FORM	; Get the forms type (maybe)
+	MOVEM	S1,EQFRM##		; Store it
+	GETLIM	S1,+.EQLIM+EQBUFF,NBLK	; Get the number of blocks
+	MOVEM	S1,EQNBL##		; STore it
+	GETLIM	S1,+.EQLIM+EQBUFF,OLIM	; Get the page limit
+	MOVEM	S1,EQPGS##		; Store it
+	GETLIM	S1,+.EQLIM+EQBUFF,CORE	; Get the core limit
+	MOVEM	S1,EQCOR##		; Store it
+	GETLIM	S1,+.EQLIM+EQBUFF,TIME	; Get the time limit
+	MOVEM	S1,EQTIM##		; Save it
+	GETLIM	S1,+.EQLIM+EQBUFF,SLPT	; Get the printer limit (input)
+	MOVEM	S1,EQLPT##		; Store it
+	GETLIM	S1,+.EQLIM+EQBUFF,SCDP	; Get the card punch limit (input)
+	MOVEM	S1,EQCDP##		; store it
+	GETLIM	S1,+.EQLIM+EQBUFF,SPTP	; Get the paper tape limit (input)
+	MOVEM	S1,EQPTP##		; Stuff
+	GETLIM	S1,+.EQLIM+EQBUFF,SPLT	; Get the plotter limit
+	MOVEM	S1,EQPLT##		; Store it
+	GETLIM	S1,.EQLIM+EQBUFF,NOT1	; Get the /NOTE value
+	MOVEM	S1,EQNOT##		; Store it
+	GETLIM	S1,.EQLIM+EQBUFF,NOT2	; Get the second half
+	MOVEM	S1,EQNOT##+1		; Save it
+
+
+	MOVE	S1,[XWD .EQACT+EQBUFF,EQACT##] ; Get the BLT pointer
+	BLT	S1,EQACT+7		; Move the account string
+	MOVE	S1,[XWD .EQUSR+EQBUFF,EQUSR##] ; Get the user name
+	BLT	S1,EQUSR##+4		; Save it
+	DMOVE	S1,.EQOWN+EQBUFF	; Get the SIXBIT user name
+	DMOVEM	S1,EQOWN##		; Save it
+	MOVE	S1,.EQOID+EQBUFF	; Get the owner's PPN
+	MOVEM	S1,EQOID##		; Stuff it
+	MOVE	S1,[XWD .EQBOX+EQBUFF,EQBOX##] ; Get the BLT pointer
+	BLT	S1,EQBOX+7		; Store it
+	MOVE	S1,[XWD .EQCST+EQBUFF,EQCST##] ; Point to the customer words
+	BLT	S1,EQCST+^D10-1		; MOve it
+	LOAD	S1,.EQLEN+EQBUFF,EQ.LOH	; Get the length of the header
+	CAXGE	S1,.EQPAT+1		; Path there?
+	 JRST	REQ.1			; No, all done
+	MOVE	S2,[XWD .EQPAT+EQBUFF,EQPAT##] ; Get the pointer
+	BLT	S2,EQPAT##+.EQPSZ-.EQPAT ; Move the path
+REQ.1:	ADDI	S1,EQBUFF		; Plus the base address
+	HRL	S1,EQNUM##		; Get the number of files
+	POPJ	P,			; And return
+
+
+OBJTAB:	EXP	0,0,0,<SIXBIT |LPT|>
+	EXP	<SIXBIT |INP|>
+	EXP	<SIXBIT |CDP|>
+	EXP	<SIXBIT |PTP|>
+	EXP	<SIXBIT |PLT|>
+	EXP	0,0,0,<SIXBIT |IBM|>
+	EXP	0,0,0,0,0,0,0,0,0
+OBJTLN==.-OBJTAB
+	SUBTTL	WRTQV5 - Write a version 5 EQ block
+
+; This routine will write a version 5 EQ block.
+
+WRTQV5::$SAVE	<P1,P2>			; Save P1
+	MOVE	S1,CURPAG##		; Get the page address
+	$CALL	.ZPAGA			; And clear it
+	MOVE	P1,CURPAG##		; Get the address
+	MOVX	S1,<<XWD %%.QSR,.EQPSZ>> ; Get the size of the block and the version
+	MOVEM	S1,.EQLEN(P1)		; Store it
+	HLLZ	S1,EQRDV##		; Get the device
+	MOVSI	S2,-RDVTLN		; Get the table length
+	CAME	S1,RDVTAB(S2)		; Is this the correct device name?
+	 AOBJN	S2,.-1			; No, loop through the table
+	JUMPGE	S2,.RETF		; If we can't find it punt
+	HRRZ	S1,RDVTB1(S2)		; Get the attributes
+	STORE	S1,.ROBAT+.EQROB(P1),RO.ATR ; Stuff the attribute in
+	HLRZ	P2,RDVTB1(S2)		; Get the object type
+	STORE	P2,.ROBTY+.EQROB(P1)	; Store it
+	SKIPN	EQROB##+.ROBTY		; Have a type?
+	  JRST	WRTQ.1			; No, skip this
+DEFINE	$MOVE(FROM,TO)<
+	LOAD	S1,FROM			; From
+	STORE	S1,TO			; To
+>; End of $MOVE
+	$MOVE	EQROB##+.ROBTY,.ROBTY+.EQROB(P1)	; Store the type
+	$MOVE	EQROB##+.ROBAT,.ROBAT+.EQROB(P1)	; Attributes
+	$MOVE	EQROB##+.ROBND,.ROBND+.EQROB(P1)	; Node
+	$MOVE	EQROB##+.ROBUA,.ROBUA+.EQROB(P1)	; User attributes
+WRTQ.1:	LOAD	S1,EQITN##		; Get the internal task name
+	STORE	S1,.EQITN(P1)		; Save it
+	LOAD	S1,EQJOB##		; Get the job name
+	STORE	S1,.EQJOB(P1)		; Save it
+	LOAD	S1,EQSEQ##		; Get the sequence
+	STORE	S1,.EQSEQ(P1),EQ.SEQ	; Save it
+	LOAD	S1,EQPRV##		; Get the 'creator priv'ed' bit
+	STORE	S1,.EQSEQ(P1),EQ.PRV	; Save it
+	LOAD	S1,EQSPL##		; Get the spooled bit
+	STORE	S1,.EQSEQ(P1),EQ.SPL	; Save it
+	LOAD	S1,EQPRI##		; Get the priority
+	STORE	S1,.EQSEQ(P1),EQ.PRI	; Store it
+	LOAD	S1,EQPRO##		; Get the request protection
+	STORE	S1,.EQSPC(P1),EQ.PRO	; Save it
+	LOAD	S1,EQNUM##		; Get the number of files
+	STORE	S1,.EQSPC(P1),EQ.NUM	; Store it
+	LOAD	S1,EQAFT##		; Get the after time
+	STORE	S1,.EQAFT(P1)		; Store it
+	CAXE	P2,.OTBAT		; Input request?
+	 JRST	WRTQ.2			; No, output
+	LOAD	S1,EQDEP##		; Get the dependency count
+	STOLIM	S1,+.EQLIM(P1),DEPN	; Store it
+	LOAD	S1,EQUNI##		; Get the unit number
+	STOLIM	S1,+.EQLIM(P1),UNIQ	; Save it
+	LOAD	S1,EQNRS##		; Get the non-restart
+	STOLIM	S1,+.EQLIM(P1),REST	; Save it
+	LOAD	S1,EQOUT##		; Get the output type
+	STOLIM	S1,+.EQLIM(P1),OUTP	; Store it
+	LOAD	S1,EQCOR##		; Get the core limit
+	STOLIM	S1,+.EQLIM(P1),CORE	; Store it
+	LOAD	S1,EQTIM##		; Get the time limit
+	STOLIM	S1,+.EQLIM(P1),TIME	; Save it
+	LOAD	S1,EQLPT##		; Get the printer limit (input)
+	STOLIM	S1,+.EQLIM(P1),SLPT	; Store it
+	LOAD	S1,EQCDP##		; Get the card punch limit (input)
+	STOLIM	S1,+.EQLIM(P1),SCDP	; store it
+	LOAD	S1,EQPTP##		; Get the paper tape limit (input)
+	STOLIM	S1,+.EQLIM(P1),SPTP	; Stuff
+	LOAD	S1,EQPLT##		; Get the plotter limit
+	STOLIM	S1,+.EQLIM(P1),SPLT	; Store it
+	JRST	WRTQ.3			; Skip output items
+
+WRTQ.2:	LOAD	S1,EQNBL##		; Get the number of blocks
+	STOLIM	S1,+.EQLIM(P1),NBLK	; STore it
+	LOAD	S1,EQPGS##		; Get the page limit
+	STOLIM	S1,+.EQLIM(P1),OLIM	; Store it
+	LOAD	S1,EQFRM##		; Get the forms type (maybe)
+	STOLIM	S1,+.EQLIM(P1),FORM	; Store it
+	DMOVE	S1,EQNOT##		; Get the /NOTE value
+	STOLIM	S1,+.EQLIM(P1),NOT1	; Store first half
+	STOLIM	S2,+.EQLIM(P1),NOT2	; And second
+
+WRTQ.3:	MOVEI	S1,.EQACT(P1)		; Get the address to move to
+	HRLI	S1,EQACT##		; And from
+	BLT	S1,.EQACT+7(P1)		; Move the account string
+	DMOVE	S1,EQOWN##		; Get the user name
+	DMOVEM	S1,.EQOWN(P1)		; Store it
+	MOVEI	S1,.EQUSR(P1)		; Get destination of user name
+	HRLI	S1,EQUSR##		; And the source
+	BLT	S1,.EQUSR+4(P1)		; Move the name
+	MOVEI	S1,.EQBOX(P1)		; Point to the box
+	HRLI	S1,EQBOX##		; From
+	BLT	S1,.EQBOX+7(P1)		; Move it
+	MOVEI	S1,.EQCST(P1)		; Move customer args
+	HRLI	S1,EQCST##		; . . .
+	BLT	S1,.EQCST+^D10-1(P1)	; . . .
+	MOVE	S1,EQOID##		; Get the owner's PPN
+	MOVEM	S1,.EQOID(P1)		; Stuff it
+	MOVEI	S2,.EQPAT(P1)		; Point to the path
+	HRLI	S2,EQPAT##		; And set up the from address
+	BLT	S2,.EQPSZ-1(P1)		; Move the path
+	MOVEI	S1,.EQPSZ(P1)		; Get the end of the header
+	HRL	S1,EQNUM##		; Get the number of files
+	$RETT				; All done
+
+DEFINE OBJATR,<
+O	INP,.OTBAT,
+O	FFS,.OTBAT,%SITGO
+O	LPT,.OTLPT,
+O	LL ,.OTLPT,%LOWER
+O	LU ,.OTLPT,%UPPER
+O	PLT,.OTPLT
+O	CDP,.OTCDP
+O	PTP,.OTPTP
+> ; End of OBJATR macro
+
+RDVTAB:
+	DEFINE O(NAME,TYPE,ATTRIB)<EXP <SIXBIT |NAME|>>
+	OBJATR
+RDVTLN==.-RDVTAB
+
+RDVTB1:
+	DEFINE O(NAME,TYPE,ATTRIB<%GENRC>)<XWD TYPE,ATTRIB>
+	OBJATR
+	SUBTTL	RFDQV5 - Read a version 5 FP/FD combination
+
+; This routine will read an FP/FD combination into the low segment
+
+RFDQV5::$SAVE	<P1,P2>			; Save P1
+	TXNN	S1,LHMASK		; Any FP/FD's left
+	 PJRST	[SETZ	S1,			; Clear S1
+		$RETT]				; And return
+	MOVE	P1,S1			; Copy the pointer to the FD/FP
+
+	LOAD	S1,.FPINF(P1),FP.FFF	; Get the file format
+	STORE	S1,FPFFF##		; Save it
+	LOAD	S1,.FPINF(P1),FP.FPF	; Get the paper format
+	STORE	S1,FPFPF##		; Save in interface loc
+	LOAD	S1,.FPINF(P1),FP.FSP	; Get the spacing
+	STORE	S1,FPFSP##		; Save it
+	LOAD	S1,.FPINF(P1),FP.DEL	; Get the delete flag
+	STORE	S1,FPDEL##		; Save it
+	LOAD	S1,.FPINF(P1),FP.FLG	; Get the log file flag
+	STORE	S1,FPFLG##		; Save it
+	LOAD	S1,.FPINF(P1),FP.NFH	; Get the no-file header bit
+	STORE	S1,FPNFH##		; Save it
+	LOAD	S1,.FPINF(P1),FP.SPL	; Get the spool bit
+	STORE	S1,FPSPL##		; Save(it
+	LOAD	S1,.FPINF(P1),FP.FCY	; Get the copy count
+	STORE	S1,FPFCY##		; Store it
+	LOAD	S1,.FPFST(P1)		; Get the starting loc
+	STORE	S1,FPFST##		; Save it
+	LOAD	S1,.FPFR1(P1)		; Get the first report word
+	STORE	S1,FPFR1##		; Save it
+	LOAD	S1,.FPFR2(P1)		; Get the second word
+	STORE	S1,FPFR2##		; Save it
+
+
+	LOAD	S1,.FPLEN(P1),FP.LEN	; Get the FP size
+	ADDI	P1,(S1)			; Bump the pointer
+	LOAD	P2,.FDLEN(P1),FD.LEN	; Get the FD size
+	LOAD	S1,.FDSTR(P1)		; Get the structure name
+	STORE	S1,FDSTR##		; Save it
+	LOAD	S1,.FDNAM(P1)		; Get the name
+	STORE	S1,FDNAM##		; Save it
+	LOAD	S1,.FDEXT(P1)		; Get the extension
+	STORE	S1,FDEXT##		; Save it
+	LOAD	S1,.FDPPN(P1)		; Get the PPN
+	STORE	S1,FDPPN##		; Save it
+	MOVX	S2,.FDPAT		; Get the offset to first word of path
+	SUBI	S2,(P2)			; Get the number of words of path (negative)
+	MOVSI	S2,(S2)			; Put in left half
+	JUMPGE	S2,RDFD.1		; Any at all?
+
+RDFD.2:	MOVEI	S1,.FDPAT(P1)		; Yes, get the address
+	ADDI	S1,(S2)			;  .  .  .
+	MOVE	S1,(S1)			; Get the word
+	MOVEM	S1,FDPAT(S2)		; Save it
+	AOBJN	S2,RDFD.2		; Loop
+
+RDFD.1:	SUB	P1,[XWD 1,0]		; Count the FD
+	ADDI	P1,(P2)			; Point to next FP (if any)
+	MOVE	S1,P1			; Get the updated pointer
+	$RETT				; And return
+	SUBTTL	WFDQV5 - Write a version 5 FP/FD combination
+
+; This routine will write a version 5 FD into the current part of
+;an EQ block
+
+WFDQV5::$SAVE	<P1>			; Save an ac
+	MOVE	P1,S1			; Get the pointer
+	MOVX	S1,FPXSIZ		; Get the size
+	STORE	S1,.FPLEN(P1),FP.LEN	; Store it
+
+	LOAD	S1,FPFFF##		; Get the file format
+	STORE	S1,.FPINF(P1),FP.FFF	; Save it
+	LOAD	S1,FPFPF##		; Get the paper format
+	STORE	S1,.FPINF(P1),FP.FPF	; Save in interface loc
+	LOAD	S1,FPFSP##		; Get the spacing
+	STORE	S1,.FPINF(P1),FP.FSP	; Save it
+	LOAD	S1,FPDEL##		; Get the delete flag
+	STORE	S1,.FPINF(P1),FP.DEL	; Save it
+	LOAD	S1,FPFLG##		; Get the log file flag
+	STORE	S1,.FPINF(P1),FP.FLG	; Save it
+	LOAD	S1,FPNFH##		; Get the no-file header bit
+	STORE	S1,.FPINF(P1),FP.NFH	; Save it
+	LOAD	S1,FPSPL##		; Get the spool bit
+	STORE	S1,.FPINF(P1),FP.SPL	; Save(it
+	LOAD	S1,FPFCY##		; Get the copy count
+	STORE	S1,.FPINF(P1),FP.FCY	; Store it
+	LOAD	S1,FPFST##		; Get the starting loc
+	STORE	S1,.FPFST(P1)		; Save it
+	LOAD	S1,FPFR1##		; Get the first report word
+	STORE	S1,.FPFR1(P1)		; Save it
+	LOAD	S1,FPFR2##		; Get the second word
+	STORE	S1,.FPFR2(P1)		; Save it
+
+
+	MOVX	P2,FDXSIZ		; Get the FD size
+	ADDX	P1,FPXSIZ		; Move down to the FD
+	STORE	P2,.FDLEN(P1),FD.LEN	; Store it
+	LOAD	S1,FDSTR##		; Get the structure name
+	STORE	S1,.FDSTR(P1)		; Save it
+	LOAD	S1,FDNAM##		; Get the name
+	STORE	S1,.FDNAM(P1)		; Save it
+	LOAD	S1,FDEXT##		; Get the extension
+	STORE	S1,.FDEXT(P1)		; Save it
+	LOAD	S1,FDPPN##		; Get the PPN
+	STORE	S1,.FDPPN(P1)		; Save it
+	HRRI	S1,.FDPAT(P1)		; Get the address of the path
+	HRLI	S1,FDPAT##		; And where to put it
+	BLT	S1,FDXSIZ-1(P1)		; And move the path
+
+	SUB	P1,[XWD 1,0]		; Count down the file
+	ADDX	P1,FDXSIZ		; Advance the pointer
+	MOVE	S1,P1			; Get the updated pointer
+	$RETT				; And return
+	SUBTTL	ENDQV5 - End a version 5 EQ block
+
+ENDQV5::$SAVE	<P1>			; Save P1
+	MOVE	P1,CURPAG##		; Get the address of the message
+	SUBI	S1,(P1)			; Get the length of the packet
+	STORE	S1,.MSTYP(P1),MS.CNT	; Store it
+	MOVX	S1,.QOCRE		; Get the function code
+	STORE	S1,.MSTYP(P1),MS.TYP	; Store it
+	STORE	P1,SAB.MS+QSRSAB##	; Stor the address
+	MOVX	S1,PAGSIZ		; Get the size of the message
+	STORE	S1,SAB.LN+QSRSAB##	; And store it for the send
+	MOVX	S1,SAB.SZ		; Get the size of the SAB
+	MOVEI	S2,QSRSAB##		; And the address
+	$CALL	C%SEND			; Send the message
+	SETZM	CURPAG##		; No page left now
+	$RETIT				; All done if it worked
+	$FATAL	(<Cannot send message to [SYSTEM]QUASAR - ^E/S1/>)
+	SUBTTL	End of QSRCV5
+
+	END				; End of program
+

@@ -1,0 +1,192 @@
+.RUN DSKB:MONGEN[10,10,SYSTEM]
+;Write MONGEN.MIC (YES,NO)
+*Y
+;MONGEN for 704 monitors
+;	
+;MONGEN  will  generate  any  known TOPS-10 configuration.  For information 
+;about which configurations are supported, please refer to the SPD.
+;	
+;/HELP (PROMPT,SHORT,LONG)
+*prompt
+;Which GEN (SYS,F)
+*sys
+;Output(DSK:SYSCNF.MAC)
+*
+;DECsystem10 (KL,KS)
+*ks
+;System name 
+*topsy
+;CPU0 serial number (1-10000)
+*4097
+;Exclude monitor overhead from user run time (YES,NO)
+*
+;Account verification (YES,NO)
+*no
+;Autoconfigured device options:
+;  Include Ethernet service (NO,YES,PROMPT)
+*no
+;  Prompt for RP0x/RM0x Massbus disks (NO,YES)
+*
+;  Include TM02/TM03 magtapes (NO,YES,PROMPT)
+*yes
+;  Include UNIBUS/LP20 printers (NO,YES,PROMPT)
+*
+;  Include UNIBUS/CD20 card readers (NO,YES,PROMPT)
+*
+;  DZ-11 TTY lines (0-32)
+*32
+;
+;  OPR octal line number (CTY,0-37)
+*
+;  Data set lines 
+*0-37
+*
+;
+;Number of Jobs (1-511)
+*40
+;Maximum pages of core for each job (0,0-16384)
+*
+;Total amount of system core in K (512-4096)
+*1024
+;Clock ticks per second (60,50)
+*50
+;Allow jobs to be locked in core (YES,NO)
+*
+;Guaranteed number of pages for unlocked jobs (0,0-16384)
+*100
+;Number of pages reserved for locking jobs in Exec Virtual Memory (10,0-?)
+*
+;Number of high priority interrupt queues (0,0-15)
+*2
+;Meter (NO,YES)
+*
+;KASER (NO,YES)
+*
+;MPXSER (YES,NO)
+*
+;PSISER (YES,NO)
+*
+;IPCF (YES,NO)
+*
+;ENQ/DEQ (YES,NO)
+*
+;Disk sets (ALL)
+*
+;Configure non-autoconfigured hardware (NO,YES)
+*yes
+;Number of RX211s (0,0-2)
+*0
+;Number of KMC/DUP Lines (0,0-2)
+*2
+;Type of line for KDP0 (ANF10,DECNET,USER,IBM)
+*anf
+;Type of line for KDP1 (ANF10,DECNET,USER,IBM)
+*dec
+;Number of DMR11 Lines (0,0-8)
+*2
+; DMR0 line type (ANF10,DECNET,USER,IBM)
+*anf
+; DMR0 switched line (YES,NO)
+*no
+; DMR1 line type (ANF10,DECNET,USER,IBM)
+*dec
+; DMR1 switched line (YES,NO)
+*no
+;Number of PTYs (20,1-476)
+*
+;Network software (YES,NO)
+*
+;Node name 
+*topsy
+;Number of remote TTYs (456,0-456)
+*40
+;ANF-10 software (YES,NO)
+*
+;  Node name (TOPSY)
+*
+;  Node number of central site (1,1-77)
+*
+;  Remote terminals (YES,NO)
+*
+;  Virtual terminals (YES,NO)
+*
+;  Remote card readers (YES,NO)
+*no
+;  Remote line printers (YES,NO)
+*no
+;  Remote paper tape punches (NO,YES)
+*no
+;  Remote paper tape readers (NO,YES)
+*no
+;  Remote plotters (NO,YES)
+*no
+;  Remote DN8x DDCMP devices (YES,NO)
+*no
+;  Remote data entry terminals (YES,NO)
+*no
+;  Remote task-to-task (YES,NO)
+*
+;  Number of connects (256,1-512)
+*
+;DECnet software (YES,NO)
+*
+;  Node name (TOPSY)
+*
+;  Area number of central site (1,1-63)
+*
+;  Node number of central site (1,1-1023)
+*
+;  Router type (ROUTING,NONROUTING)
+*
+;  Transmit password (DECNET20)
+*
+;  Remote terminals (YES,NO)
+*
+;IP software (YES,NO)
+*
+;  DEUNA interface for IP (YES,NO)
+*yes
+;  Number of SLIP interfaces (0,0-32)
+*2
+;  Number of UDP: devices (10,0-2)
+*
+;  Number of TCP: devices (20,0-10)
+*10
+;Decimal "symbol,value" 
+*
+;Octal "symbol,value" 
+*prvfil,055
+*
+;SIXBIT "symbol,value" 
+*
+;Type "device-mnemonic,PI-channel" for special devices 
+*
+;Type "device-mnemonic,PI-channel,no.-of-devices" 
+*
+;Type "device-mnemonic,PI-channel,highest-ac-to-save" 
+*
+;Type "ersatz-device,P,Pn,search-list-type" 
+*MAI,3,5,ALL
+*MON,10,2,ALL
+*
+;Type "command-name,dispatch,flags,unique-bits,PRVTAB-name" 
+*amis,,runflg,,
+*cd,,runflg,,
+*finger,,runflg,,
+*ncopy,nft,runflg,,
+*ndelet,nft,runflg,,
+*ndirec,nft,runflg,,
+*nrenam,nft,runflg,,
+*ntype,nft,runflg,,
+*path,,runflg,,
+*route,,runflg,,
+*
+;Terminal class 
+*
+;Additional terminals for classes:
+;Class to extend 
+*
+;System default terminal type (TTY)
+*vt100
+;Which GEN (SYS,F)
+=^Z

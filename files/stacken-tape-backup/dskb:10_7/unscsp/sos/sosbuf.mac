@@ -1,0 +1,1582 @@
+	TITLE	SOSBUF -- BUFFER HANDLING ROUTINES
+	SUBTTL  William R. Sears, III  Jan 1976
+
+; This file contains the buffer handling routines.  Included
+; are the temporary file IO routines, routines to locate
+; a specific line in the file and code to add and delete lines
+; from the file.
+
+	SEARCH	SOSTCS
+	$INIT
+
+; The following macro is for debugging only
+; It should be redefined to <> for a production SOS.
+FTDEBUG==0
+IFN FTDEBUG,<
+DEFINE CKPTR.,<
+	PUSHJ	P,CKPNTR
+>>
+IFE FTDEBUG,<DEFINE CKPTR.,<>>
+
+; The following routine(s) are now obsolete.
+
+	SUBTTL	Buffer Description
+
+
+comment	`
+
+The buffer is organized as a large block of storage divided into
+3 parts.  The buffer will always be a multiple of BLKSIZ*2 (256)
+words.  It is laid out as follows:
+
+		 ------------------------------------
+ [BUFFIR]------>|                                    |
+		|                                    |
+		|                                    |
+		|     Lines occuring before the      |
+		|            current line            |
+		|                                    |
+		|                                    |
+		|                                    |
+		 ------------------------------------
+ [LPNTR]------->|                                    |
+		|                                    |
+		\                                    /
+		/             Free Space             \
+                \                                    /
+                |                                    |
+		|                                    |
+                 ------------------------------------
+ [PNTR]-------->|     First word of Current Line     |
+                |                                    |
+		|                                    |
+                |                                    |
+                 ------------------------------------
+ [BUFLAS]------>   First word following buffer data
+		|                .                   |
+		|                .                   |
+		|                .                   |
+ [BUFLIM]------>|  Highest value BUFLIM can take on  |
+		 ------------------------------------
+`
+				CONT.
+comment	`
+
+(The following comments use the BLISS notation of .X to mean the
+contents of location X.)
+
+The buffer data base consists of:
+
+BUFFIR	Contains the address of the first data word in the buffer.
+
+BUFLOW	Contains a copy of BUFFIR with -200 in the left half.  It
+	is used for compares with LPNTR to check for buffer empty.
+
+BUFBDY  Contains the low order seven bits of BUFFIR.  It is used to
+	detect block boundaries for line blocking the output file.
+
+BUFLAS	Contains the address of the word following the last data word
+	in buffer.  Will always be equal to BUFLIM unless EOF 
+	flag is on.
+
+BUFLIM	Contains the highest value that BUFLAS may take on.
+
+PNTR	Contains the address of the first word of the current line.
+	It is the first word of the high part of the buffer.
+
+LPNTR	Contains the address of the first word in the free space area.
+	The left half contains a negative count of words to go
+	before the next	block boundary.
+
+BUFHSZ	Is the number of words given by (bufsiz-2*blksiz)/2 rounded
+	down to a multiple of whole blocks.
+
+The size of the buffer is given by .BUFLIM-.BUFFIR
+
+
+Reading is always performed to the high part of the buffer, IO always
+starts at .BUFLAS.
+
+The number of data words in the high part is given by .BUFLAS-.PNTR.
+
+The number of data words in the low part is given by .LPNTR-.BUFFIR.
+
+The number unused words in the buffer is given by .PNTR-.LPNTR.
+
+The buffer is completely full when .PNTR EQL .LPNTR AND
+.BUFLAS EQL .BUFLIM.
+
+Writing is always performed from the low part of the buffer.  IO always
+starts from .BUFFIR.
+
+`; End of comment
+comment	`
+
+CHANNEL TABLE
+
+The channel table contains a one word entry for each channel used
+by SOS for input or output.  It is indexed by the logical channel
+number.  The format of the table is:
+
+
+	        8     12                    35
+	 ------------------------------------
+	|    0   | chn |        open block   | For channel 1
+	 ------------------------------------
+	|    0   | chn |        open block   | For channel 2
+	 ------------------------------------
+	|    0   | chn |        open block   | For channel 3
+	 ------------------------------------
+	|    0   | chn |        open block   | For channel 4
+	 ------------------------------------
+	|    0   | chn |        open block   | For channel 5
+	 ------------------------------------
+	|    0   | chn |        open block   | For channel 6
+	 ------------------------------------
+
+where
+	chn		channel number used for communication with
+			the monitor
+
+	open block	is the address of the open block for this
+			channel
+
+All IO UUO are redefined in SOS to be local UUO's that do the
+channel mapping before calling the monitor.  Thus the call
+
+	ENTER	3,X
+
+would map logical channel 3 into the channel specified in CHNTAB
+before calling the monitor.  (The actual monitor call is done with
+saved definitions which are given in SOSSYM).
+
+NOTE:  Although there exists an entry for the channel TTY, this
+channel must not be changed by modifying CHNTAB[TTY].  This is
+because the error handler in SOSERR is not properly recursive
+and cannot safely do local UUO's while performing error recovery.
+For this reason, SOSERR does IO monitor calls for the channel TTY
+directly.  Do not change CHNTAB[TTY]!  Since other parts of SOS
+do use local UUO's on channel TTY, the entry in CHNTAB[TTY] must 
+be setup, however.
+
+`;  End of commentary on CHNTAB
+	SUBTTL	Buffer Initialization
+
+; Here from SOSINT to setup the buffer pointers.  Call with
+; T1=desired buffer size and .JBFF## pointing to the first free word
+
+BUFINI::AOS	T2,.JBFF##	; First free word
+	MOVEM	T2,BUFFIR	; Point to start of buffer
+	HRLI	T2,-BLKSIZ	; Count to next block
+	MOVEM	T2,BUFLOW	; Save for limit checks
+	ANDI	T2,BLKSIZ-1	; Boundary bits
+	MOVEM	T2,BUFBDY	; Save for BLKCHK
+	ADDI	T1,BLKSIZ-1
+	TRZ	T1,BLKSIZ-1	; Make size multiple of block size
+	MOVE	T2,BUFFIR	; Get first again
+	ADD	T2,T1		; Compute end of the buffer
+	MOVEM	T2,BUFLIM	; Save as limit
+	ADDI	T2,2		; Don't use .BUFLIM for data
+	MOVEM	T2,.JBFF##	; And as first free
+	MOVEM	T2,SVJFF2	; Save this for command processor
+	MOVEM	T2,CXFCOR	; Save for Co-edit return
+	CAMG	T2,.JBREL##	; See if this much core is here
+	JRST	BUFIN0		; Yes, don't use CORE UUO
+	CORE	T2,		; Request more core
+	  JRST	BUFIN1		; Failed
+BUFIN0:	MOVE	T2,BUFLIM
+	MOVE	T1,CRLF##	; Get a CRLF
+	MOVEM	T1,1(T2)	; Leave at end of buffer for Find
+	SUB	T2,BUFFIR	; Size of the buffer
+	MOVEI	T1,-200(T2)	; Minus one block (save for blocking)
+	ASH	T1,-1		; Half of it
+	TRZ	T1,BLKSIZ-1	; Round to whole blocks
+	MOVEM	T1,BUFHSZ	; Save buffer half size
+	ASH	T2,-3		; Small value
+	TRZ	T2,BLKSIZ-1	; Round to whole blocks
+	CAIG	T2,BLKSIZ	; Must be at least 1 block
+	MOVEI	T2,BLKSIZ	; Ensure it
+	MOVEM	T2,BUFSAI	; Remember short value
+	SETZM	@BUFLIM		; Clear limit word
+	MOVE	T2,BUFFIR
+	SETZM	-1(T2)		; Clear word preceding buffer
+	JRST	CPOPJ1##	; Wins, return to user
+
+BUFIN1:	SOS	T2,BUFFIR	; Get back start of space
+	MOVEM	T2,.JBFF##	; Restore JBFF
+	POPJ	P,
+	SUBTTL	FINDx -- Subroutines to move forward or backward 1 line
+
+; FINDN -- Subroutine to find the next line
+; FINDN1 -- Subroutine to find the current or next line.
+; Call with
+;	PUSHJ	P,FINDN   (or FINDN1)
+;	<always return here with line number in T1>
+; Returns T1=0 if end of file; never returns a page mark.
+
+FINDN1::CKPTR.
+	MOVE	T1,(PNTR)	; Fetch current line
+	TRNE	T1,1		; Pointing to a line number?
+	POPJ	P,		; Yes, just return
+	 ;
+FINDN::	CKPTR.
+	PUSHJ	P,SETRFL##
+	MOVE	T1,CPGL		; Get current logical page
+	MOVEM	T1,DPG		; Call it desired
+	MOVE	T1,(PNTR)	; Fetch current line number
+	CAME	T1,PGMK		; Is it a page mark?
+	PJRST	FORLIN		; Call FORLIN
+	PUSHJ	P,FORLIN	; Find the next line
+	AOS	CPG		; Increment page counter
+	JUMPE	T1,FIND3	; Return 0 for end of file, set BGSN
+	POPJ	P,		; and return
+
+; FINDB -- Find previous line
+;
+
+FINDB::	CKPTR.
+	PUSHJ	P,SETRFL##
+	PUSH	P,(PNTR)	; Save current line
+	PUSH	P,CPG		; and page
+	PUSHJ	P,BKPLIN	; Try and backup one line
+	  JRST	FINDBA		; Nope, must wrap
+	CAMN	T1,PGMK		; Pointing to a page mark?
+	SOS	CPG		; Yes, decrement Page number
+	ADJSP	P,-2
+	POPJ	P,		; Line is now setup
+
+; Here if we have to wraparound to find the previous line
+
+FINDBA:	POP	P,DPG		; Save desired page
+	POP	P,SINDEX	; Line to re-find
+	TRO	FL,SSBGSN	; Force FIND to wraparound
+	PUSHJ	P,FIND		; Refind the line
+	SETZ	T1,		; Anticipate no line
+	CAMN	LPNTR,BUFLOW	; Already at first line?
+	POPJ	P,		; Yes, just return that
+	PUSHJ	P,BKPLIN	; Backup one line
+	ERROR	ICN		; Huh?
+	CAMN	T1,PGMK##	; Pointing to a page mark?
+	SOS	CPG		; Decrement page number then
+	POPJ	P,
+	SUBTTL  FINDLO, FINDHI and FINDCL
+
+; FINDLO -- Find first line of typed range
+; FINDL1 -- Same, but does not call SVLOLN
+
+FINDLO::PUSHJ	P,SVLOLN##	; Save for #
+FINDL1::MOVE	SINDEX,LOLN	; Get line number
+	MOVE	T1,LOPG		; And page
+	PJRST	FINDT1		; Setup DPG and call FIND
+
+
+; FINDHI -- Routine to FIND HILN/HIPG
+; FINDH1 -- Same, but does not call SVHILN
+
+FINDHI::PUSHJ	P,SVHILN##	; Save for #
+FINDH1::MOVE	SINDEX,HILN	; Get line number
+	MOVE	T1,HIPG		; And page
+	PJRST	FINDT1		; Setup DPG and call FIND
+
+; FINDCL -- Routine to find the current logical line/page
+
+
+FINDCL::MOVE	SINDEX,CLN	; Current logical line
+	MOVE	T1,CPGL		; and page
+FINDT1:	MOVEM	T1,DPG		; Setup DPG
+	PJRST	FIND		;  and call FIND
+	SUBTTL	Routines to insert page marks
+
+
+; INSPAG -- Routine to insert a new page into the file
+; Update CPG and CLN
+
+INSPAG::PUSHJ	P,INSPMK	; Insert a page mark into the buffer
+	MOVE	T2,CPG		; Current page
+	CAIE	T1,0		; End of file
+	CAIN	T1,PGMK		; or page mark
+	MOVE	T1,LNZERO##	; Use line zero
+	DMOVEM	T1,CLN		; Store current line and page
+	POPJ	P,
+
+
+; INSPMK -- routine to insert a page mark into the file
+
+INSPMK::DMOVE	T1,PGMK		; Load a page mark
+	DMOVEM	T1,LIBUF	; Save in LIBUF
+	MOVEI	T1,2		; Length of a page mark
+	PUSHJ	P,INSLIN	; Insert the page mark
+	AOS	BGPG		; so adjust input pointers
+	PJRST	FINDN		; Find line after new page mark
+
+	SUBTTL	FIND -- Subroutine to find a desired line
+
+; Call with DPG containing the desired page
+;	    SINDEX containing the desired line
+; Returns with T1=line found (either equal to SINDEX or next higher)
+;           PNTR points to desired line (or one higher)
+
+FIND::	CKPTR.
+	PUSHJ	P,SETRFL##
+	TRNE	FL,SSBGSN	; Is CPG setup?
+	JRST	FNDWRP		; No, go fix it
+	MOVE	T1,CPG		; Get current page number
+	CAMN	T1,DPG		; On right page?
+	JRST	FNDLIN		; Yes, find the line
+	CAML	T1,DPG		; Current page too small
+	JRST	FINDPP		; No, must backup
+	SKIPN	T1,(PNTR)	; Load current line number
+	JRST	FIND3		; This is last page and empty
+	  ;
+FIND1:	CKPTR.
+	CHKREN	COMND##		; ^C^C then Re-enter?
+	CAMN	T1,PGMK##	; Is this a page mark?
+	JRST	FIND2		; No, keep looking
+	PUSHJ	P,FORLIN	; Advance over the page mark
+	JUMPN	T1,FIND1	; Keep looking for the page mark
+	JRST	FIND3		; End of file, return a zero, set BGPG
+				CONT.
+
+;  Here when a page mark was just found.  Try to advance over it.
+
+FIND2:	PUSHJ	P,FORLIN	; Advance to next line
+	AOS	T2,CPG		; Now on next page
+	JUMPE	T1,FIND3	; Hit end of file, return zero
+	CAME	T2,DPG		; Is it the one we're looking for?
+	JRST	FIND1		; No, keep looking
+	JRST	FNDLIN		; Yes, find the line
+
+FIND3:	TRNE	FL,SSBGSN	; Reached end without seeing BIGP?
+	POPJ	P,		; Yes, don't set it then
+	TRO	FL,BGSN		; Biggest page has been seen
+	MOVE	T2,CPG
+	MOVEM	T2,BGPG
+	POPJ	P,		; Return zero for end of file
+
+;  Here when the current page number is larger than the desired page
+;  number.  Back up to get the desired page.
+
+FINDPP:	CHKREN	COMND##		; Have we re-entered?
+	PUSHJ	P,BKPLIN	; Move backward one line
+	  JRST	FNDWRP		; Have to wraparound, not in buffer
+	CAME	T1,PGMK##	; Find a page mark?
+	JRST	FINDPP		; No, keep looking
+	SOS	T2,CPG		; Yes, decrement count
+	CAME	T2,DPG		; Is this the wanted page?
+	JRST	FINDPP		; No, keep looking
+;;	PJRST	FNDLIN		; Fall thru to find the line
+				  CONT.
+;  Here when PNTR points to a line on the desired page.  Position
+;  to find the appropriate line.
+
+FNDLIN:	CKPTR.
+	MOVE	T1,(PNTR)	; Fetch current line number
+	CAME	PNTR,BUFLAS	; End of buffer?
+	CAMN	T1,PGMK		;  or pointing to a page mark?
+	JRST	FNDLN2		; Yes, must move backward then
+	  ;
+FNDLN1:	CKPTR.
+	CHKREN	COMND##
+	CAMG	T1,SINDEX	; Too far forward?
+	JRST	FNDLFF		; Yes, must move pointer forward
+FNDLN2:	PUSHJ	P,BKPLIN	; Backup to previous line
+	  JRST	FNDWRP		; Must wrap, line not in buffer
+	CAME	T1,PGMK		; Hit a page mark?
+	JRST	FNDLN1		; Try again
+	PUSHJ	P,FORLIN	; Space over it then
+;;	PJRST	FNDLFF		; And handle as forward space
+
+; Here when the desired line is in the high part of the buffer
+
+FNDLFF:	CKPTR.
+	CHKREN	COMND##		; Have we re-entered?
+	CAME	T1,PGMK##	; Is this a pagemark?
+	CAML	T1,SINDEX	; Is this the line?
+	POPJ	P,		; Yes, return it
+	PUSHJ	P,FORLIN	; No, get the next one
+	JUMPN	T1,FNDLFF	; Look for another if not EOF
+	POPJ	P,		; Return at end of file
+; Here with BKPLIN gives a failure return.  The line we want
+; is in the part of the file that has already been written out.
+
+FNDWRP::SETZM	OLDLIN		; Avoid spurious sequence checks
+	TRNE	FL,BOF		; Is the first part of the file in core
+	JRST	FNDFST		; Yes, just return the first line
+	TLNN	FL,COPFIL	; Are we copying?
+	TRNE	FL,READOF	; Read only mode?
+	JRST	FNDWRR		; That's special also
+
+; Here on full edit.  See if any changes have been made this pass.
+
+	TLNN	FL,TECOF	; Finish copy if unsequenced
+	SKIPE	CHGCNT##	; Any changes this pass?
+	  JRST	FNDWRF		; Yes, full wraparound needed
+	MOVE	T1,OUTSIZ	; Get the last size
+	MOVE	T2,PNTNMO	; Point to output block
+	CAML	T1,XRBMWL(T2)	; This size greater
+	MOVEM	T1,XRBMWL(T2)	; Yes, remember it
+
+; Come here to rewind the input file.  Either no changes last
+; pass or file is being read in read only mode (join at FNDWRR).
+
+FNDWRR:	TLNN	FL,TECOF	; Unsequenced mode?
+	JRST	FNDWRS		; No
+;
+; Here to perform rewind if input file is unseqenced.
+
+FNDRWT:	PUSHJ	P,IREADT	; Special first read function
+	SETZM	OUTSIZ		; Clear output file size
+	JRST	FIND		; Try to find the line again
+
+; Here on full edit.  Must finish writing the file
+
+FNDWRF::PUSHJ	P,OCOMPL	; Complete the output
+	PUSHJ	P,XCHCHN	; Exchange channel assignments
+	SKIPE	AUXFIL		; Are we reading a .TMP file
+	JRST	FNDWRS		; Yes, don't have to make a one
+
+; Here on full wraparound for the first time.  Must open up the
+; AUXIALIARY file.
+
+	MOVE	T3,PNTNMO	; Point to input lookup block
+	MOVE	T1,EDNAM	; Get name used for temporary files
+	HLLZ	T2,XRBTFX(T3)	; Extension for next output file
+	DMOVEM	T1,.RBNAM(T3)	; Establish as input file name
+	MOVE	T1,PNTNMI	; Point to output block
+	MOVE	T2,.RBPPN(T1)	; Get the PPN (path)
+	MOVEM	T2,.RBPPN(T3)	; Save as next output Path
+	MOVE	T2,.RBVER(T1)	; File version
+	MOVEM	T2,.RBVER(T3)	; Store file version in .TMP file
+	MOVE	T2,OUTSIZ	; Get number of words we wanted to write
+	ADDI	T2,BLKSIZ-1	; Round to next whole block
+	LSH	T2,W2BLSH	; Convert to blocks
+	MOVEM	T2,.RBEST(T3)	; Request this much from Monitor
+	SETZM	.RBALC(T3)	; To save whole file
+	MOVE	T2,.RBDEV(T1)	; Last output device
+	MOVEI	T1,@CHNTAB+OUT	; Point to device block
+	MOVEM	T2,.OPDEV(T1)	; Place in open block for IN channel
+	OPNDSK	OUT,@CHNTAB+OUT	; Open up the channel
+	  JRST	CWTOF		; Can't write output file
+	PUSHJ	P,MAKFIL##	; Make a new output file
+	  JRST	CWTOF		; Can't
+IFN CRYPSW,<
+	MOVE	T1,OCODE	;INPUT AND OUTPUT ENCRYPTION KEYS...
+	MOVEM	T1,ICODE	; ARE NOW THE SAME
+>
+	SETOM	AUXFIL		; Flag auxilliary file now in use
+
+; Here after wraparound to reset flags, etc.
+
+FNDWRS:	SETZB	T1,OLDLIN	; Used to order check lines
+	EXCH	T1,CHGCNT	; Fetch old value of change count
+	SKIPL	T1		; Did we just do a save?
+	ADDM	T1,TOTCHG##	; No, increment total for all passes
+	PUSHJ	P,IREAD		; Perform initial read
+	JRST	FIND		; And try again to find the line
+
+;  Here if we can't start up the copy for some reason
+;  By this time, the UUO handler will have already typed the reason
+;  to the user.
+
+CWTOF:	CLRBFI			; Clear typeahead
+	OUTSTR	[ASCIZ/?Can't write next temp file/]
+	SKIPN	BAKF1		; Have we renamed his original file?
+	JRST	CWTOF1		; No, ask him if he wants to exit
+	OUTSTR	[ASCIZ/--Exiting.
+/]
+	JRST	CWTOF2
+
+CWTOF1:	OUTSTR	[ASCIZ/.  Save changes so far? /]
+	PUSHJ	P,CONFRM##	; Ask user?
+	  JRST	CWTOF3		; He said no
+CWTOF2:	MOVMS	CXFMNE		; Allow first file exit
+	SETOM	TELFLG##	; Force file name to be typed
+	MOVEI	T1,12		; Line feed will stop NSCAN
+	MOVEM	T1,LIMBO	; Save it
+	PUSHJ	P,NSCAN##	; Setup device, etc.
+	  JFCL			; Should never happen
+	SKIPGE	UNSEQF		; Dequence specified?
+	OUTSTR	[ASCIZ/%Line numbers will be left on output file
+/]
+	SETZM	UNSEQF		; Indicate to SOSEND
+	JRST	SWPXIT##	; And end this mess
+
+CWTOF3:	PUSHJ	P,XCHCHN	; Change channels back
+	JRST	QUIT##
+
+; Here to return the first line
+
+FNDFST:	TRZ	FL,SSBGSN	; Clear this so don't loop
+IFN FTDEBUG,<
+	CAME	LPNTR,BUFLOW	; Make sure low buffer is empty
+	NERROR	ICN		; It isn't
+>
+	MOVE	T1,0(PNTR)	; Fetch first word
+	CAMN	PNTR,BUFLAS	; Buffer empty?
+	SETZ	T1,		; Return a zero
+	POPJ	P,		; Else the line number
+	SUBTTL	FORLIN -- subroutine to advance the line pointer forward
+
+; Subroutine to advance the line pointer forward.
+;
+; Call with LPNTR and PNTR setup
+; Returns with LPNTR and PNTR advanced and T1 containing the next line
+; number.  If T1 is zero, then end of file was reached and the high
+; part of the buffer is empty.
+
+FORLIN::CKPTR.
+	MOVEI	T2,(PNTR)	; First word of high buffer
+	SUB	T2,BUFLAS	; Negated number of words in high buffer
+	HRL	PNTR,T2		; Make AOBJN word
+	JUMPGE	PNTR,FORLN3	; If high buffer empty
+	MOVE	T1,(PNTR)	; Fetch a word
+	JRST	FORLN2		; Skip test on first pass
+	  ;
+FORLN1:	MOVE	T1,(PNTR)	; Fetch a word
+	TRNE	T1,1		; Line bit set?
+	JRST	FORLN4		; Yes, done
+FORLN2:	MOVEM	T1,(LPNTR)	; Move word to low area
+	AOBJP	LPNTR,FORLN5	; Increment low pointer, check block end
+FORLN6:	AOBJN	PNTR,FORLN1	; And check next word
+				CONT.
+; Here if the end of the buffer is reached
+
+FORLN3:	SETZ	T1,		; Anticipate end of file
+	TRNE	FL,EOF		; Check end of file
+	JRST	FORLN4		; Yes, return the zero
+	MOVE	T2,HIPG		; Get desired position
+	CAME	T2,CPG		; On the right page?
+	SKIPA	T1,BUFHSZ	; Number of words to advance
+	MOVE	T1,BUFSAI	; Only one block on page
+	HRRZS	PNTR		; Clean up the pointer
+	PUSHJ	P,ADVBFR	; Advance the buffer
+	CKPTR.
+	MOVEI	T2,(PNTR)	; First word of high buffer
+	SUB	T2,BUFLAS	; Negated number of words in high buffer
+	HRL	PNTR,T2		; Make AOBJN word
+	PUSHJ	P,STLPNT	; Re-fix LPNTR
+	JUMPL	PNTR,FORLN1	; Look for next line
+	SETZ	T1,		; Make sure T1 is correct
+FORLN4:	HRRZS	PNTR		; Clean up the pointer
+	JUMPE	T1,SETOLN	; If zero, don't check sequence
+	CAMN	T1,PGMK		; Is this a page mark
+	PJRST	CLROLN		; Reset old line number
+	CAMLE	T1,OLDLIN	; How does this compare with last one
+	JRST	SETOLN		; Just fine
+	RERROR	ORDER
+	MOVE	T2,CPG		; Oops, we have a sequence error.  Page
+	PUSHJ	P,PGPRN1##	; Should be typed for him
+	PUSHJ	P,OUTLIN##	; As well as the offending line
+	MOVE	T1,(PNTR)	; Restore the line number
+	PJRST	SETOLN		; Setup OLDLIN
+
+; Here to line block the low buffer when block boundary is crossed
+
+FORLN5:	PUSH	P,PNTR		; Save PNTR
+	MOVEI	PNTR,1(PNTR)	; Make it correct
+	PUSHJ	P,BLKCHK	; Go fix low buffer
+	MOVEI	T1,(PNTR)	; High
+	SUBI	T1,(LPNTR)	;     - Low
+	CAIL	T1,BLKSIZ	; Plenty of room left?
+	JRST	FORLN7
+	MOVEI	T1,BLKSIZ	; Amount of space we need
+	PUSHJ	P,DUMPBF	; Make some space
+FORLN7:	POP	P,PNTR
+	PUSHJ	P,STLPNT	; Setup LPNTR
+	JRST	FORLN6		; and join processing
+
+;Subroutine to setup LPNTR with a minus count of words left to go
+;till we reach the next block boundary.  This must be done before
+;entering FORLIN's main loop.
+
+STLPNT:	MOVEI	T3,(LPNTR)	; Where we are now
+	TRZ	T3,BLKSIZ-1	; Clear low order bits
+	IOR	T3,BUFBDY	; Guess next block boundary
+	CAIG	T3,(LPNTR)	; Right?
+	ADDI	T3,BLKSIZ	; No, got the previous one.  Fix it
+	SUBI	T3,(LPNTR)	; Length in words till next block
+	MOVNI	T3,(T3)		; Negate the count
+	HRLI	LPNTR,(T3)	; Fix up LPNTR
+	POPJ	P,		;  and return
+	SUBTTL	BKPLIN -- Subroutine to backup one line in the buffer
+
+; Call with PNTR and LPNTR setup.
+; 	PUSHJ	P,BKPLIN
+;	  <reached beginning of buffer>
+;	<PNTR & LPNTR setup, T1=(PNTR)>
+
+BKPLIN::CKPTR.
+	MOVEI	T2,(LPNTR)	; Point to low buffer limit
+	SUB	T2,BUFFIR	; Subtract first word giving amount
+	JUMPLE	T2,CPOPJ##	; If low part empty
+	  ;
+BKPLN1:	SUB	LPNTR,[1,,1]	; Point to highest word in low buffer
+	SKIPN	T1,(LPNTR)	; Fetch it
+	JRST	BKPLN2		; If zero word, ignore it
+	SUBI	PNTR,1		; and adjust PNTR also
+	MOVEM	T1,(PNTR)	; Move to high part
+	TRNE	T1,1		; Line number bit set?
+	JRST	BKPLN3
+BKPLN2:	SOJG	T2,BKPLN1	; No, move next word if there is one
+	PUSHJ	P,FXLPNT	; Fix the pointer
+	PJRST	CLROLN		; Clear OLDLIN and return
+
+BKPLN3:	MOVEM	T1,OLDLIN
+	PUSHJ	P,FXLPNT	; Fix the pointer
+	JRST	CPOPJ1##	; Give good return
+
+
+;CLROLN -- Routine to Clear OLDLIN after backing up or crossing page
+;	   boundary
+;Call
+;	PUSHJ	P,CLROLN
+;	<return here>
+
+CLROLN::SETZM	OLDLIN		; Clear OLDLIN
+	POPJ	P,		; and return
+
+; FXLPNT -- Routine to fix up LPNTR to get block count in range
+;
+; Call
+;	PUSHJ	P,FXLPNT
+;	<return here>
+
+FXLPNT:	MOVE	T3,LPNTR	; Copy the pointer
+FXLPN1:	ADD	T3,[BLKSIZ,,0]	; Try fixing it
+	JUMPGE	T3,CPOPJ	; Better?
+	MOVE	LPNTR,T3	; Yes, try again
+	JRST	FXLPN1		; Until best
+	SUBTTL	ADVBFR -- Subroutine to advance the buffer
+
+; ADVBFR -- Subroutine to advance the buffer
+;
+; Call with T1 = number of words to advance with .T1 MOD 128 EQL 0
+
+ADVBFR::CKPTR.
+	MOVEI	T2,(PNTR)	; Pointer to high buffer
+	SUBI	T2,(LPNTR)	; Amount of free space left
+	CAIL	T2,BLKSIZ(T1)	; Room for requested input
+	PJRST	DATAIN		; Go read the data
+	PUSH	P,T1		; Save advance request
+	SUB	T1,T2		; How much space we are short
+	ADDI	T1,2*BLKSIZ-1	; Round into next block size
+	TRZ	T1,BLKSIZ-1	; Then to even blocks
+	PUSHJ	P,DUMPBF	; Dump to make room
+	POP	P,T1		; Restore request
+	PJRST	DATAIN		; Read the data and return
+	SUBTTL	INPUT routines for SOS
+
+; IREAD -- Subroutine to perform the initial read
+;
+IREAD::	PUSHJ	P,IPNTRS	; Initialize pointers
+	USETI	IN,1		; Rewind the input file
+	SETOM	IBUF+3		; Zero block for decryption
+IREAD0:	MOVE	T1,BUFHSZ	; Size of half the buffer
+	PUSHJ	P,DATAIN	; Fill the buffer
+	CAMN	PNTR,BUFLAS	; Nothing read at all? (Null file)
+	TRNE	FL,EOF		; And not end of file
+	CAIA
+	JRST	IREAD0		; Yes, get next block (all zeros read)
+	MOVE	T1,(PNTR)	; Look at first word in buffer
+	CAME	PNTR,BUFLAS	; Nothing read?  Assume numbered
+	TRNE	T1,1		; Is it a line number
+	POPJ	P,		; Yes, all done.  File is numbered
+
+; Here if the file is not line numbered
+
+	TLOE	FL,TECOF	; Set TECO mode on input
+	ERROR	ICN		; Already set?
+	SKIPN	UNSQIF		; Do we already think we know?
+	SKIPE	BASICF		;  or BASIC mode?
+	CAIA			;
+	SETOM	UNSQIF		; No, flag this as TECO input file
+	SKIPGE	XFLAG		; Did he say /X
+	TLZ	FL2,LNUMF	; Yes, suppress line numbers
+	SETSTS	IN,.IOASL	; Change mode to ASCII LINE
+	MOVE	T2,[%LDNDB]	; Default number of buffers
+	GETTAB	T2,		; Read it
+	  MOVEI	T2,2		; Assume 2
+	SKIPN	T1,BUFNUM	; Number to be used
+	MOVE	T1,T2		; Else default
+	IMULI	T1,BLKSIZ+3	; Amount of space required
+	ADD	T1,.JBFF	; Amount of core required
+	CORE	T1,		; Get it now (if INBUF can't get
+	  ERROR	NEC		; he gets an address check)
+	HRLZ	T3,SVJFF2	; Nominal core size now
+	INBUF	IN,@BUFNUM##	; Allocate input buffers
+	HRR	T3,.JBFF##	; Nominal core size with RT buffer ring
+	HRRZM	T3,SVJFF2	; Save for SOSCMD
+	HRRZM	T3,CXFCOR	; Save here also
+	MOVEM	T3,RDTBFP	; Remember the address range of buffers
+	MOVE	T1,CHNTAB+IN	; Point to IN open block
+	HRRZ	T1,.OPBUF(T1)	; Point to buffer header
+	MOVSI	T2,(POINT 7,)	; 7 bit byte pointer
+	MOVEM	T2,.BFPTR(T1)	; Pass on to monitor
+	SETZM	.BFCTR(T1)	; Clear word count, just in case
+
+; Enter here to setup initial read if TECO mode is already selected.
+; This initialize the co-routine and starts the initial read
+
+IREADT:	MOVE	T2,RTIPDP	; Fetch Read Teco PDL
+	PUSH	T2,RDTREF	; Save the initial PC
+	MOVEM	T2,RDTPDP	; Restore for later
+	SETZM	IBUF+.BFCTR	; Make sure we start at the top
+	MOVEI	T1,@CHNTAB+IN	; To the open block
+	HRRZ	T1,.OPBUF(T1)	; To input buffer header
+	USETI	IN,-1		; Set end of file
+IREAD1:	SKIPL	@.BFADR(T1)	; Use bit set here?
+	JRST	IREAD2		; No, finished flushing
+	INPUT	IN,		; Advance to next buffer
+	JRST	IREAD1		; Until done
+
+IREAD2:	PUSHJ	P,INIPAG	; Initialize for a new page
+	JRST	IREAD		; Go do the initial read
+; Subroutine to initilize the buffer pointers.  Called from IREAD
+; and by CREATE code in SOSINT.
+
+IPNTRS::MOVEI	T1,1
+	MOVEM	T1,CPG		; Initilize current page
+	TRO	FL,BOF		; Note at beginning of file
+	TRZ	FL,EOF!SSBGSN	; and not at end
+	TRNN	FL,READOF	; Read only?
+	USETO	OUT,1		; If not, make sure we write from top
+	MOVE	T2,PNTNMI	; Point to input name
+	MOVE	T2,.RBSIZ(T2)	; Then to size of the input file
+	MOVEM	T2,REMSIZ	; No, save input file size as REMSIZ
+	SETZM	OUTSIZ		; Zero size of output file written
+	SETOM	OBUF+3		; Initialize block number for encryption
+	MOVE	PNTR,BUFLIM	; Initialize high buffer pointer
+	MOVEM	PNTR,BUFLAS	; And note it is empty
+	MOVE	LPNTR,BUFLOW	; Initialize low buffer pointer
+	POPJ	P,		; and return
+	SUBTTL	DATAIN -- Subroutine to read data into the buffer
+
+;
+; Call with T1=number of words to read.  Should normally be a multiple
+; of 128 words.
+
+
+DATAIN:	CKPTR.
+	TRNE	FL,EOF		; At end of file?
+	POPJ	P,		; Yes, just return
+	MOVNS	T2,T1		; Number of words to read
+	ADD	T2,BUFLIM	; Compute first input word
+	HRLZS	T1
+	HRRI	T1,-1(T2)	; Address part of IOWD
+	MOVEI	T2,(PNTR)	; Point to first word in high buffer
+	SUB	T2,BUFLAS	; Compute number of words in high buffer
+	JUMPE	T2,DATAN1	; If no compression needed
+	ADDI	T2,1(T1)	; Where to move first word
+	HRLI	T2,(PNTR)	; Where first word is now
+	HRRI	PNTR,(T2)	; Update PNTR
+	BLT	T2,(T1)		; Move current data down
+	JRST	DATAN2
+
+DATAN1:	MOVEI	PNTR,1(T1)	; Fixup pntr
+DATAN2:	TLNE	FL,TECOF	; Unsequenced input?
+	JRST	DATAN4		; Yes
+	HLRE	T3,T1		; Count of words to read
+	ADDB	T3,REMSIZ	; Update amount of file remaining
+	SETZ	T2,		; Set stop word
+	INUUO	IN,T1		; Read using T1 as IOWD
+	  JRST	DATAN3		; If read successfully
+	STATZ	IN,IO.ERR	; Skip if just end of file check
+	ERROR	DIE		; Fatal input error
+
+DATAN3:	
+IFN CRYPSW,<
+	PUSHJ	P,CRPIOI	; Yes, go do it
+>
+	SETZ	T1,		; Assume no shortfall
+	JUMPG	T3,DATAN5	; Right?
+	MOVM	T1,T3		; Get count of shortfall
+	SETZM	REMSIZ		; Note nothing left
+	TRO	FL,EOF		; Note end of file
+				CONT.
+
+; Join here to fixup pointers, zero compress the buffer and return
+
+DATAN5:	SUB	T1,BUFLIM	; Subtract limit from shortfall
+	MOVMS	T1
+	MOVE	T2,BUFLIM	; Limit
+	MOVEM	T2,BUFLAS	; Update BUFLAS
+DATAN6:	SKIPN	T3,-1(T1)	; First word of data
+	JRST	DATAN7		; If this one to be skipped
+	MOVEM	T3,-1(T2)	; Save if non-zero
+	SUBI	T2,1		; Decrease input pointer
+DATAN7:	CAILE	T1,1(PNTR)	; Did we move the last word?
+	SOJA	T1,DATAN6	; No, do the next one
+	MOVEI	PNTR,(T2)	; Reset PNTR
+	PJRST	SETBLL		; Setup last line terminator in buffer
+
+
+; Here if unsequenced -- zero compression is not needed here since
+; it has already been performed.
+
+DATAN4:	PUSH	P,C		; Save C
+	PUSHJ	P,RDTECO	; Read in unsequenced data
+	POP	P,C		; Restore C
+	SUB	T1,BUFLIM	; Subtract limit from shortfall
+	MOVMS	T1
+	MOVEM	T1,BUFLAS	; Update BUFLAS
+	SETZM	(T1)		; Make sure zero word follows buffer
+
+; Here to set the value of BUFBLL, which is the last 
+; word in the buffer with a line number bit set.  If the value
+; of PNTR is less than BUFBLL, then it is not necessary to call
+; GETLTH to ensure that a line is in core.
+
+SETBLL:	TRNE	FL,EOF		; End of file
+	JRST	SETBL2		; Yes, all lines in core
+	MOVE	T1,BUFLIM	; LWA+1 of buffer
+	SUBI	T1,1		; Point to last word in buffer
+	MOVEI	T2,1		; Line terminator
+SETBL1:	TDNE	T2,(T1)		; Check for line terminator
+	JRST	SETBL3		; Yes have one
+	CAILE	T1,1(PNTR)	; Have we reached the end
+	SOJA	T1,SETBL1	; No, keep looking
+	SETZM	BUFBLL		; None, set small value
+	POPJ	P,
+
+SETBL2:	MOVE	T1,BUFLIM	; Use a suitably high value
+SETBL3:	MOVEM	T1,BUFBLL	; Got one, set it up
+	POPJ	P,
+
+
+	SUBTTL	Subroutine to perform unsequenced input
+
+RDTECO::PUSHJ	P,SAVR##	; Save T3,T4 and T5
+	HRRI	T4,1(T1)	; Address of first word to read
+	HRLI	T4,(POINT 7,)	; Form byte pointer to it
+	HLRE	T5,T1		; Get count of words to get
+	MOVMS	T5		; Make positive
+	IMULI	T5,5		; Convert to byte count
+	SETZM	1(T1)		; Clear a word
+	AOBJN	T1,.-1		;  and all others in IOWD range
+	JRST	RESUME
+
+; Here when everything is normal
+
+RDTEC1:	SOSG	IBUF+.BFCTR	; See if anything in data buffer
+	PUSHJ	P,RDTGET
+	ILDB	C,IBUF+.BFPTR	; Fetch a charcter
+	CAIG	C,15		; Special character?
+	  JRST	RDTEC3		; Yes, go handle
+RDTEC4:	TLZE	FL,L1.NNL	; Need new line?
+	PUSHJ	P,RTNLN		; Yes, make one
+	IDPB	C,T4		; Store character in buffer
+	SOJG	T5,RDTEC1	; Loop for more data
+	PUSHJ	P,RDTXJR	; Return to main program
+RDTREF:	JRST	RDTEC1		; Get some more data
+
+; Here on a special character
+
+RDTEC3:	CAIN	C,14		; Is it a formfeed?
+	  JRST	RDTFF		; Yes,
+	CAIN	C,12		; Is it a linefeed?
+	  JRST	RDTLF		; Yes, go handle
+	JUMPE	C,RDTEC1	; Is it null, ignore it
+	SKIPN	SWUNDER##	;WANT UNDERLINE?
+	 CAIE	C,15		;OR NOT A <CR>
+	  JRST	RDTEC4		;YES--JUST OUTPUT IT
+	   JRST	RDTEC1		;NO--IGNORE IT
+
+; Here on a bare form feed
+
+RDTFF:
+	PUSHJ	P,RTPGMK	; Then a page mark
+	PJRST	RDNLC		; Advance to next line
+
+; Here on a line feed
+
+RDTLF:	PUSHJ	P,RTCRLF	; Output a CRLF
+;;	PJRST	RDNLC
+
+; Here to advance to the next word and output a sequence number
+
+RDNLC:	TLO	FL,L1.NNL	; Note we need a new line
+	JRST	RDTEC1		; And continue processing
+
+; Here to insert a CRLF
+
+RTCRLF::MOVEI	C,15		; CR
+	PUSHJ	P,RTIOC		; Send it out
+	MOVEI	C,12		; LF
+	PUSHJ	P,RTIOC		; Send it out too
+	PJRST	RTALGN		; And align to next word
+; Here to insert a page mark
+
+RTPGMK:	PUSHJ	P,RTALGN	; Align to next word
+	MOVE	T1,PGMK		; Fetch a pagemark
+	PUSHJ	P,RTIOW		; Put word in the buffer
+	MOVE	T1,PGMKW2	; Second word
+	PUSHJ	P,RTIOW		; Second word
+;;	PJRST	INIPAG		; Initialize for a new page
+
+; Subroutine to reset TECLIN and set L1.NNL.  Call at start of
+; a new page or start of file
+
+INIPAG:	TLO	FL,L1.NNL	; Note that we need a new line
+	SETZM	TECLIN		; Set for initial line number
+	POPJ	P,		; Return
+
+; Here to start a new line
+; This routine preserves C
+
+RTNLN:	PUSH	P,C		; Save next input character
+	PUSHJ	P,RTALGN	; Zero fill to a word boundary
+	CAIGE	T5,5		; Room for the line number?
+	PUSHJ	P,RDTXJR	; No, pause then
+	SKIPN	BASICF		; Is this a basic mode file?
+	JRST	RTNLN1		; No, generate a new sequence number
+RDBAS1:	POP	P,C		; Get back next character
+	CAIE	C," "		; Skip spaces
+	CAIN	C,11		; and tabs
+	JRST	RDBAS1		; Loop until not space or tab
+	CAIG	C,"9"		; Is it
+	CAIGE	C,"0"		;  a digit
+	ERROR	BBF		; First must be a digit
+	MOVE	T1,C		; Initialize accumulator
+RDBAS3:	PUSHJ	P,RTCHAR	; Get next character
+	CAIG	C,"9"		; Is it
+	CAIGE	C,"0"		;  a digit
+	JRST	RDBAS2		; If no, end of sequence number
+	LSH	T1,7		; Advance accumulator
+	IOR	T1,C		; OR in this digit
+	JRST	RDBAS3		; And look for next
+
+RDBAS2:	CAIE	C," "		; Is this a blank
+	CAIN	C,11		;  or tab?
+	PUSHJ	P,RTCHAR	; Yes, get something else
+	PUSH	P,C		; Save next character
+	LSH	T1,1		; Make space for sequence bit
+	IOR	T1,LNZERO##	; Supply zero fill and seq bit
+	MOVEM	T1,(T4)		; Plant the number in the buffer
+	JRST	RTNLN4		;  and join processing
+
+RTNLN1:	SKIPN	T1,TECLIN	; Save as this line number
+	JRST	RTNLN2		; If not initialized
+	CAML	T1,TECINC	; Smaller than increment?
+	JRST	RTNLN3		; Yes, we must have wrapped around
+	MOVNI	T1,2		;GET -2 (EXIT CONTIGIOUS)
+	CAME	T1,.UNSQF	;SET?
+	 CAMN	T1,UNSEQF	;..
+	  CAIA			;YES--FORGET MESSAGE
+	RERROR	PMI		;NO-- TELL HIM
+	SETOM	PMIFLG		;FLAG WE ADDED ONE
+	PUSHJ	P,RTPGMK	; Install a page mark
+	TLZ	FL,L1.NNL	; Clear need new line flag
+	CAIGE	T5,5		; Check for room
+	PUSHJ	P,RDTXJR	; Wait
+	JRST	RTNLN1		; And try again
+
+RTNLN2:	MOVE	T1,TECFST	; Get starting line number
+	MOVEM	T1,TECLIN	; Save for next time
+RTNLN3:	MOVEM	T1,(T4)		; Save in the buffer
+	MOVE	T2,TECINC	; Get increment
+	PUSHJ	P,ASCIAD##	; Add to get next line number
+	MOVEM	T1,TECLIN	; Save for next time
+RTNLN4:	ADDI	T4,1		; Increment the pointer again
+	SUBI	T5,5		; And decrement remaining data count
+	CAIGE	T5,1		; See if room left for the tab
+	PUSHJ	P,RDTXJR	; No, pause
+	MOVEI	C,11		; Get a tab
+	PUSHJ	P,RTIOC		; Output it and return
+	JRST	CHPOPJ##	; Restore next character and return
+; Subroutine to align the output pointer on the next word boundary
+; Call with
+;	PUSHJ	P,RTALGN
+
+RTALGN:	MOVEI	T1,(T5)		; Count
+	IDIVI	T1,5		; Compute remaining count
+	SUBI	T5,(T2)		; Decrement by that many
+	JUMPL	T4,CPOPJ	; If byte pointer is already aligned
+	HRLI	T4,(POINT 7,)	; Point to pre-first byte
+	ADDI	T4,1
+	POPJ	P,
+
+; Subroutine to emit a word.  Call with output word aligned
+; by calling RTALGN first.  This routine leaves the output
+; word aligned if sucessive calls are needed.
+
+RTIOW:	CAIGE	T5,5		; Room for it
+	PUSHJ	P,RDTXJR	; No, resume calling process
+	MOVEM	T1,(T4)		; Store the page mark
+	SUBI	T5,5		; Decrement the counter
+	AOJA	T4,CPOPJ	; Increment pointer 1 word and return
+
+
+; Subroutine to emit a single character
+
+RTIOC:	TLZE	FL,L1.NNL	; New line waiting?
+	PUSHJ	P,RTNLN		; Yes, send it out
+	IDPB	C,T4		; Send out the character
+	SOJG	T5,CPOPJ	; If room for still more
+;;	PJRST	RDTXJR		; Else return to caller of RDTECO
+
+; Here to resume the calling process
+
+RDTXJR:	PUSH	P,T1		; Save T1
+	SETZ	T1,		; Clear it
+	PUSHJ	P,RESUME	; Resume caller
+	POP	P,T1		; Restore T1
+	POPJ	P,		; And restart the input
+
+; Routine to get a single character from an unsequenced input file
+
+RTCHAR:	SOSGE	IBUF+.BFCTR	; Check buffer count
+	PUSHJ	P,RDTGET	; Refill buffer
+	ILDB	C,IBUF+.BFPTR	; Get next character
+	JUMPE	C,RTCHAR	; Ignore nulls
+	POPJ	P,		; Return it
+; Here to get data for TECO mode input
+
+RDTGET:	INUUO	IN,		; Do buffer mode input
+	  PJRST	SIBPWC		; Setup BPWC
+	STATZ IN,IO.ERR		; Check for errors on input
+	  ERROR	DIE		; Yes, die
+	STATO	IN,IO.EOF	; Skip if end of file
+	  ERROR	ICN		; What?
+
+; here on end of file
+
+	MOVEI	T1,(T5)		; Get count remaining
+	IDIVI	T1,5		; Compute shortfall
+	SETZ	C,		; Clear C
+	JUMPE	T2,RDTGT1	; If remainder of word is null
+	IDPB	C,T4		; Clear remainder of last word
+	SOJG	T2,.-1		; Loop till end of word
+RDTGT1:	TRO	FL,EOF		; Note that we've reached end of file
+;;	PJRST	RESUME		; Return to caller of RDTECO
+
+; Here to resume caller of RDTECO
+
+RESUME:	EXCH	P,RDTPDP	; Get back callers push down list
+	POPJ	P,		; And return to him
+	SUBTTL	Subroutine to compute the length of the current line
+
+; GETLTH -- Subroutine to return the length of the current line
+;
+; Call with PNTR set up
+; Return T1=length unless no current line, then T1=0
+
+GETLTH::CKPTR.
+	PUSH	P,PNTR		; Save PNTR
+	MOVEI	T1,(PNTR)	; Point to first word in high buffer
+	SUB	T1,BUFLAS	; Compute number of words in high buffer
+	HRLI	PNTR,(T1)	; Make AOBJN pointer
+	AOBJP	PNTR,GETLT3	; Skip if 1 word or less
+	MOVEI	T2,1		; Bit for testing
+	  ;
+GETLT1:	TDNE	T2,(PNTR)	; See if line bit set
+	JRST	GETLT4		; Yes, done
+	AOBJN	PNTR,GETLT1	; Keep looking
+;
+; Here if hit end of buffer before end of line
+
+GETLT2:	MOVEI	T1,(PNTR)	; Current end
+	SUB	T1,(P)		; Compute length so far
+	CAILE	T1,BLKSIZ	; Excessively long?
+	ERROR	ELL		; Yes, die now
+GETLT3:	TRNE	FL,EOF		; End of file in core?
+	JRST	GETLT4		; Yes, that's the end then
+	HRRZS	PNTR		; Clear counter in left half
+	SUB	PNTR,(P)	; Compute length so far
+	EXCH	PNTR,(P)	; Get old value of PNTR
+	MOVE	T2,HIPG		; Highest page in command
+	CAMLE	T2,CPG		; Long way off?
+	SKIPA	T1,BUFHSZ	; Yes, read lots of data
+	MOVE	T1,BUFSAI	; No, just read in a little
+	PUSHJ	P,ADVBFR	; From the file
+	POP	P,T1		; Restore old count to T1
+	CAMN	PNTR,BUFLAS
+	POPJ	P,		; Return if no more data
+	JRST	GETLTH		; Try this again
+
+; Here when end of line is found
+
+GETLT4:	MOVEI	T1,(PNTR)	; Get new end
+	SUB	T1,(P)		; Compute displacement
+	POP	P,PNTR		; Restore old pointer
+	POPJ	P,
+	SUBTTL	BLKCHK -- Routine to check for line blocking
+
+;  This routine is called whenever LPNTR is moved  across  a  block
+;  boundary to ensure that each block in the low buffer is properly
+;  line blocked.   Normally  when  this  condition  is  reached,  a
+;  partial  line  will  exist  at  the top of the low buffer.  This
+;  routine detects this condition and moves this partial  line  out
+;  of  the last block, then zeros the remainder of the block.  When
+;  it returns, LPNTR is properly setup, and all completed blocks in
+;  the low buffer are properly line blocks and ready for output.
+;  
+;  Proper functioning of this routine requires that there always be
+;  enough  free  space between the high and low buffers so that the
+;  line can  always  be  moved.   No  checking  is  done  here.   A
+;  sufficient  condition  to  ensure  that  this  is the case is to
+;  always leave one block of free space in the buffer.   Space  can
+;  always   be   made   by  calling  the  routine  DUMPBF  whenever
+;  insufficient space remains in the buffer.  The  amount  of  free
+;  space  left  should  always be checked whenever data is added to
+;  the buffer.  Since this routine can use  up  some  of  the  free
+;  space, a check should be made after this routine is called.
+
+				CONT.
+BLKCHK:	
+IFN FTDEBUG,<
+	MOVE	T3,LPNTR	;Low pointer
+	TRZ	T3,777600	;All RH bits except low 7
+	CAME	T3,BUFBDY	;Make sure we're really there
+	ERROR	ICN		;Nope, bum call
+>
+	MOVEI	T3,1		; Line sequence bit for testing
+	CAME	PNTR,BUFLAS	; Or end the buffer
+	TDNE	T3,(PNTR)	; Does next word start a line?
+	POPJ	P,		; Yes, then we are line blocked
+;
+;Here to find the start of the partial line
+;
+	PUSH	P,T4		; Save T4
+	MOVEI	T4,-1(LPNTR)	; Last word of partial line
+	TDNN	T3,(T4)		; This one started it?
+	SOJA	T4,.-1		; No, backup up and look again
+;
+;Here with T4 pointing to the partial line
+;
+	MOVEI	T3,(LPNTR)	; First free word after block
+	SUBI	T3,(T4)		; Length of the line
+	CAILE	T3,BLKSIZ	; Is it reasonable?
+	ERROR	ELL		; Excessively long input line
+	PUSH	P,T4		; Save address of line
+	HRLS	T4,(P)		; Copy address to both halves
+	HRRI	T4,(LPNTR)	; Where to move the line to
+	ADDI	LPNTR,(T3)	; Update LPNTR
+	BLT	T4,-1(LPNTR)	; Shift partial line out of block
+	POP	P,T4		; Restore pointer to line
+	ADDI	T4,1		; Make it [addr,,addr+1]
+	ADDI	T3,-1(T4)	; Point to old LPNTR
+	SETZM	-1(T4)		; Clear first word
+	CAILE	T3,(T4)
+	BLT	T4,-1(T3)	; Then the rest of the line
+	CKPTR.
+	POP	P,T4		; Restore T4
+	POPJ	P,
+	SUBTTL	LOADCL -- Subroutine to load the current line into LIBUF
+
+; LOADCL -- Subroutine to load the current line into LIBUF
+;
+; Call with PNTR setup.  Returns CPOPJ
+; On return, T1 contains the length of the line.
+
+LOADCL::CKPTR.
+	MOVE	T1,[LIBUF,,LIBUF+1]
+	SETZM	LIBUF
+	BLT	T1,LIBUF+MXWPL+1
+	PUSHJ	P,GETLTH	; Get length of this line
+	JUMPE	T1,CPOPJ##	; Just return if no words
+	CAILE	T1,MXWPL	; Make sure not too long
+	NERROR	LTL		; Oops, line is too long
+	HRRI	T2,LIBUF	; Destination
+	HRLI	T2,(PNTR)	; Source
+	BLT	T2,LIBUF-1(T1)	; Transfer it
+	MOVE	T2,[POINT 7,LIBUF,6] ; Point to the line buffer
+LOADC1:	ILDB	C,T2		; Look at next character
+	SKIPN	0(T2)		; End of line?
+	NERROR	ILFMT		; Must end with CRLF
+	CAIE	C,15		; Found the carriage return yet?
+	JRST	LOADC1		; No keep looking
+	ILDB	C,T2		; Yes, get next
+	CAIE	C,12		; Next must be linefeed
+	NERROR	ILFMT		; Nope, don't take it
+	ILDB	C,T2		; Get the next one
+	JUMPE	C,CPOPJ##	; Must be the end now
+	NERROR	ILFMT		; Else that is no good either
+	SUBTTL	OCOMPL -- Subroutine to finish out a file
+
+; OCOMP1 -- Subroutine to finish out a file
+;
+
+OCOMPL::PUSHJ	P,OCOMP1	; Finish writing output file
+	PJRST	REWOUP		; Rewind so next pass can read it
+
+; Here to comple writing the output file
+
+OCOMP1::CKPTR.
+	TRO	FL,SSBGSN	; We won't count pages here
+	MOVEI	T3,(PNTR)
+	SUBI	T3,(LPNTR)	; Free space
+	CAIGE	T3,BLKSIZ	; Enough to try again?
+	JRST	OCOMP2		; No, dump some first
+	HRLI	T1,(PNTR)	; Start of high buffer
+	HRRI	T1,(LPNTR)	; First word of free space
+	MOVE	T2,BUFLAS	; Limit of high buffer
+	SUBI	T2,(PNTR)	; Size of high buffer
+	JUMPE	T2,OCOMP2	; No, go get more data
+	PUSHJ	P,STLPNT	; Setup LPNTR and T3 
+	MOVMS	T3		; Get magnitude
+	CAILE	T2,(T3)		; Use smaller of high size or block size
+	MOVEI	T2,(T3)		; from current low pointer position
+	HRLI	T2,(T2)		; Both sides now
+	ADD	LPNTR,T2	; Adjust LPNTR (both halves)
+	ADDI	PNTR,(T2)	; and PNTR (right half)
+	BLT	T1,-1(LPNTR)	; Compress the buffer into low part
+	TLZN	LPNTR,-1	; On even boundary?
+	PUSHJ	P,BLKCHK	; Ensure low buffer is line blocked
+	JRST	OCOMP1
+
+OCOMP2:	MOVEI	T1,(LPNTR)	; Point to limit of low part
+	SUB	T1,BUFFIR	; Compute amount of data in buffer
+	CAMN	PNTR,BUFLAS	; At end of buffer?
+	TRNN	FL,EOF		; and end of file on last read
+	CAIA
+	PJRST	DUMPBF		; Dump remainder
+	TRZ	T1,BLKSIZ-1	; Round down to whole blocks
+	PUSHJ	P,DUMPBF	; And dump it out onto the file
+	MOVE	T1,PNTR		; Point to first free word
+	SUBI	T1,BLKSIZ(LPNTR); Free space minus 1 block
+	TRZ	T1,BLKSIZ-1	; Round down to whole blocks
+	JUMPLE	T1,OCOMP1	; If we can't take any more data
+	PUSHJ	P,DATAIN	; And fill it (if possible)
+	JRST	OCOMP1		; Go finish out the file
+	SUBTTL	DUMPBF -- Subroutine to dump the buffer
+
+; DUMPBF -- Call with T1 = number of words to be dumped
+; Returns CPOPJ
+; DMPBFS -- Same call as DUMPBF, but gives non-skip return if
+;	    no data is dumped.
+; This routine does not affect either PNTR or the high buffer in any
+; way.  FORLIN depends on this fact.
+
+DUMPBF:	PUSHJ	P,DMPBFS	; Call DMPBFS
+	  POPJ	P,		; Non-skip
+	POPJ	P,		; and skip are the same
+
+DMPBFS:	CKPTR.
+	PUSHJ	P,SAVR##	; Preserve T3-T5
+	MOVEI	T2,(LPNTR)	; Limit of low buffer
+	SUB	T2,BUFFIR	; Compute count in low buffer
+	CAMG	T2,T1		; Less than request?
+	MOVE	T1,T2		; Yes, use actual data count
+	MOVN	T3,T1		; Data count, negated
+	HRLZS	T3		; Move to left half
+	HRR	T3,BUFFIR	; Make IOWD
+	SOJGE	T3,CPOPJ	; Adjust the IOWD, check for zero
+	SETZ	T4,		; Zero terminate IOWD list
+IFN CRYPSW,<
+	PUSHJ	P,CRPIOO	; Encrypt if needed
+>
+	TRNN	FL,READOF	; Skip OUTPUT if read only
+	OUTUUO	OUT,T3		; Output the data
+	  JRST	DMPBF1		; No errors, keep going
+	ERROR 	DDE		; Error on output
+
+DMPBF1:	TRZ	FL,BOF		; No longer at beginning of file
+	ADDM	T1,OUTSIZ	; Increment amount written
+	HRLI	T1,(T1)		; Both sides now
+	SUB	LPNTR,T1	; Update LPNTR
+	PUSHJ	P,FXLPNT	; Fix pointer if needed
+	ADD	T1,BUFFIR	; Compute address of first data word
+	MOVSS	T1		; Source goes in left half for BLT
+	HRR	T1,BUFFIR	; Destination of the data
+	CAME	LPNTR,BUFLOW	; Don't BLT if nothing to move
+	BLT	T1,-1(LPNTR)	; Compress the buffer
+	JRST	CPOPJ1##	; Give good return
+; Subroutine to exchange input and output channel pointers.
+; Also changes lookup/enter block pointers for reference by
+; end code
+
+
+XCHCHN::MOVE	T1,CHNTAB##+IN	; Get IN channel entry
+	EXCH	T1,CHNTAB##+OUT	; Exchange with OUT entry
+	MOVEM	T1,CHNTAB##+IN	; Exchange with IN entry
+	MOVE	T1,PNTNMI	; Then do lookup block pointers
+	EXCH	T1,PNTNMO
+	MOVEM	T1,PNTNMI
+	POPJ	P,
+
+; Subroutine to rewind the output file so it can perform input
+; Note:  This is a logical rewind only, no USETI is performed here.
+; (A USETI IN,1 is done by IREAD instead)
+
+REWOUP::PUSHJ	P,CLRTEC	; Clear TECO mode if set
+	MOVEI	T1,@PNTNMO	; Point to the output lookup block
+	AOSLE	XRBNOR(T1)	; See if must open for update now
+	JRST	REWOP1		; Yes, don't re-open
+	PUSHJ	P,MAKFL1##	; Yes, go open it
+	  JRST	CWTOF		; Can't write next temp file
+REWOP1:	MOVEI	T2,@PNTNMO	; Point to its lookup block
+	MOVE	T1,OUTSIZ	; Get the output size
+	MOVEM	T1,.RBSIZ(T2)	; Save as input size for reading
+	CAML	T1,XRBMWL(T2)	; See if this pass longer
+	MOVEM	T1,XRBMWL(T2)	; Yes, update maximum written length
+	POPJ	P,		; Return
+
+; Subroutine to clear the TECOF flag
+; Call with CHNTAB+IN pointing to the unsequenced input file.
+
+CLRTEC::TLZN	FL,TECOF	; See if input file was unsequence
+	POPJ	P,		; Nothing else to do
+	MOVE	T3,CHNTAB+OUT	; Point to input file channel block
+	SETSTS	OUT,.IODMP	; Back to dump mode input
+	HRRZ	T2,RDTBFP	; Read Teco buffer pointer
+	MOVSI	T1,400000	; Virgin buffer ring bit
+	MOVE	T2,.OPBUF(T3)	; Point to buffer header
+	MOVEM	T1,(T2)		; Save in header block
+	HLRZ	T1,RDTBFP	; Point to first word of old buffer
+SETJF2::MOVE	T2,CXFCOR	; End of this segment
+	CAML	T2,SVJFF2	; Skip if not highest segment
+	MOVEM	T1,SVJFF2	; Let SOSCMD core back to there
+	MOVEM	T1,CXFCOR	; Reduce length of this segment
+	POPJ	P,
+	SUBTTL  INSED -- Routines to insert and delete lines
+
+; INSED -- Subroutine to insert and delete data words
+; Call with
+;	NCNT = number of words to add from LIBUF
+;	OCNT = number of words to delete from buffer
+; Returns CPOPJ
+
+INSED::	SKIPE	T1,OCNT		; Get count to delete
+	PUSHJ	P,DLTLIN	; Delete that many words
+	SKIPN	T1,NCNT		; Get count to insert
+	POPJ	P,		; If nothing to insert
+;;	PJRST	INSLIN		; and insert them from LIBUF
+
+; Subroutine to insert data in the buffer
+; Call with PNTR setup, T1 containing the number of words to insert
+; Data should be in LIBUF. Uses T1-T5 (calls FIND)
+; Return with Line number in T1.
+
+INSLIN::CKPTR.
+	MOVE	T2,PNTR		; Get high pointer
+	SUBI	T2,(LPNTR)	; Get size of free space
+	CAILE	T2,BLKSIZ(T1)	; Skip if free space too small
+	  JRST	INSLN1		; Enough, continue
+	PUSH	P,T1		; Save space
+	MOVEI	T1,BLKSIZ	; Size of one block
+	PUSH	P,CPG		; Save current page
+	SKIPE	T2,(PNTR)	; Current line number
+	CAMN	T2,PGMK		; A page mark?
+	MOVE	T2,LNOVER##	; Last possible line + 1
+	PUSH	P,T2		; Save to refind
+	PUSHJ	P,DMPBFS	; Dump a block
+	  TRO	FL,SSBGSN	; Made no room, force a wraparound
+	POP	P,SINDEX	; Restore line
+	POP	P,DPG		; And page
+	PUSHJ	P,FIND		; Find it again
+	POP	P,T1		; Restore the count
+	JRST	INSLIN		; Go see if we need to dump a block
+
+INSLN1:	HRLI	T2,LIBUF	; Point to line buffer
+	SUBI	PNTR,(T1)	; Update PNTR to account for new line
+	HRRI	T2,(PNTR)	; Point to destination
+	ADDI	T1,-1(PNTR)	; Setup pointer to last word of line
+	BLT	T2,(T1)		; Copy the date into the main buffer
+	AOS	CHGCNT		; Count as a change
+	MOVE	T1,LIBUF	; Get the line number
+	CAMN	T1,PGMK		; Page mark?
+	PJRST	CLROLN		; Yes, clear OLDLIN
+SETOLN:	MOVEM	T1,OLDLIN	; Else set it up
+	POPJ	P,		; Done
+	SUBTTL	DLTLIN -- Subroutine to remove a line from the buffer
+
+; Call with length in T1, PNTR setup
+
+DLTPAG::MOVEI	T1,2		; Page mark is two words long
+	  ;
+DLTLIN::CKPTR.
+	AOS	CHGCNT		; Count as a change
+	MOVE	T2,BUFLAS	; Last word of data
+	SUBI	T2,(PNTR)	; Count of words in the buffer
+	CAML	T2,T1		; Is the requested amount present
+	JRST	DLTLN1		; Yes, continue
+	TRNE	FL,EOF		; Are we at end of file?
+	ERROR	ICN		; Yes, then we are very confused
+	PUSH	P,T1		; Save requested count
+	MOVEI	T1,BLKSIZ	; Advance forward one buffer
+	PUSHJ	P,ADVBFR	; Go advance the buffer
+	POP	P,T1		; Restore the count
+	JRST	DLTLIN		; And try again
+
+; Here when it is known that the whole line is in core
+
+DLTLN1:	ADDI	PNTR,(T1)	; Increment PNTR
+	POPJ	P,		; and return
+	SUBTTL	SxBPWC -- Routines to setup byte pointer/word counts
+
+; These routines setup the byte pointer and word count in IBUF
+; (IN channel) or OBUF (OUT channel) from the channel specific
+; buffer header blocks.  They preserve all AC's.
+
+SIBPWC::
+IFN CRYPSW,<
+	PUSHJ	P,CRPBFI	; Decrypt if necessary
+>
+	PUSHJ	P,SAVR##	; Save all temporaries used
+	MOVE	T3,CHNTAB+IN	; Point to IN open block	
+	HRRZ	T3,.OPBUF(T3)	; Point to buffer header
+	DMOVE	T4,.BFPTR(T3)	; Fetch Byte pointer and word cound
+	DMOVEM	T4,IBUF+.BFPTR	; Place in IBUF
+	SETZM	.BFCTR(T3)	; Prevent confusion
+	POPJ	P,
+
+; Here to setup OBUF for OUT channel
+
+SOBPWC::PUSHJ	P,SAVR##	; Save all temporaries used
+	MOVE	T3,CHNTAB+OUT	; Point to OUT open block	
+	HLRZ	T3,.OPBUF(T3)	; Point to buffer header
+	DMOVE	T4,.BFPTR(T3)	; Fetch Byte pointer and word cound
+	DMOVEM	T4,OBUF+.BFPTR	; Place OUT OBUF
+	SETZM	.BFCTR(T3)	; Prevent confusion
+	POPJ	P,
+	SUBTTL	-- Encryption support
+
+IFN CRYPSW,<
+
+;Routine to save AC's for the encryption routine
+
+HAC==12		; Highest AC to save
+
+SAVCRX::ADJSP	P,HAC+1		; Need HAC+1 places on the PDL
+	MOVEM	HAC,0(P)	; Save high AC first
+	MOVEI	HAC,-HAC(P)	; Where to BLT to
+	BLT	HAC,-1(P)	; Save the AC's
+	MOVE	HAC,0(P)	; Restore in case needed again
+	PUSHJ	P,@-<HAC+1>(P)	; Return to caller
+	MOVSI	HAC,-HAC(P)	; Set to restore
+	BLT	HAC,HAC		; Restore the AC's
+	ADJSP	P,-<HAC+2>	; The the PDL pointer
+	POPJ	P,		; then return
+
+;Here to encrypt an IOWD on output
+;Call with IOWD in T3
+;	PUSHJ	P,CRPIOO
+;	<return here, does nothing if .OCODE EQL 0 or readonly mode>
+
+CRPIOO:	SKIPE	OCODE		; Encrypting?
+	TRNE	FL,READOF	; and not readonly?
+	POPJ	P,		; No,
+	PUSHJ	P,SAVCRX	; Yes, save AC's
+	MOVE	11,OCODE
+	MOVEI	10,OBUF+3
+	AOS	12,T3		; Convert IOWD to AOBJN word and save it
+	PJRST	CRPIOW
+
+;Here to encrypt an IOWD on input
+;Call with IOWD in T1 (not T3 as in CRPIOO)
+;	PUSHJ	P,CRPIOI
+;	<return here, does nothing .ICODE EQL 0>
+
+
+CRPIOI::SKIPN	ICODE
+	POPJ	P,
+	PUSHJ	P,SAVCRX	;
+	MOVE	11,ICODE	; Input key
+	MOVEI	10,IBUF+3	; Block counter
+	AOS	12,T1		; Copy the IOWD
+	  ;
+CRPIOW::MOVE	7,12		; Get the IOWD
+	ADD	12,[BLKSIZ,,BLKSIZ] ; Anticipate next block
+	SKIPGE	12		; If more than BLKSIZ words
+	HRLI	7,-BLKSIZ	; Use block size if too large
+	MOVE	5,11		; Key
+	AOS	6,(10)		; Set up block number
+	PUSHJ	P,CRYPT.##	; Encrypt this block
+	JUMPL	12,CRPIOW	; If more to do
+	POPJ	P,		; Else return
+
+
+;Here to encrypt a buffer on input
+
+CRPBFI::SKIPN	ICODE		; Needed?
+	POPJ	P,		; No,
+	PUSHJ	P,SAVCRX	; Save AC's
+	MOVEI	7,@CHNTAB+IN	; Locate the buffer header
+	HRRZ	7,.OPBUF(7)	; To the buffer header
+	HRRZ	7,.BFADR(7)	; Get the buffer address
+	ADD	7,[-BLKSIZ,,2]	; Make AOBJN word
+	AOS	6,IBUF+3
+	MOVE	5,ICODE		; The key itself
+	PJRST	CRYPT.##	; Encrypt the block
+
+CRPBFO::SKIPN	OCODE		; See if needed
+	POPJ	P,		; No,
+	PUSHJ	P,SAVCRX	; Save AC's
+	MOVEI	7,@CHNTAB+OUT	; Locate the buffer header
+	HLRZ	7,.OPBUF(7)	; To the buffer header
+	HRRZ	7,.BFADR(7)	; Get the buffer address
+	ADD	7,[-BLKSIZ,,2]	; Make AOBJN word
+	AOS	6,OBUF+3	; Block key (block count)
+	MOVE	5,OCODE		; The encryption key
+	PJRST	CRYPT.##	; Call the encryptor
+
+>;  End of CRYPSW conditional
+	SUBTTL	CKPNTR -- Debugging routine to watch pointers
+
+IFN FTDEBUG,<
+CKPNTR:	TLNE	PNTR,-1		; Left half still zero?
+	PUSHJ	P,CKPTR1		; Nope
+	CAIG	PNTR,(LPNTR)	; C(PNTR) GTR C(LPNTR)
+	PUSHJ	P,CKPTR1		; Nope, time to die
+	CAMG	PNTR,BUFLIM	; High pointer points into space
+	CAMGE	PNTR,BUFFIR	; Or fell in a hole?
+	PUSHJ	P,CKPTR1		; Time to die
+	POPJ	P,		; All seems to be okay, return
+
+; Here on a pointer failure.  Better to go into DDT than just die
+; if possible
+
+CKPTR1:	OUTSTR	[ASCIZ/?Pointers check fails/]
+	SKIPN	.JBDDT		; DDT in core?
+	JRST	CKPTR2		; No, just say what happened
+	OUTSTR	[ASCIZ/--entering DDT
+/]
+	PUSH	P,.JBDDT##	; Put address of DDT on PDL
+	POPJ	P,		; Enter DDT
+	HALT	.		; He shouldn't have tried that
+
+CKPTR2:	OCRLF
+	EXIT	1,
+
+>; End of FTDEBUG code for pointer checking
+	SUBTTL	Disk space routines
+
+; Subroutine to tell the user how much space is left on his disk area
+;
+
+TELSPC::PUSHJ	P,FREDSK
+TELSP0:	MOVE	T2,STRNAM+1	; Get free space
+	JUMPL	T2,TELOVR	; Overdrawn?
+TELSP1:	PUSHJ	P,DPRNT##	; Print in decimal
+	OUTSTR	[ASCIZ " blocks in your area on "]
+	PUSHJ	P,GVDSTR##	; Give structure name
+	PUSHJ	P,FOCRLF	; Terminate the line
+	MOVE	T2,STRNAM+2	; Get rest of world
+	PUSHJ	P,DPRNT		; In decimal
+	OUTSTR	[ASCIZ " blocks for all users"]
+	JRST	FOCRLF##	; Force CRLF
+
+TELOVR:	OUTSTR	[ASCIZ "Over quota by "]
+	MOVN	T2,T2		; Tell him bad news
+	JRST	TELSP1
+
+; Subroutine to obtain the amount of free disk space
+
+FREDSK::TRNE	FL,READOF	; Readonly?
+	JRST	FREDS1		; Yes, go get input structure
+	PUSHJ	P,GOUSTR##	; Output structure name
+	JRST	FREDS2		; Join processing
+
+FREDS1:	PUSHJ	P,GINSTR##	; Get input structure name
+FREDS2:	MOVEM	T1,STRNAM
+	MOVE	T1,[3,,STRNAM]	; DSKCHR UUO
+	DSKCHR	T1,
+	  SKIPA	T1,[^D100]	; As good a number as any
+	SKIPG	T1,STRNAM+1	; Get amount in T1
+	ADDI	T1,OVRDRW	; Adjust for overdraw
+	CAMLE	T1,STRNAM+2	; How about the rest of the world
+	MOVE	T1,STRNAM+2	; Disk is full - give lesser
+	POPJ	P,
+
+	END
+

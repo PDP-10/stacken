@@ -1,0 +1,1036 @@
+	TITLE	VEREDT - GLXVER EDITOR
+	SUBTTL	Dave Cornelius 20-JUN-79
+
+	SEARCH	GLXMAC		;Get GLX library syms,
+	SEARCH	ORNMAC		;For more parser macros
+	PROLOG	(VEREDT)
+	EDIWHO==0
+	EDIVER==2
+	EDIMIN==0
+	EDIEDT==12
+	.JBVER==137
+	%%.EDT==<VRSN.(EDI)>
+	LOC	.JBVER
+	EXP	%%.EDT
+	RELOC
+
+; Registers
+	MSTK=13				;A stack ptr for parse pages
+SUBTTL	Revision History
+
+;005		Take advantage of new $STOP, use new PARSER macros
+;006		Remove refs to GLXWTO, its a red herring
+;007		Change .KY symbols to .KX, so we don't conflict with ORNMAC
+;010		Remove PB link to parser. Use P$SETUP instead
+;		Add GLXPFH to the module names
+;011		Remove PDB.NX symbol and use CR.SAV to get the module  key input
+;		Remove PARINT from VEREDT
+;012		Use the GCO number specified by the user. GCOs are decimal.
+	SUBTTL	Define the offsets for the Module data block
+
+	PHASE	0
+
+DB.KY:!	BLOCK	1			;The keyword word
+	DB.KYM==-1,,0			;Mask for the keyword value
+	DB.ORD==0,,-1			;The # of the GLX entry that this
+					; module appears in the GLXVER file.
+
+DB.MED:!BLOCK	1			;The module edit word
+	DB.MOD==0,,-1			;The module edit number, xxxedt
+	DB.DVD==1B0			;If lit, data in the block is valid
+	DB.EDT==1B1			;If lit, this module is involved in this
+					; edit.
+
+DB.GLX:!BLOCK	1			;The GLX-wide info word
+	DB.LOD==-1,,0			;The summation of the xxxEDTs
+					; last time this module was patched
+	DB.GCO==0,,-1			;The Galaxy Change Order that went
+					; with this edit
+
+DB.WHO:!BLOCK	1			;Sixbit (node format) of the editor's
+					; initials
+
+DB.TXA:!BLOCK	1			;Address of ASCIZ string for name
+
+DB.SZ:!
+	DEPHASE
+START:	RESET
+	MOVE	P,[IOWD PDLEN,PDL]	;Set up stack
+	MOVEI	S1,IBSIZE		;Length of init block
+	MOVEI	S2,IBLK			;Addr of initialization block
+	PUSHJ	P,I%INIT		;Say hello to GLXLIB
+	MOVE	S1,[POINT 7,INICOM]	;Aim at startup command
+	STORE	S1,PARBLK+PAR.SR	;Tell PARSER this is a core parse
+MLOOP:	MOVE	MSTK,[IOWD MSTKLN,MSTKAD] ;Set up the message page stack
+	PUSH	MSTK,BOTSTK		;Flag end of stack
+	PUSHJ	P,GETCOM		;Find out what is to be done
+	SETZ	S1,			;Make sure we do no more core parsing
+	STORE	S1,PARBLK+PAR.SR	;clear string addr in parse block
+	PUSHJ	P,P$KEYW##		;What is the command?
+	JUMPF	MLOOP2			;No??!!
+	MOVSI	S2,-NUMMAI		;Make AOBJN for Main Key table
+MLOOP1:	HLRZ	T1,MAITAB(S2)		;Get key
+	CAIE	T1,(S1)			;Match?
+	AOBJN	S2,MLOOP1		;No, try again
+	JUMPGE	S2,MLOOP2		;WHAT??? No match??
+	HRRZ	T1,MAITAB(S2)		;Get routine address
+	PUSHJ	P,(T1)			;Do the stuff
+	JUMPT	MLOOP3			;Try again if all went well
+MLOOP2:	$TEXT	(,<Command Error>)
+
+MLOOP3:	POP	MSTK,S1			;Get next page to be returned
+	CAMN	S1,BOTSTK		;Hit end of stack?
+	JRST	MLOOP			;Yes, start over
+	PUSHJ	P,M%RPAG		;Give it away
+	JRST	MLOOP3			;Try for some more
+	SUBTTL	Some Commands
+
+EDICOM:	PUSHJ	P,CHKVLD		;Make sure we have good data
+	JUMPT	EDIC.1			;We have... continue
+	$TEXT	(,<Not enough valid data, try READ-IN first>)
+	$RETF
+EDIC.1:	PUSHJ	P,OPNIN			;Get the input file ready
+	PUSHJ	P,OPNOUT		;Get the output file, too
+					; (And any backups, if tops 10)
+	PUSHJ	P,DOEDIT		;Insert our entry
+	PUSHJ	P,CLSIN			;finish the input file
+	PUSHJ	P,RENOUT		;Do backup, close files
+	$RETT				;Great!
+
+;The return to monitor command
+QUICOM:	PUSHJ	P,I%EXIT		;See you later!
+	$STOP	(IER,EXIT routine returned)
+
+;The set filespec command
+ESTCOM:
+	PUSHJ	P,.SAVE2		;Save a reg or two
+	PUSHJ	P,P$KEYW##		;Input or Output?
+	MOVSI	S2,-NUMFTP		;AOBJN ptr for file types
+ESTC.1:	HLRZ	P2,FTPTAB(S2)		;Get next entry's key
+	CAIE	P2,(S1)			;Match?
+	AOBJN	S2,ESTC.1		;No
+	SKIPL	S2			;Success?
+	$STOP	(IFK,Illegal file key type in ESTCOM)
+	HRRZ	P2,FTPTAB(S2)		;Get addr of XWD FDaddr,P$xFIL routine
+	MOVE	P2,(P2)			;Get XWD FDaddr,P$xFIL routine
+	PUSHJ	P,(P2)			;Get ptr to file
+	SKIPT				;Ok
+	$STOP	(FNP,File not in parse message)
+	MOVSS	P2			;Put FDIN or FDOUT in RH
+	MOVSI	S1,PFD.D1(S1)		;Put FD source addr in LH
+	HRRI	S1,.FDFIL(P2)		;Put dest FD addr in RH (FDIN or FDOUT etc)
+	SUBI	S2,PFD.D1-.FDFIL	;Convert PFD header len into FD hdr len
+	STORE	S2,.FDLEN(P2),FD.LEN	;Update length of file spec
+	ADDI	S2,-PFD.D1(S1)		;Figure termination address
+	BLT	S1,(S2)			;Move the FD to our space
+	PJRST	P$CFM##			;Finish the message
+
+FTPTAB:	XWD	.KXEIN,[XWD FDIN,P$IFIL##]
+	XWD	.KXEOU,[XWD FDOUT,P$OFIL##]
+IFN FTUUOS,<
+	XWD	.KXEBK,[XWD FDBAK,P$OFIL##]
+>;END IFN FTUUOS
+	NUMFTP==.-FTPTAB		;Number of file types
+;The display filespec command
+EDSCOM:
+	PUSHJ	P,P$KEYW##		;Find what the user typed
+	CAIE	S1,.KXEAL		;'ALL' ?
+	CAIN	S1,.KXEIN		;or 'INPUT-'
+	$TEXT	(,<Input file: ^F/FDIN/>)
+	CAIE	S1,.KXEAL		;'ALL' ?
+	CAIN	S1,.KXEOU		; or 'OUTPUT-'
+	$TEXT	(,<Output file: ^F/FDOUT/>)
+IFN FTUUOS,<
+	CAIE	S1,.KXEAL		;'ALL' ?
+	CAIN	S1,.KXEBK		; or 'BACKUP-'
+	$TEXT	(,<BACKUP file: ^F/FDBAK/>)
+>;END IFN FTUUOS
+	PUSHJ	P,P$TOK##		;Try for a comma
+	JUMPT	EDSCOM			;There's more, handle it
+	PJRST	P$CFM##			;Finish command
+	SUBTTL	READ-IN COMMAND
+
+ERDCOM:	PUSHJ	P,P$CFM##		;No args for the READ command
+	JUMPF	.POPJ			;Not comfirmed, pass error up
+	PUSHJ	P,OPNIN			;Fire up the input file
+	PUSHJ	P,RDGLOB		;Read the global symbols
+	PUSHJ	P,RDMODS		;Read in all the module info
+	PUSHJ	P,CLSIN			;Done or EOF, finish the input file
+	PUSHJ	P,CHKVLD		;Make sure all modules have info
+	SKIPT				;Were they all read in?
+	$STOP	(IMI,Insufficient Module Info in input file)
+	$RETT				;Yes, they were!
+	SUBTTL	The SHOW command
+ESHCOM:
+	PUSHJ	P,TYPHED		;Type the header line
+	PUSHJ	P,.SAVE1		;Save a loop reg
+
+ESHC.1:	PUSHJ	P,P$KEYW##		;Get next keyword
+	SKIPT
+	$STOP	(KNN,Keyword is Not Next in SHOW parse)
+	CAIN	S1,.KXEAL		;Is it 'ALL'?
+	JRST	ESHC.3			;Yes, Type out all modules
+	PUSHJ	P,MODSRC		;No, find DBA for this module
+	PUSHJ	P,TYPMOD		;And type out the info
+ESHC.2:	PUSHJ	P,P$TOK##		;Try for a comma
+	JUMPF	P$CFM##			;No, force confirm
+	JRST	ESHC.1			;Yes, type next module
+
+ESHC.3:	MOVSI	P1,-NUMMOD		;Get AOBJN ptr to module table
+ESHC.4:	HRRZ	S1,MODTAB(P1)		;Get DBA address
+	PUSHJ	P,TYPMOD		;Type out this module
+	AOBJN	P1,ESHC.4		;Do all modules
+	JRST	ESHC.2			;See if there's more input
+	SUBTTL	Routines to type module info
+TYPHED:	$TEXT	(,<Module	ModEDT	  Load	   GCO#	Who>)
+	$TEXT	(,<------	------	  ----	   ----	--->)
+	$RETT
+
+TYPMOD:	LOAD	S2,DB.MED(S1),DB.DVD	;Get Vaild data bit
+	JUMPE	S2,TYPM.1		;Jump if no data here
+	$TEXT	(,<GLX^T/@DB.TXA(S1)/	^O6/DB.MED(S1),DB.MOD/	^O6/DB.GLX(S1),DB.LOD/	^D6/DB.GLX(S1),DB.GCO/	^W/DB.WHO(S1)/>)
+	$RETT
+
+TYPM.1:	$TEXT	(,<GLX^T/@DB.TXA(S1)/	 No data known>)
+	$RETT
+	SUBTTL	DBA bit data manipulation
+
+;Routine to clear a bit from all module data blocks
+;Call with bit set in S1
+CLRBIT:	PUSHJ	P,.SAVE1
+	MOVSI	P1,-NUMMOD		;Make AOBJN ptr for Valid bit settings
+CLRB.1:	HRRZ	S2,MODTAB(P1)		;Get addrs of Module Data block
+	ANDCAM	S1,DB.MED(S2)		;Clear the desired bit
+	AOBJN	P1,CLRB.1		;Do all the modules
+	$RETT
+
+;Routine to clear the valid bit for all MDBs
+CLRVLD:	MOVX	S1,DB.DVD		;Get the valid bit
+	PJRST	CLRBIT			;Clear all valid bits
+
+;Routine to clear the edit bit for all MDBs
+CLREDT:	MOVX	S1,DB.EDT		;Get the edit bit
+	PJRST	CLRBIT			;Clear 'em all
+
+;Routine to clear the valid bit for an MDB passed in S1
+SETVLD:	MOVEI	S2,1			;Load a 1
+	STORE	S2,DB.MED(S1),DB.DVD	;Store the indicator
+	$RETT
+
+;Routine to set the edit bit for an MDB passed in S1
+SETEDT:	MOVEI	S2,1			;Load a 1
+	STORE	S2,DB.MED(S1),DB.EDT	;Light the edit bit
+	$RETT
+
+;Routine to make sure the valid bit is lit in all MDB's
+CHKVLD:	PUSHJ	P,.SAVE2		;save some regs
+	SETZ	P2,			;Clear sum reg for module edits
+	MOVSI	P1,-NUMMOD		;Mak AOBJN ptr to module info table
+CHKV.1:	HRRZ	S1,MODTAB(P1)		;Get addr of Module Descriptor Block
+	LOAD	S2,DB.MED(S1),DB.DVD	;Get 'valid' bit
+	JUMPE	S2,.RETF		;Not, valid, so return false
+	LOAD	S2,DB.MED(S1),DB.MOD	;Get edit level for this module
+	ADDI	P2,(S2)			;Tally 'em up
+	AOBJN	P1,CHKV.1		;Check 'em all
+	CAMN	P2,GLXLD		;Does this total line up??
+	$RETT				;Win!
+	$TEXT	(,<GLXLOD sum is wrong at ^O/GLXLD/, fixing to ^O/P2/>)
+	MOVEM	P2,GLXLD		;Save the correct sum
+	$RETT
+	SUBTTL	Read in global version data
+
+RDGLOB:	PUSHJ	P,SETM.A		;Set up a match buffer for us
+	PUSHJ	P,FNDMAR		;Read till we hit a match
+	SKIPT				;Did we hit EOF?
+	$STOP	(ESG,EOF while Searching for Global version data)
+	PUSHJ	P,PARNUM		;Yes, Read the global version number
+	SKIPT				;OK?
+	$STOP	(CPG,Can't Parse Global version number)
+	PUSHJ	P,P$NUM##		;Read the parsed number
+	MOVEM	S1,GLXLD		;Stash global version for later
+	SKIPF				;OOPS!
+	PUSHJ	P,P$TEXT##		;Check for proper termination
+	SKIPT				;All OK?
+	PUSHJ	P,S..CPG		;No, complain
+	PJRST	P$CFM##			;Finish the parse
+	SUBTTL	RDMODS - Read in all the modifications for all modules
+RDMODS:
+	PUSHJ	P,.SAVE2		;Save work regs (hold DBA, and order)
+	PUSHJ	P,CLRVLD		;Mark all module data as invalid
+	SETZ	P2,			;Start order of edits at 0
+	PUSHJ	P,SETM.B		;Set up Match buffer
+RDMO.1:	PUSHJ	P,FNDMAR		;Read till we find a GLX xxx line
+	JUMPF	.RETT			;EOF?  all done!
+	PUSHJ	P,PARINP		;Parse the versions from the line
+	PUSHJ	P,P$KEYW##		;Get key
+	SKIPT				;none there??
+	$STOP	(ILT,Invalid line type in input file)
+	PUSHJ	P,MODSRC		;Match the key to a Module Data Block
+	MOVE	P1,S1			;Save MDB addr
+	PUSHJ	P,SETVLD		;Say that data is valid in this MDB
+	PUSHJ	P,P$TOK##		;Bypass the comma
+	SKIPT				;One is required
+	PUSHJ	P,S..ILT		;OOPS!!
+	PUSHJ	P,P$NUM##		;Get a number
+	SKIPT				;One is required
+	PUSHJ	P,S..ILT		;OOPS!!
+	STORE	S1,DB.MED(P1),DB.MOD	;Save the module edit # (xxxEDT)
+	PUSHJ	P,P$TOK##		;Bypass the comma
+	SKIPT				;One is required
+	PUSHJ	P,S..ILT		;OOPS!!
+	PUSHJ	P,P$NUM##		;Get a number
+	SKIPT				;One is required
+	PUSHJ	P,S..ILT		;OOPS!!
+	STORE	S1,DB.GLX(P1),DB.LOD	;Save the load level of this last edit
+	PUSHJ	P,P$TOK##		;Bypass the comma
+	SKIPT				;One is required
+	PUSHJ	P,S..ILT		;OOPS!!
+	PUSHJ	P,P$NUM##		;Get a number
+	SKIPT				;One is required
+	PUSHJ	P,S..ILT		;OOPS!!
+	STORE	S1,DB.GLX(P1),DB.GCO	;Save the GCO for that edit
+	PUSHJ	P,P$TOK##		;Bypass the comma
+	SKIPT				;One is required
+	PUSHJ	P,S..ILT		;OOPS!!
+	PUSHJ	P,P$SIXF##		;Read the initials
+	SKIPT				;One is required
+	PUSHJ	P,S..ILT		;OOPS!!
+	STORE	S1,DB.WHO(P1)		;Save editor's id
+	PUSHJ	P,P$FLD##		;Eat the rest of the line
+	PUSHJ	P,P$CFM##		;Finish the line
+	STORE	P2,DB.KY(P1),DB.ORD	;Store sequence # of this module
+	AOJA	P2,RDMO.1		;And bump to next seq #
+	SUBTTL	GETCOM - Get a user request
+GETCOM:
+	DMOVE	S1,[EXP PAR.SZ,PARBLK]	;Aim S1,S2 at length, block
+	PUSHJ	P,GETC.1		;Do the stuff
+	JUMPT	.POPJ			;OK
+	JRST	GETCOM			;Try again
+
+;Enter here with S1, S2 pointing to a different parse block
+GETC.1:	PUSHJ	P,PARSER##		;Get a command
+	JUMPF	GETC.2			;Something went wrong
+	MOVE	S1,PRT.CM(S2)		;Get address of command block
+	LOAD	S2,.MSTYP(S1),MS.TYP	;Get meesage type from block header
+	CAIE	S2,.OMCMD		;Is it a command?
+	$STOP	(PRB,Parser Returned Bad message) ;NO??!!
+	SKIPN	S2,COM.PB(S1)		;Is there a parse block?
+	$STOP	(NPB,No Parse Block)	;NO??!!
+	ADDI	S2,(S1)			;Make offset into real address
+	PUSH	MSTK,S1			;Stack the message pages recieved
+	MOVE	S1,S2			;Copy parse block addr into arg reg
+	PUSHJ	P,P$SETUP##		;Set the library seed
+	$RETT				;OK, return with ptr to parse
+
+GETC.2:	$TEXT	(,<^M^J?Command error: ^T/@PRT.EM(S2)/>)
+	SETZM	@PRT.EM(S2)		;Clear the error
+	$RETF				;Try again
+
+;Routines to set up incore parsing for reading data from the input file
+PARNUM:	DMOVE	S1,[EXP PAR.SZ,PARB.2]	;Aim at a counted block
+	JRST	PARMAT			;Go parse from the match block
+
+PARINP:	DMOVE	S1,[EXP PAR.SZ,PARB.3]	;parse a line of the input file
+
+PARMAT:	PUSH	P,MATPTR		;Get pointer to unmatched text
+	POP	P,PAR.SR(S2)		;Put in parse block
+	PJRST	GETC.1			;Then do the parse
+	SUBTTL	OPNFIL - Setup input and output files
+OPNIN:
+	MOVEI	S1,FOB.MZ		;Get size of input file block
+	MOVEI	S2,FOBIN		;Aim at input spec
+	PUSHJ	P,F%IOPN		;Open the input file
+	JUMPT	OPNF.1			;OK, continue
+	$TEXT	(,<Can't open input file ^F/FDIN/, error code = ^O/S1/>)
+	$STOP	(CIF,Cannot open input file)
+OPNF.1:	MOVEM	S1,IFNIN		;Save the internal file number
+	$RETT
+
+OPNOUT:	MOVEI	S1,FOB.MZ		;Get size of output file block
+	MOVEI	S2,FOBOUT		;Aim at output spec
+	PUSHJ	P,F%OOPN		;Get ready to write
+	JUMPT	OPNF.2			;OK
+	$TEXT	(,<Can't open output file ^F/FDOUT/, error code = ^O/S1/>)
+	$STOP	(COF,Cannot open output file)
+OPNF.2:	MOVEM	S1,IFNOUT		;Save IFN of output file
+	$RETT
+	SUBTTL	DOEDIT - find the correct place and insert our comment
+DOEDIT:
+	PUSHJ	P,SETMAT		;Go setup matching line for load number
+	SKIPT				;Parse OK?
+	$STOP	(ENP,Edit message Not Parseable)
+	PUSHJ	P,FNDMAT		;Copy until we hit that line
+	SKIPT				;Found it?
+	$STOP	(CFG,Cannot Find GLXLOD info)
+	MOVE	S1,G$NUME		;Get number of files that changed
+	ADDM	S1,GLXLD		;Summation moves that much
+	$TEXT	(COPY.1,<GLXLOD==:^O6R0/GLXLD/		;Sum of GLX module edits>)
+	PUSHJ	P,SETM.C		;Find start of MODULES macro
+	PUSHJ	P,FNDMAT		;Find it
+	SKIPT				;Found it?
+	$STOP	(CFM,Cannot Find MODULES macro definition)
+	PUSHJ	P,COPYIO		;Copy that line out
+	PUSHJ	P,WRITUS		;Add all our edits to the macro
+	PUSHJ	P,CMTOLD		;And comment out any that we wrote
+	PUSHJ	P,COPYEF		;And copy down to EOF
+	PUSHJ	P,FIXTAB		;Fix up incore tables
+	$RETT
+	SUBTTL	SETMAT - Set up matching line from command
+SETMAT:
+	PUSHJ	P,P$KEYW##		;Read the next module
+	JUMPF	.POPJ			;Quit if not a module
+	PUSHJ	P,MODSRC		;Find the MDB
+	LOAD	S2,DB.MED(S1),DB.EDT	;Is it marked from parse?
+	SKIPN	S2			;Well?
+	$STOP	(KNP,Key Not Parsed, but returned as edit)
+	PUSHJ	P,P$TOK##		;Try for a comma
+	JUMPT	SETMAT			;Got one, read a module
+	PUSHJ	P,P$NUM##		;Get the GCO number
+	JUMPF	.POPJ			;None there!!
+	MOVEM	S1,E$GCO		;Save for this edit
+	PUSHJ	P,P$SIXF##		;Get the initials
+	JUMPF	.POPJ			;Return error
+	MOVEM	S1,EDIINI		;Save editors initials
+	PUSHJ	P,P$TEXT##		;Get the comment
+	JUMPF	.POPJ			;Return error
+	AOS	S1			;Bump past header word
+	MOVEM	S1,MSGADR		;Save for dumping in GLXVER.MAC
+	PUSHJ	P,P$TEXT##		;Get the real comment
+	JUMPF	.POPJ			;Can't have it
+	AOS	S1			;Bump past header word
+	MOVEM	S1,CMTADR		;Save for dumping
+	PUSHJ	P,P$CFM##		;Make sure that's all
+	JUMPF	.POPJ			;More, I'm not interested???
+				;Fall thru to build text buffer
+
+;Routine to setup the match buffer for global symbol matches
+SETM.A:	$TEXT	(<-1,,CHKBUF>,<GLXLOD==:^0>)
+	$RETT
+
+;Routine to setup the match buffer for finding all active (non-commented)
+; lines inside the MODULES macro
+SETM.B:	$TEXT	(<-1,,CHKBUF>,<GLX ^0>)
+	$RETT
+
+;Routine to setup the match buffer to find the beginning of the MODULES macro
+SETM.C:	$TEXT	(<-1,,CHKBUF>,<DEFINE MODULES^0>)
+	$RETT
+
+;Routine to search the module table for a given key entry
+;Takes a module key in S1, returns the address of the module data block in S1
+MODSRC:	PUSHJ	P,.SAVE2		;Save some regs
+	MOVSI	P1,-NUMMOD		;Make AOBJN index reg
+
+MODS.1:	HLRZ	P2,MODTAB(P1)		;Get Key to match
+	CAIE	P2,(S1)			;Is this the one?
+	AOBJN	P1,MODS.1		;No, keep moving
+	SKIPL	P1			;Off end of list?
+	$STOP	(KNM,<Key does Not match Module code = ^O/S1/>)
+	HRRZ	S1,MODTAB(P1)		;Get addr of module data block
+	$RETT				;Found
+	SUBTTL	READLN - Read an input line into the line buffer
+READLN:
+	PUSHJ	P,.SAVE1		;Save a reg
+	MOVE	P1,[POINT 7,LINBUF]	;Aim at the buffer
+	MOVEI	S1,MAXCHR		;Get lenght of line buffer
+	MOVEM	S1,NUMCHR		;That's how much space we got
+	MOVE	S1,IFNIN		;Get handle of input file
+
+READ.1:	PUSHJ	P,F%IBYT		;Read a byte
+	JUMPF	READ.5			;Go check error, maybe EOF
+	JUMPE	S2,READ.1		;Get rid of nulls
+	SOSGE	NUMCHR			;Keep track of space left in line
+	$STOP	(LBO,Line buffer overflow)
+	IDPB	S2,P1			;Stuff in line buffer
+	CAIE	S2,.CHLF		;Is it End Of Line
+	JRST	READ.1			;No, keep going
+	SETZ	S1,			;Get a null
+	IDPB	S1,P1			;Mark end of line
+	$RETT
+READ.5:	CAIE	S1,EREOF$		;Hit end?
+	$STOP	(TIE,Terrible Input Error)
+	$RETF				;Give EOF indication to caller
+	SUBTTL	CHKMAT - See if input line matches command typed
+CHKMAT:
+	MOVE	S1,[POINT 7,CHKBUF]	;Use command line as test string
+	MOVE	S2,[POINT 7,LINBUF]	;Use file line as base string, since
+					; it is probably longer
+					;Also, S2 will aim at next char (,)
+					;So we can pick off the version #
+	PUSHJ	P,S%SCMP		;Compare the strings
+	TXNE	S1,<SC%LSS!SC%SUB!SC%GTR>	;Exact match?
+	TXNE	S1,SC%SUB		;No, match all of command?
+	SKIPA				;Yes, Yes, here we are
+	$RETF				;Must have been a mismatch
+	MOVEM	S2,MATPTR		;Save so we can parse the version #
+	$RETT
+	SUBTTL	WRITUS - Copy our comment into the output file
+WRITUS:
+	PUSHJ	P,.SAVE1		;Preserve a loop counter
+	$TEXT	(,<>)			;Clean line on TTY, too.
+	$TEXT	(COPY.1,<>)		;Get down a line
+	PUSHJ	P,CPYCMT		;And set up a comment line
+	$TEXT	(COPY.1,<GLXLOD ^O6R0/GLXLD/>) ;Mark header for the edit
+	SETOM	LINFLG			;Comment out the first line
+	$TEXT	(WRIT.3,<^T/@CMTADR/^A>)
+	MOVSI	P1,-NUMMOD		;Make a table loop pointer
+WRIT.1:	HRRZ	S1,MODTAB(P1)		;Get addr of next MDB
+	LOAD	S2,DB.MED(S1),DB.EDT	;Get 'involved in this edit' bit
+	JUMPE	S2,WRIT.2		;Not involved, move along
+	INCR	DB.MED(S1),DB.MOD	;Bump the module's edit number
+	PUSH	P,EDIINI		;Get editor's initials
+	POP	P,DB.WHO(S1)		;Store in MDB
+	LOAD	S2,GLXLD		;Get the new number
+	STORE	S2,DB.GLX(S1),DB.LOD	;Save it in the MDB
+	LOAD	S2,E$GCO		;Get the GCO that goes with this edit
+	STORE	S2,DB.GLX(S1),DB.GCO	;Save in MDB
+	$TEXT	(COPY.1,<GLX ^T/@DB.TXA(S1)/,^O/DB.MED(S1),DB.MOD/,^O/GLXLD/,^D/E$GCO/,^W/DB.WHO(S1)/,^H9/[-1]/,^T/@MSGADR/>)
+	$TEXT	(,<GLX^T/@DB.TXA(S1)/ edit #^O/DB.MED(S1),DB.MOD/ applied>)
+	$TEXT	(COPY.1,<>)
+WRIT.2:	AOBJN	P1,WRIT.1		;Check all the modules
+	$TEXT	(,<New GLXLOD sum is ^O/GLXLD/>)
+	$RETT
+
+; Co-routine to output the lines of the comments
+WRIT.3:	PUSH	P,S1			;Save char for later scrutiny
+	SKIPN	LINFLG			;Need to tab over for multi-line comment?
+	JRST	WRIT.4			;No, just do normal stuff
+	PUSHJ	P,CPYCMT		;Double comment it out
+	MOVEI	S1,.CHTAB		;Get a Tab
+	PUSHJ	P,COPY.1		;Output it
+	JUMPF	.POPJ			;Quit on errors
+	MOVEI	S1,.CHTAB		;And another
+	PUSHJ	P,COPY.1		;Do it again
+	JUMPF	.POPJ			;Quit on errors
+	SETZM	LINFLG			;Don't do it any more
+	MOVE	S1,(P)			;Get character back
+WRIT.4:	PUSHJ	P,COPY.1		;Dump it out
+	JUMPF	.POPJ			;Quit on errors
+	POP	P,S1			;Get Char back
+	CAIN	S1,.CHLF		;End of line??
+	SETOM	LINFLG			;If we come in again, we'll tab comment over
+	$RETT
+	SUBTTL	CMTOLD	Comment out the old lines of GLX from the MODULES macro
+
+; The DB.ORD field tells where we can expect to find each module in the input
+; file.  We read the input till we find 'GLX ', then we see if this n'th GLX
+; line has been edited. If so, we comment it out. Otherwise, we go on to the  next
+CMTOLD:
+	PUSHJ	P,.SAVE2
+	PUSHJ	P,SETM.B		;Set to match on GLX lines
+	SETZ	P1,			;Save index for match
+CMTO.1:	PUSHJ	P,FNDMAT		;Find the next GLX line
+	JUMPF	.RETT			;EOF
+	MOVSI	P2,-NUMMOD		;Ptr to MODTAB
+CMTO.2:	HRRZ	S1,MODTAB(P2)		;Get MDB addrs
+	LOAD	S2,DB.MED(S1),DB.EDT	;Was this one editted?
+	JUMPE	S2,CMTO.3		;No, don't check order number
+	LOAD	S2,DB.KY(S1),DB.ORD	;Get order of this module
+	CAIE	S2,(P1)			;Is this the one?
+CMTO.3:	AOBJN	P2,CMTO.2		;No, try again
+	SKIPGE	P2			;Editing done to this slot?
+	PUSHJ	P,CPYCMT		;Yes, comment it out
+	PUSHJ	P,COPYIO		;In any case, copy the line out
+	AOJA	P1,CMTO.1		;Try next slot
+	SUBTTL	FIXTAB - Fixup the DB.ORD field for all modules
+
+FIXTAB:
+	PUSHJ	P,.SAVE2		;Ssave work regs
+	SETZ	P1,			;Start assigning numbers at 0
+	MOVSI	P2,-NUMMOD		;Look thru modules tabl
+FIXT.1:	HRRZ	S1,MODTAB(P2)		;Get next MDB addr
+	LOAD	S2,DB.MED(S1),DB.EDT	;Is this module involved in the edit
+	JUMPE	S2,FIXT.2		;No, skip it
+	STORE	P1,DB.KY(S1),DB.ORD	;Yes, store new order number
+	AOS	P1			;Assign next order number
+FIXT.2:	AOBJN	P2,FIXT.1		;Assign the order #s to all edited modules
+
+FIXT.3:	PUSHJ	P,FIXLOW		;Find lowest un-edited module
+	JUMPF	.RETT			;No more, quit
+	STORE	P1,DB.KY(S1),DB.ORD	;Store this new order number
+	AOS	P1			;Bump order number
+	MOVEI	S2,1			;Get a light
+	STORE	S2,DB.MED(S1),DB.EDT	;Mark as edited so FIXLOW will bypass us
+	JRST	FIXT.3			;try for more
+
+;FIXLOW - Returns MDB addr is S1 of lowest unedited module.
+;	returns false is no unedited modules exist
+FIXLOW:	PUSHJ	P,.SAVE3
+	SETZ	S1,			;Start with no matches
+	MOVEI	P3,NUMMOD		;Set Lowest module seen to high #
+	MOVSI	P1,-NUMMOD		;Make AOBJN ptr
+FIXL.1:	HRRZ	S2,MODTAB(P1)		;Get next MDB addr
+	LOAD	P2,DB.MED(S2),DB.EDT	;Is it edited?
+	JUMPN	P2,FIXL.2		;Yes, skip it
+	LOAD	P2,DB.KY(S2),DB.ORD	;Get order #
+	CAIL	P2,(P3)			;Is this a new low??
+	JRST	FIXL.2			;No, bypass it
+	MOVE	P3,P2			;Yes, set it up
+	MOVE	S1,S2			;Copy ptr to MDB
+FIXL.2:	AOBJN	P1,FIXL.1		;Check all modules
+	JUMPE	S1,.RETF		;No match, return false
+	$RETT				;Otherwise, S1 has MDB
+	SUBTTL	COPYIO - Copy the input line buffer into the output file
+COPYIO:
+	$TEXT	(COPY.1,<^A^T/LINBUF/>)	;Do the stuff
+	$RETT
+
+COPYEF:	PUSHJ	P,READLN		;Read a line
+	JUMPF	.RETT			;EOF, done
+	PUSHJ	P,COPYIO		;write it out
+	JRST	COPYEF			;Do the whole thing
+
+COPY.1:	MOVE	S2,S1			;Set up char for F%OBYT
+	MOVE	S1,IFNOUT		;Get handle of output file
+	PJRST	F%OBYT			;Dump, let F%OBYT return error indicator
+
+;Routine to comment out a line
+CPYCMT:	MOVEI	S1,.CHSEM		;Yes, get semicolon
+	PUSHJ	P,COPY.1		;Comment out the next line
+	JUMPF	.POPJ			;Quit on errors
+	MOVEI	S1,.CHSEM		;Do it twice so we don't accumulate in
+					; the macro defn
+	PJRST	COPY.1			;2nd semi
+
+;Two routines to read thru the input file untill CHKMAT says  true.
+;NOTE  the caller must set up the CHKBUF to allow CHKMAT do to the right thing.
+;Returns- True - The matching line has been read (into LINBUF), but has not 
+;		-  been output. (CHKMAT ONLY)
+;	-False - EOF on the input file
+FNDMAR:	TDZA	S1,S1			;Say we just want to read
+FNDMAT:	SETO	S1,			;Say we want to output
+	PUSHJ	P,.SAVE1		;Save a flag reg
+	MOVE	P1,S1			;Protect the flag
+FNDM.1:	PUSHJ	P,READLN		;Get next line
+	JUMPF	.POPJ			;EOF done! return the false indicator
+	PUSHJ	P,CHKMAT		;See if this line is interesting
+	JUMPT	.POPJ			;Yes, let the caller worry about it
+	SKIPE	P1			;No, want to write this line out?
+	PUSHJ	P,COPYIO		;Yes, do it
+	JRST	FNDM.1			;Either way, go read so more
+	SUBTTL	RENCLO - Rename in/out files, close files.
+CLSIN:
+	MOVE	S1,IFNIN		;Get handle of input file
+	PUSHJ	P,F%REL			;Done with the input
+	JUMPT	RENC.1			;Ok
+	$STOP	(CCF,<Can't close input file ^F/FDIN/, error code = ^O/S1/>)
+RENC.1:	$RETT
+
+RENOUT:
+IFN FTUUOS,<
+	MOVEI	S1,FOB.MZ		;Size of FOB for .BAK file
+	MOVEI	S2,FOBBAK		;Address of FOB for .BAK file
+	PUSHJ	P,F%DEL			;Delete old .BAK file
+	JUMPT	RENC.0			;OK, continue
+	CAIE	S1,ERFNF$		;Failed 'cause file not there?
+	$STOP	(CDB,Cannot delete .BAK file) ;No, complain
+RENC.0:
+	MOVEI	S1,FRB.MZ		;Get size of Rename block
+	MOVEI	S2,FRBBAK		;Address of Master-to-BAK rename block
+	PUSHJ	P,F%REN			;Save the old master
+	SKIPT				;OK
+	$STOP	(CRM,Cannot rename master file to .BAK file)
+>;END IFN FTUUOS
+
+	MOVE	S1,IFNOUT		;Get handle of output file
+	PUSHJ	P,F%REL			;Close it, so we can later rename it
+	SKIPT				;OK, proceed
+	$STOP	(CCO,Can't close output file)
+
+IFN FTUUOS,<
+	MOVEI	S1,FRB.MZ		;Get size of Rename block
+	MOVEI	S2,FRBNEW		;Address of New-master-to-Master renamer
+	PUSHJ	P,F%REN			;Make a new master
+	JUMPT	RENC.3			;OK
+	$STOP	(CRN,Cannot rename new master to master file)
+RENC.3:
+>;END IFN FTUUOS
+
+	$RETT
+	SUBTTL	DATA STORAGE
+
+	PDLEN==200
+PDL:	BLOCK	PDLEN
+
+	MSTKLN==30+1			;Up to 30 outstanding pages plus a flag
+BOTSTK:	EXP	^O123456		;A flag indcating stack underflow
+MSTKAD:	BLOCK	MSTKLN			;plus a flag word
+
+IBLK:	$BUILD	(IB.FLG+1)
+	$SET	(IB.FLG,IT.OCT,1)	;Get commands from controlling TTY
+	$EOB
+	IBSIZE==.-IBLK			;Size of the block
+	SUBTTL	FILE DATA AREA
+
+;	File Open Block for the INput file
+FOBIN:	$BUILD	FOB.MZ
+	$SET	(FOB.FD,,FDIN)
+	$SET	(FOB.CW,FB.BSZ,7)	;ASCII (7-BIT BYTE) FILE
+	$EOB
+;	File Descriptor block for the INput file
+FDIN:
+	$BUILD	FDXSIZ
+	$SET	(.FDLEN,FD.LEN,FDINL)	;Length of this FD
+IFN FTUUOS,<
+	$SET	(.FDSTR,,<SIXBIT/DSK/>)
+	$SET	(.FDNAM,,<SIXBIT/GLXVER/>)
+	$SET	(.FDEXT,,<SIXBIT/MAC   />)
+	$SET	(.FDPPN,,<0,,0>)
+>;END IFN FTUUOS
+	$EOB
+IFN FTJSYS,<
+	RELOC	FDIN+.FDFIL
+	ASCIZ	/DSK:GLXVER.MAC/
+	RELOC
+>;END IFN FTJSYS
+	FDINL==.-FDIN			;Compute length of FDIN
+
+;File Open Block for the OUTput file
+FOBOUT:	$BUILD	FOB.MZ
+	$SET	(FOB.FD,,FDOUT)
+	$SET	(FOB.CW,FB.BSZ,7)	;ASCII FILE
+IFN FTUUOS,<
+	$SET	(FOB.CW,FB.NFO,1)	;Don't allow, if file already exists
+>;END IFN FTUUOS
+	$EOB
+
+;	File Descriptor block for the OUTput file
+FDOUT:	$BUILD	FDXSIZ
+	$SET	(.FDLEN,FD.LEN,FDOUTL)	;Length of this FD
+IFN FTUUOS,<
+	$SET	(.FDSTR,,<SIXBIT/DSK/>)
+	$SET	(.FDNAM,,<SIXBIT/EDITOR/>)
+	$SET	(.FDEXT,,<SIXBIT/TMP   />)
+	$SET	(.FDPPN,,<0,,0>)
+>;IFN FTUUOS
+	$EOB
+IFN FTJSYS,<
+	RELOC	FDOUT+.FDFIL
+	ASCIZ	/DSK:GLXVER.MAC/
+	RELOC
+>;END IFN FTJSYS
+	FDOUTL==.-FDOUT			;Compute length of the FD
+
+IFN FTUUOS,<
+;File Open Block for the BAKup file
+FOBBAK:	$BUILD	FOB.MZ
+	$SET	(FOB.FD,,FDBAK)
+	$SET	(FOB.CW,FB.BSZ,7)	;ASCII FILE
+	$EOB
+;	File Descriptor block for the BAKup file
+FDBAK:	$BUILD	FDMSIZ
+	$SET	(.FDLEN,FD.LEN,FDBAKL)
+	$SET	(.FDSTR,,<SIXBIT/DSK/>)
+	$SET	(.FDNAM,,<SIXBIT/GLXVER/>)
+	$SET	(.FDEXT,,<SIXBIT/BAK   />)
+	$SET	(.FDPPN,,<0,,0>)
+	$EOB
+	FDBAKL==.-FDBAK			;Compute length of the FD
+
+;	File rename block for new file == master file
+FRBNEW:	$BUILD	FRB.MZ
+	$SET	(FRB.SF,,FDOUT)
+	$SET	(FRB.DF,,FDIN)
+	$EOB
+
+;	File rename block for old master file == .BAK file
+FRBBAK:	$BUILD	FRB.MZ
+	$SET	(FRB.SF,,FDIN)
+	$SET	(FRB.DF,,FDBAK)
+	$EOB
+>;END IFN FTUUOS
+IFNIN:	BLOCK	1			;Space for the input file handle
+IFNOUT:	BLOCK	1			;Space for the output file handle
+	SUBTTL	BUFFERS and pointers for I/O
+
+	.CHLF==12			;A Line terminator
+	.CHSEM==";"			;A Semi-colon
+;	.CHLAN==74			;Left Angle bracket
+;	.CHRAN==76			;Right Angle bracket
+	NCHPW==5			;ASCII data
+	MAXCHR==^D200			;Max # chars on an input line
+	MODCHR==^D10			;Max # chars in a module name
+LINBUF:	BLOCK	<<MAXCHR+1>+<NCHPW-1>>/NCHPW	;Space for ASCIZ string
+CHKBUF:	BLOCK	<<MAXCHR+1>+<NCHPW-1>>/NCHPW	;Space for check string
+MODBUF:	BLOCK	<<MODCHR+1>+<NCHPW-1>>/NCHPW	;Space for a module name
+NUMCHR:	BLOCK	1			;Counts the # of chars left in LINBUF
+PBPTR:	BLOCK	1			;Pointer to the parse blocks
+MSGPAG:	BLOCK	1			;Address of page to be returned
+EDINUM:	BLOCK	1			;Holds the edit number as entered
+EDIINI:	BLOCK	1			;Space for sixbit initials
+CMTADR:	BLOCK	1			;Holds the address of the comments
+MSGADR:	BLOCK	1			;Holds the address of the compile-
+					; time message comment
+LINFLG:	BLOCK	1			;Flag for multi-line comments, since
+					; they end with a CRLF, and single-line
+					; comments don't
+MATPTR:	BLOCK	1			;Saves byte ptr to match char
+
+;GLOBAL flags and edit numbers read in from the file-
+GLXLD:	BLOCK	1			;The summation of all the xxxEDT edit #s
+G$NUME:	BLOCK	1			;Counts the number of modules in the edit
+E$GCO:	BLOCK	1			;The GCO for this edit
+	SUBTTL	PARSER DATA AREA
+
+PARBLK:	$BUILD	PAR.SZ			;The block passed to PARSER
+	$SET	(PAR.TB,,PDBINI)	;The table address
+	$SET	(PAR.PM,,PROMPT)	;The prompt pointer
+	$SET	(PAR.CM,,0)		;No command block (parser will get a page)
+	$SET	(PAR.SR,,0)		;No in-core parse
+	$EOB
+
+PARB.2:	$BUILD	PAR.SZ			;The block for the incore parse of
+	$SET	(PAR.TB,,PDBI.2)	; The version # from the file
+	$EOB
+
+PARB.3:	$BUILD	PAR.SZ			;The block for reading the file lines into core
+	$SET	(PAR.TB,,PDBI.3)	;Aim at the parse tables
+;	PAR.SR Will be filled in at runtime by PARMAT
+	$EOB
+
+PROMPT:	ASCIZ	/VEREDT>/		;The greeting message
+
+DEFINE KEYMAIN,<
+X	(DISPLAY,EDS,<Display file parameters>)
+X	(EDIT,EDI,<Edit a Module>)
+X	(EXIT,QUI,<Exit to monitor>)
+X	(HELP,EHL,<Help!>)
+X	(QUIT,QUI,<Exit to monitor>)
+X	(READ-IN,ERD,<Read current edit levels from file into core>)
+X	(SET,EST,<Set file parameters>)
+X	(SHOW,ESH,<Show current edit info about selected modules>)
+>;END DEFINE KEYMAIN
+
+;Note- ALL is also used as a keyword before this KEYMOD table during parsing
+DEFINE KEYMOD,<				;The keys for the GLXxxx module names
+X	(COM,COM)
+X	(FIL,GFL)
+X	(INI,INI)
+X	(INT,INT)
+X	(IPC,IPC)
+X	(KBD,KBD)
+X	(LNK,LNK)
+X	(MAC,MAC)
+X	(MEM,GMM)
+X	(OTS,OTS)
+X	(PFH,PFH)
+X	(SCN,SCN)
+X	(TXT,TXT)
+>;END DEFINE KEYMOD
+
+DEFINE KEYOTH,<
+X	(<INPUT-FILE>,EIN)
+X	(<OUTPUT-FILE>,EOU)
+X	(<ALL-FILES>,EAL)
+IFN FTUUOS,<
+X	(<BACKUP-FILE>,EBK)
+>;END IFN FTUUOS
+>;END DEFINE KEYOTH
+
+DEFINE	X(A,B),<
+.KX'B==..X
+..X==..X+1
+>;END DEFINE X
+
+	..X==12345			;Start key indicies at 12345
+	KEYMAIN				;Generate the main (command) keys
+	KEYMOD				;Generate the Module keys
+	KEYOTH				;Generate the other keys
+
+INICOM:	ASCIZ	/READ-IN
+/					;The start-up command
+
+PDBINI:	$INIT	(PDB1)			;The start of the parse tree
+
+PDB1:	$KEYDSP	(COMS)
+
+DEFINE X(A,B),<
+	DSPTAB	('B'FDB,.KX'B','A')
+>;END DEFINE X
+
+COMS:	$STAB
+	KEYMAIN				;Generate the keytabs for the commands
+	$ETAB
+
+EDIFDB:	$NOISE	(EDI010,<GLXLIB module(s)>,<$ACTION(EDISET)>)
+
+EDI010:	$KEY	(EDI030,EDI020,<$ACTION(EDICHK)>)
+
+DEFINE X(A,B),<
+	KEYTAB	(.KX'B','A')
+>;END DEFINE X
+
+EDI020:	$STAB
+	KEYMOD				;Generate the keytabs for the modules
+	$ETAB
+
+EDI030:	$TOKEN	(EDI010,<,>,<$FLAGS(CM%SDH!CM%HPP),$HELP(comma for more modules),$ALTER(EDI040)>)
+
+EDI040:	$NUMBER	(EDI050,^D10,<decimal GCO number>)
+
+EDI050:	$NOISE	(EDI060,<by>)
+
+EDI060:	$FIELD	(EDI070,<your initials>)
+
+EDI070:	$NOISE	(EDI080,<compilation message>)
+
+EDI080:	$CTEXT	(EDI100,<message to be PRINTXed next compilation>)
+
+EDI100:	$CRLF	(<$ACTION(TXTINP##),$HELP(<confirm for multiple line response>),$FLAGS(CM%SDH!CM%HPP),$PREFILL(EDIMSG)>)
+
+;Routine to setup the initial conditions for the edit
+EDISET:	PUSHJ	P,CLREDT		;Clear all the edit bits
+	SETZM	G$NUME			;Set # of modulse involved to 0
+	$RETT
+
+;Routine to make sure that the edit bit is clear for each module entered
+; This insures that modules are not entered twice
+; This routine lights the edit bit for the module it finds
+EDICHK:
+	MOVE	S1,CR.SAV(S2)		;GET THE ADDRESS OF SAVED ELEMENT
+	MOVE	S1,ARG.DA(S1)		;GET THE VALUE
+	PUSHJ	P,MODSRC		;Find the MDB
+	LOAD	S2,DB.MED(S1),DB.EDT	;Get the edit bit
+	JUMPN	S2,EDIC.2		;If it's already lit, we have an error
+	AOS	G$NUME			;Count the number involved
+	PJRST	SETEDT			;Otherwise, light it!
+EDIC.2:	MOVEI	S2,[ASCIZ/Duplicate module name on command/]
+	$RETF
+
+;Routine to prompt the user for input since we can't default across CRLF
+EDIMSG:	$TEXT	(,<Enter brief description of edit>)
+	$RETT
+
+CONFRM:	$CRLF
+	SUBTTL	Parse blocks for picking up the version # from the file
+
+PDBI.2:	$INIT	(VER020)
+
+VER020:	$NUMBER	(VER030,^D8,<>)
+
+VER030:	$CTEXT	(CONFRM)
+	SUBTTL	Parse blocks for reading a GLX line into core
+PDBI.3:	$INIT	(VER050)
+
+VER050:	$KEY	(VER080,VER060)		;Next PDB, table adr
+
+DEFINE X(NAM,KEY),<
+	KEYTAB	(.KX'KEY','NAM')
+>;END DEFINE X
+
+VER060:	$STAB
+	KEYMOD
+	$ETAB
+
+VER080:	$TOKEN	(VER090,<,>)
+
+VER090:	$NUMBER	(VER100,^D8)		;xxxEDT (file edit number)
+
+VER100:	$TOKEN	(VER110,<,>)
+
+VER110:	$NUMBER	(VER120,^D8)		;GLXLOD summation of xxxEDT numbers
+					; (when this edit was applied)
+
+VER120:	$TOKEN	(VER130,<,>)
+
+VER130:	$NUMBER	(VER140,^D10)		;GCO number
+
+VER140:	$TOKEN	(VER150,<,>)
+
+VER150:	$FIELD	(VER160)		;Editor's initials
+
+VER160:	$CTEXT	(CONFRM)
+	SUBTTL	Quit and Help commands
+QUIFDB:	$NOISE	(CONFRM,<editing, i.e. exit to monitor>)
+
+
+EHLFDB:	$NOISE	(CONFRM,<with commands>)
+	SUBTTL	READ-IN and SHOW commands
+
+ERDFDB:	$NOISE	(CONFRM,<edit data from file to core>)
+
+ESHFDB:	$NOISE	(ESH010,<latest edits for>)
+
+ESH010:	$KEY	(ESH030,ESH020,$DEFAULT(<ALL>))	;Next PDB, table adr, Default
+
+DEFINE X(NAM,KEY),<
+	KEYTAB	(.KX'KEY','NAM')
+>;END DEFINE X
+ESH020:	$STAB
+	KEYTAB	(.KXEAL,<ALL>)
+	KEYMOD
+	$ETAB
+
+ESH030:	$CRLF	($ALTER(ESH040))
+
+ESH040:	$TOKEN	(ESH010,<,>,<$FLAGS(CM%HPP!CM%SDH),$HELP(<comma to enter more module names>)>)
+	SUBTTL	File command tables
+
+ESTFDB:	$NOISE	(EST010,<spec for>)
+
+EST010:	$KEYDSP	(EST020,<$DEFAULT<OUTPUT-FILE>>)
+
+EST020:	$STAB
+	DSPTAB	(EST030,.KXEIN,<INPUT-FILE>)
+	DSPTAB	(EST080,.KXEOU,<OUTPUT-FILE>)
+	$ETAB
+
+EST030:	$NOISE	(EST040,<to be>)
+
+EST040:	$IFILE	(CONFRM,<input file spec>)
+
+EST080:	$NOISE	(EST090,<to be>)
+
+EST090:	$OFILE	(CONFRM,<output file spec>)
+
+
+EDSFDB:	$NOISE	(EDS010,<settings of>)
+
+EDS010:	$KEY	(EDS030,EDS020,<$DEFAULT<ALL-FILES>>)	;Next PDB,table, default
+
+EDS020:	$STAB
+	KEYTAB	(.KXEAL,<ALL-FILES>)
+IFN FTUUOS,<
+	KEYTAB	(.KXEBK,<BACKUP-FILE>)
+>;END IFN FTUUOS
+	KEYTAB	(.KXEIN,<INPUT-FILE>)
+	KEYTAB	(.KXEOU,<OUTPUT-FILE>)
+	$ETAB
+
+EDS030:	$CRLF	($ALTER(EDS040))
+
+EDS040:	$TOKEN	(EDS010,<,>,<$FLAGS(CM%SDH!CM%HPP),$HELP(<comma for more files>)>)
+
+	SUBTTL	KEYWORD MATCH TABLES
+DEFINE X(NAM,KEY),<
+	XWD	.KX'KEY','KEY'DBA
+>;END DEFINE X
+MODTAB:
+	KEYMOD				;Generate the table
+	NUMMOD==.-MODTAB
+
+
+DEFINE X(NAM,KEY),<
+'KEY'DBA:
+	$BUILD	DB.SZ
+	$SET	(DB.KY,DB.KYM,.KX'KEY')	;;Put it the keyword value
+	$SET	(DB.TXA,,[ASCIZ/'NAM'/]);;Point at the text, too
+	$EOB
+>;;END OF DEFINE X
+	KEYMOD				;Generate the module data blocks
+
+
+DEFINE X(NAM,KEY),<
+	XWD	.KX'KEY,KEY'COM		;;Dispatch to command handler
+>;END OF DEFINE X
+MAITAB:
+	KEYMAI
+	NUMMAI==.-MAITAB
+
+	SUBTTL	The HELP command
+DEFINE X(NAM,KEY,MSG),<
+	$TEXT	(,<NAM - MSG>)
+>;END DEFINE X
+EHLCOM:	KEYMAIN
+	$RETT
+	END	START

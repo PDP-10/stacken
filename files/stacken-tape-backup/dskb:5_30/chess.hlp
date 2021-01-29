@@ -1,0 +1,91 @@
+The Greenblatt CHESS program runs under control of the DEC
+time-sharing monitor for the PDP-10. This copy comes to you from
+TYMSHARE, Intergalactic Computer Operations, California, USA.
+
+To start the program type: "R GAM:CHESS"
+
+The following commands are relevant:
+
+PB	Play Black - Instructs CHESS to play on behalf  of black
+PW	Play White - Same for white
+PS	Play Self - CHESS will make alternate white and black moves
+
+PG	Print Game - Print the entire game on TTY
+BD	Print Board - Display the current board position on TTY
+
+SETW=	Print the current width of move examination on TTY
+	the first number is the number of plausible moves
+	considered on the first ply, the second number is
+	the number of plausible moves considered on the
+	second ply, etc.  The last number applys to the
+	corresponding ply and all succeeding plies.
+
+SETD=	Print the current depth of move examination
+
+SETW ARG1 ARG2 ARG3 ...	Sets the width of plausible moves
+	as explained above.
+	SETW 7 7 6 is the usual (hacker mode) setting;
+	SETW 15 15 9 9 7 is the tournament mode setting
+
+SETD ARG	Sets the depth of move examination
+	SETD 4 is the usual (hacker mode) setting;
+	SETD 6 is the tournament mode setting
+
+M	Move - CHESS makes one move.  if in one of the
+	automatic play modes (PB,PW), CHESS will then
+	make its own move.
+
+U	Unmove - Take back the last move (either CHESS'
+	or the opponent's)
+
+RESET	Reset the game to the beginning position
+
+Moves are typed using the pseudo-standard chess notation.
+The full form of a move might be:
+
+	KNP/KN2-KN4	;King's knight's pawn on
+			;King's knight 2 moves to
+			;King's knight 4
+
+In all moves, -(minus sign) or  (space) means an ordinary move,
+while X or * indicates a capture.
+
+Moves may be abbreviated to any portion of the above notation which
+is sufficient to specify the move without ambiguity.  For example,
+the above move could be:
+
+	KNP-KN4
+	KNP-N4
+	P/KN2-KN4
+	P/KN2-N4
+	P/N2-KN4
+	P-KN4
+But could not usually be:
+	P-N4
+	P/N2-N4
+
+Since these latter two could apply to either king's knight's pawn
+or queen's knight's pawn.  Note that these two would be adequate if
+the queen's knight's pawn had previously been moved to or past QN4.
+
+To castle to king-side, type O-O
+To castle to queen-side, type O-O-O
+
+Games typed out by CHESS preface each move with the letter B(Black)
+or the letter W(White); this notation should not be used for
+typein.  CHESS uses only a portion of the full format for its own
+typeout.
+
+Pieces are designated as follows:
+KING-K,QUEEN-Q,BISHOP-B,KNIGHT-N,CASTLE OR ROOK-R,PAWN-P
+
+As an example, suppose you wanted to play white, and play pawn to
+king four as your first move. proceed as follows:
+
+.R GAM:CHESS	;(Run the chess program)
+_PB		;(This tells CHESS to play black)
+_P K4		;(Your move)
+B KP/K2-K4	;(CHESS' response)
+_		;(CHESS is ready for your next move)
+
+	<End of HLP:CHESS.HLP - 810312/SO>

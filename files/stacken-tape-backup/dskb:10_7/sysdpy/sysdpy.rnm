@@ -1,0 +1,2244 @@
+.;SYSDPY %704(653) users manual			RDH  --  3-Aug-88
+.;
+.;This file produces SYSDPY.MAN, a general manual for the use and
+.;enjoyment of the various flavours of the TOPS-10 SYSDPY programme
+.;
+.;The current variations of SYSDPY available are:
+.;
+.;	SYSDPY		VT06 (Datapoint 3300)
+.;	SYSDPA		VT05
+.;	SYSDPB		VT05B
+.;	SYSVBX		VB10C
+.;	SYSV50		VT50 (sans cursor addressing)
+.;	SYSV52		VT52
+.;	SYSV61		VT61 (^A and ^R commands)
+.;	SYSANS		VT100 (ANSI terminals)
+.;	SYSDLT		Delta Data Telterm
+.;	SYSHZL		Hazeltine 2000
+.;
+.;
+.;
+.PS 59,80
+.LM 0
+.RM 80
+.PAGING
+.NUMBER PAGE 0
+.TITLE SYSDPY %704(653) Users Reference Manual
+.SUBTTL
+.;Copyright
+.BLANK 10
+.CENTER
+SYSDPY %704(653) users reference manual
+.SKIP 20
+Copyright (C) 1984, 1988.
+.BREAK
+Digital Equipment Corporation, Maynard, Massachusetts, U.S.A.
+.SKIP
+This software is furnished under a license and may be used and copyed only
+in accordance with the terms of such license and with the inclusion of the
+above copyright notice.  This software or any other copies thereof may not
+be provided or otherwise made available to any other person.   No title to
+and ownership of the software is hereby transferred.
+.SKIP
+The information in this software is subject to change  without  notice and
+should not be construed as a commitment by Digital Equipment Corporation.
+.SKIP
+Digital  assumes  no  responsibility  for  the  use  or reliability of its
+software on equipment which is not supplied by Digital.
+.SUBTTL Introduction
+.PAGE
+.AUTOP
+
+SYSDPY is a program which runs under the DECsystem-10 (TOPS-10)
+monitor. It displays various job and/or system statistics on a
+video terminal. Unlike SYSTAT, SYSDPY dynamically updates the
+video screen, changing only the characters that have changed since
+the last display update. In addition, the ability to "scroll"
+through a display which is larger than the screen size is
+provided.
+
+SYSDPY is available in ten different flavours (i.e., ten
+different programs) to run on each of ten
+different types of terminals. Each different flavour is assembled
+to run only on its particular type of terminal (or any compatible
+terminal). The ten flavours of SYSDPY currently available are:
+.SKIP
+SYSDPA	SYSDPY for a Digital VT05A terminal.
+.BREAK
+SYSDPB	SYSDPY for a Digital VT05B (2400 baud VT05) terminal.
+.BREAK
+SYSDPY	SYSDPY for a digital VT06 (Datapoint 3300) terminal.
+.BREAK
+SYSVBX	SYSDPY for a Digital VB10C graphics display.
+.BREAK
+SYSV50	SYSDPY for a Digital VT50 terminal.
+.BREAK
+SYSV52	SYSDPY for a Digital VT52 terminal.
+.BREAK
+SYSV61	SYSDPY for a Digital VT61 terminal.
+.BREAK
+SYSANS	SYSDPY for a Digital VT100 or other ANSI terminals.
+.BREAK
+SYSDLT	SYSDPY for a Delta Data Telterm terminal.
+.BREAK
+SYSHZL	SYSDPY for a Hazeltine 2000 terminal.
+
+Although no privileges are generally required to run SYSDPY in
+the normal mode, certain statistics are available only by PEEKing
+or SPYing on the monitor, which requires some privileges (e.g.,
+SYSDPY running with the JACCT bit set or under an account with
+PEEK or SPY privileges). SYSDPY will run *MUCH* more efficiently
+if it has SPY privileges.
+
+The following discussions presuppose SYSDPY running under a
+7.03 or 7.04 monitor.
+.SUBTTL Commands
+.PAGE
+
+When SYSDPY is first run it will by default start the normal job
+display. While SYSDPY is running it is always listening for
+commands.
+
+A SYSDPY command is generally a single letter ("N", for example,
+selects the normal job display which is the default on startup).
+No carriage return line feed sequence is needed to terminate the
+command.
+.NOAUTOP
+.SKIP 1
+.CENTER
+SYSDPY commands
+.SKIP 1
+.LM 8
+.I -8
+A	Toggle auto-roll of all jobs. Normally SYSDPY will scroll
+through the entire display available, advancing by approximately
+one screenful each update pass. The "A" command will toggle the
+current scroll or no-scroll setting (see also the "+" and "-"
+commands).
+.skip
+.I -8
+C	Displays the DECnet link status for all open links on the
+system.
+.skip
+.I -8
+E	Display Ethernet status. All Ethernet channels are shown, as
+are all KLNI kontrollers, and enabled protocol types. Datagram traffic
+is summarized, as are the "Free Queue Errors".
+.SKIP
+.I -8
+F	List file system statistics. The "F" command changes the
+display to one which lists, for each disk unit in the system, I/O
+counts, error summaries, structure membership, etc. In addition
+a summary of swapping units is provided. This command requires
+PEEK or SPY privileges.
+.SKIP
+.I -8
+H	List help text. If the file HLP:SYSDPY.HLP exists then read
+and display the file. Otherwise a quick summary of all available
+commands will be displayed.
+.SKIP
+.I -8
+I	List incremental statistics (where applicable). The "I"
+command tells SYSDPY to, rather than simply listing the usual
+total since system startup value, list the incremental value, i.e.,
+the change in the value since the last update cycle. This
+incremental facility applies only to certain values: the system
+uptime (except on "N" display where uptime is always total);
+job runtimes; job disk reads and writes ("S" command);
+all cpu statistics; network I/O (byte) counts;
+TTY I/O counts; and network message counts (the "_\" command).
+Incremental mode is generally indicated by a "(+)"
+immediately preceding the uptime value (except on the "N"
+display where it immediately precedes the first cpu column
+header). The "J" display and the "N" display in "S" mode do not
+display the incremental mode indicator.
+.SKIP
+.I -8
+J	List only jobs (in multiple columns). The "J" command
+is similar to the "N" command but restricted to displaying only
+jobs (no system statistics). As many columns of jobs will be
+displayed as will fit on the screen (each column requres 40
+spaces).
+.skip
+.I -8
+"K"	Displays CI network information.
+The "K" command lists open paths to nodes on the CI network,
+packet transmission and reception counts, ACKing statistics,
+and Port Recoverable Error counts.
+.SKIP
+.I -8
+L	Log screens into file LPT:SYSDPY.LOG[-] (close on _^Z). The
+"L" command instructs SYSDPY to, each time the screen is updated,
+write the entire contents of the screen into the "log" file. If the
+file already exists the new data is appended to the already extant
+file. Each screen is separated with a form feed. The file is CLOSEd
+on a "_^Z" command to SYSDPY.
+.SKIP
+.I -8
+M	List memory data. The "M" command displays the normal job
+data but with an expanded memory summary showing both virtual and
+physical job memory usage. No system statistics are displayed in
+the "M" job display.
+.SKIP
+.I -8
+N	List normal (some of everything) status. The "N" command
+lists a column of job status information
+(same as "J" display) and a column of system status information such
+as cpu idle and lost time, available disk structures, etc. This
+is the default state when SYSDPY is first started.
+.SKIP
+.I -8
+O	Toggle suppression of [OPR] jobs in "J", "N", and "M" displays.
+Normally SYSDPY will display all jobs under all ppns. The "O"
+command will instruct SYSDPY to suppress display of jobs running
+under the [1,2] ([OPR]) ppn. A second "O" command "toggles" back
+to displaying [OPR] jobs.
+.SKIP
+.I -8
+Q	List the system queues. The "Q" command displays the system's
+queues just as the QUEUE program would, but in "DPY" mode. This
+command requires GALAXY version 4.
+.SKIP
+.I -8
+R	Refresh entire screen immediately. The "R" command forces
+an immediate screen refresh cycle (a refresh cycle re-writes the
+entire screen rather than just updating only the portions of the
+screen that changed). By default, SYSDPY will automatically refresh
+the screen every so often anyway (every 100 update cycles for VT06's,
+1000 update cycles for VT05's, or 10000 update cycles for any other
+type of terminal supported). The "R" command resets the auto-refresh
+counter. All screen refreshes are made in normal video regardless of
+the state of the reverse video update mode ("_^R" command).
+.SKIP
+.I -8
+S	Toggle system or expanded job statistics in "N" display.
+The "S" command will cause SYSDPY to display the disk reads, disk
+writes, and the user name for jobs in the "N" display rather than
+the usual system statistics. A second "S" command toggles back to
+showing the system statistics.
+.SKIP
+.I -8
+T	Topology for network display. The "T" command changes the
+display to show the ANF network topology and message numbers (NOT the
+number of messages but the NCL message numbers). This display
+requires PEEK or SPY privileges.
+.SKIP
+.I -8
+V	Toggle cpu and core priority. The "V" command requests
+SYSDPY to attempt to lock in memory and run in a high priority run
+queue. If SYSDPY was entered in an HPQ state (a .SET HPQ command is
+in effect for the job) then SYSDPY will not change the HPQ setting.
+In addition, if no "W" command has been issued the update time is
+reduced to one second. A second "V" command will clear the lock
+and HPQ setting (except that if a .SET HPQ command is in effect
+HPQ is not cleared) and restore the update time to the default
+ten seconds (if no "W" command has been issued). After 1000
+update cycles SYSDPY automatically clears the "V" state.
+The "Q" command also automatically clears the "V" state (since it
+must do IPCF to QUASAR, and IPCF is illegal if the job is locked in
+memory). No error
+message is issued if SYSDPY fails either to lock or run in HPQ.
+This command requires LOCK and/or HPQ privileges.
+.SKIP
+.I -8
+nW	Set wait time to "n" decimal seconds. The
+"W" command is used to select the wait time between screen updates.
+The default update time is ten seconds (one second if in "V" mode).
+The update interval may range from zero to sixty seconds. Note that
+a value of zero means one clock tick, not infinite run state. If "n"
+is not typed SYSDPY will revert to the default wait time.
+.SKIP
+.I -8
+Z	List the LAT service counters. The "Z" command selects the
+LAT service display, which shows all known LAT servers. Some LAT
+traffic statistics are also shown.
+.SKIP
+.I -8
+_\	Display ANF network statistics. The "_\" command selects the
+ANF network statistics display. The number of network messages sent
+and received is shown, broken down by message type (e.g., DATA
+or NEIGHBORS). In addition, a histogram is shown of the data
+messages sent and received as a function (log base 2) of the
+data message size. Also, network free core usage is shown.
+.SKIP
+.I -8
+*	Displays the DECnet node status for all nodes in the DECnet
+network.  Using the A command allows you to toggle between all network
+nodes and just those nodes with active links open to them.
+Using the "_^" option
+allows you to toggle between all known nodes and only those
+nodes with which the local node has had contact (ie: for which
+there is an active delay field).
+.SKIP
+.I -8
+n+	Advance screen by "n" or approximately one screen-full
+if "n" is not specified. The "+" command scrolls the screen
+forward by "n" lines or jobs (depending on the display) or,
+if "n" is not specified, by slightly less than a full screen.
+If the end of the display is reached SYSDPY will "bottom"
+justify the display to put as much of the display as possible
+onto the screen. The issuance of the "+" command clears
+auto-roll (see the "A" command).
+.SKIP
+.I -8
+n-	Retreat screen by "n" or approximately one screen-full
+if "n" is not specified. The "-" command scrolls the screen
+backwards by "n" lines or jobs (depending on the display) or,
+if "n" is not specified, by slightly less than a full screen.
+If the end of the display is reached SYSDPY will "top" justify
+the display to put as much of the display as possible onto the
+screen. The issuance of the "-" command clears auto-roll (see
+the "A" command).
+.SKIP
+.I -8
+_!	Toggle display of "idle" jobs. The "!" command toggles
+whether "idle" jobs are displayed in the job displays; or "idle"
+nodes in the DECnet display.
+.SKIP
+.I -8
+_#	Toggle PTY number or controlling job number. The "_#" command
+toggles whether the "Where" column (of the job display) shows the
+PTY number or the controlling job number for a job which is being
+controlled by another job.
+.SKIP
+.I -8
+%	Toggle runtime or percentage of cpu. The "%" command
+toggles whether the "Runtime" column (of the job display) shows
+the actual runtime in hours, minutes, seconds, and hundredths,
+or the percentage of the cpu that the runtime represents.
+NOTE: on KL-10 based systems which calculate the user program
+runtime from EBOX/MBOX ticks the runtime figure can vary
+tremendously depending on the cache hit rate. For a totally
+compute bound job (no monitor calls) the runtime can vary from
+approximately 12% of elapsed time with a 0% cache hit ratio
+to over 110% of elapsed time with a 100% cache hit ratio.
+.SKIP
+.I -8
+_^	Toggle skipping system statistics. The "_^" command
+toggles skipping the first part of the system statistics display
+in the "N" display (and starting directly with the structure
+display, then the device display); or skipping "non-valid delay time"
+nodes in the DECnet display; or skipping error summary information
+in the "F" display.
+.SKIP
+.I -8
+_^A	Toggle alarm (flashing) mode (if applicable). The "_^A"
+command causes the entire screen to enter alarm mode (VT61's only).
+A second "_^A" command clears alarm mode. SYSDPY will also clear alarm
+mode on exit.
+.SKIP
+.I -8
+_^C	Terminate SYSDPY execution. The "_^C" command will cause
+SYSDPY to exit at the end of the current update pass if one is in
+progress, or immediately if an update is not in progress. SYSDPY will
+close any log file being written, clear alarm and reverse video modes,
+and position the cursor to the bottom of the screen before exiting.
+.SKIP
+.I -8
+_^R	Toggle reverse video updating (if applicable). The "_^R"
+command causes all subsequent screen updates to be made in reverse
+video (VT61's only). A second "_^R" command clears reverse video update
+mode. SYSDPY will also clear reverse video update mode on exit. All
+screen refreshes (always implied when a new display is started)
+are made in normal video regardless of the setting
+of the reverse video update mode.
+.SKIP
+.I -8
+_^Z	Terminate SYSDPY execution. The "_^Z" command will cause
+SYSDPY to exit at the end of the current update pass if one is in
+progress, or immediately if an update is not in progress. SYSDPY will
+close any log file being written, clear alarm and reverse video modes,
+and position the cursor to the bottom of the screen before exiting.
+.SKIP
+.I -8
+_<ESC_>	Freeze screen as is (any subsequent command will thaw). The
+_<ESC_> command will cause SYSDPY to cease updating the screen until
+another command is typed. Any command typed (except of course another
+_<ESC_> command) will enable SYSDPY to resume screen updating.
+.SKIP
+.I -8
+SPACE	Update screen display immediately. SYSDPY will always update
+the screen display after issuance of any command (except _<ESC_>). SPACE
+will force an update cycle without changing any SYSDPY parameters.
+.LM 0
+.SUBTTL C Display - DECnet link status display
+.PAGE
+.AUTOPARAGRAPH
+
+Following is a sample of the SYSDPY "C" display:
+.SKIP
+.LITERAL
+  DECnet Link Status for System RL171C DEC10 Development 08-Dec-83 14:19:59
+Job         Node    Chn  State    XMIT    RCVD  DOBJ  SOBJ  Seg  XFLOW RFLOW
+1            --       1   CW                    FAL    255  561   Seg   Seg
+4            --       1   CW                    ERCV  NICE  561   Seg   Seg
+4            --       2   CW                    LBM   NICE  561   Seg   Seg
+4            --       3   CW                    NICE  NICE  561   Seg   Seg
+17         AMBER      1   RN         8       7  VPMU  VPMU  561   None  Seg
+17           --       2   CW                    MAIL  MAIL  561   Seg   Seg
+18           --       1   CW                    PST   ANY   561   Seg   Seg
+24           --       1   CW                    FAL    255  561   Seg   Seg
+25           --       1   CW                    FAL    255  561   Seg   Seg
+26           --       1   CW                    DTR   DTR   561   Seg   Seg
+32         MENTOR     1   RN       155     109  NRT   ANY   100   None  Seg
+38         KL2137     1   RN       395     113  NRT   ANY    64   Seg   Seg
+47         KL2137     1   RN        29      25  NRT   ANY    64   Seg   Seg
+57         KL2102     1   RN        44      26  NRT   ANY   500   None  Seg
+58         MRVAX      1   RN        10      11  FAL    229  561   None  Seg
+64         KL2102     1   RN         7       6  NRT   ANY   500   None  Seg
+65         KL2102     1   RN        99     189  FAL    229  561   Seg   Seg
+66         SPAGS      1   CS                 1  NRT   ANY   561   Seg   Seg
+68         MRVAX      1   RN        60      93  FAL    229  561   None  Seg
+69         KL2137     1   RN        46     100  FAL    229  256   Seg   Seg
+NRTSER       --       2   CW                    NRT   NRT   561   Seg   Seg
+NRTSER_52  MRFORT     3   RN      9252    8162  NRT   NRT    64   Seg   None
+.END LITERAL
+
+	The first line of the display identifies the system on which the
+information is being obtained.
+.br
+	The second line is the header line which tells you to what each column
+in the display corresponds.
+.lm 8
+.skip
+.i -8
+Job	This column is the job information associated with the link.  It has
+one of two formats.  For outgoing links, it identifies the job by which this
+link has been opened.  For incoming links, it identifies the NRTSER line
+number which is connected to the system.
+.BR
+.skip
+.I -8
+Node	This column identifies the node name to which the link 
+is opened. Please note that if pass-through is being used it is the node 
+whose pass-through task is connected.  If there is no node name 
+(CW state), two dashes (--) are typed instead of the node name.
+.BR
+.skip
+.I -8
+Chn	Is the DECnet channel on which this connection is open.
+.br
+.skip
+.i -8
+State	This is the DECnet state of the link and can have one of the
+following values.
+.skip
+.lit
+CW	Connect Wait - the link is waiting for a connect initiate.
+CR	Connect Received - a connect has been received on this link.
+CS	Connect Sent - a connect initiate has been sent on this circuit.
+RJ	Remote Rejected Connect Init.
+RN	Link is up and Running.
+DR	Disconnect Received.
+DS	Disconnect Sent.
+DC	Disconnect Confirmed.
+CF	No Confidence - the system has lost confidence in this link.
+LK	No Link -the link is no longer valid.
+CM	No Communication
+NR	No Resources.
+.end literal
+.skip
+.i -8 
+XMIT	The number of messages transmitted.
+.skip
+.i -8
+RCVD	The number of messages received.
+.skip
+.i -8
+DOBJ	The destination object type.  Certain of these
+are predefined and will type out as alpha symbols to represent them.  If they
+are not, then they will type out as the decimal object type which is found in
+the object type field.
+.SKIP
+.I -8
+SOBJ	The source object type.
+.skip
+Object types may be one of the following:
+.skip
+.literal
+ANY	Any task
+FAL	File Access Listner
+URD	Unit Record Devices
+ATS	Application terminal service
+CTS	Command terminal Services
+TCV	RSX-11M Task control Version 1
+OSI	Operator Services Interface
+NRM	Node Resources Manager
+70G	IMB 3270-BSC Gateway
+80G	IBM 2780-BSC Gateway
+90G	10 IBM 3790-BSC Gateway
+TPS	TPS Application
+RDA	RT-11 DIBOL Application
+T2TH	TOPS-20 Terminal Handler
+T2RS	TOPS-20 Remote Spooler
+TCV2	RSX-11M Task control version 2
+TLK	TLK Utility
+RTL	RSX-11M Remote Task Loader
+NICE	NICE process
+MTP	RSTS/E Media Transfer Program
+HNCT	RSTS/E Homogeneous Network CTH
+MAIL	Mail Listener
+NRT	NRT program
+CTH	Concentrator Terminal Handler
+LBM	Loop back mirror
+ERCV	Event Receiver
+VPMU	VAX/VMS Personal Message Utility
+FTS	FTS
+PHON	PHONE utility
+DDMF	Distributed Data Management Facility
+X25G	X.25 Gateway server
+UETP	UETP
+VMAI	VAX/VMS MAIL service
+X29S	X.29 Terminal Server
+CAL	Calendar system
+X25A	X.25 Gateway Access
+SNAG	SNA Gateway access
+SNAR	SNA RJE utility
+CTRM	CTERM terminal protocol
+DTR	DTR test propram
+DTS	DTR/DTS test program
+PST	Pass-Through task
+.end literal
+.skip
+.I -8
+Seg	Is the segment size being used to communicate with this node.
+.skip
+.i -8
+XFLOW	The transmit flow control option.
+.SKIP
+.I -8
+RFLOW	The receive flow control option.
+.SKIP
+Flow control options are one of the following:
+.skip
+.LIT
+None	No flow control is being used
+Seg	Segment flow control is being used
+Msg	Message flow control is being used
+.end lit
+.SUBTTL * display - DECnet node status
+.lm 0
+.PAGE
+
+Following is a sample SYSDPY "*" display:
+.skip
+.literal
+  DECnet Node Status for System RL211A DEC10 Development 08-Jun-85 14:09:18
+Node     Delay  Hops  Cost  Links  Address     Circuit
+ISHTAR            1     2           7.  95  ETH-0
+MENTOR            1     2           7.  96  ETH-0
+SUBA              1     2           7.  97  ETH-0
+DEMILO           31   1023          7.  98
+D2244A           31   1023          7.  99
+RONCO             1     2           7. 107  ETH-0
+RNCODN           31   1023          7. 108
+WFR1A2           31   1023          7. 109
+KL1026    5000    0     0           7. 110  local
+JINX      1000    1     2           7. 111  DTE-0-3
+IO                1     2           7. 112  ETH-0
+KL2137            3     8           7. 113  ETH-0
+IODN             31   1023          7. 114
+IBOX              3     8           7. 115  ETH-0
+KL2116            3     8           7. 116  ETH-0
+CLOYD     1000   31   1023          7. 140
+CLYDDN            3    11           7. 141  ETH-0
+GIDNEY            1     2           7. 142  ETH-0
+GIDDN             2     3           7. 143  DTE-0-3
+MRCHIP           31   1023          7. 144
+CHIPDN           31   1023          7. 145
+.end literal
+.lm 8
+.skip
+.I-8
+Node	Is the name of the node.
+.skip
+.i -8
+Delay	Is the milli-second  delay to the node.
+If there is none specified, then
+this node is either not reachable or we have not transfered any
+data to it.
+.skip
+.i -8
+Hops	This is the number of hops away that the node is.
+.skip
+.i -8
+Cost	This is the cost to the node.
+.skip
+.i -8
+Links	This is the number of active links to the node.  If there are no
+active links, then this field will be left blank.  If the "!" option
+is used, then only nodes with active links will be displayed.
+If the "^" option is used then only nodes with valid delay times
+will be displayed.
+.skip
+.I -8
+Circuit	This is the circuit currently being used to get to this node.  The
+word local means that this is the local node.
+.LM 0
+.SUBTTL E Display - Ethernet status
+.PAGE
+.AUTOPARAGRAPH
+
+Following is a sample of the SYSDPY "E" display:
+.SKIP
+.LITERAL
+Ethernet Status of RL226A DEC10 Development 21-Aug-85 17:01:29 UP:05:00:46
+
+Chan/Kont          State      E-Net Address          DgmXmt     DgmRcv
+ETH-0              Online   AA-00-04-00-6E-1C         35048     107327
+  NI-0             Online   AA-00-03-03-00-22         34395     100269
+  NI-1             Online   AA-00-03-03-00-13           653       7058
+
+Protocol           State    Kont      User           DgmXmt     DgmRcv    FQE
+  60-04 LAT        Online   NI-0   System             34365      97026      5
+  90-00 Loopback   Online   NI-0   System                 0          2      0
+  60-02 RmtCon     Online   NI-0   System                30       3239      0
+  -Inf-            Online          Job 17 Ctx 1           0          0      0
+  60-01 DNA/MOP    Online   NI-0   Job 17 Ctx 1           0          2      0
+  60-03 DECnet     Online   NI-1   System               653       7058      3
+  -Inf-            Online          Job 23 Ctx 1           0          0      0
+.END LITERAL
+.SKIP 2
+The Ethernet display comes with two basic sub-displays: the Channel and
+Kontroller display; and the Protocol display.
+
+The Channel and Kontroller display provides information about each
+Ethernet "channel" in service on the system, and all the "kontrollers"
+(or "KLNI"s) associated with that channel. The display columns are
+as follows:
+.SKIP 1
+.NOAUTOP
+.LM 8
+.I -8
+Chan/Kont###This column identifies first the Ethernet Channel, and
+on subsequent lines indented by two spaces each Ethernet Kontroller
+(e.g., a "KLNI") associated with that channel. Although the names
+are the same, these channels and kontrollers are nonetheless distinct
+entities from DECnet "circuits" and "lines".
+.BREAK
+.I -8
+State	The "State" column indicates whether the specified channel or
+kontroller is "online" or "offline".
+.BREAK
+.I -8
+E-Net#Address###This column lists the physical Ethernet Address of the
+specified channel or kontroller. In keeping with Ethernet conventions,
+this address is displayed in hexadecimal, with "-" characters between
+each byte's worth of address value.
+.BREAK
+.I -8
+DgmXmt	The "DgmXmt" column shows the count of "datagrams" (or messages)
+transmitted through the specified channel or kontroller.
+.BREAK
+.I -8
+DgmRcv	The "DgmRcv" column shows the count of "datagrams" (or messages)
+received through the specified channel or kontroller.
+.LM 0
+.AUTOP
+.SKIP
+The Protocol display shows the Ethernet protocols enabled for the
+previous Channel and Kontroller list, as follows:
+.LM 8
+.NOAUTOP
+.SKIP
+.I -8
+Protocol###The "Protocol" column shows each Ethernet protocol enabled.
+The protocol is displayed in typical Ethernet fashion as a two-byte
+hexadecimal value with a "-" separating the two bytes. After each
+protocol is displayed numerically, it is identified by name:
+.LM 16
+.SKIP
+.BR;.I -8;60-01##DNA/MOP - the MOP dump and load maintenance protocol
+.BR;.I -8;60-02##RmtCon - the MOP remote console protocol
+.BR;.I -8;60-03##DECnet - the DECnet/NSP routing protocol
+.BR;.I -8;60-04##LAT - the Local Area Terminal protocol
+.BR;.I -8;60-05##Diag's - reserved for diagnostic usage
+.BR;.I -8;60-06##Customer - a protocol reserved for customer usage
+.BR;.I -8;60-07##SCA - the System Communication Architecture protocol
+.BR;.I -8;90-00##Loopback - the loopback protocol
+.LM 8
+.SKIP
+There are also several "pseudo-protocols" available for user programs
+to utilize:
+.LM 16
+.SKIP
+.BR;.I -8;-Inf-##Info protocol. The "info" protocol is not a true
+Ethernet protocol,
+but rather a software handle via which user programs can obtain
+Ethernet information. Internally to the monitor, the "info" protocol
+uses the same data structures as a "real" protocol, and so appears
+in the protocol display.
+.BR;.I -8;-Prm-##Promiscuous protocol. The promiscuous protocol
+is a "catch-all" that signifies that all protocol types are to be
+received.
+.BR;.I -8;-Unk-##Unknown protocol. The "unknown" protocol
+is another "catch-all" that signifies any protocol type not
+otherwise explicitly enabled (in effect, a "wastebucket").
+.LM 8
+.SKIP
+.BREAK
+.I -8
+State	The "State" column indicates whether the associated kontroller
+is "online" or "offline".
+.BREAK
+.I -8
+Kont	The "Kont" column identifies the Ethernet Kontroller associated
+with the specified protocol.
+.BREAK
+.I -8
+User	The "User" column identifies the logical "user" of a given
+protocol, either the system (for such as DECnet) or a particular user
+job (such as NML for the MOP dump and load protocol).
+.BREAK
+.I -8
+DgmXmt	The "DgmXmt" column displays the count of datagrams that have
+been transmitted for the specified protocol and kontroller.
+.BREAK
+.I -8
+DgmRcv	The "DgmRcv" column displays the count of datagrams that have
+been received for the specified protocol and kontroller.
+.BREAK
+.I -8
+FQE	The "FQE" column shows the number of "Free Queue Errors" which
+have occurred for the specified protocol and kontroller. A free queue
+error occurs when a message is received for the specified protocol, but
+there are no message buffers available ("free") to hold the message.
+.LM 0
+.SUBTTL F display - file system statistics
+.PAGE
+.AUTOPARAGRAPH
+
+Following is a sample of the SYSDPY "F" display:
+.SKIP
+.LITERAL
+Disk Status for RN212A DEC10 TRISMP 04-Jun-85 13:18:39 (+) UP:00:05.10
+Unit or F/S    Free     BR       BW       DR       DW       MR       MW
+BLKK Mnt:13    111140
+ RNA3(BLKK0)   111140   3528     2556     6508     4381     491      996
+ RNC3(.....)            9205     5954     8573     604      635      1341
+   SWP   Errors: SDEV:1 RETRIES:1 LBN:537706711 1CONI:540100,222615
+     2CONI:500000,2415 1DATAI:7000,600 2DATAI:6000,0
+DSKR Mnt:1     191120
+ RNA8(DSKR0)   191120   1        31       20       0        44       41
+ RNC8(.....)            3        117      70       0        55       167
+   SWP
+BLKY Mnt:8     101535
+ RPG0(BLKY0)   101535   0        0        12323    1        45       0
+DSKT Mnt:10    584880
+ RAI0(DSKT0)   291190   475      533      534      447      116      77
+ RAH2(DSKT1)   293690   545      622      1233     649      107      136
+DSKB Mnt:18    40310
+ RAI23(DSKB0)  40310    381      430      3093     563      522      737
+POOF Mnt:0     251910
+ RAH47(POOF0)  251910   0        0        0        0        70       0
+
+Swap Unit      SR       SW       PR       PW       Used(P)
+RPA3(DSKA0)    41148    36416    108      624      1026/8190 = 13%
+RPF3(.....)    5460     3112     36       40
+RNA3(BLKK0)    39300    38320    188      552      419/4096 = 10%
+RNC3(.....)    2344     184      36       0
+RNA8(DSKR0)    48712    36292    184      436      388/8190 = 5%
+RNC8(.....)    2856     952      32       0
+.END LITERAL
+.SKIP 2
+
+The first line is the standard SYSDPY "ID" line, containing the name
+of the system (preceded by the header "This is"), the current date
+and time, and finally the system uptime.
+
+The "F" display is divided into two sub-displays: disk file structure
+and unit information, and swapping unit information. The first portion of
+the display is devoted to disk file structures.
+Each structure is first identified:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+<str>	The disk file structure is first identified by name (in the
+sample screen shown above the first structure name is "BLKK", the
+second structure name is "DSKR", and so on.
+.BREAK
+.I -8
+Mnt:n	The total mount count for the structure (note that being in
+the active swapping list counts as a "mount", as does being in the system
+search list).
+.BREAK
+.I -8
+<free>	The total free blocks for the entire structure (i.e., the sum of
+free blocks for all units combined within the file structure).
+.BREAK
+.LM 0
+.AUTOP
+
+Next, each disk unit in the file structure is summarized. First the
+count of I/O operations for that unit is listed in columns
+as follows:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+Unit or F/S	This column identifies first the physical disk unit or
+drive and second the logical disk unit ID (enclosed within parenthesis)
+within a file structure which is mounted on that physical drive.
+A disk unit ID of "....." indicates that this physical unit is an
+alternate port for the immediately preceding disk unit or drive.
+The unit name is indented to distinguish the physical unit from the
+preceding logical file structure (not indented) to which the unit belongs.
+.BREAK
+.I -8
+Free	Free count. The number of free blocks available on the
+specific unit (as opposed to the entire file structure). For alternate
+ports of a multi-ported disk the free count is blank (since the free
+count is dependent on the pack mounted, not the access port).
+.BREAK
+.I -8
+BR	Buffered Reads. The count of user-mode buffered I/O reads
+(i.e., disk reads done in ASCII,
+ASCII line, byte, image, image binary, or binary I/O mode) for that
+unit in disk blocks.
+.BREAK
+.I -8
+BW	Buffered Writes. The count of user-mode buffered I/O writes
+(i.e., disk writes done in ASCII,
+ASCII line, byte, image, image binary, or binary I/O mode) for that
+unit in disk blocks.
+.BREAK
+.I -8
+DR	Dump Reads. The count of user-mode dump I/O reads
+(i.e., disk reads done in image dump,
+dump records, or dump record I/O mode) for that unit in disk blocks.
+.BREAK
+.I -8
+DW	Dump Writes. The count of user-mode dump I/O writes
+(i.e., disk writes done in image dump,
+dump records, or dump record I/O mode) for that unit in disk blocks.
+.BREAK
+.I -8
+MR	Monitor Reads. The count of monitor reads
+(i.e., disk blocks read by the
+monitor on behalf of a user, as in reading directories or RIBs) for
+that unit in disk blocks.
+.BREAK
+.I -8
+MW	Monitor Writes. The count of monitor writes
+(i.e., disk blocks written by the
+monitor on behalf of a user, as in updating SATs) for that unit in
+disk blocks.
+.BREAK
+.LM 0
+.AUTOP
+
+Following the I/O operation counts for each unit, the status of each
+unit is detailed as follows:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+RHB	Re-read Home Blocks. The unit has gone offline or unsafe and
+the monitor must read the disk pack home blocks again in order to
+verify that the correct disk pack is still mounted on that unit
+.BREAK
+.I -8
+OFL	OFfLine. The unit is currently offline (although the monitor
+thinks there should be a disk mounted and accessible on that unit).
+.BREAK
+.I -8
+HWP	Hardware Write Protect. The unit is write protected by hardware
+rather than software. The monitor is totally unable to write onto disk
+unit (e.g., for swapping).
+.BREAK
+.I -8
+SWP	Software Write Protect. The unit is write protected by software
+for this job. The monitor is able to write onto the disk unit
+(e.g., for updating file access dates), and other jobs are able to
+write onto the unit.
+.BREAK
+.I -8
+SAF	Single Access File structure. The unit is part of a
+single-access file structure (i.e., only one job is allowed to access
+the disk unit).
+.BREAK
+.I -8
+PRF	PRivate File structure. The unit is part of a "private"
+file structure. A private file structure is one that can be mounted
+only by its owner's project group or by a privileged job.
+.BREAK
+.I -8
+NNA	No New Accesses. The unit is "locked" by the operator
+(i.e., no new file accesses by users are allowed). Typically this
+is done prior to the removal of a file structure in order to let
+file accesses "wind down" and gracefully terminate before the
+file structure is actually removed from the system.
+.BREAK
+.I -8
+AWL	Write Locked for All. The unit is write locked for all jobs
+in the system (unlike SWP above which applies only to this job).
+.BREAK
+.I -8
+HDEV	Hard DEVice errors. This is the total count of non-recoverable
+errors other than data errors (i.e., the hardware is at fault (such as
+a power supply failure), not the data).
+.BREAK
+.I -8
+HDAT	Hard DATa errors. This is the total count of non-recoverable
+errors in the data itself (i.e., the hardware is functioning correctly
+but the data (or data media) is at fault).
+.BREAK
+.I -8
+SDEV	Soft DEVice errors. This is the total count of recoverable
+errors other than data errors.
+.BREAK
+.I -8
+SDAT	Soft DATa errors. This is the total count of recoverable
+errors in the data itself.
+.BREAK
+.I -8
+RETRIES	The number of times the monitor tried the last operation
+before it finally succeeded (soft error condition) or failed
+(hard error condition).
+.BREAK
+.I -8
+SER	SAT ERrors. This is the count of the number of times that
+a disk SAT block disagreed with the monitor's main memory count of
+the number of free blocks on the disk unit.
+.BREAK
+.I -8
+RER	RIB ERrors. This is the count of RIB (Retrieval Information
+Block) errors encountered in files on the disk unit.
+.BREAK
+.I -8
+CER	Checksum ERrors. This is the count of checksum errors
+encountered in files on the disk unit. A checksum error occurs when
+the checksum field in a RIB pointer does not match the calculated
+checksum of the first word pointed to by the RIB pointer.
+.BREAK
+.I -8
+PHUNG	Position HUNG count. This is the count of the number of times
+the disk unit "hung" during a positioning operation.
+.BREAK
+.I -8
+THUNG	Transfer HUNG count. This is the count of the number of times
+the disk unit "hung" during a transfer operation but the monitor
+managed to recover (i.e., get the unit going again and complete the
+transfer operation) by stopping the unit in transfer state.
+.BREAK
+.I -8
+NTHUNG	Non-recoverable Transfer HUNG count. This is the count of the
+number of times the disk unit "hung" during a transfer operation and
+the monitor was unable to recover and complete the transfer.
+.BREAK
+.I -8
+SHUNG	 Software HUNG count. This is the count of the number of times
+the monitor itself got confused (e.g., disk unit and channel idle but
+in transfer wait state) but noticed and recovered anyway.
+.BREAK
+.I -8
+LBN	Logical Block Number. This is the logical block number
+(within the disk unit) for which the last error occurred.
+.BREAK
+.I -8
+1CONI	This is the disk unit status (CONI) after the last initial
+error occurred and before any recovery was attempted.
+.BREAK
+.I -8
+2CONI	This is the disk unit status (CONI) after the last soft error
+recovery or hard error fatality.
+.BREAK
+.I -8
+1DATAI	This is the disk unit status (DATAI) after the last initial
+error occurred and before and recovery was attempted.
+.BREAK
+.I -8
+2DATAI	This is the disk unit status (DATAI) after the last soft error
+recovery or hard error fatality.
+.BREAK
+.I -8
+.LM 0
+.SKIP 2
+.AUTOP
+
+After all file structures have been listed a summary is given
+of the swapping units as follows:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+Swap Unit	As in the "Unit or F/S" column above this column
+identifies both the physical and logical disk unit.
+.BREAK
+.I -8
+SR	The total count of swap reads (in blocks) for this unit.
+.BREAK
+.I -8
+SW	The total count of swap writes (in blocks) for this unit.
+.BREAK
+.I -8
+PR	The total count of pageing reads (in blocks) for this unit.
+.BREAK
+.I -8
+PW	The total count of pageing writes (in blocks) for this unit.
+.BREAK
+.I -8
+Used (P)	The amount of space currently in use on the
+swapping unit and the total swapping space available on that
+unit (separated by a "/"). Note that this includes any dormant
+high segments residing on that unit (which is not included in
+the SWP field of the "N" display). This field is left blank
+for alternate ports as, like the free count above, the space
+used is dependent on the pack itself and not on the ports.
+.BREAK
+.LM 0
+.AUTOP
+
+Finally, if there have been any swapping I/O errors a line is printed
+summarizing the errors:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+Swap errors	The total number of swap I/O errors.
+.BREAK
+.I -8
+CHK	At least one checksum error occured.
+.BREAK
+.I -8
+DEV	At least one device error occured. 
+.BREAK
+.I -8
+DAT	At least one data error occured.
+.BREAK
+.I -8
+Lost	Total swapping space lost due to I/O errors.
+.LM 0
+.SUBTTL K Display - CI network information
+.PAGE
+.AUTOPARAGRAPH
+
+Following is a sample of the SYSDPY "K" display:
+.SKIP
+.LITERAL
+CI Status of RL226A DEC10 Development 21-Aug-85 17:01:27 UP:05:00:45
+
+Open Paths:
+CI Node  00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15
+CPU0     --                   AB          AB
+CPU1     AB                   AB          --
+
+Packet counts:
+            XMT   Avg/sec       RCV   Avg/sec  Discarded     Node
+CPU0     107498     5.96     248884    13.79           0      ALL
+CPU1     113200     6.27     158556     8.79           1      ALL
+
+Statistics:
+          A ACK     A NAK     A NRS     B ACK     B NAK     B NRS
+CPU0      52208        46      9297     51641         6      9502
+CPU1      54900        69     35744     45219        58     35655
+
+Errors:
+CPU0  CRC:37
+CPU1  CRC:69
+.END LITERAL
+.AUTOP
+.SKIP 2
+The CI network display is broken into several columnar sub-displays,
+each replicated once per CI (or KLIPA) channel per CPU.
+
+First is the basic CI topology under the heading "Open Paths:". There
+is a column for each of the 16 possible CI node addresses. Each CPU
+or CI channel is then displayed. A "--" indicates that the specified
+CPU or channel is assigned to that CI node address. An "A" or "B"
+indicates which of the two redundant CI paths to a node are usable.
+
+Second is the display of traffic counters under the heading "Packet#counts:"
+with the following columns (again replicated once per CPU or channel):
+.SKIP
+.NOAUTOP
+.LM 8
+.I -8
+XMT	The "XMT" column shows the number of CI packets (datagrams or messages)
+transmitted on that CPU or channel.
+.BREAK
+.I -8
+Avg/sec	This column then displays the preceding "XMT" count as a
+"per second" statistic (i.e., average packets per second transmitted).
+.BREAK
+.I -8
+RCV	The "RCV" column shows the number of CI packets (datagrams or messages)
+received by the CPU or channel.
+.BREAK
+.I -8
+Avg/sec	This column then displays the preceding "RCV" count as a
+"per second" statistic (i.e., average packets per second received).
+.BREAK
+.I -8
+Discarded###The "Discarded" column shows the number of datagrams
+that were discarded for the specified CPU or channel because the software
+did not supply enough receive buffers.
+.BREAK
+.I -8
+Node	The "Node" column shows the CI node(s) for which the port is
+recording traffic information.
+The default is all nodes unless changed by the
+"CICTRS" utility.
+.LM 0
+.SKIP
+.AUTOP
+Next is a display of packet ACKing information under the heading
+"Statistics:". The displayed statistics are:
+.LM 8
+.SKIP
+.NOAUTOP
+.I -8
+A#ACK	The "A#ACK" column shows the number of packets which were
+acknowledged by the remote node (successfully transmitted) on CI path A.
+.BREAK
+.I -8
+A#NAK	The "A#NAK" column shows the number of packets for which transmission
+failed on CI path A because the remote node returned a negative acknowledgement.
+.BREAK
+.I -8
+A#NRS	The "A#NRS" column shows the number of packets for which transmission
+failed on CI path A because the remote node did not respond
+with an acknowledgement in a
+sufficient amount of time.
+.BREAK
+.I -8
+B#ACK	The "B#ACK" column shows the number of packets which were
+acknowledged by the remote node (successfully transmitted) on CI path B.
+.BREAK
+.I -8
+B#NAK	The "B#NAK" column shows the number of packets for which transmission
+failed on CI path B because the remote node returned a negative acknowledgement.
+.BREAK
+.I -8
+B#NRS	The "B#NRS" column shows the number of packets for which transmission
+failed on CI path B because the remote node did not respond
+with an acknowledgement in a
+sufficient amount of time.
+.LM 0
+.AUTOP
+.SKIP
+Finally, a list of error counts is displayed under the heading "Errors:"
+for each CPU or channel.The types of error are:
+.LM 8
+.SKIP
+.I -8
+CRC	CRC checksum errors detected in received packets
+.BREAK
+.I -8
+MVR#PAR	Parity errors detected by the "data mover"
+.BREAK
+.I -8
+CBUS#PAR###CBUS parity errors
+.BREAK
+.I -8
+REG#PLIPE###Register parity errors
+.BREAK
+.I -8
+DATA#PLIPE###Data parity errors
+.BREAK
+.I -8
+CHN	Errors detected by the KL-10 internal channel interface
+.BREAK
+.I -8
+EBUS#PAR###EBUS parity errors
+.BREAK
+.I -8
+SPR#CHN	Spurious channel errors
+.BREAK
+.I -8
+CBUS#AVL#TMO###CBUS timeout ("busy-too-long") errors
+.BREAK
+.I -8
+SPR#RCV#ATTN###Spurious receive attention interrupts
+.BREAK
+.I -8
+SPR#XMT#ATTN###Spurious transmit attention interrupts
+.BREAK
+.I -8
+XMT#BFR#PAR###Parity errors detected in the transmit buffer
+.BREAK
+.I -8
+XMT#TMO	Packet transmission timeouts
+.LM 0
+.SUBTTL M display - job and memory statistics
+.PAGE
+.AUTOPARAGRAPH
+
+Following is a sample of the SYSDPY "M" display:
+.SKIP
+.LITERAL
+This is RN212A DEC10 TRISMP 04-Jun-85 13:17:35 (+) UP:00:10.98
+VM(MAX=37862,USED=2394) PGR.USER=10.0 PFC:NIW=3194 IW=24484
+Job  Who  Where What     Virtual          Physical       PGR   State Runtime
+15 10,701  117 DTECO  83+35(511)       83+35+5(511)      0.00  TI    00:00.03
+16 [OPR]  D424 LPTSPL 46+39(512)       25+39+4(512)      0.55  HB V  00:00.00
+17 10,6016 114 SEARCH 2+12(511)        2+12+4(511)       0.00  ^C    00:01.10
+18 [OPR]   J4  FAL    139+39(512)      139+39+3(512)     0.00  HS    00:00.00
+19 [OPR]  D424 NML    40+128(512)      26+128+3(512)     8.81  HB V  00:00.00
+20 [OPR]  D424 NETMAI 43+11(512)       43+11+4(512)      0.00  ED    00:00.00
+21 [OPR]   31  OPR    55+39(512)       55+39+3(512)      6.77  HB    00:00.00
+22 [OPR]  D424 PSTHRU 4+7(512)         4+7+3(512)        0.00  HB S  00:00.00
+23 [OPR]  D424 MIC    2+16(512)        2+16+3(512)       0.00  HS    00:00.00
+24 [OPR]  D424 MIC    2+15(512)        2+15+4(512)       0.00  HS#   00:00.00
+25 30,5570 120 DIRECT 6+47(1024)       6+47+5(512)       0.00  ^C    00:00.00
+26 [OPR]  D424 DTELDR 6+8(512)         6+8+3(512)        0.00  HS    00:00.00
+27 [OPR]   J4  FAL    143+39(512)      143+39+3(512)     0.00  HS    00:00.00
+28 10,6026 124 RL211A 229+272(2000)    229+272+4(1000)   0.00  ^C S  00:00.00
+29 [SELF]  123 MS     240+80(10000)    240+80+6(1000)    0.00  HB S  00:00.00
+30 [SELF]  126 SYSANS 18+0(10000)      18+0+6(1000)      0.00  RN+   00:00.31
+31 30,6003 125 D6TQ3  80+0(511)        80+0+4(511)       0.00  ^C S  00:00.00
+32 10,6026 127 DIP    5+27(2000)       5+27+5(1000)      0.00  ^C S  00:00.00
+33 30,5730 32  DTECO  2015+35(16384)   415+35+5(512)   117.78  TINV  00:00.06
+34 10,6062 121 DIRECT 14+47(511)       14+47+5(511)      0.00  ^C S  00:00.00
+35 10,701  J13 MACRO  132+25(511)      132+25+5(511)     0.00  RN    00:04.08
+.END LITERAL
+.SKIP 2
+
+The first line is the standard SYSDPY "ID" line, containing the name
+of the system (preceded by the header "This is"), the current date
+and time, and finally the system uptime.
+
+The second line summarizes general virtual memory usage as follows:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+VM	System-wide virtual memory usage as follows:
+.BREAK
+.LM 16
+.I -8
+MAX	The amount of virtual memory still available for all users
+(i.e., total swapping space available minus the amount of virtual
+memory currently being used).
+.BREAK
+.I -8
+USED	The amount of virtual memory currently in use by all jobs.
+.BREAK
+.LM 8
+.I -8
+PGR.USER	The total system-wide paging rate for all users.
+.BREAK
+.I -8
+PFC	Page Fault Class. This is the class of page fault which
+caused paging operations.
+.BREAK
+.LM 16
+.I -8
+NIW	Not In Working set. This class of page fault occurs for
+pages which are not in the job's working set, i.e., those pages
+which are paged out to the swapping media (this includes allocated
+but zero pages).
+.BREAK
+.I -8
+IW	In Working set. This class of page faults occurs for pages
+which are in the job's working set but which have access allowed
+turned off, i.e., those pages which do not require being read in
+from the swapping space.
+.BREAK
+.LM 0
+.AUTOP
+
+The remainder of the screen is devoted to job display.
+
+The "Job", "Who", "Where", "What", "State", and "Runtime" columns
+are the same as for the "N" display.
+
+The memory statistics are broken down into two major columns
+(each with several fields) to describe the job's virtual and
+physical (working set) memory usage as follows:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+Virtual	This column first lists the job's low segment virtual
+size, followed by the job's high segment virtual size,
+followed by the job's virtual memory limit (enclosed in parenthesis).
+.I -8
+Physical	This column lists first the job's low segment physical
+size, followed by the job's high segment physical size, followed by
+the job's "monitor's per-process" size (which includes the job's page
+map ("UPT") and section maps,
+disk DDBs, TMPCOR, pathological name definitions, and so on), and
+finally the job's physical memory limit (enclosed in parenthesis).
+The first three fields comprise the job's working set (but note that the
+"per process" pages are not counted against the job's physical limit).
+.LM 0
+.SUBTTL N display - job and system statistics
+.PAGE
+.AUTOPARAGRAPH
+
+Following is a sample of the SYSDPY "N" display:
+.SKIP
+.LITERAL
+Job  Who  Where What  #P State Runtime  This is RL366A DEC10 Development
+16 10,6016 114 STECO  100 RN   00:00.80 02-Aug-88 11:13:49 UP:01:04:29
+17 [OPR]   J4  FAL    181 HS S 00:00.00  (+) ID OV LS  UPTIME   CTX UUO DBL CSH
+18 [OPR]  D424 NML    157 HB V 00:00.00 CPU0  0 47  0 00:11.36   11 139   0  12
+19 [OPR]  D424 MX     185 ED   00:00.00 CPU1  0 16  0 00:11.35    4  54   0   4
+20 [OPR]   31  OPR    96 HB S  00:00.00 CPU2 (Not Running)
+21 [OPR]  D424 PSTHRU 14 HB S  00:00.00      DSKI DSKO SWPI SWPO MTAI MTAO
+22 [OPR]  D424 MIC    21 HS    00:00.00 CPU0  103   21  260   58    0    0
+23 [OPR]  D424 MIC    21 HS#   00:00.00 CPU1   47    0   78  317  144    0
+24 30,5570 120 NETWOR 28 ^C S  00:00.00 ANF In:167  Out:787  Cor:2603
+25 [OPR]  D424 DTELDR 17 HS    00:00.00 DCN In:248  Out:199  Blk:10/80=13%
+26 [OPR]   J4  FAL    185 HS   00:00.00 ETH In:1178 Out:151  Dgm:12/2
+27 10,6026 124 RL366A 505 ^C S 00:00.00 TTY In:6    Out:498  Cnk:1775/2660=67%
+28 [SELF]  123 MS     326 HB   00:00.00 IPCF S:0    Out:3    W/P:0/0
+29 [SELF]  126 SYSANS 24 RN+   00:00.20 Mem:512/1965 Shr:550 JRN:5/5/32
+30 30,6003 125 D6TQ3  84 ^C S  00:00.00 Use:3052/4741 Swp:2756/39468 ASR:.24
+31 10,6030 102 SED    65 HB    00:24.30 FRU:25568/70272=36.38%
+32 10,6026 127 DIP    37 ^C S  00:00.00 KSYS:+1D10:45 HDE:19 POK:41/8
+33 30,5730 32  DTECO 455 TINV  00:00.26 Job:39/100 Det:16
+34 10,6062 121 DIRECT 66 ^C S  00:00.00 Struc  Mnt  Free    Struc  Mnt  Free
+35 10,701  J13 MACRO  137 RN   00:04.88 BLKX   10  16905    RENG   2   142420
+37 10,6062 132 DTECO  123 ^CNS 00:00.00 DSKA   12  7580     DSKP   3   205510
+38 10,6036 4   STECO  171 RN   00:00.21 AP10   1   120165   DSKC   16  74240
+52 [OPR]   115 SYSANS 19 HS+   00:00.25 BLKK   13  111930   DSKR   1   191120
+53 [OPR]   116 OPR    96 HB S  00:00.00 DSKZ   0   554173   BLKY   8   101535
+.END LITERAL
+.SKIP 2
+
+This display has two completely independent componets - a job display
+(the left half of the screen) and the system display (the right half
+of the screen). If "S" mode is in effect then the system display is
+not shown (the job display is expanded to fill the screen).
+.SKIP 2
+
+The job display shows all the jobs in use, by whom, doing what, etc. The
+job information displayed is as follows:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+Job	The job number.
+.BREAK
+.I -8
+Who	The user account running in that job slot. Normally the
+user ppn is listed. There are two special cases:
+.SKIP
+.LM 16
+.I -8
+[OPR]	The "user" is the privileged operator account (usually [1,2]).
+.BREAK
+.I -8
+[SELF]	The "user" is running under the same account under which
+SYSDPY is running.
+.SKIP
+.LM 8
+.I -8
+Where	The terminal which is controlling the job, if any. This field
+has several possible representations:
+.SKIP
+.LM 16
+.I -8
+CTY	The terminal is the system CTY.
+.BREAK
+.I -8
+DET	There is no terminal attached to that job. If the job has
+PEEK or SPY privileges this will be expanded to include the terminal
+to which the job was last attached.
+.BREAK
+.I -8
+Dnn	There is no terminal currently attached to that job. The
+job was last attached to TTYnn. This format requires PEEK or SPY
+privileges.
+.BREAK
+.I -8
+Jnn	The job is being controlled by job nn (i.e., the job is
+attached to a PTY owned by job nn). This is the normal display for
+a controlled job but it may be changed by the "_#" command to
+display the PTY number instead.
+.BREAK
+.I -8
+Pnn	The job is attached to PTYnn (i.e., the job is being controlled
+by another job). The "_#" command may be used to display the
+controlling job number instead.
+.BREAK
+.I -8
+nn	The job is attached to TTYnn.
+.SKIP
+.LM 8
+.I -8
+What	The job's logical program name. Although usually the name of the
+program last run by that job, the job may have issued a SETNAM
+monitor call to change the program name.
+.BREAK
+.I -8
+_#P	The total user working set size (including "monitor per process"
+pages such as the page map).
+.BREAK
+.I -8
+State	The state of the job. This column consists of the basic
+state code (two letters and/or digits) plus
+assorted flags. The basic state code (running, in I/O wait, etc.) is
+shown first. Although nominally the state code names are the same as
+the names of the actual monitor job queues some of the state names
+are "SYSDPY Specials" which are intended to convey more information
+about the job than just the job queue in which the job currently
+resides:
+.SKIP
+.LM 16
+.I -8
+AU	Alter UFD (or SFD) wait. The AU "resource" is essentially
+the monitor's file directory interlock. In order to change a file
+directory (e.g., create or delete files) the job must have the
+file directory interlock. The directory interlock is on a per
+directory per structure basis. Note that this file directory
+interlock is NOT the same as the STRUUO UFD interlock.
+.BREAK
+.I -8
+CA	Core Allocation wait. The job is attempting to lock in
+physically contiguous memory but must wait for the monitor to
+move (swap) other jobs out of the way first.
+.BREAK
+.I -8
+CB	Core Block wait. The CB "resource" is essentially the
+monitor's file system interlock based on the monitor's file
+system database in monitor free core - hence the name "Core Block".
+Only one job may have the CB resource at any time, all other jobs
+must queue up for it to become available.
+.BREAK
+.I -8
+CX	ConteXt resource wait.
+The CX "resource" interlocks PDB creation, deletion, and context
+block scanning.  It is a job-wide resource which may be gotten
+at UUO level or clock level by any job or CPU wishing to modify
+a PDB or context block for another job.  In particular, the CX
+resource sees the most use during job creation/destruction, IPCF
+packet/page manipulations, and of course all command or UUO
+context related operations.
+.BREAK
+.I -8
+CW	Command Wait. Although the user program is still running
+(i.e., it is not in _^C state) the user typed a command which is
+still pending on the
+job's controlling terminal. This is
+a SYSDPY Special state, the job can be in any of the
+queues except the ST queue.
+.BREAK
+.I -8
+DA	Disk Allocation wait. The DA "resource" is essentially
+the monitor's disk unit SAT (Storage Allocation Table) interlock.
+Only one job may have the DA resource for any specific disk unit
+at any time, all other jobs must queue up for it to become available.
+.BREAK
+.I -8
+DC	Data Control wait.
+.BREAK
+.I -8
+DI	Disk Input wait. The job is blocked waiting its turn to
+read from a disk unit. This is a SYSDPY Special state which
+requires PEEK or SPY privileges, the job is actually in the DI queue.
+.BREAK
+.I -8
+DO	Disk Output wait. The job is blocked waiting its turn to
+write to a disk unit. This is a SYSDPY Special state which
+requires PEEK or SPY privileges, the job is actually in the DI queue.
+.BREAK
+.I -8
+DS	Disk I/O wait Satisfied. Formerly in DI/DO/DW state, the job's
+disk I/O request has been completed at disk interrupt level. The
+job is waiting for the scheduler to requeue the job into the run
+queue(s).
+.BREAK
+.I -8
+DW	Disk I/O wait. The job is blocked waiting its turn to either
+read or write form or to a disk unit. This is a SYSDPY Special
+state, the job is actually in the DI queue.
+.BREAK
+.I -8
+D1	DECtape controller number 1 wait. The job is waiting for
+the first DECtape controller to become available for some sort of
+I/O operation.
+.BREAK
+.I -8
+D2	DECtape controller number 2 wait. The job is waiting for
+for the second DECtape controller to become available for some sort
+of I/O operation.
+.BREAK
+.I -8
+E6	Event DN60 wait. The job is waiting for a DN60-class
+front end operation to complete. This is a SYSDPY Special state,
+the job is actually in the EW queue.
+.BREAK
+.I -8
+EF	Event Front-end wait. The job is performing some sort of
+operation involving a "front-end" processor and is waiting for
+the operation to complete. This is a SYSDPY Special state, the
+job is actually in the EW queue.
+.BREAK
+.I -8
+EK	Event Kontroller wait. The job is requesting the monitor
+to perform some magnetic tape operation which is blocked pending
+the availability of the tape kontroller. This is a SYSDPY Special
+state, the job is actually in the EW queue.
+.BREAK
+.I -8
+EL	Event Label wait. The job is performing some sort of
+magnetic tape operation which requires the intervention of the
+tape label processor. This is a SYSDPY Special state, the job is
+actually in the EW queue.
+.BREAK
+.I -8
+EN	Event Network wait. The job is performing some sort of
+operation with an ANF network device which is blocked pending completion.
+This is a SYSPDY Special state, the job is actually in the EW queue.
+.BREAK
+.I -8
+ER	Event Rewind wait. The job is waiting for a magnetic tape
+rewind operation. This is a SYSDPY Special state, the job is actually
+in the EW queue.
+.BREAK
+.I -8
+ES	Event wait Satisfied. Formerly in some sort of event wait,
+the job is now ready to run again, and is waiting for the monitor
+to reschedule the job into the run queues. This is a SYSDPY Special
+state, the job is actually in the EW queue(s).
+.BREAK
+.I -8
+EV	EVM (Exec Virtual Memory) wait. The job is attempting some
+(probably I/O) operation which requires some part of the job's
+address space to be mapped into the monitor's address space,
+(such as DECtape I/O). The job must wait until other jobs free up
+sufficient EVM for the monitor to honor the job's request.
+.BREAK
+.I -8
+EW	Event Wait. This wait state covers a wide
+range of conditions, such as waiting for a magnetic tape to
+rewind or a network task channel connection. This is sort of a
+catch-all wait state for any type of wait condition which does not
+deserve a monitor queue all to itself (such as the "DI/DO/DS"
+state above).
+.BREAK
+.I -8
+Hn	The job is in the run queue(s) and is running
+in high priority run queue "n". This is a SYSDPY Special state, the
+job is actually in the RN queue(s).
+.BREAK
+.I -8
+HB	HiBernate. The job has suspended execution pending some sort of
+external awakening condition, such as I/O completion or reception of
+an IPCF packet (a HIBER with a zero (infinite) SLEEP time). This is
+a SYSDPY Special state, the job is actually in the SL queue.
+.BREAK
+.I -8
+HS	Hibernate with Sleep. The job has suspended execution
+pending either some sort of external awakening condition or the
+passage of a specified time interval (a HIBER with a non-zero SLEEP
+time). This is a SYSDPY Special state, the job is actually in the
+SL queue.
+.BREAK
+.I -8
+IN	INput wait. The job is waiting for some sort of input
+operation to complete. This is a SYSDPY Special state which requires
+PEEK or SPY privileges, the job is actually in the IO queue.
+.BREAK
+.I -8
+IO	I/O wait. The job is waiting for some sort of currently
+active I/O operation to complete,
+or possibly the monitor has stopped the job and is
+waiting for the job's I/O to complete so the job can be swapped.
+.BREAK
+.I -8
+JD	Job DAEMON wait. The job has issued a DAEMON
+monitor call but DAEMON has not finished servicing the request yet.
+.BREAK
+.I -8
+MM	Memory Management wait. The MM "resource" is essentially
+the monitor's main memory interlock. A program must "own" the MM
+resource before it can change its main memory image (e.g., allocate
+more memory via a CORE or PAGE. monitor call). Only one job may
+own the MM resource, all other jobs must queue up for it to become
+available.
+.BREAK
+.I -8
+NA	NAp. The job has temporarily suspended active execution
+(SLEEP or HIBER) for a very short interval (less than one second).
+.BREAK
+.I -8
+NU	NUll. The NU queue contains all the jobs which are not
+in use. Since SYSDPY does not display jobs which are not in use
+this state should never appear.
+.BREAK
+.I -8
+OU	OUtput wait. The job is waiting for some sort of output
+operation to complete. This is a SYSDPY special state which
+requires PEEK or SPY privileges, the job is actually in the IO queue.
+.BREAK
+.I -8
+OW	Operator Wait. The job is in a _^C state due to a device
+error, and is waiting to be continued (by the operator). This is a
+SYSDPY special state, the job is actually in the ST queue.
+.BREAK
+.I -8
+PI	Paging I/O wait. The job has requested the monitor to
+change the job's working set in a manner which requires either
+reading or writing pages to or from the swapping space.
+.BREAK
+.I -8
+PS	Paging I/O wait Satisfied. Formerly in PI state, the job's
+paging I/O request has been completed at disk interrupt level. The
+job is waiting for the scheduler to requeue the job into the run
+queue(s).
+.BREAK
+.I -8
+RU	RUN or GETSEG or MERGE in progress. The job is in the
+process of performing a GET command, a GETSEG monitor call,
+a MERGE command or monitor call, or a RUN (or R) command or monitor
+call. This is a SYSDPY special state, the job can actually be
+in one of several different job queues.
+.BREAK
+.I -8
+RN	RuN. The job is in the run queue(s), either actively
+running or awaiting its turn to run on some cpu.
+.BREAK
+.I -8
+SL	SLeep. The job has temporarily suspended active execution
+(SLEEP) for a fairly long (one second or more) interval.
+This is a SYSDPY Special state, the job is actually in the SL
+queue (see the "HS" state above).
+.BREAK
+.I -8
+ST	STopped. The job is HALTed. The program may have executed
+a HALT instruction or EXIT monitor call, the user may have manually
+stopped the program (_^C or .HALT monitor command), or the monitor
+may have stopped the program due to some error condition. SYSDPY
+will never display this state but will attempt to SYSDPY Special
+the state into _^C, _^W, OW, etc., states.
+.BREAK
+.I -8
+TI	Terminal Input wait. The job is blocked waiting for input
+from a terminal (usually the job's controlling or command terminal).
+This is a SYSDPY Special state which requires PEEK or SPY privileges,
+the job is actually in the TI queue (see the "TO" state below).
+.BREAK
+.I -8
+TO	Terminal Output wait. The job is blocked waiting for terminal
+output to complete (actually, since all terminal I/O is buffered
+through the monitor the job is waiting for the terminal to accept
+sufficient output that the monitor can finish copying the job's
+terminal output into the monitor's internal buffers). This is a
+SYSDPY Special state which requires PEEK or SPY privileges, the
+job is actually in the TI queue (see the "TI" state above).
+.BREAK
+.I -8
+TS	Terminal I/O wait Satisfied. Formerly in either TI or TO
+state, the job's terminal I/O request has been completed at terminal
+interrupt level. The job is waiting for the scheduler to requeue
+the job into the run queue(s).
+.BREAK
+.I -8
+TW	Terminal I/O Wait. The job is blocked waiting for terminal
+input or output to complete. This is a SYSDPY Special state, the job
+is actually in the TI queue.
+.BREAK
+.I -8
+WS	Wait Satisfied. Formerly in an I/O wait state, the job's
+I/O request has been completed at interrupt level. The
+job is waiting for the scheduler to requeue the job into the run
+queue(s).
+.BREAK
+.I -8
+_^C	The job is HALTed and completely idle. This is a SYSDPY
+Special state, the job is actually in the ST queue.
+.BREAK
+.I -8
+_^D	The job is HALTed but a DAEMON request is being serviced for
+the job (e.g., a "DCORE" command). This is a SYSDPY Special state,
+the job is actually in the ST queue.
+.BREAK
+.I -8
+_^W	The job is HALTed but waiting for a command to be processed
+(such as an "E" command but the program is swapped out). This is a
+SYSDPY Special state, the job is actually in the ST queue.
+.BREAK
+.I -8
+nn	The job is in the run queue(s) and is running
+in high priority run queue "nn". This is a SYSDPY Special state,
+the job is actually in the RN queue(s).
+.BREAK
+.LM 8
+.SKIP
+
+After the basic job state is shown the following flags may appear:
+.SKIP
+.LM 16
+.I -8
+N	The job's high segment is a sharable high segment which comes
+from the NEW: device (usually [1,5]).
+.BREAK
+.I -8
+O	The job's high segment is a sharable high segment which comes
+from the OLD: device (usually [1,3]).
+.BREAK
+.I -8
+_#	The job's high segment is a sharable high segment which comes
+from a non-system directory (i.e., neither OLD:, STD:, or NEW:).
+.BREAK
+.I -8
+_@	The job's high segment has been obsoleted (i.e., the disk file
+from which the high segment originated has been deleted or superceded).
+.BREAK
+.I -8
+_+	The job's high segment is actually a SPY segment.
+.BREAK
+.I -8
+_&	The job's low segment is locked in physical memory.
+.BREAK
+.I -8
+S	The job's working set is swapped out to secondary storage.
+.BREAK
+.I -8
+F	The job's working set is swapped out to secondary storage in
+a non-contiguous fashion - i.e., the job's working set is swapped and
+fragmented. If not preceded by an "S" (indicating a swapped working
+set) then the working set is in main memory but the swapping copy
+of the high segment is fragmented.
+.BREAK
+.I -8
+V	The job is Virtual (i.e., the job's working set is only a
+part of the job's total virtual memory image).
+.BREAK
+.LM 8
+.I -8
+.SKIP
+
+Runtime	The job's program execution time in one of two forms: if
+the runtime is at least one hour then
+in the form hh:mm:ss (hours, minutes, and seconds); if the runtime
+is less than an hour then in the form mm:ss.cc (minutes, seconds, and
+hundredths). If the "%" command is in effect than the runtime
+itself will be converted to a percentage of cpu figure instead of
+a straight elapsed time value.
+.BREAK
+.I -8
+Reads	The total disk reads (in blocks) performed by the job. This
+column is available only in "S" mode.
+.BREAK
+.I -8
+Writes	The total disk writes (in blocks) performed by the job. This
+column is available only in "S" mode.
+.BREAK
+.I -8
+User	The user name. This column is available only in "S" mode.
+.BREAK
+.LM 0
+.SKIP 2
+.AUTOP
+
+The system display is as follows:
+
+The first line identifies the name of the monitor currently running.
+
+The second line lists the current date, time, and system uptime.
+
+Next is the first of four per-cpu statistics blocks as follows:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+ID	Idle time (percent). The idle time is the time during
+which the cpu has no user job which wants to run.
+.BREAK
+.I -8
+OV	Overhead time (percent). The overhead time is the time
+spent doing monitor processing which cannot be readily attributed
+to a specific job (e.g., scheduling jobs or servicing interrupts).
+.BREAK
+.I -8
+LS	Lost time (percent). The lost time is the time that the
+monitor wanted to run a user job but couldn't because (e.g.,) another
+job had to be swapped out in order to make room to swap in the runnable
+user job AND there were no other user jobs runnable in the interim.
+.BREAK
+.I -8
+UPTIME	Uptime (either hh:mm:ss or mm:ss.cc). The cpu uptime is
+how long the cpu has been running. Note that this figure is completely
+independent of the system uptime.
+.BREAK
+.I -8
+CTX	Context switches per second. A context switch is switching from
+one user job to run another user job.
+.BREAK
+.I -8
+UUO	Monitor calls per second.
+.BREAK
+.I -8
+DBL	Cpu doorbells per second (multi-cpu systems only). A cpu
+doorbell is a notification from another cpu that something has
+happened which might have caused a job to become runnable on this
+cpu. A doorbell counts only if the cpu is idle (i.e., running the
+null job).
+.BREAK
+.I -8
+CSH	Cache sweeps per second (KL-10 cpus only).
+.BREAK
+.LM 0
+.AUTOP
+
+Following the general cpu statistics block is a disk/tape I/O
+statistics block. This block summarizes the total disk/tape I/O
+which has passed through each cpu:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+DSKI	DiSK Inputs. This is the total number of disk blocks
+read (other than swapping) per second by this cpu.
+.BREAK
+.I -8
+DSKO	DiSK Outputs. This is the total number of disk blocks
+written (other than swapping) per second by this cpu.
+.BREAK
+.I -8
+SWPI	SWaP Inputs. This is the total number of disk blocks
+read for swapping per second by this cpu.
+.BREAK
+.I -8
+SWPO	SWaP Outputs. This is the total number of disk blocks
+written for swapping per second by this cpu.
+.BREAK
+.I -8
+MTAI	MagTApe Inputs. This is the total number of "blocks"
+read for magtapes per second by this cpu. A "block" is defined
+as 640 "frames" (i.e., typically how a disk block would be written
+onto the tape by programs such as BACKUP).
+.BREAK
+.I -8
+MTAO	MagTApe Outputs. This is the total number of "blocks"
+written for magtapes per second by this cpu.
+.BREAK
+.LM 0
+.AUTOP
+
+Following the cpu disk statistics block is the internal channel and PI
+usage block. This block is available only on KL-10 processors, and
+only if the monitor's "background performance analysis" facility is
+turned on (PERF. function .PMBPN).
+
+The first set of figures are the RH20 internal channel usages,
+in percent (11. is eleven percent, 1.1 is one and one one-tenth
+percent, .11 is eleven-hundredths of one percent).
+These percentages represent the time that the RH20 has
+data for the MBOX, as opposed to the time the RH20 is actually busy.
+As such the values can vary widely (easily a factor of ten to one) for
+a given RH20 usage - the heavier the system (MBOX) load (other RH20s,
+cpu cache sweeps, etc.) the higher the channel percentages will be.
+
+The second set of figures are the PI usages, again in percent (as
+above). PI0 is a DTE20 cycle-stealing from the cpu,
+and PI7 is the scheduler and friends.
+.BREAK
+.AUTOP
+.LM 0
+
+Following the cpu statistics blocks is the ANF network I/O count summary:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+In	ANF network bytes received and processed per second.
+.BREAK
+.I -8
+Out	ANF network bytes processed and transmitted per second.
+.BREAK
+.I -8
+Cor	Amount of monitor free core in use by NETSER.
+.BREAK
+.AUTOP
+.LM 0
+
+Following the ANF network I/O count summary is the DECnet I/O count summary:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+In	DECnet network bytes received and processed per second.
+.BREAK
+.I -8
+Out	DECnet network bytes processed and transmitted per second.
+.BREAK
+.I -8
+Blk	DECnet message-block usage in two fields - first is the current
+number of message blocks in use, followed by the total available allotment
+of message blocks. The percentage of blocks in use is then displayed.
+.SKIP
+It should be noted that the DECnet I/O count summary is not available on
+KS/DECnet systems due to the way the monitor is structured. Only KL/DECnet
+systems will display the DECnet I/O counts.
+.BREAK
+.AUTOP
+.LM 0
+
+After the DECnet I/O count summary comes the Ethernet summary:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+In	Ethernet bytes received and processed per second.
+.BREAK
+.I -8
+Out	Ethernet bytes transmitted per second.
+.BREAK
+.I -8
+Dgm	Ethernet "datagrams" received/transmitted per second.
+.BREAK
+.AUTOP
+.LM 0
+
+Next is a TTY I/O count summary:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+In	TTY characters received (typed by users, not MIC) per second.
+.BREAK
+.I -8
+Out	TTY characters output (by programs or echoed, includes fill) per second.
+.BREAK
+.I -8
+Cnk	The number of TTY chunks in use, and the number of TTY chunks
+available, then the percentage of chunks in use.
+.BREAK
+.AUTOP
+.LM 0
+
+Following the TTY I/O counts is an IPCF summary:
+.SKIP
+.LM 8
+.I -8
+S	The number of IPCF packets transferred per minute
+.BREAK
+.I -8
+Out	The number of IPCF packets currently outstanding.
+.BREAK
+.I -8
+W/P	The number of IPCF words/pages per minute for word-mode and
+page-mode packets respectively.
+.BREAK
+.AUTOP
+.LM 0
+
+Next are the memory and job loading statistics:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+Mem	The amount of physical system memory available for all users.
+There are three fields: maximum single user (CORMAX); maximum for all
+users combined (MAXMAX); and the maximum possible MAXMAX (PHYMAX),
+i.e., the amount of memory for which the system is configured.
+If all three values are the same, only CORMAX is typed. If MAXMAX
+and PHYMAX are the same but CORMAX is different then only CORMAX
+and MAXMAX are typed. If CORMAX and MAXMAX are the same but PHYMAX is
+different (i.e., some memory is locked by user programs or is offline)
+then only CORMAX and PHYMAX are typed (MAXMAX is left blank). If all
+three are different then all three are typed.
+.BREAK
+.I -8
+Shr	The amount of virtual memory saved by sharing high segments.
+.BREAK
+.I -8
+JRN	The number of Jobs RuNning. There are three fields: the number
+of running jobs (i.e., in the RN queue(s)), the number of jobs running or
+I/O blocked (i.e., neither stopped nor one of SL or HB or TI or EW
+states), and the number of jobs doing anything (i.e., not stopped).
+.BREAK
+.I -8
+Use	The total user memory space used by all users. There are two
+fields: working set user memory, and virtual user memory.
+Only if the two are different are both fields typed.
+.BREAK
+.I -8
+Swp	The total swapping space used. There are two fields: total user
+space used by all jobs, and total space available to all jobs.
+.BREAK
+.I -8
+ASR	Active Swapping Ratio. The ratio of total active user working set
+memory space (active defined as second field of JRN above) to
+MAXMAX (i.e., the ratio of how much active program memory is in use to how
+much room is available for it in physical system memory).
+.BREAK
+.LM 0
+.AUTOP
+
+The next line shows the amount of Monitor section 0 free core in use (in words),
+total available free core and the percentage.
+.BREAK
+.LM 0
+.AUTOP
+
+Next is a line of system shutdown timer, current scheduling, and
+error counts as follows:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+KSYS	Time remaining until system shutdown, expressed in the form:
++-ddDhh:mm where "dd" is days, "hh" is hours, and "mm" is minutes.
+The leading "+" indicates that the KSYS is set for a future time,
+a "-" indicates that the KSYS timer has expired.
+.BREAK
+.I -8
+HDE	Total hardware error count.
+.BREAK
+.I -8
+STP	Stopcode count in two fields: job stopcodes; debug stopcodes.
+.BREAK
+.I -8
+MPE	Total memory parity errors.
+.BREAK
+.I -8
+RIB	Total file system RIB errors.
+.BREAK
+.I -8
+POK	This field shows first the total number of POKE.'s performed
+and second the job number of the last job to perform a POKE.
+.BREAK
+.I -8
+SCH	Current SCHEDule value (see the DECsystem-10 Operating Systems
+Command Manual under the SCHED command).
+.BREAK
+.LM 0
+.AUTOP
+
+Next is a job summary:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+Jobs	Job totals in three fields: total jobs in use (expressed as number
+of logged-in jobs "+" number of not-logged-in jobs); total timesharing
+job capacity (LOGMAX); and total job capacity (JOBMAX). If LOGMAX and JOBMAX
+are the same only one value is printed.
+.BREAK
+.I -8
+Det	Total number of jobs running detached (logged in or not).
+.BREAK
+.LM 0
+.AUTOP
+
+Next, in as many columns as will fit (20 characters per column) is
+listed the available disk file structures:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+Struc	The name of the disk file structure
+.BREAK
+.I -8
+Mnt	The structure mount count
+.BREAK
+.I -8
+Free	The total disk blocks free for that structure.
+.BREAK
+.LM 0
+.AUTOP
+
+Finally the rest of the system display is devoted to I/O devices
+in use in as many columns as will fit across the screen (at 13 characters
+per column). Disks are not shown; magtape label dummy DDBs are not
+shown; and job command terminals are not shown:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+Dev	The name of the device in use.
+.BREAK
+.I -8
+By	The job number which owns the device.
+.BREAK
+.I -8
+How	"A" if assigned to job; "I" if OPENed (or INITed) for I/O.
+.LM 0
+.SUBTTL T display - network topology and message numbers
+.PAGE
+.AUTOPARAGRAPH
+
+Following is a sample of the SYSDPY "T" display:
+.SKIP
+.LITERAL
+ANF Topology for RW340A KL10 SYS#1279 01-Mar-79 04:13:41 UP:29:33:39
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+KL1279(10)    3,  2,                    72        0    0    0    0    0    0
+KL1026(26)   27,                                  15   15   15   15   15   15
+CYNIC(66)    76,                                  3    3    3    3    3    3
+KS4101(76)   66, 27,                              11   11   15   15   245  245
+CTCH22(22)   27,                                  3    3    3    3    3    3
+NEXT(27)     26, 22,  2, 76,                      3    3    3    3    4    4
+RSX45(53)                                         2    2    2    2    7    7
+DS401B(2)    10, 27,                              101  101  101  101  211  211
+DN87CP(3)    10, 53,                              110  110  110  110  180  180
+.END LITERAL
+.SKIP 2
+
+The first line is the standard SYSDPY "ID" line, containing the name
+of the system (preceded by the header "This is"), the current date
+and time, and finally the system uptime.
+
+Following are the nodes currently up in the ANF network:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+Node	The name of the node, and the node number in parenthesis.
+.BREAK
+.I -8
+Neighbors	The numbers of that node's immediate neighbors. If the node
+is listed without any neighbors then it is a "sequential" node such
+as a DN92 or an RSX-11M/DECnet node linked to the ANF network through
+a DECnet compatible port.
+.BREAK
+.I -8
+OPR	The TTY line number of the node's OPR terminal.
+.BREAK
+.I -8
+CTL	The job number doing station ConTroL.
+.BREAK
+.I -8
+LAR	Last ACK Received (NCL message number).
+.BREAK
+.I -8
+LAP	Last ACK Processed (NCL message number).
+.BREAK
+.I -8
+LMS	Last Message Sent (NCL message number).
+.BREAK
+.I -8
+LMA	Last Message ACKed (NCL message number).
+.BREAK
+.I -8
+LMR	Last Message Received (NCL message number).
+.BREAK
+.I -8
+LMP	Last Message Processed (NCL message number).
+.LM 0
+.SUBTTL _\ display - network statistics
+.PAGE
+.AUTOPARAGRAPH
+
+Following is a sample of the SYSDPY "_\" display:
+.SKIP
+.LITERAL
+ANF Statistics for RW340A KL10 SYS#1279 01-Mar-79 04:13:53 UP:00:33:51
+NTCOR= 3500    NTMAX=  4176    NTBAD=  5
+Unnumbered CTL  XMIT'ed  RECV'ed       Numbered CTL    XMIT'ed  RECV'ed
+0 DAP/DATA      17637    14628         1 CONNECT       38       26
+1 ACK           7707     5417          2 DISCONNECT    5        17
+2 NAK           5        0             3 NEIGHBORS     8        8
+3 REP           0        5             4 REQ CONFIG    8        7
+4 START         6        3             5 CONFIG        7        14
+5 STACK         3        5             6 DATA REQUEST  8        8425
+6 NODE ID       2        2             7 STATION CTL   0        0
+XMIT'ed=25360 Average=12.48/sec           RECV'ed=20060 Average=9.87/sec
+ 2**N  0%   20%  40%  60%  80%  99%     2**N  0%   20%  40%  60%  80%  99%
+1 00%                                  1 00%
+2 01%  *                               2 25%  *******
+3 34%  *********                       3 68%  *****************
+4 05%  **                              4 04%  *
+5 01%  *                               5 01%  *
+6 02%  *                               6 00%
+7 25%  *******                         7 00%
+8 00%                                  8 00%
+9 29%  ********                        9 00%
+
+.END LITERAL
+.SKIP 2
+
+The first line is the standard SYSDPY "ID" line, containing the name
+of the system (preceded by the header "This is"), the current date
+and time, and finally the system uptime.
+
+The second line is general network values:
+.SKIP
+.LM 8
+.NOAUTOP
+.I -8
+NTCOR	Total monitor free core in use by NETSER.
+.BREAK
+.I -8
+NTMAX	Maximum-so-far value of NTCOR.
+.BREAK
+.I -8
+NTBAD	Number of bad network messages received.
+.BREAK
+.LM 0
+.AUTOP
+
+The next portion of the display is devoted to the total number of
+network messages received and transmitted, broken down by message
+type. Note that the "Numbered CTL" messages are also counted in the
+"Unnumbered CTL" DAP/DATA messages (they are the DAP messages). The
+total number of data messages can be found by subtracting the total
+Numbered CTL messages from the DAP/DATA Unnumbered CTL messages.
+
+The next line summarizes total messages received and transmitted.
+
+The last portion of the screen is a histogram of the data messages
+received and transmitted, broken down as a function (log base 2) of
+the data message size.
+
+Note - This display does not scroll, and in particular, on terminals
+with less than 20 (decimal) lines on the screen (e.g., VT50's)
+the histogram is not displayed.
+.LM 0
+.SUBTTL Z Display - LAT service counters
+.PAGE
+.AUTOPARAGRAPH
+
+Following is a sample of the SYSDPY "Z" display:
+.SKIP
+.LITERAL
+LAT Status on RL226A DEC10 Development 21-Aug-85 17:01:21 UP:05:00:39
+Server      Received     Xmitted  Re-Xmitted   Seq error     Ill msg    Ill slot
+
+*LAT1(Software Eng. MRO1-2 Pole M14)
+               1675        1765          13           0           0           0
+*LAT9(MR01-2/L5)
+              23900       28177          65          10           0           0
+*LAT3(MRO1-2 LM18.5)
+               2545        2646           8           0           0           0
+ LAT21(MRO1-2 Pole P8)
+               1095        1037           7         128           0           0
+.END LITERAL
+.AUTOP
+.SKIP 2
+The LAT display shows the names of all known LAT servers, and LAT protocol
+statistics associated with each LAT server, as follows:
+.LM 8
+.NOAUTOP
+.SKIP
+.I -8
+Server	The "Server" column displays first the name of the LAT server,
+followed by the "location" string of the LAT server, enclosed in parenthesis.
+If the specified LAT server is currently connected to the host, the name
+is prefixed with a "*" character.
+.BREAK
+.I -8
+Received###The "Received" column (starting the second line of display for
+each LAT server) shows the count of LAT protocol messages received
+by the host from
+the specified LAT server.
+.BREAK
+.I -8
+Xmitted	The "Xmitted" column shows the count of LAT protocol
+messages transmitted
+by the host to the specified LAT server.
+.BREAK
+.I -8
+Re-Xmitted###This column shows the number of LAT protocol messages which
+were re-transmitted to the specified LAT server.
+.BREAK
+.I -8
+Seq#error###The "Seq#error" column show the number of LAT protocol
+messages received out of order.
+.BREAK
+.I -8
+Ill#msg	The "Ill#msg" column shows the number of "illegal" LAT protocol
+messages received from the specified LAT server.
+.BREAK
+.I -8
+Ill#slot###The "Ill#slot" column shows the number of LAT protocol
+messages received from the specified LAT server but for a terminal
+slot (or "connection") not in use.

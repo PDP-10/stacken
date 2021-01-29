@@ -1,0 +1,100 @@
+title bar
+search jobdat, uuosym,macten
+
+.text	"/symseg:low/locals"
+
+opdef tcp. [call [sixbit "tcp."]]
+
+dummy:	block	1
+
+vector:
+vectcp:	exp handler, 0, 0, 0
+
+bar:	jfcl
+	reset
+	open	0,[
+		exp .iobyt+uu.aio
+		sixbit 'tcp'
+		xwd ob,ib]
+	 halt
+	movei	1,vector
+	piini.	1,
+	 jfcl
+	move	1,[
+		ps.fac+ps.fon+exp[
+			exp 0
+			xwd <vectcp-vector>,ps.rid!ps.rod!ps.rdo!ps.rol!ps.rsw
+			xwd 0,0]]
+	pisys.	1,
+	 jfcl
+	movei	1,[
+		exp 0		;Function
+		exp 0		;Channel.
+		exp 0		;Flags.
+		exp 0		;Local address.
+		byte (8) ^D130, ^D237, ^D234, ^D195
+		exp 4711	;Local port
+		exp ^D13	;Remote port, daytime.
+		exp 0,0]	;buffer size, ptr
+	tcp. 1,
+	 halt
+loop:	movei	1,^D60
+	sleep	1,
+	jrst	loop
+
+handler:
+	move	1,vectcp+.psvfl
+	trnn	1,ps.rsw
+	 jrst	hand.2
+	movei	1,[
+		exp 4
+		exp 0
+		repeat 10,<0>]
+	tcp. 1,
+	 halt
+	cail 1,0
+	 caile 1,^D10
+	  movei 1,^D11
+	outstr[ asciz "state: "]
+	outstr@[exp[ asciz "closed"]
+		exp[ asciz "listen"]
+		exp[ asciz "syn-sent"]
+		exp[ asciz "syn-received"]
+		exp[ asciz "established"]
+		exp[ asciz "fin-wait 1"]
+		exp[ asciz "fin-wait 2"]
+		exp[ asciz "closing"]
+		exp[ asciz "time-wait"]
+		exp[ asciz "close-wait"]
+		exp[ asciz "last-ack"]
+		exp[ asciz "???"]](1)
+	outstr[ byte (7) 15, 12, 0]
+
+hand.2:	move 1,vectcp+.psvfl
+	trnn 1,ps.rid
+	 jrst hand.3
+
+copy:	sosge ib+.bfctr
+	 jrst nxtbuf
+	ildb 1,ib+.bfptr
+	outchr 1
+	jrst copy
+
+nxtbuf:	statz io.eof
+	 jrst hand.4
+	in
+	 jrst copy
+	jrst copy	 
+
+hand.3:	statz	io.eof
+hand.4:	 outstr[asciz "EOF
+"]
+	movei 1,^D60
+	debrk.
+	 jfcl
+	halt
+
+ob:	block	3
+ib:	block	3
+
+end	bar

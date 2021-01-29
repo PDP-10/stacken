@@ -1,0 +1,803 @@
+! DSKC:FILT10.B36[10,5665,SOURCE,TOPS10]  21-Sep-83 21:44:22, Edit by GROSSMAN
+!
+! Fix detection of errors while parsing file specs.
+! Edit=26
+!
+! FILT10 - Network Management File Utility, Tops-10 Specific Routines
+!
+!                          COPYRIGHT (C) 1981 BY
+!     DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASSACHUSETTS  01754
+!
+! THIS SOFTWARE IS FURNISHED  UNDER A LICENSE FOR USE ONLY ON A SINGLE
+! COMPUTER  SYSTEM AND  MAY BE  COPIED ONLY WITH  THE INCLUSION OF THE
+! ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE, OR ANY OTHER COPIES  THEREOF
+! MAY NOT BE PROVIDED OR  OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON
+! EXCEPT FOR USE ON SUCH SYSTEM AND TO ONE WHO AGREES TO THESE LICENSE
+! TERMS.  TITLE TO AND  OWNERSHIP OF THE  SOFTWARE  SHALL AT ALL TIMES
+! REMAIN IN DEC.
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT NOTICE
+! AND SHOULD  NOT BE CONSTRUED  AS A COMMITMENT  BY DIGITAL  EQUIPMENT
+! CORPORATION.
+!
+! DEC ASSUMES  NO  RESPONSIBILITY  FOR  THE USE OR  RELIABILITY OF ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DEC.
+!
+
+!++
+! Facility: LSG DECnet Network Management
+!
+! Abstract: This file contains the Tops-10 specific routines for the
+!	    Network Management file system.
+!
+! Environment: TOPS10 user mode, BLISS-36
+!
+! Author: Stuart S. Grossman, Creation Date: 9-Dec-81
+!
+!--
+%global_routine('MX$FILE_STRUCTURE',file_id) =
+    BEGIN
+    LOCAL
+        file: REF file_data_block,
+        spcblk: REF BLOCK[] FIELD (spec_block_fields);
+
+    IF NOT nmu$table_fetch (file_table, .file_id, file)
+    THEN
+        RETURN 0;
+
+    spcblk = file[fd_spec_block];
+    RETURN .spcblk[spec_device]
+    END;
+
+%global_routine('GETLOK', name, channel) =
+    BEGIN
+    STACKLOCAL
+        appblk: VECTOR[6] INITIAL(%O'010001'^18 + 3);
+
+    REGISTER t;
+    BUILTIN UUO;
+
+    appblk[1] = .channel;
+    appblk[2] = .name;
+    t = $enqaa^18 + appblk;
+    IF uuo(1,enq$(t))
+    THEN
+        RETURN $true                    !Success... got the lock
+    ELSE
+        BEGIN
+        $error(FACILITY=$internal,
+               SEVERITY=$warning,
+               CODE=uf$nqe,
+               MESSAGE_DATA=.t);
+
+        RETURN .t ^ 18;                  !Failure... enq failed.  Tell why
+        END
+
+    END;
+
+%global_routine('FRELOK',name,channel) =
+    BEGIN
+    STACKLOCAL
+        appblk: VECTOR[6] INITIAL(%O'010001'^18 + 3);
+
+    REGISTER t;
+    LOCAL
+        val;
+
+    BUILTIN UUO;
+
+    val = $false;
+    appblk[1] = .channel;
+    appblk[2] = .name;
+    t = $deqda^18;
+    IF uuo(1,deq$(t))
+    THEN
+        val = $true
+    ELSE
+        $error(FACILITY=$internal,
+               SEVERITY=$warning,
+               CODE=uf$dqe,
+               MESSAGE_DATA=.t);
+
+    RETURN .val;
+
+    END;
+%routine ('ALLOC_BUFFER', FILE : ref FILE_DATA_BLOCK) =
+
+!++
+! Functional description:
+!
+!	This routine will allocate and build buffer rings for doing disk I/O.
+!	This is necessary because just letting Tops-10 create it's own buffers
+!	will mess up NML's memory management.
+!
+! Formal parameters:
+!
+!	FILE		Address of a FILE_DATA_BLOCK.
+!
+! Routine value:
+!
+!	$true		If all buffers could be allocated
+!	$false		If not all buffers could be allocated
+!
+! Side effects:
+!
+!	A pointer to an input or output buffer control block will be put
+!	into FD_BUFFER_HEADERS.
+!--
+
+BEGIN
+
+    BUILTIN
+	uuo;
+
+    REGISTER
+	t1;
+
+    LOCAL
+	arglst : VECTOR [2],
+	buffer_header : REF VECTOR [buffer_data_block_allocation];
+
+!
+! Allocate the buffer ring control block.
+!
+    buffer_header = nmu$memory_get (buffer_data_block_allocation);
+
+    IF .buffer_header EQL 0 THEN RETURN $false;
+!
+! Size, and number of buffers required
+!
+    arglst [0] = $ioasc;		! Probably this mode
+    arglst [1] = %SIXBIT 'DSK';		! Figger out for DSK:
+
+    t1 = arglst;
+    UUO (1,devsiz (t1));		! Get the number and size of buffers
+!
+! Now its time to set up the buffer ring.
+!
+    buffer_header [$bfadr] = mx$file_build_buffers (1, .t1<0,18,0>);
+    IF .buffer_header [$bfadr] EQL 0 THEN
+    BEGIN
+	nmu$memory_release (.buffer_header, buffer_data_block_allocation);
+	RETURN $false
+    END;
+
+    file [fd_current_buffer] = .buffer_header;
+
+    $true
+END; ! End of ALLOC_BUFFER
+%routine ('DEALLOC_BUFFER', FILE : ref FILE_DATA_BLOCK) : novalue =
+
+!++
+!
+! Functional description:
+!
+!	This routine will deallocate the buffer ring for a file.
+!
+! Formal parameters:
+!
+!	.FILE		Address of a File Descriptor Block
+!
+! Routine value:
+!
+!	NONE
+!
+!--
+BEGIN
+
+    LOCAL
+	buffer_header : REF VECTOR [buffer_data_block_allocation];
+
+    buffer_header = .file [fd_current_buffer];
+
+    mx$file_kill_buffers (.buffer_header[$bfadr]);
+
+    nmu$memory_release (.buffer_header, buffer_data_block_allocation)
+END; ! End of DEALLOC_BUFFER
+%global_routine ('MX$FILE_BUILD_BUFFERS', NUMBER_BUFFERS, BUFFER_SIZE) =
+
+!++
+!
+! Functional description:
+!
+!	Set up a buffer ring for doing Tops-10 style buffered I/O.
+!
+! Formal parameters:
+!
+!	.NUMBER_BUFFERS		Number of buffers desired
+!	.BUFFER_SIZE		Size of one buffer
+!
+! Routine value:
+!
+!	neq 0			Buffer ring address + virgin buffer bit
+!	eql 0			Not enough memory for all the buffers
+!
+!--
+
+BEGIN
+
+    LOCAL
+	buffer_ring : REF VECTOR,
+	got_memory_flag;
+
+    BIND
+	buffer_temp = (.buffer_size - 2) ^ 18;
+
+    buffer_ring = 0;			! Indicate no buffer ring yet
+    got_memory_flag = $true;		! Flag for allocation failure cleanup
+!
+! Now its time to set up the buffer ring.
+!
+
+    DECR junk FROM .number_buffers TO 1 DO
+    BEGIN
+	LOCAL
+	    buffer : REF VECTOR;
+
+	buffer = nmu$memory_get(.buffer_size);	! Get one buffer
+	IF .buffer EQL 0 THEN
+	BEGIN
+	    got_memory_flag = $false;
+	    EXITLOOP;
+	END;
+!
+! Now its time to set up the header for one buffer.
+!
+	buffer [$bfsts] = 0;			! Reset the status word
+	buffer [$bfcnt] = 0;			! And the count word
+
+	IF .buffer_ring EQL 0 THEN
+	BEGIN
+!
+! Special code for the first time through. It makes a ring of one item which
+! points to itself.
+!
+	    buffer [$bfhdr] = buffer_temp + buffer [$bfhdr];
+	    buffer_ring = .buffer;
+	END
+	ELSE
+	BEGIN
+!
+! Here if not the first time through.  Insert the new buffer into the
+! buffer ring.
+!
+	    buffer [$bfhdr] = .buffer_ring [$bfhdr];
+	    buffer_ring [$bfhdr] = buffer_temp + buffer [$bfhdr];
+	END;
+    END; ! Of DECR loop
+
+    IF NOT .got_memory_flag THEN
+    BEGIN
+	mx$file_kill_buffers (.buffer_ring);	! Kill off the buffers
+	RETURN 0
+    END;
+
+    bf$vbr + buffer_ring [$bfhdr]
+
+END; ! End of MX$FILE_BUILD_BUFFERS
+%global_routine ('MX$FILE_KILL_BUFFERS', BUFFER_RING : ref block) : novalue =
+
+!++
+!
+! Functional description:
+!
+!	This routine will take apart and deallocate a Tops-10 I/O buffer ring.
+!	It will also deallocate the header.
+!
+! Formal parameters:
+!
+!	.BUFFER_RING		Address of $BFHDR word of a buffer in a buffer
+!				ring.  Ie: the contents of $BFADR of a buffer
+!				ring control block.
+!
+! Routine value:
+!
+!	NONE
+!
+!--
+
+BEGIN
+    LOCAL
+	current_buffer : REF BLOCK,
+	temp,
+	first_buffer;
+
+    current_buffer = first_buffer = (.buffer_ring AND %O'777777') - $bfhdr;
+
+    DO
+    BEGIN
+
+	temp = (.current_buffer [$bfhdr, 0, 36, 0] AND %O'777777') - $bfhdr;
+
+	nmu$memory_release (.current_buffer, .current_buffer [$bfhdr, 18, 17,0] + 2);
+	current_buffer = .temp;
+
+    END
+    UNTIL .current_buffer EQL .first_buffer;
+
+END; ! End of MX$FILE_KILL_BUFFERS
+%routine('FILPAR', spec, filop_block_, lookup_block_, path_block_) =
+    begin
+
+%( The following is the file parser action table. The entries are action
+routines to be called whenever going from one parser state to another. The
+table is accessed using the old state and the new state. The table is
+arranged such that the vertical numbers are the old state, and the horizontal
+numbers are the new state.
+
+\	1	2	3	4	5	6	7
+ \----------------------------------------------------------
+0!     dev     fil     fil                             fil
+1!             fil     fil                             fil
+2!                     ext                             ext
+3!                             proj
+4!                                     prog    prog
+5!                                     sfd     sfd
+6!                                                     end
+
+)%
+
+	SWITCHES LIST (NOOBJECT);
+
+	STRUCTURE
+	    parse_matrix [old, new ; row, col] =
+	    [row+1 * col]
+	    (parse_matrix + old*col + new - 1)<0,36,0>;
+
+	LITERAL
+	    dev$p = 1,			! We just saw a device
+	    fil$p = 2,			! We just saw a file name
+	    ext$p = 3,			! We just saw an extension
+	    proj$p = 4,			! We just saw a project number
+	    prog$p = 5,			! We just saw a programmer number
+	    sfd$p = 6,			! We just saw a SFD
+	    end$p = 7;			! We just saw end of file spec string
+
+	BIND
+	    ptable = UPLIT(
+		dev$p,	fil$p,	fil$p,	0,	0,	0,	fil$p,
+		0,	fil$p,	fil$p,	0,	0,	0,	fil$p,
+		0,	0,	ext$p,	0,	0,	0,	ext$p,
+		0,	0,	0,	proj$p,	0,	0,	0,
+		0,	0,	0,	0,	prog$p,	prog$p,	0,
+		0,	0,	0,	0,	sfd$p,	sfd$p,	0,
+		0,	0,	0,	0,	0,	0,	end$p)
+		     : parse_matrix [6,7];
+    BIND
+	filop_block = .filop_block_:
+                        BLOCK [$fofsp+1] FIELD (filop_block_fields),
+	lookup_block = .lookup_block_:
+                        BLOCK [4] FIELD (lookup_block_fields),
+	path_block = .path_block_:
+                        BLOCK [$ptmax] FIELD (path_block_fields);
+    OWN
+        ptr,
+        len;
+
+    LOCAL
+        state,
+        newstate,
+        token,
+        sfd_count;
+
+    BIND
+        sfd = path_block [path_sfd] : VECTOR [5];
+
+	ROUTINE getc =
+	BEGIN
+	    len = .len - 1;
+	    IF .len LSS 0 THEN RETURN 0;
+	    CH$RCHAR_A(ptr)
+	END;
+
+	ROUTINE getoct (token) =
+	BEGIN
+	    LOCAL
+		temp;
+
+	    .token = 0;
+
+	    INCR index FROM 1 TO .len DO
+	    BEGIN
+		temp = getc ();
+		IF .temp LSS %C'0' OR .temp GTR %C'7' THEN EXITLOOP;
+		IF .index LEQ 6 THEN .token = ..token * 8 + .temp - %C'0';
+	    END;
+
+	    .temp
+	END; !End of routine GETOCT
+
+	ROUTINE getsix (token) =
+	BEGIN
+	    LOCAL
+		temp,
+		ptr;
+
+	    .token = 0;
+	    ptr = CH$PTR(.token,,6);
+
+	    WHILE $true DO
+	    BEGIN
+		temp = getc ();
+		IF .temp GEQ %C'a'
+		   AND .temp LEQ %C'z' THEN temp = .temp - %C'a'+%C'A';
+
+		IF NOT (.temp GEQ %C'A' AND .temp LEQ %C'Z')
+		   AND NOT (.temp GEQ %C'0' AND .temp LEQ %C'9') THEN EXITLOOP;
+
+		temp = .temp - %C' ';
+		IF (..token AND %O'77') EQL 0 THEN CH$WCHAR_A(.temp, ptr);
+	    END;
+
+	    .temp
+	END; !End of routine GETSIX
+
+    state = 0;
+    sfd_count = 0;
+    ptr = .spec;
+    len = CH$LEN(.ptr);
+
+    WHILE .state NEQ 7 DO
+        BEGIN
+        newstate = (IF .state EQL 3 OR .state EQL 4 THEN getoct (token)
+            					    ELSE getsix (token));
+
+        newstate =
+            (SELECTONE .newstate OF
+		SET
+		    [%C':']		:	1;
+		    [%C'.']		:	2;
+		    [%C'[']		:	3;
+		    [%C',']		:	IF .state LEQ 3 THEN 4 ELSE 5;
+		    [%C']']		:	6;
+		    [0,%O'15',%O'12']	:	7;
+		    [OTHERWISE]		:	0;
+		TES);
+
+        CASE .ptable [.state, .newstate] FROM 0 TO end$p OF
+	    SET
+
+	    [0]		:       RETURN $false;
+	    [dev$p]	:	filop_block [filop_device] = .token;
+	    [fil$p]	:	lookup_block [lookup_name] = .token;
+	    [ext$p]	:	lookup_block [lookup_ext] = .token ^ -18;
+	    [proj$p]	:	path_block [path_project] = .token;
+	    [prog$p]	:	path_block [path_programmer] = .token;
+	    [sfd$p]	:	(sfd[.sfd_count] = .token;sfd_count = .sfd_count + 1);
+	    [end$p]	:	;
+	    TES;
+
+        state = .newstate;
+
+	END; !End of while .STATE neq 7
+	$true
+    END; !End of routine PARSE
+%routine ('OPEN_FILE', FILE : ref FILE_DATA_BLOCK, FN : ref FILE_NAME_BLOCK) =
+
+!++
+! Functional description:
+!
+!	This routine will do LOOKUPs or ENTERs as appropriate, in order to
+!	set up the file for I/O. It will also set up the byte counts, byte
+!	sizes, and other stuff in the file and buffer data bases.
+!
+! Formal parameters:
+!
+!	FILE		ref pointer to a FILE_DATA_BLOCK
+!	FN		ref pointer to a FILE_NAME_BLOCK
+!
+! Implicit inputs:
+!
+!	NONE.
+!
+! Routine value:
+!
+!	$TRUE		if file is successfully opened
+!	$FALSE		otherwise
+!
+! Side effects:
+!
+!	A file is now opened, and an I/O channel is now allocated.
+!
+!--
+
+BEGIN
+
+    LOCAL
+	temp: VECTOR[2];
+
+    BIND
+	filop_block = file[fd_filop_block]:
+                        BLOCK [$fofsp+1] FIELD (filop_block_fields),
+	lookup_block = file[fd_lookup_block]:
+                        BLOCK [4] FIELD (lookup_block_fields),
+	path_block = file[fd_path_block]:
+                        BLOCK [$ptmax] FIELD (path_block_fields),
+        spec_block = file[fd_spec_block]:
+                        BLOCK [8] FIELD (spec_block_fields);
+
+    file[fd_error] = 0;
+
+!
+! First we set up the FILOP, LOOKUP, and PATH blocks with the constant data
+!
+
+	! Tell monitor to assign channels, and use privs
+    filop_block [filop_flags] = fo$prv + fo$asc;
+    filop_block [filop_open_flags] = $ioasc + uu$lbf;
+    filop_block [filop_device] = %SIXBIT'DSK   ';
+    filop_block [filop_output_buffer_number] = 0;
+    filop_block [filop_input_buffer_number] = 0;
+    filop_block [filop_lookup_pointer] = lookup_block;
+    filop_block [filop_spec_length] = 8;
+    filop_block [filop_spec_block] = spec_block;
+    lookup_block [lookup_path] = path_block;
+    
+
+!
+! Now its time to parse the filespec...
+!
+
+    IF NOT filpar(.fn[fn_pointer],filop_block,lookup_block,path_block)
+    THEN
+        BEGIN
+        file[fd_error] = uf$cnp;
+	RETURN $false;
+        END;
+
+    CASE .file [fd_access]
+	FROM file_access_read_only TO file_access_append_only OF
+	    SET
+
+	    [file_access_read_only]:
+		BEGIN
+                file [fd_filop_function] = $foinp;
+                filop_block [filop_function] = $fored;
+                filop_block [filop_input_buffer_header] = 
+                    .file [fd_current_buffer];
+		END;
+
+	    [file_access_write_only]:
+		BEGIN
+                file [fd_filop_function] = $foout;
+                filop_block [filop_function] = $fowrt;
+                filop_block [filop_output_buffer_header] =
+                    .file [fd_current_buffer];
+		END;
+
+	    [file_access_append_only]:
+		BEGIN
+                BIND
+                    buffer = .file [fd_current_buffer]: buffer_data_block;
+
+                buffer [bd_valid] = $true;
+                file [fd_filop_function] = $foout;
+                filop_block [filop_function] = $foapp;
+                filop_block [filop_output_buffer_header] =
+                    .file [fd_current_buffer];
+
+		END;
+	    TES;
+
+    BEGIN
+
+    BUILTIN
+        UUO;
+
+    REGISTER
+        t1;
+
+	set_in_your_behalf(filop_block,lookup_block);
+        t1 = ($fofsp+1) ^ 18 OR filop_block;
+        IF NOT UUO (1, filop$(t1)) 
+        THEN
+            BEGIN
+            SELECTONE .t1 OF
+                SET
+                [erfbm_]:   file [fd_error] = uf$lok;           !File is locked
+                [OTHERWISE]:file [fd_error] = .t1^18 + uf$fpe;  !Filop error
+                TES;
+
+            file[fd_channel] = .filop_block[filop_channel];
+            temp = .file[fd_channel]^18 OR $forel;
+            t1 = 1^18 + temp;
+            UUO(1,filop$(t1));            
+
+            RETURN $false;
+            END;
+
+        temp = %SIXBIT'TXT   ';
+        IF (.lookup_block[lookup_name] EQL %SIXBIT'MAIL  ') AND
+           (.lookup_block[lookup_ext] EQL .temp<18,18,0>)
+        THEN
+            IF (temp = getlok(CH$PTR(
+                                 UPLIT(%ASCIZ'Mail append interlock')),
+                              .filop_block[filop_channel]))
+            THEN
+		BEGIN
+                  file[fd_lock_channel] = .filop_block[filop_channel];
+		  file[fd_light_new_mail_bit] = 1;
+		END
+            ELSE
+                BEGIN
+                IF .temp EQL (enqru_ ^ 18) 
+                THEN
+                    file[fd_error] = uf$lok         !File is locked
+                ELSE
+                    file[fd_error] = uf$cgl;        !Some other nasty error
+
+                frelok(CH$PTR(UPLIT(%ASCIZ'Mail append interlock')),
+                       .filop_block[filop_channel]);
+
+                temp [0] = .file[fd_channel] ^ 18 OR $focls;
+                temp [1] = cl$rst;
+                t1 = 2^18+temp;
+                UUO(1,filop$(t1));                
+
+                temp = .file[fd_channel]^18 OR $forel;
+                t1 = 1^18 + temp;
+                UUO(1,filop$(t1));            
+
+                RETURN $false;
+                END;
+    END;
+
+    !Here is all is well... finish up
+    IF .lookup_block [lookup_length] LSS 0
+    THEN
+	BEGIN
+        file [fd_block_count] = ((- .lookup_block[lookup_length]) - 1)/128 + 1;
+	file [fd_length] = - .lookup_block[lookup_length];
+	END
+    ELSE
+        file [fd_block_count] = .lookup_block [lookup_length];
+
+    file [fd_channel] = .filop_block [filop_channel];
+    $true
+END; ! End of OPEN_FILE
+%routine ('CLOSE_FILE', FILE : ref FILE_DATA_BLOCK) =
+
+!++
+!
+! Function description:
+!
+!	This routine will do a Tops-10 file close, and channel release.
+!
+! Formal parameters:
+!
+!	.FILE		Address of file descriptor block
+!
+! Routine value:
+!
+!	$true		File was closed successfully
+!	$false		Couldn't close file
+!
+!--
+
+BEGIN
+    BIND
+	filop_block = file[fd_filop_block]:
+                        VECTOR [$fofsp+1],
+	lookup_block = file[fd_lookup_block]:
+                        BLOCK [4] FIELD (lookup_block_fields),
+	path_block = file[fd_path_block]:
+                        BLOCK [$ptmax] FIELD (path_block_fields),
+        spec_block = file[fd_spec_block]:
+                        VECTOR [8];
+
+    BUILTIN
+	UUO;
+
+    REGISTER
+	t1;
+
+    LOCAL
+        value,
+	i,
+	rename_block: VECTOR [$rbmax+1];
+
+
+    value = $true;
+
+    IF .file[fd_lock_channel] NEQ 0
+    THEN
+	value = .value AND (IF frelok(CH$PTR(UPLIT(
+                                        %ASCIZ'Mail append interlock')),
+         	                  .file[fd_channel])
+                            THEN
+                                $true
+                            ELSE
+                                (file[fd_error]=uf$cfl; $false));
+
+IF NOT .file [fd_light_new_mail_bit] THEN
+BEGIN
+    filop_block [0] = .file[fd_channel] ^ 18 OR $focls;
+
+    IF  .file [fd_abort]
+    THEN filop_block [1] = cl$rst
+    ELSE filop_block [1] = 0;
+
+    t1 = 2 ^ 18 OR filop_block;
+END
+ELSE
+BEGIN
+	INCR i FROM 1 TO $fofsp DO filop_block[.i] = 0;
+	filop_block [0] = .file[fd_channel] ^ 18 OR $fornm OR fo$uoc;
+	filop_block [$foleb]<left_half> = rename_block;
+	INCR i FROM 0 TO $rbmax DO rename_block [.i] = 0;
+	rename_block [$rbcnt] = $rbmax;
+	rename_block [$rbnam] = .spec_block[$foffn];
+	rename_block [$rbext] = .spec_block[$fofex];
+	rename_block [$rbffb] = 1;
+	rename_block [$rbtyp] = rb$dec OR ($rbdas ^ 12) OR ($rboms ^ 6);
+	t1 = ($foleb + 1) ^ 18 OR filop_block;
+END;
+
+    IF NOT (value = (.value AND UUO (1, filop$(t1))))
+    THEN
+        file[fd_error] = (.t1 ^ 18) + uf$fpe;
+
+    filop_block[0] = .file[fd_channel]^18 OR $forel;
+    t1 = 1^18 OR filop_block;
+    UUO(1,filop$(t1));
+    RETURN .value;
+
+END; ! End of CLOSE_FILE
+%routine ('MAP_PAGE', FILE : ref FILE_DATA_BLOCK) =
+
+!++
+!
+! Functional description:
+!
+!	This routine will do a buffered mode read from a file.  Call it
+!	once to fill (or empty) the buffer.  The FILOP function is read
+!	from the FD_FILOP_FUNCTION field of the file descriptor block.
+!
+! Formal parameters:
+!
+!	.FILE			Address of file descriptor block
+!
+! Routine value:
+!
+!	$true			Everythings fine, byte is in DATA.
+!	$false			I/O error occurred while reading.  GETSTS
+!				data is in DATA.
+!
+!--
+
+BEGIN
+    BIND
+	buffer = (file [fd_current_buffer]): REF buffer_data_block;
+
+    LOCAL
+	filop_args;
+
+    BUILTIN
+	UUO;
+
+    REGISTER
+	t1;
+
+    filop_args = .file [fd_channel] ^ 18 + .file [fd_filop_function];
+
+    t1 = 1 ^ 18;
+    t1 = .t1 + filop_args;
+    IF NOT UUO (1, filop$(t1)) THEN
+    BEGIN
+	file [fd_error] = (.t1 ^ 18) + uf$fpe;
+    	RETURN $false;
+    END;
+
+    file [fd_current_block] = .file [fd_current_block] + 1;
+
+    IF .file [fd_current_block] GEQ .file [fd_block_count] THEN
+    buffer [bd_end_of_file] = $true;
+
+    buffer [bd_pointer] = CH$PTR((.buffer [bd_address] AND %O'777777') + 2);
+    buffer [bd_valid] = $true
+END; ! End of MAP_PAGE
+
+! CMS REPLACEMENT HISTORY
+
+
+!*1 WADDINGTON 27-Nov-1984 15:25:13 "MX's File System Tops-10 Specific Routines"

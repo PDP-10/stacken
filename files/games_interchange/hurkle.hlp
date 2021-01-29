@@ -1,0 +1,34 @@
+     H  U  R  K  L  E     Rules and Instructions
+
+	Written by:  Jeff Bunce    Jan  1978
+
+   This is the game of HURKLE.  The object of HURKLE
+is to find out where the hurkle is hiding.
+
+
+   To make a guess,  type the gridpoint  coordinates
+where you think the hurkle is hiding.  Home-base  is
+at point 0,0 on the grid (the south-west corner).  A
+guess is a pair of numbers(whole numbers)  separated
+by a comma.  The first number is the distance to the
+right of home-base,and the second number is the dis-
+tance above home-base.
+
+
+	For example:
+	   If you think the hurkle is hiding five up
+	   and seven to the right,you would type 5,7
+	   when you enter the spot,  then you punch
+	   the 'RETURN' key.
+
+     After each guess, I will tell you approximately
+which direction to head for your next guess.
+
+
+		Good Luck and Happy Hunting!
+
+
+
+
+
+

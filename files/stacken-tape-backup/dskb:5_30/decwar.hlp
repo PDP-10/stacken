@@ -1,0 +1,842 @@
+                          DECWAR Version 1.2
+
+
+
+     DECWAR is a space battle game designed to be played by from 1  to
+16  people.   Each person plays on a separate terminal, and enters the
+game by typing
+
+                    R GAM:DECWAR
+
+Players are free to enter and leave the game as  desired,  since  each
+has  his  own job and therefore won't interfere with the other players
+(the jobs interact through a shareable high segment).
+
+
+     The first person to run the game will select the startup options.
+The current startup options are:
+
+     1.  Regular or Tournament game.  A  regular  game  will  randomly
+         initialize  the  galaxy.  A tournament game will prompt for a
+         startup code.  Each tournament game played with the same code
+         will have the same initial galaxy setup.
+
+     2.  Include Romulans.  Romulans are nasty beasts  that  beginners
+         are  better  off without.  However, if you're the only person
+         playing, the Romulan would be your only competition.
+
+     3.  Include black holes.  Black holes are annoying, since if  you
+         run  into one, you're dead.  They're especially dangerous for
+         those who don't look before they leap.
+
+
+     Each player gets to select the ship he wants to  control  from  a
+list  of  remaining ships on his side.  There are initially 8 ships on
+each side:
+
+             Federation ships               Empire ships
+
+                Enterprise                    Buzzard
+                Intrepid                      Cobra
+                Lexington                     Falcon
+                Nimitz                        Hawk
+                Savannah                      Jackal
+                Trenton                       Python
+                Vulcan                        Raven
+                Yorktown                      Wolf
+
+
+     There are two primary opposing forces in  the  galaxy  --  Humans
+(Federation)  and Klingons (Empire).  The first person to run the game
+gets a Federation ship, the next player to enter gets an Empire  ship,
+the next gets a Federation ship, etc., so that the sides are as evenly
+divided as possible.  The object is to destroy  all  enemy  bases  and
+ships, and capture all enemy planets, before he does the same to you.
+
+
+
+     Due to continuous espionage activities, present front-line  ships
+of the Federation and the Klingon Empire are identical in strength and
+weaponry.  These ships can move from sector  to  sector  using  either
+warp  engines  or  impulse  power,  can attack enemy installations and
+ships using  either  photon  torpedoes  or  phasers,  and  can  defend
+themselves  against  such  attack  using their deflector shields.  All
+ships also possess sub-space radios which  keep  them  in  touch  with
+friendly starbases as well as other ships.
+
+
+     The various devices of a ship are subject to damage.  This damage
+may  be  due  to  enemy  attack or to over use.  These damages, unlike
+total ship damage, may be repaired  while  underway.   If  any  device
+possesses  300  or  more units of damage, it is inoperative until this
+situation is remedied.  A ship possesses the following devices:
+
+     1.  Warp Engines -- These engines are the normal mode  of  travel
+         for starships.  The maximum allowable speed is warp factor 6,
+         with warp's  5  and  6  risking  potential  damage  to  these
+         engines.
+
+     2.  Impulse Engines -- These engines are basically for  emergency
+         use  while  the warp engines are critically damaged.  Impulse
+         engines move the ship at warp factor 1.
+
+     3.  Photon Torpedo Tubes -- Used to fire  photon  torpedoes.   If
+         these  tubes  are  damaged, the accuracy of torpedo bursts is
+         impaired.  The maximum torpedo range is 10 sectors.
+
+     4.  Phaser Banks -- Each ship possesses two phaser banks, with  a
+         single  phaser  control.  Damage to this phaser control or to
+         the ship's computer reduces the strength of the phaser hit.
+
+     5.  Deflector Shields -- The deflector shields of a ship  protect
+         it  from  damage  from  phaser  and photon torpedo hits.  The
+         percent shield strength indicates the percent of the incoming
+         hit  which  will be nullified.  In addition, strong deflector
+         shields may  deflect  photon  torpedoes  with  little  or  no
+         damage.   NOTE:   If  a  ship's shields are up, the amount of
+         energy expended during movement is doubled.
+
+     6.  Ship Computer -- The ship's computer  is  used  for  computed
+         firing,  computation  during  ship  movement,  and for phaser
+         control.  If the computer is inoperative,  navigation  during
+         warp and impulse movement becomes inexact.
+
+     7.  Life Support -- If the life support units of a  starship  are
+         inoperative,  the ship must either repair this damage or dock
+         within 5 stardates.  If this is not  accomplished,  the  crew
+         will die.
+
+     8.  Sub-Space Radio -- The sub-space radio is used to communicate
+         with  other  ships,  of either side.  Bases under attack also
+         use the sub-space radio to call for  help  and  notify  their
+         team's ships of their destruction.
+
+     9.  Tractor Beam -- The ship's tractor beam is used primarily  to
+         tow  damaged  friendly  ships away from danger.  The beam can
+         not be used unless both ships have lowered their shields.
+
+     In addition to the individual devices discussed  above,  a  newly
+commissioned  ship  (or  a  fully  repaired  and  rearmed  older ship)
+possesses the following attributes:
+
+     1.  5000 units of  ship  energy.   This  energy  is  used  during
+         movement  as  well  as  phaser firing.  If this quantity ever
+         reaches zero (0), the ship is dead.  A ship  possessing  1000
+         units  of  ship  energy  or less automatically goes to yellow
+         alert, and a warning bell sounds after every move.
+
+     2.  2500 units of shield energy.  This energy is  stored  in  the
+         ship's shields (whether up or down), and is separate from the
+         ship energy.  However,  energy  may  be  transferred  between
+         these two energy reserves as needed.
+
+     3.  Zero (0)  units  of  ship  damage.   During  battle,  a  ship
+         collects  hits  from enemy installations and ships.  If these
+         accumulated hits ever reach 2500 units of damage or  greater,
+         the  ship  is  destroyed.  Ship damage may be reduced only by
+         docking.
+
+
+     The galaxy is arranged in a grid of 75 by  75  sectors.   Players
+can  move  freely  throughout  the galaxy in search for enemies, which
+come in one of several categories:
+
+     1.  Romulan.  This  is  the  most  dangerous  thing  to  come  up
+         against,  and  fortunately there is a maximum of 1 Romulan in
+         the game  at  any  given  time.   The  Romulan  moves  around
+         concealed  by  his  cloaking  device  until he comes across a
+         suitable target (Federation or Empire ship or base) which  he
+         immediately  proceeds  to  attack.   An  infinite  supply  of
+         torpedoes and energy make him a formidable foe.  If you  kill
+         one, another will eventually appear somewhere in the galaxy.
+
+     2.  Enemy ship.  This is the second most dangerous thing to  come
+         across,   since   all   enemy   ships  are  backed  by  human
+         intelligence.  All  ships  are  created  equal,  and  so  the
+         outcome  of a clash between two ships is usually due to skill
+         on its captain's part, although some other  factors  do  come
+         into play.
+
+     3.  Enemy base.  These aren't dangerous unless  you  come  within
+         range (4 sectors) since they are immobile.  Destroying a base
+         is useful primarily because it removes it from  use  by  your
+         enemy  (bases  are used as supply stations and as a refuge in
+         times of stress).   A  damaged  starbase  will  slowly  build
+         itself  back  to  full  strength  if  it  is  not  completely
+         destroyed.
+
+     4.  Enemy planet.  These are just like enemy bases,  except  that
+         they're   weaker   (how  MUCH  weaker  depends  on  how  many
+         fortifications the enemy has built on them).  They're  firing
+         range  is  only two sectors, and they can re-supply the enemy
+         less rapidly than can a base.
+
+     5.  Neutral planet.  While these aren't  strictly  classified  as
+         enemies,  they  will  take pot shots at you (they're range is
+         also 2 sectors), so be wary of them.
+
+     When playing the game, all  commands  may  be  abbreviated  to  2
+characters,  and  some  may be abbreviated to 1 character (you may use
+the shortest unambiguous abbreviation, which is usually 2 characters).
+For  a  list of the possible commands type HELP, and for a description
+of an individual command type HELP command.  The  help  on  individual
+commands  will be read from this help file (that's what the periods in
+column 1 are for in the long description of each command).  The  legal
+commands are:
+
+     1.  BASES -- List the position and status of friendly  bases,  or
+         the status of known enemy bases.
+
+     2.  BUILD -- Develop installations on a  planet,  and  eventually
+         build it into a base.  The planet must first be captured.
+
+     3.  CAPTURE -- Win a neutral or enemy planet over to your side.
+
+     4.  DAMAGES -- List damaged devices and their current status.
+
+     5.  DEFINE -- Give a name to a group of ships  to  send  messages
+         to.
+
+     6.  DOCK -- Dock at an adjacent base or planet.   This  increases
+         your  energy, replenishes your torpedoes, repairs your ship a
+         little, and reduces your ship damage.
+
+     7.  ENERGY -- Transfer energy between two ships.
+
+     8.  GRIPE -- Record bugs, comments, suggestions, etc.  in a  file
+         that  is  periodically reviewed by people responsible for the
+         upkeep of the game.
+
+     9.  HELP -- List or describe possible commands.
+
+    10.  IMPULSE -- Move under impulse engines.
+
+    11.  MOVE -- Move using warp engines.
+
+    12.  NEWS -- Tells about any new features or enhancements.
+
+    13.  PHASERS -- Fire phasers at a target.
+
+    14.  PLANETS -- List various information about known planets.
+
+    15.  POINTS -- List your score breakdown so far.
+
+    16.  RADIO -- Turn ship's sub-space radio on or off.
+
+    17.  REPAIR -- Repair your damaged devices a little.
+
+    18.  SCAN -- Display the galaxy with  the  default  range  set  to
+         maximum (10 sectors in each direction from your ship).
+
+    19.  SEND -- Send messages to  other  ships  using  the  sub-space
+         radio.
+
+    20.  SHIELDS -- Transfer energy to or from your shields, or  raise
+         or lower your shields.
+    21.  SRSCAN -- Display the  galaxy  with  a  default  range  of  7
+         sectors (1 greater than the maximum warp factor).
+
+    22.  STATUS -- List your ship's current status and supply levels.
+
+    23.  TARGETS -- List targets  (enemies  within  range)  and  their
+         current locations.
+
+    24.  TERMINATE -- Get out of the game.
+
+    25.  TIME -- Provides information on run time and elapsed time.
+
+    26.  TORPEDOES -- Fire photon torpedoes.
+
+    27.  TRACTOR -- Use tractor beam to tow friendly ships.
+
+    28.  USERS -- List the names and other information known about the
+         players currently in the game.
+
+
+
+.PAUSES
+Commands that take real time
+
+Many of the commands are designed to take a  certain  amount  of  real
+time.  This is done to help equalize the game when there are different
+speed terminals  and  different  speed  typists  in  the  game.   Some
+commands  take  a  constant  amount of time, and some are based on the
+speed of the slowest terminal in the game.
+
+BUILD     5 to 7 seconds
+CAPTURE   5 seconds
+DOCK      2 to 4 seconds
+IMPULSE   2 to 4 seconds
+MOVE      2 to 4 seconds
+REPAIR    4 seconds
+
+You have 2 phaser banks, each of which must be cooled off  after  it's
+fired  before  it  can  be  used again.  Each phaser bank takes 3 to 6
+seconds plus the amount of phaser damage  /  100  to  cool  off.   For
+instance,  if  there  was  a  300  baud terminal in the game, and your
+phasers had 200 units of damage, each of your phaser banks would  take
+6 + 2 = 8 seconds to cool off after being fired.  Therefore, you could
+fire once every 4 seconds, or twice every 8 seconds.
+
+After each burst of torpedoes the tubes must be reloaded before  being
+used  again.   It takes 2 to 4 seconds plus the amount of torpedo tube
+damage / 100 to load a torpedo.  For instance, if there was a 300 baud
+terminal  in the game, your torpedoes had 200 units of damage, and you
+had just fired 3 torpedoes, it would take 4 *  3  +  2  =  14  seconds
+before you could fire torpedoes again.
+
+Because of the huge amount of time taken for scans on slow  terminals,
+SCAN  and  SRSCAN  also have pauses.  If there are only fast terminals
+playing, there is no pause, but if there is a slower terminal  in  the
+game, the number of seconds paused is 0.04 * area scanned.
+.
+
+.ESCAPE
+Use of the ESCAPE (ALTMODE) key
+
+A lone altmode entered in response to the COMMAND prompt will  execute
+the previously entered command.  This is useful when building a planet
+into a base, when docking, repairing, firing torpedoes, etc.
+.
+
+.CTL-C
+Use of ^C
+
+If you're in command input wait (DECWAR is waiting for you to  type  a
+command),  typing  ^C  will  output a series of bells and leave you in
+command input wait state.  A second ^C will then abort  the  game  and
+return  you  to monitor mode.  When you abort the game in this manner,
+your ship is returned to the pool of available  ships.   You  will  be
+able  to  continue  unless someone has taken over your ship or someone
+has moved into the spot you occupied.
+
+If you're not in a command input wait state  when  you  type  ^C,  any
+stacked  commands  (commands  that  you  typed  in  ahead of time that
+haven't been executed yet) will be aborted, and a series of bells will
+be  output.   After  you hear the bells, ^C will act as above (it will
+take you out of the game).
+.
+
+.CTL-T
+Use of ^T
+
+The name of game changes during different stages.  During startup,  it
+will  be  DECWAR.   When  waiting  for input, it will be DECWTI.  When
+executing a command, it will be DECWRN.  When sleeping after a command
+that  takes  time (MOVE, CAPTURE, BUILD, etc.) it will be DECWSL.  You
+can tell what state the game is in by typing ^T  and  looking  at  the
+program  name  displayed.  This is useful when you're not sure if it's
+waiting for a command yet or still executing a series of commands  you
+typed in ahead of time.
+.
+.BASES
+BASE information
+
+Syntax:  BAses, or BAses n1 n2, or BAses Nearest
+
+This command is used to provide the location and  shield  strength  of
+all  the  bases  on your side, or just of one base on either side (the
+location of an enemy base must already be known).  Also,  the  NEAREST
+switch will give the location of the nearest friendly base.
+
+Examples:
+
+BA              Gives location and shield strength of ALL functional
+                bases on your side
+BA 32 14        Gives shield strength of base at sector 32 - 14
+BA n            Gives location of nearest friendly base
+.
+
+.BUILD
+BUILDing a starbase
+
+Syntax:  BUild <a,r> n1 n2
+
+To fortify a captured  planet.   Captured  planets  may  be  fortified
+against  recapture  (and/or  destruction)  by  the  enemy  using  this
+command, up to a maximum of four builds per planet.  In  addition,  as
+your  team's  starbases  are  destroyed by enemy action, a fifth build
+will complete the  construction  of  a  NEW  starbase  on  the  planet
+specified.   Only  ten starbases per team may be functional at any one
+time.  The planet's location may be  given  in  Absolute  or  Relative
+coordinates.
+
+Examples:
+
+BU 32 12        Build the planet at sector 32 - 12
+BU a 32 12      Equivalent to "BU 32 12"
+BU r 1 1        Build the planet at sector 32 - 12, if your present
+                location is 31 - 11
+.
+
+.CAPTURE
+CAPTURing planets
+
+Syntax:  CApture <a,r> n1 n2
+
+Capture of neutral or enemy planets.  At the start  of  the  game  all
+planets are neutral (they fire at everyone!).  Once captured by either
+side, they fire only at enemy ships, and can be DOCKed  at  to  refuel
+and  rearm, just like a base.  Enemy planets may also be captured, and
+recaptured any number of times.  The planet's location may be given in
+Absolute or Relative coordinates.
+
+Examples:
+
+CA 12 32        Capture planet at sector 12 - 32
+CA a 12 32      Equivalent to "CA 12 32"
+CA r 1 1        Capture planet at sector 12 - 32, if your ship's
+                present location is 11 - 31
+.
+.DAMAGES
+DAMAGE report
+
+Syntax:  DAmages <device names>
+
+Reports on the damaged devices of your ship, listing the  device  name
+and  the  current  amount  of  damage.   The  condition of all or just
+selected devices may be examined.  Total SHIP damage is NOT reported.
+
+Examples:
+
+DA              Lists all damaged devices and their current damages
+DA sh t         Lists damages for SHields and Torpedos (Photon tubes)
+DA ph ra c      Lists damages for PHasers, sub-space RAdio, and
+                Computer
+.
+
+.DEFINE
+DEFINition of SEND groups
+
+Syntax:  DEfine <group name> <ship names>
+
+This command is used to assign groups of ships  to  a  specific  name,
+thus  simplifying  the  sending  of messages to multiple players.  All
+players begin the game with certain standard group names  defined,  as
+described  in  the  SEND  help  file.   Groups  may  be  redefined  or
+eliminated as desired.  Group names will  be  truncated  to  five  (5)
+characters.
+
+Examples:
+
+DE fools i e l  SEND FOOLS now equivalent to SEND I E L.
+DE fools        Eliminates FOOLS as a valid group name.
+.
+
+.DOCK
+DOCKing at bases or planets
+
+Syntax:  DOck <ST <device name(s)> >
+
+To refuel, repair, and rearm your ship by DOCKing.  If you are  within
+one  sector of a base or captured planet, you can DOCK, thereby adding
+to your ship  and  shield  energy  supplies,  increasing  your  photon
+torpedo  reserves,  and  reducing  your SHIP damage.  Also, repairs to
+devices are accelerated while you are docked.  If you have NO  damages
+and  are  completely refueled and rearmed, DOCKing will have no affect
+on your ship, and will in effect be a wasted move.  No coordinates are
+needed, the ship's computer will determine whether you are adjacent to
+a base.  A STATUS command string may be appended to a DOCK order.
+
+Examples:
+
+DO              Dock, no status report
+DO st           Dock, show ship's status AFTER docking
+DO st sh t      Dock, show ship's shield strength and number of
+                torpedos on board AFTER docking
+.
+
+.ENERGY
+ship-to-ship ENERGY transfer
+Syntax:  Energy  ship name  units of energy to transfer
+
+Allows a ship to transfer energy to another ship  of  the  same  team.
+The two ships must be located in adjacent sectors.  Ten percent of the
+energy transferred will be lost due to broadcast  dissipation.   If  a
+ship  attempts  to  send more energy than the other ship can store (ie
+5000 units), the transfer will automatically be reduced to the maximum
+possible.
+
+Example:
+
+E i 1000        Transfers 1000 units of energy to the Intrepid.  The
+                Intrepid will receive 900 units of energy.
+.
+
+.GRIPE
+submitting GRIPEs
+
+Syntax:  Gripe
+
+To report bugs in the game and to suggest  possible  additions  and/or
+modifications  in  the  code.   Type in your comments, then a CTL-Z to
+exit and continue the game.  Unless you are currently under red alert,
+GRIPE will protect you from enemy attack.
+.
+
+.HELP
+HELP documentation
+
+Syntax:  Help <command>
+
+Lists the available commands, and provides information on  the  syntax
+and  use  of these commands.  Each file begins with the syntax of that
+command, then includes a short description of  its  use,  and  finally
+some examples where needed.  Unless you are currently under red alert,
+HELP will protect you from enemy attack.
+
+Examples:
+
+H               List all the available commands
+H sh            Give help for SHIELDS command
+.
+
+.IMPULSE
+move using IMPULSE power
+
+Syntax:  Impulse <a,r> n1 n2
+
+Moves ship using impulse power.  Fixed movement per turn of one sector
+vertically, horizontally, or diagonally (equivalent to warp factor 1).
+As with the Warp drive, the desired move may be given in  Absolute  or
+Relative coordinates.
+
+Examples:
+
+I 37 45         Move to sector 37 - 45
+I a 37 45       Equivalent to "I 37 45"
+I r 1 -1        Move to sector 37 - 45, if your ship's present
+                location is 36 - 46
+.
+.MOVE
+MOVE using warp drive
+
+Syntax:  Move <a,r> n1 n2
+
+Moves ship using warp drive.  Maximum allowable warp speed is 6,  with
+each  warp factor corresponding to one sector of vertical, horizontal,
+or diagonal movement.  Maximum SAFE warp speed is four;  warp  factors
+five  and  six  risk potential warp engine damage.  Energy consumption
+per move is proportional to the square of the  warp  factor.   If  the
+ship's  shields are up during this movement, the energy consumption is
+doubled.  The desired move  may  be  given  in  Absolute  or  Relative
+coordinates.
+
+Examples:
+
+M 37 45         Move to sector 37 - 45
+M a 37 45       Equivalent to "M 37 45"
+M r 4 -5        Move to sector 37 - 45, if your ship's present
+                location is 33 - 50
+.
+
+.PHASERS
+PHASERS
+
+Syntax:  PHasers <a,r,c> <energy consumption> n1 n2
+
+Fires Phasers at a target.  Only  one  target  may  be  specified  per
+command.   The  size  of  the  hit  is  inversely  proportional to the
+distance  from  the  target.   Maximum  range  is  ten  (10)   sectors
+vertically,  horizontally,  or  diagonally.  Each phaser fire consumes
+200 units of ship energy,  unless  a  specific  amount  of  energy  is
+specified.   A  phaser  fire must consume at least 50 units of energy,
+and may not use more than 500 units of energy.  The phaser banks  have
+roughly  a 5% chance of damage with a default (200 unit) hit, with the
+probability of damage reaching nearly 65% with a  maximum  (500  unit)
+hit.   The  severity  of the resulting damage is also dependant on the
+size of the hit.  Also, if your ship's shields are  up,  a  high-speed
+shield  control  is used to quickly lower and then restore the shields
+during the fire.  This procedure consumes another 200  units  of  ship
+energy.    NOTE:    Although   Phasers   can  damage  enemy  planetary
+installations (BUILD's), they can NOT destroy the planet itself.   The
+target location may be specified using Absolute, Relative, or Computed
+(300 baud or less jobs only) coordinates.
+
+Examples:
+
+PH 12 32        Phaser target at sector 12 - 32
+PH a 12 32      Equivalent to "PH 12 32"
+PH r 2 -3       Phaser target at sector 12 - 32, if your ship's
+                present location is sector 10 - 35
+PH c Raven      Phaser the Raven (if in range)
+PH 300 12 32    Phaser target at sector 12 - 32, using 300 units
+                of energy.
+.
+
+.PLANETS
+PLANET information
+
+Syntax:  PLanets <ALL,SUM,CAP,FED,KLI,EMP> and/or <ranges,locations>
+Provides the locations  and  current  political  leanings  of  all  or
+selected  planets  which  your  ship's computer currently has data on.
+The listing produced by this command is  controlled  by  the  'groups'
+requested.   Groups can be defined using specific coordinates, ranges,
+political affiliations, or combinations of the above.  More  than  one
+group  can  be defined in one PLANETS command, linked by 'and' (serves
+as a logical 'OR').
+
+Examples:
+
+PL              Lists all CAPTURED planets (of both sides), plus any
+                NEUTRAL planets within 10 sectors.
+PL all          Equivalent to "PL".
+PL summary      Give summary for ALL planets.
+PL fed          Lists all FEDERATION planets.
+PL kli (or emp) Lists all KLINGON EMPIRE planets.
+PL cap          Lists all CAPTURED planets.
+PL n            Lists all NEUTRAL planets within 10 sectors.
+PL n 10         Equivalent to "PL n".
+PL all and n    Equivalent to "PL"
+PL 4            List all planets within 4 sectors.
+PL 12 32        Show political affiliation of planet at sector 12 32.
+PL fed 5        List FEDERATION planets within 5 sectors.
+PL fed 5 and n  List FEDERATION planets within 5 sectors and NEUTRAL
+                planets within 10 sectors.
+.
+
+.POINTS
+POINTS scored
+
+Syntax:  POints <ME,KLI,EMP,HUM,FED,ROM,ALL>
+
+Itemizes  the  game's  point  totals  up  to   the   present   moment.
+Information  can  be  obtained  concerning  the  points scored by your
+individual ship, your team,  the  opposition,  the  romulans,  or  any
+combination  of  the  above.  If the Romulan Empire is not involved in
+the game, the ROM switch will be ignored.
+
+Examples:
+
+PO              Prints out the scoring of your present ship.
+PO me           Equivalent to "PO".
+PO kli fed      Prints out the scoring of the two teams.
+PO all          Prints out all the scoring information available.
+.
+
+.RADIO
+Turn Sub-Space RADIO on or off
+
+Syntax:  Radio ON, or Radio OFF
+
+Turns on or off your ship's Sub-Space Radio, thus controlling  whether
+you will receive any messages from other ship's or your bases.
+
+Examples:
+
+RA on           Turn Sub-Space radio ON.
+RA off          Turn Sub-Space radio OFF.
+.
+.REPAIR
+REPAIRing ship damages
+
+Syntax:  REpair
+
+Repairs damaged ship devices.  If a ship suffers a critical hit  to  a
+device,  REPAIR can be used to restore the device to full (or partial)
+working order.  A call to REPAIR removes fifty (50)  units  of  damage
+from  each  damaged  device,  in addition to the normal repair rate of
+thirty (30)  units  per  turn.   Also,  if  the  ship  is  DOCKED,  an
+ADDITIONAL  fifty  (50)  units  of damage is removed.  REPAIR does NOT
+reduce the SHIP damage.
+.
+
+.SCAN
+full range SCAN
+
+Syntax:  SCan <u,d,r,l,c>;  <range> or <Vrange,Hrange>;  <w>
+
+Displays a selected portion of the nearby universe.  If  no  range  is
+specified,  SCAN  defaults  to a square scan range of ten sectors from
+the present ship location.  The switches UP, DOWN,  RIGHT,  LEFT,  and
+CORNER  modify  this  to include only the part of this original square
+specified (relative to the  ship).   The  maximum  scan  range  is  10
+sectors,  and  larger  specified ranges are reduced to this value.  If
+individual vertical and horizontal ranges are specified, the  scanning
+field  will be shaped accordingly.  The WARNING switch if added to the
+end of a scan command string will flag the empty sectors within  range
+of  an enemy base or planet with #'s instead of .'s.  The scan symbols
+and their meanings are:
+
+        *               Star
+        @               Planet
+       []               Federation base
+       ()               Empire base
+       ~~               Romulan warship
+        .               Empty sector
+                        Black hole
+E,I,L,N,S,T,V,Y         Federation warships
+B,C,F,H,J,P,R,W         Empire warships
+        #               Empty sector in range of enemy base or planet
+                        (using WARNING switch)
+
+Examples:
+
+SC              Scan universe within 10 sectors
+SC 10           Equivalent to "SC"
+SC 4            Scan universe within 4 sectors
+SC 13           Equivalent to "SR 10" or "SC"
+SC 4 4          Equivalent to "SC 4"
+SC 2 8          Scan up to 5 rows and 17 columns, centered on the
+                present ship location
+SC u 4 7        Shows only upper half of normal "SC 4 7" scan
+SC c -5 -5      Scan the region bounded by the present ship location
+                and the location (-5,-5) sectors away (puts ship in
+                one corner of the scan)
+SC w            Same as 'SC', plus showing danger zones around enemy
+                bases and planets
+.
+.SEND
+SENDing messages using the sub-space radio
+
+Syntax:  SEnd <to> <ALL,KLI,EMP,FED,player(s),group(s)> ;  message
+
+Sends messages to one or several of the players currently in the game,
+with  no  range limitation.  Players who have turned their radios off,
+or have a critically damaged sub-space radio can not be sent to.
+
+Examples:
+
+SE v;Hello!             Sends 'Hello!' to the Vulcan.
+SE klingon;DROP DEAD!   Sends 'DROP DEAD' to all Klingons.
+SE v,e;HELP ME          Sends 'HELP ME' to the Vulcan and Enterprise.
+.
+
+.SHIELDS
+SHIELD maintenance
+
+Syntax:  SHields Up, SHields Down, or SHields Transfer n
+
+Allows a player to raise or lower ship shields, as  well  as  transfer
+energy  between  ship  (engines)  and shield energy reserves.  Raising
+shields  consumes  100  units  of  ship  energy,  lowering   them   or
+transfering energy is 'free'.
+
+Examples:
+
+SH u            Shields Up      (RAISE shields)
+SH d            Shields Down    (LOWER shields)
+SH t  500       Transfer 500 units of energy TO shields
+SH t -500       Transfer 500 units of energy FROM shields
+.
+
+.SRSCAN
+Short Range SCAN
+
+Syntax:  SRscan <u,d,r,l,c>;  <range> or <Vrange,Hrange>;  <w>
+
+Equivalent to SCAN, but with a default scan range of 7  sectors.   For
+complete information on sensor scans, type HELP SCAN.
+.
+
+.STATUS
+STATUS of ship
+
+Syntax:  STatus <c,l,t,e,d,s>
+
+Reports current status of ship.   Allows  player  to  check  his  ship
+Condition,  Location,  Torpedo  supply,  ship  Energy, ship Damage and
+Shield condition individually or as a group.
+
+Examples:
+
+ST              Give full status report
+ST t            Report how many torpedos remain on board
+ST e d sh       Report the ship energy, the ship damage, and the
+                shield condition (energy, %, up/down)
+ST l            Report the current ship location
+.
+.TARGETS
+TARGETS in range command
+
+Syntax:  TArgets <range>
+
+Provides a listing of all enemy ships, bases,  and  planets  within  a
+certain  range  (ten  sectors  maximum).   The  location  (and  shield
+strength if a base or ship) is provided for  each  target.   Primarily
+for  locating  a  target  during  battle  when  a  scan  would  be too
+time-consuming.
+
+Examples:
+
+TA              List all targets within ten (10) sectors.
+TA 10           Equivalent to "TA".
+TA 5            List all targets within five (5) sectors.
+.
+
+.TERMINATE
+TERMINATE command
+
+Syntax:  TErminate
+
+To quit the game  prematurely  and  return  to  monitor.   Permanently
+removes  your  ship  from the game.  To temporarily leave the game (to
+answer SENDS, etc.) type ^C.  Typing CONTINUE will then restore you to
+the game in your prior condition and location.
+.
+
+.TORPEDOS
+photon TORPEDO burst
+
+Syntax:  TOrpedo <a,r,c> num n1 n2 <n3 n4> <n5 n6>
+
+Fires Photon Torpedo burst at a target.   One,  two,  or  three  (max)
+torpedos  may  be  fired  with  one  command,  and the torpedos may be
+individually targeted, or fired at a  common  location.   The  minimum
+range  of  a  photon  torpedo  is  8  sectors, but some will travel 10
+sectors before self-destructing.  Photon  torpedos  may  be  deflected
+from  the  desired  track to a greater or lesser extent by a number of
+different factors, including your ship's shield strength, Computer and
+Photon  tube  damage,  and  torpedo  misfires.  A torpedo misfire also
+aborts the rest of the burst, and sometimes damages the  Photon  tubes
+as  well.   Photon  torpedos  may cause stars to go nova, and can also
+destroy planets (if no enemy installations remain intact).  The target
+location  may  be  given  in Absolute, Relative, or Computed (300 baud
+jobs or less) coordinates.  A torpedo burst uses no ship energy.
+
+Examples:
+
+TO 1 12 24              Fire one torpedo at sector 12 - 24
+TO 3 12 24              Fire three torpedos at sector 12 - 24
+TO 3 12 24 13 39 45 12  Fire one torpedo at sector 12 - 24,
+                        one torpedo at sector 13 - 39,
+                        and one torpedo at sector 45 - 12
+TO 3 12 24 13 39        Fire one torpedo at sector 12 - 24,
+                        and two torpedos at sector 13 - 39,
+TO a 3 12 24            Equivalent to "TO 3 12 24"
+TO r 2 2 -5             Fire two torpedos at sector 22 - 25,
+                        assuming your location is 20 - 30
+TO c 3 Raven            Fire three torpedos at the Raven
+.
+
+.TRACTOR
+TRACTOR beam usage
+
+Syntax:  TR <ship name> or TR off
+
+Allows a ship to tow another ship of the same  team.   The  two  ships
+must  be  located  in  adjacent sectors and both ships must have their
+shields lowered.  Once such a beam is applied, either  ship  can  pull
+the other behind it using warp or impulse engines.  Energy consumption
+for the towing ship is three (3) times the normal  rate  for  movement
+with  the  shields  down.   The  ship  being  towed  will end the move
+trailing the lead ship.  If either ship raises his deflector  shields,
+the  tractor beam is automatically cut.  The tractor beam will also be
+broken if either ship is hit by a torpedo or damaged by a nova.
+
+Examples:
+
+TR              Breaks any existing tractor beam
+TR off          Equivalent to TR
+TR r            Apply tractor beam to the Raven.
+.
+
+.USERS
+USERS command
+
+Syntax:  Users
+
+This command lists all the ships currently active in the  game,  along
+with each ship's captain, TTY number, baud rate, and PPN.
+.
+

@@ -1,0 +1,2806 @@
+.CONTROL CHAR
+.VARIABLE HLP T,F
+.LM 0;.RM 72;.NNM;.NPA
+.IF HLP
+.C;SOS HELP FILE
+.ELSE HLP
+.C;SOS MANUAL
+.ENDIF HLP
+.C;Version 23E(77)
+.B
+SOS is the Son Of Stopgap text editor. This file briefly describes
+each of the SOS commands and its use. For help on a particular
+command, type "H,<command name>" to SOS. For example, information on
+all alter mode commands is available by typing "H,A" to SOS. Help for
+the various SOS switches can be had by typing "H,/". A highly
+abbreviated command list appears below.
+.B;.NF
+A (Alter) Intraline editing        M (Mark) Insert page mark
+B (Begin) Go to top of file        N (Number) Re-number lines
+BP(Begin Page) Go to top of page   NA(Number And open) Open a hole
+C (Copy) Copy text                 NF(Number file) Renumber file
+CC(Co-Copy) Co-edit copy           NP(number page) Renumber page
+CT(Co-Transfer) Co-edit text move  O (Output) Output text to a file
+CX(Co-edit) Begin/toggle co-edit   P (Print) Print lines on TTY
+D (Delete) Delete text             R (Replace) Delete and insert
+E (Exit) Terminate editing         S (Substitute) Search and replace
+F (Find) Find a string             T (Transfer) Move text
+G (Go) Exit and run program        VL(inVert Lower) Convert to LC
+H (Help) Type help messages        VU(inVert Upper) Convert to UC
+I (Insert) Insert new text         VV(inVert inVert) Toggle case
+J (Join) Join lines                W (World) Save the world (file)
+JC(Justify Centered) Center text   X (eXtend) Append to end of line
+JL(Justify Left) Flush text left   ; (comment) Rest of line ignored
+JR(Justify Right) Flush text right @ (indirect) Execute from a file
+JU(Justify) Fully justify text     = (give) Type parameter values
+JW(Justify Word) Word justify text / (set) Set values
+K (Kill) Delete page marks         . (move) Move line pointer
+L (List) List lines to LPT:
+.IFNOT HLP
+.B;.F
+Throughout this file, the following terms apply.
+.B;.LM 16
+.I-16;Term	Meaning
+.B
+.I-16;n		a positive integer.
+.I-16;+n		a positive integer.
+.I-16;-n		a negative integer.
+.I-16;range		is an SOS line range specification. It is made up of
+a starting and an ending point separated by a colon.
+A line number specification is given on each side of
+the colon. There are several special elements that
+may be used in line number specifications in place of
+or in addition to an actual line number. These are:
+.B;.LM 24
+.I-8;_#	is the first line of the last line range
+specification given.
+.I-8;%	is the last line of the last insert command
+given.
+.I-8;_.	is the current line number if used to the left
+of a slash, or the current page if used to the
+right of a slash. This may be omitted on most
+commands (except "R" and "D" in NOVICE mode).
+Thus, "A.<CR>" and "A<CR>" are equivalent.
+.I-8;_^	is the first line on the current page if used
+to the left of a slash or the first page in
+the current file if used to the right of a
+slash.
+.I-8;*	is the last line on the current page if used
+to the left of a slash or the last page in the
+current file if used to the right of a slash.
+.I-8;!	may be suffixed to a line number or one of the
+above characters and followed by a digit
+giving the number of lines. Thus, ".!5" means
+five lines starting at the current line.
+.I-8;BF	is the beginning of file (same as _^/_^).
+.I-8;EF	is the end of file (same as */*) when used as
+the second argument to the range specifier, or
+is the entire file (same as _^/_^:*/*) when used
+as a range specifier by itself.
+.B;.LM 16
+Arithmetic expressions using plus and minus may also
+be included in a line number specification. Thus,
+".-5" means five lines before the current line, ".+4"
+means 4 lines beyond the current line, and ".-2!4"
+means start 2 lines before the current line and go for
+4 lines.
+.B
+In addition, a line number specification may be
+suffixed with a slash and a page number specification.
+Page numbers can be constructed in a manner similar to
+line numbers. As an example, "_^!5/47" means five
+lines starting at the first line on page 47. If the
+page specification is omitted, the current page is
+assumed.
+.B
+Thus an example of a line range specification would be
+"10/1:*/999", meaning line 10 on page 1 through the
+last line on page 999.
+.B
+A search string specified between ALTmodes may be
+specified in place of a line number specification.
+Commands using this must be terminated with 1 <CR> to
+end the search string, and 1 additional <CR> to end
+the command instead of the usual 1 <CR>. Thus,
+"$foo$<CR><CR>" means the next line containing the
+string "foo".
+.B
+.I-16;$		is the symbol for the ESCape or ALTmode key. If this
+character is typed in response to the SOS "*", the
+line preceding the current line will be printed.
+.B
+.I-16;<CR>		is the symbol for the Carriage Return key.
+.B
+.I-16;<LF>		is the symbol for the Line Feed key. If <LF> is typed
+in response to the SOS "*", the line following the
+current line will be printed.
+.B
+.I-16;<STRING>	is used to represent a valid search string. A search
+string consists of up to 20 character strings separated
+by <CR> and terminated by an ALTmode. The search
+string may contain certain special characters to
+control the search. The S(ubstitute) command accepts
+two such arguments - the first is the string to look
+for, while the second is a string to replace the first
+one. These special characters are preceeded by a
+control-E (_^E). A detailed explanation of the
+pattern match characters can be found under _^E.
+.B
+.I-16;_^_^		is also used as a flag in this file for the SOS "H,x"
+command. _^_^ may be encountered if the monitor command
+.B
+_.HELP SOS
+.B
+is used. It is not part of the text and should be
+ignored.
+.PAGE
+.I-16;_A/NEWALTER
+.I-16;Purpose:	The "A" command causes SOS to enter intraline edit
+mode. Once in this mode, any of the intraline edit
+commands are valid. Unless otherwise noted, an
+intraline edit command may be preceded by an integer
+and/or a sign to modify its function. In general, a
+positive integer preceding a command means "the next
+<integer> occurrences", and a negative integer means
+"the previous <integer> occurrences". If no integer
+precedes a command, 1 is assumed. At all times, the
+cursor is positioned between 2 characters or between a
+character and one end of the line. The cursor will be
+visually positioned on top of the character it
+logically precedes.
+.B
+A "word" in the following discussion means any number
+of consecutive letters, numbers, periods, percent
+signs, dollar signs, and any surrounding tabs or
+blanks.
+.B
+Examples:
+Cx Change next character to "x".
+4Cabcd Change the next 4 characters to "abcd".
+-Cz Change the previous character to "z".
+-2Cgo Change the previous two characters to "go".
+.B
+There are two classes of alter commands, immediate action, and those
+that require a unit and a mode. These two types are discussed below.
+.F;.B;.LM 16
+.I-16;Syntax:	A range
+.BR;Alter the line or lines specified by "range".
+.B
+A list of immediate action commands follows.
+.B;.LM 16
+.I-16;Command	Function
+.B
+.I-16;B		Insert a blank at the current cursor position.
+.I-16;C		Change the next character to be whatever is typed
+after the "C".
+.I-16;D		Delete the character under the cursor.
+.I-16;E		Exit alter mode on the current line; do not print the
+rest of line. All changes made before "E" is typed
+become permanent.
+.I-16;I		Enter insert mode. Allows an arbitrary string to be
+entered starting at the current cursor position and
+ending with an ALTmode or ESCape.
+.I-16;J		Join the next line to the end of the current line and
+position the cursor at the start of the joined text.
+.I-16;N		Print the rest of the current line, make the changes
+indicated, and enter alter mode on the next line.
+.I-16;O		Insert one character in the text. "nOc" will insert
+"n" occurrences of "c" starting at the current cursor
+position. "-nOc" is illegal.
+.I-16;P		Print the rest of the line, and then reprint the line
+number and the line up to the current cursor position.
+.I-16;Q		Quit alter mode. None of the changes made to the line
+are retained.
+.I-16;T		Insert a tab at the current cursor position.
+.I-16;X		Extend. Move to the end of the current line and enter
+insert mode. T may be terminated by typing ALTmode or
+ESCape. If a <CR> is typed while in eXtend mode, a
+new line will be started if use of the global line
+increment will allow room for a new line. If there is
+not enough room for a new line, <CR> returns you to
+SOS command mode. The <LF> character may be used to
+insert new lines and have SOS compute a new line
+number that will fit. The eXtend command may be
+prefixed by a count which will be interpreted as a
+suggested line increment.
+.I-16;'		Insert the control equivalent of the character typed
+after the apostrophe. For example, "'Z" inserts a
+Control-Z in the line.
+.I-16;+		Insert a copy of the character preceding the current
+cursor position. "n+" inserts "n" copies of whatever
+character precedes the current cursor position. "-n+"
+is illegal.
+.I-16;/		Transpose the next 2 characters.
+.I-16;_;		Break the line at the current cursor position and
+assign a new line number to the rest of the line. If
+there is no room for a new line, "%ORDER" is printed
+and the ";" is ignored.
+.I-16;<CR>		Type the rest of the line and end the alter, making
+all indicated changes to the line.
+.I-16;<LF>		If in insert mode, break the line at the current
+position and start a new line with whatever is left.
+If no room remains for another line number, "%ORDER"
+is printed, and the <LF> is ignored. If not in insert
+mode, <LF> is treated as <CR>.
+.I-16;_^R (Control-R)	Retype the current line up through the current cursor
+position.
+.I-16;RUBOUT		Back up the cursor 1 character if not in insert mode.
+If in insert mode, it erases the previous character.
+.I-16;_^U (Control-U)	Cancel all alterations on the current line and start
+over.
+.I-16;_^W (Control-W)	Backspace one word.
+.B
+The other class of alter commands work with a function to preform, and
+a unit (range) to perform it to. The general format of these commands
+is <optional signed repeat count number> <function> <unit>.
+.b
+The functions are:
+.B
+.I-16;K		Delete characters
+.I-16;R		Replace characters (delete and enter insert mode)
+.I-16;V		InVert case of characters
+.I-16;_^		Upper case characters
+.I-16;_\		Lower case characters
+.I-16;<null>		Move the cursor position
+.b
+The units are:
+.B
+.I-16;<space>		Single character
+.I-16;F<string>	Up to <string>
+.I-16;G<string>	Up to and including <string>
+.I-16;L		Entire line
+.I-16;M<string>	Only to <string>
+.I-16;S<char>		Up to <char>
+.I-16;W		Word
+.I-16;Z		To end of line
+.B
+For example, KW would delete a word, -3KW would delete the preceeding
+three words, KSx would delete up to character "x", RW would replace a
+word, W (null function) would skip a word, RZ would replace to end of
+line, etc.
+.PAGE
+.I-16;_A/OLDALTER
+.I-16;Purpose:	The "A" command causes SOS to enter intraline edit
+mode. Once in this mode, any of the intraline edit
+commands are valid. Unless otherwise noted, an
+intraline edit command may be preceded by an integer
+and/or a sign to modify its function. In general, a
+positive integer preceding a command means "the next
+<integer> occurrences", and a negative integer means
+"the previous <integer> occurrences". If no integer
+precedes a command, 1 is assumed. At all times, the
+cursor is positioned between 2 characters or between a
+character and one end of the line. The cursor will be
+visually positioned on top of the character it
+logically precedes.
+.B
+A "word" in the following discussion means any number
+of consecutive letters, numbers, periods, percent
+signs, dollar signs, and any surrounding tabs or
+blanks.
+.B
+Examples:
+Cx Change next character to "x".
+4Cabcd Change the next 4 characters to "abcd".
+-Cz Change the previous character to "z".
+-2Cgo Change the previous two characters to "go".
+.B
+The table below gives some of the more frequently used alter
+mode characters and their functions. The unit on which the
+character operates is given at the top of each column, and the
+effect of a given character is given down the left side. Thus
+"X" will replace the next word by deleting it and entering
+insert mode, allowing the user to type the replacement word.
+.NF;.LM 5;.B
+	        |Character|  Word   |  Line   |Character| String  |
+	        |         |         |         | Search  |         |
+	--------+---------+---------+---------+---------+---------+
+	Move    | Space   |  W      |  <TAB>  | S       | F       |
+	cursor  | Rubout  |         |         |         | G       |
+	--------+---------+---------+---------+---------+---------+
+	Delete  | D       |  Z      |  :      | K       | Y       |
+	        |         |         |         |         |         |
+	--------+---------+---------+---------+---------+---------+
+	Replace | C       |  X      |  H      | !       | M       |
+	        | R       |         |         |         |         |
+	--------+---------+---------+---------+---------+---------+
+	Change  | _^       |  V      |  _#      | "       |         |
+	case    |         |         |         |         |         |
+	--------+---------+---------+---------+---------+---------+
+.F;.B;.LM 16
+.I-16;Syntax:	A range
+.BR;Alter the line or lines specified by "range".
+.B
+A list of these commands follows.
+.B;.LM 16
+.I-16;Command	Function
+.B
+.I-16;B		Insert a blank at the current cursor position.
+.I-16;C		Change the next character to be whatever is typed
+after the "C".
+.I-16;D		Delete the character under the cursor.
+.I-16;E		Exit alter mode on the current line; do not print the
+rest of line. All changes made before "E" is typed
+become permanent.
+.I-16;F		Find a string. Type "F<string to look for>$". This
+will look for a string and place the cursor before the
+start of the string if successful; if not successful
+the bell is sounded at the user's terminal. RUBOUT
+and Control-U may be used to erase incorrectly typed
+characters when entering the search string. The
+special search control characters used with the F(ind)
+and S(ubstitute) commands are not allowed in alter
+mode search strings.
+.I-16;G		Identical to "F", except the cursor is positioned at
+the end of the string.
+.I-16;H		Hack (delete) the rest of the line and enter insert
+mode.
+.I-16;I		Enter insert mode. Allows an arbitrary string to be
+entered starting at the current cursor position and
+ending with an ALTmode or ESCape.
+.I-16;J		Join the next line to the end of the current line and
+position the cursor at the start of the joined text.
+.I-16;K		Search for the single character typed after "K",
+deleting all characters up to, but not including, the
+specified character. If the character is not found,
+nothing is deleted, the cursor is not moved, and the
+bell is sounded at the user's terminal.
+.I-16;L		List rest of line, reprint the line number and place
+cursor at start of line.
+.I-16;M		Similar to "F", but deletes the string and enters
+insert mode.
+.I-16;N		Print the rest of the current line, make the changes
+indicated, and enter alter mode on the next line.
+.I-16;O		Insert one character in the text. "nOc" will insert
+"n" occurrences of "c" starting at the current cursor
+position. "-nOc" is illegal.
+.I-16;P		Print the rest of the line, and then reprint the line
+number and the line up to the current cursor position.
+.I-16;Q		Quit alter mode. None of the changes made to the line
+are retained.
+.I-16;R		Replace. Deletes the specified number of characters
+and enters insert mode.
+.I-16;S		Search for the character typed after the "S" and place
+the cursor before it.
+.I-16;T		Extend. Move to the end of the current line and enter
+insert mode. T may be terminated by typing ALTmode or
+ESCape. If a <CR> is typed while in eXtend mode, a
+new line will be started if use of the global line
+increment will allow room for a new line. If there is
+not enough room for a new line, <CR> returns you to
+SOS command mode. The <LF> character may be used to
+insert new lines and have SOS compute a new line
+number that will fit. The eXtend command may be
+prefixed by a count which will be interpreted as a
+suggested line increment.
+.I-16;V		Invert the case of all letters in the next word.
+.I-16;W		Skip word. Places the cursor at the start of the
+next word when moving right, or at the start of the
+last word skipped when moving left.
+.I-16;X		Delete a word and enter insert mode.
+.I-16;Y		Similar to "F", but deletes the string.
+.I-16;Z		Delete a word.
+.I-16;!		Similar to "K", but enters insert mode after deleting
+all text up to, but not including, the character typed
+after the "!".
+.I-16;"		Invert the case of all characters up to the character
+typed after the quote.
+.I-16;'		Insert the control equivalent of the character typed
+after the apostrophe. For example, "'Z" inserts a
+Control-Z in the line.
+.I-16;_#		InVert the case of all letters from current cursor
+position to the end of line.
+.I-16;+		Insert a copy of the character preceding the current
+cursor position. "n+" inserts "n" copies of whatever
+character precedes the current cursor position. "-n+"
+is illegal.
+.I-16;/		Transpose the next 2 characters.
+.I-16;:		Delete the rest of the line.
+.I-16;_;		Break the line at the current cursor position and
+assign a new line number to the rest of the line. If
+there is no room for a new line, "%ORDER" is printed
+and the ";" is ignored.
+.I-16;_\		Transpose the previous 2 characters.
+.I-16;_^		Invert the case of the next character, if it is a
+letter.
+.I-16;<CR>		Type the rest of the line and end the alter, making
+all indicated changes to the line.
+.I-16;<LF>		If in insert mode, break the line at the current
+position and start a new line with whatever is left.
+If no room remains for another line number, "%ORDER"
+is printed, and the <LF> is ignored. If not in insert
+mode, <LF> is treated as <CR>.
+.I-16;_^R (Control-R)	Retype the current line up through the current cursor
+position.
+.I-16;RUBOUT		Back up the cursor 1 character if not in insert mode.
+If in insert mode, it erases the previous character.
+.I-16;SPACE		Advance the cursor 1 character if not in insert mode;
+inserts a blank in the text if used in insert mode.
+.I-16;TAB (Control-I)	Move the cursor to the end of the current line.
+.I-16;_^U (Control-U)	Cancel all alterations on the current line and start
+over.
+.I-16;_^W (Control-W)	Same as -W.
+.PAGE
+.I-16;_B
+.I-16;Purpose:	The B command causes SOS to establish the current
+position as the line preceding the first line in the
+file. It is identical to the BF command.
+.B;
+.I-16;Syntax:	B
+.BR; Position the line pointer to lie prior to the first
+line in the file.
+.PAGE
+.I-16;_BF
+.I-16;Purpose:	The BF command causes SOS to establish the current
+position as the line preceding the first line in the
+file. It is identical to the B command.
+.B;
+.I-16;Syntax:	BF
+.BR; Position the line pointer to lie prior to the first
+line in the file.
+.PAGE
+.I-16;_BP
+.I-16;Purpose:	The BP command causes SOS to establish the current
+position as the line preceding the first line on the
+current page.
+.B;
+.I-16;Syntax:	BP
+.BR; Position the line pointer to lie prior to the first
+line on the current page.
+.PAGE
+.I-16;_C
+.I-16;Purpose:	Allows copying of lines from within the current file
+or from another file.
+.B;
+.I-16;Syntax:	C n,range,inc1,inc2
+.BR; Copy the lines given by "range" after line "n" with an
+increment of "inc1" to be used before a page mark, and
+"inc2" to be used after a page mark. "inc1" and
+"inc2" are optional.
+.I-8;C n=file,range,inc1,inc2
+.BR
+Copy the lines given by "range" from "file" into the
+file being edited after line "n". "inc1" and "inc2"
+have the same meanings given above.
+.I-8;C n=file
+.BR
+Enter search mode on "file". User can use any command
+that does not alter "file" to find the lines to be
+copied. When the lines are located, type "E" and SOS
+will print "Source Lines=". The user then types a
+range of lines to be copied into the file being
+edited. "Range" may be suffixed by "inc1" and "inc2"
+as above. If "EQ" is used to exit the file, SOS will
+assume no lines are to be copied and will simply
+return to normal edit mode.
+.I-8;C n=file/S
+.BR
+Same as "C n=file".
+.PAGE
+.I-16;_CC
+.I-16;Purpose:	Allows copying of lines from the second file of a
+co-edit pair into the first member of the pair.
+.B;
+.I-16;Syntax:	CC n,range,inc1,inc2
+.BR; Co-Copy the lines given by "range" from file 2 into
+file 1 placing them after line "n" with an increment
+of "inc1" to be used before a page mark, and "inc2" to
+be used after a page mark. "inc1" and "inc2" are
+optional.
+.PAGE
+.I-16;_CT
+.I-16;Purpose:	Allows transferring of lines from the second file of a
+co-edit pair into the first member of the pair.
+.B;
+.I-16;Syntax:	CT n,range,inc1,inc2
+.BR; Co-transfer the lines given by "range" from file 2
+into file 1 placing them after line "n" with an
+increment of "inc1" to be used before a page mark, and
+"inc2" to be used after a page mark. "inc1" and
+"inc2" are optional.
+.PAGE
+.I-16;_CX
+.I-16;Purpose:	Establish the second file of a co-edit pair or switch
+between the files of a co-edit pair.
+.B;
+.I-16;Syntax:	CX:file
+.BR; Suspend edit on current file and enter co-edit mode on
+the file given by "file". Type any of the "E"
+commands to the second file of a co-edit pair to
+return to normal edit mode.
+.I-8;CX:file/R
+.BR
+Same as CX:file, but file is opened for readonly.
+.I-8;CX
+.BR
+Toggle between the two co-edit files.
+.PAGE
+.I-16;_D
+.I-16;Purpose:	Remove lines from a file.
+.B;
+.I-16;Syntax:	D range
+.BR; Delete the line or lines specified by "range".
+.I-8;D range,Y
+.BR
+Delete the lines specified by "range" without asking
+for confirmation on page deletion. The ",Y" is
+assumed if EXPERT mode is in effect.
+.PAGE
+.I-16;_E/NEWCOMMAND
+.I-16;Purpose:	Exit the editor either with or without saving the edit
+and optionally start editing another file.
+.B;
+.I-16;Syntax:	E
+.BR; Exit and update file.
+.I-8;E:file
+.BR
+Same as "E", but the updated file is written to
+"file". If ":file" is used, it must be the last
+item in the list.
+.I-8;ER:file
+.BR
+Same as "E", but begin SOSing "file" when done. If
+"ER" is used, all strings for the last "F" and/or "S"
+command are retained, as are most other attributes of
+the current edit. If "R:file" is used, it must be the
+last option in the list. /R may be suffixed to the
+file specification to open the file in readonly mode.
+.B;.LM 8
+The following 4 mutually exclusive characters may be suffixed
+to "E" prior to the ":" or "R:" options if either is used.
+.B;.LM 16
+.I-8;C	Exit contiguous, unsequencing the file, and removing
+all page marks.
+.I-8;S	Leave sequence numbers on the file.
+.I-8;U	Unsequence the file.
+.I-8;X	Leave the sequencing format the same as the input file.
+.B;.LM 8
+The following 3 mutually exclusive characters may be suffixed
+to any of "C", "S", "U", "X", or, if none of these options is
+used, to "E".
+.B;.LM 16
+.I-8;B	Create a backup file.
+.I-8;N	Create no backup files.
+.I-8;O	Create .BAK and .OLD files.
+.B;.LM 8
+The following 2 options may be suffixed to any preceding
+option in any order.
+.B;.LM 16
+.I-8;D	If the input file is in readonly mode or is different
+from the output file, delete it. If the file is write
+protected, the "D" option is ignored. If /NODELETE
+is in effect, SOS will ask for verification before
+deleting the file.
+.I-8;Q	Quit. All edits done since the last "[Saving]" or "W"
+command are lost.
+.PAGE
+.I-16;_E/OLDCOMMAND
+.I-16;Purpose:	Exit the editor either with or without saving the edit
+and optionally start editing another file.
+.B;
+.I-16;Syntax:	E
+.BR; Exit and update file.
+.I-8;E:file
+.BR
+Same as "E", but the updated file is written to
+"file". If ":file" is used, it must be the last
+item in the list.
+.I-8;ER:file
+.BR
+Same as "E", but begin SOSing "file" when done. If
+"ER" is used, all strings for the last "F" and/or "S"
+command are retained, as are most other attributes of
+the current edit. If "R:file" is used, it must be the
+last option in the list. /R may be suffixed to the
+file specification to open the file in readonly mode.
+.B;.LM 8
+The following 3 mutually exclusive characters may be suffixed
+to "E" prior to the ":" or "R:" options if either is used.
+.B;.LM 16
+.I-8;C	Exit contiguous, unsequencing the file, and removing
+all page marks.
+.I-8;S	Unsequence the file.
+.I-8;X	Leave the sequencing format the same as the input file.
+.B;.LM 8
+The following 3 mutually exclusive characters may be suffixed
+to any of "C", "S", "X", or, if none of these options is
+used, to "E".
+.B;.LM 16
+.I-8;B	Create no backup files.
+.I-8;O	Create .BAK and .OLD files.
+.B;.LM 8
+The following 2 options may be suffixed to any preceding
+option in any order.
+.B;.LM 16
+.I-8;D	If the input file is in readonly mode or is different
+from the output file, delete it. If the file is write
+protected, the "D" option is ignored. If /NODELETE
+is in effect, SOS will ask for verification before
+deleting the file.
+.I-8;Q	Quit. All edits done since the last "[Saving]" or "W"
+command are lost.
+.PAGE
+.I-16;_F/NEWCOMMAND
+.I-16;Purpose:	Locate a string of text within the file and print
+number of the line containing the string, optionally
+followed by the line itself. In addition, the "F"
+command can place the user in alter mode on the line
+containing the string.
+.B;
+.I-16;Syntax:	F
+.BR; Find whatever string was last searched for, with the
+search starting at the line following the current one.
+.I-8;F<string>$
+.BR
+Find "<string>" with the search starting on the line
+following the current line.
+.I-8;F<string>$range,x,E,n
+.BR
+Find the first "n" occurrences of "<string>" on the
+specified range as defined by the search criterion "x"
+and "E".
+.I-8;F$range,x,E,n
+.BR
+Same as above, but searches for whatever string was
+given in the last "F" command.
+.B;.LM 8
+The following search or action criterion "x" may be one or
+more of the following:
+.B;.LM 16
+.I-8;A	Enter alter mode on the found line, positioning the
+cursor before string that was found.
+.I-8;D	Delete the found line.
+.I-8;E	Require exact case match on the search strings (see
+also /EXACT).
+.I-8;L	Print the line number of the found line only.
+.I-8;M	Place a page mark before the found line.
+.I-8;N	Find not. Find the lines that do not contain the specified strings.
+.I-8;S	Do not print the found line.
+.I-8;T	Give a total of the lines found.
+.I-8;U	Print the line without line numbers.
+.PAGE
+.I-16;_F/OLDCOMMAND
+.I-16;Purpose:	Locate a string of text within the file and print
+number of the line containing the string, optionally
+followed by the line itself. In addition, the "F"
+command can place the user in alter mode on the line
+containing the string.
+.B;
+.I-16;Syntax:	F
+.BR; Find whatever string was last searched for, with the
+search starting at the line following the current one.
+.I-8;F<string>$
+.BR
+Find "<string>" with the search starting on the line
+following the current line.
+.I-8;F<string>$range,x,E,n
+.BR
+Find the first "n" occurrences of "<string>" on the
+specified range as defined by the search criterion "x"
+and "E".
+.I-8;F$range,x,E,n
+.BR
+Same as above, but searches for whatever string was
+given in the last "F" command.
+.B;.LM 8
+The following search or action criterion "x" may be one or
+more of the following:
+.B;.LM 16
+.I-8;A	Enter alter mode on the found line, positioning the
+cursor before string that was found.
+.I-8;D	Delete the found line.
+.I-8;E	Require exact case match on the search strings (see
+also /EXACT).
+.I-8;L	Print the line number of the found line only.
+.I-8;M	Place a page mark before the found line.
+.I-8;N	Print the line number of the found line only (same as
+L).
+.I-8;S	Do not print the found line.
+.I-8;T	Give a total of the lines found.
+.I-8;U	Print the line without line numbers.
+.I-8;-	Find not. Find the lines that do not contain the specified string.
+.PAGE
+.I-16;_G/NEWCOMMAND
+.I-16;Purpose:	Exit the editor either with or without saving the edit
+and optionally either run the program given by the
+"/RUN" switch, or edit another file.
+.B;
+.I-16;Syntax:	G
+.BR; Exit, update file, and execute the program given with
+the "/RUN" switch.
+.I-8;G:file
+.BR
+Same as "G", but write the updated file to "file".
+.I-8;GR:file
+.BR
+Exit and update file, and then begin SOSing "file"
+when done. If "GR" is used, all strings for the last
+"F" and/or "S" command are retained as are most other
+attributes of the current edit. If "R:file" us used,
+it must be the last option in the list. /R may be
+suffixed to the file specification to open the file in
+readonly mode. "GR:file" is identical in function to
+"ER:file".
+.B;
+.B;.LM 8
+The following 4 mutually exclusive characters may be suffixed
+to "G" prior to the ":" or "R:" options if either is used.
+.B;.LM 16
+.I-8;C	Exit contiguous, unsequencing the file, and removing
+all page marks.
+.I-8;S	Leave sequence numbers on the file.
+.I-8;U	Unsequence the file.
+.I-8;X	Leave the sequencing format the same as the input file.
+.B;.LM 8
+The following 3 mutually exclusive characters may be suffixed
+to any of "C", "S", "U", "X", or, if none of these options is
+used, to "G".
+.B;.LM 16
+.I-8;B	Create a backup file.
+.I-8;N	Create no backup files.
+.I-8;O	Create .BAK and .OLD files.
+.B;.LM 8
+The following 2 options may be suffixed to any preceding
+option in any order.
+.B;.LM 16
+.I-8;D	If the input file is in readonly mode or is different
+from the output file, delete it. If the file is write
+protected, the "D" option is ignored. If /NODELETE
+is in effect, SOS will ask for verification before
+deleting the file.
+.I-8;Q	Quit. All edits done since the last "[Saving]" or "W"
+command are lost.
+.PAGE
+.I-16;_G/OLDCOMMAND
+.I-16;Purpose:	Exit the editor either with or without saving the edit
+and optionally either run the program given by the
+"/RUN" switch, or edit another file.
+.B;
+.I-16;Syntax:	G
+.BR; Exit, update file, and execute the program given with
+the "/RUN" switch.
+.I-8;G:file
+.BR
+Same as "G", but write the updated file to "file".
+.I-8;GR:file
+.BR
+Exit and update file, and then begin SOSing "file"
+when done. If "GR" is used, all strings for the last
+"F" and/or "S" command are retained as are most other
+attributes of the current edit. If "R:file" us used,
+it must be the last option in the list. /R may be
+suffixed to the file specification to open the file in
+readonly mode. "GR:file" is identical in function to
+"ER:file".
+.B;
+.B;.LM 8
+The following 3 mutually exclusive characters may be suffixed
+to "G" prior to the ":" or "R:" options if either is used.
+.B;.LM 16
+.I-8;C	Exit contiguous, unsequencing the file, and removing
+all page marks.
+.I-8;S	Unsequence the file.
+.I-8;X	Leave the sequencing format the same as the input file.
+.B;.LM 8
+The following 3 mutually exclusive characters may be suffixed
+to any of "C", "S", "X", or, if none of these options is
+used, to "G".
+.B;.LM 16
+.I-8;B	Create no backup files.
+.I-8;O	Create .BAK and .OLD files.
+.B;.LM 8
+The following 2 options may be suffixed to any preceding
+option in any order.
+.B;.LM 16
+.I-8;D	If the input file is in readonly mode or is different
+from the output file, delete it. If the file is write
+protected, the "D" option is ignored. If /NODELETE
+is in effect, SOS will ask for verification before
+deleting the file.
+.I-8;Q	Quit. All edits done since the last "[Saving]" or "W"
+command are lost.
+.PAGE
+.I-16;_H
+.I-16;Purpose:	Allow an SOS user to get some help without having to
+leave the editor.
+.B;
+.I-16;Syntax:	H
+.BR;Type the general information section of the HELP file.
+.I-8;H,command
+.BR
+Type help for the command whose name is "command".
+.I-8;H,/
+.BR
+Type a short list of all the SOS switches and functions.
+.I-8;H,=
+.BR
+Type a short list of all the SOS editing options during the edit.
+.I-8;H/switch
+.BR
+Type help for the switch whose name is "switch". Help
+for switches named /NOxxxx (e.g., /NOEXACT) may be
+had by typing H/xxxx (e.g., H/EXACT).
+.I-8;H,char
+.BR
+Type help on the special character "char".
+.PAGE
+.I-16;_I
+.I-16;Purpose:	Allow insertion of new lines into the file, with or
+without a user specified line increment.
+.B;
+.I-16;Syntax:	I
+.BR; Begin inserting text after the current line using the
+next available line number and global increment.
+.I-8;In
+.BR
+Begin inserting text on or after line "n" using the
+first available line number and the global increment.
+"n" is any valid line number specification.
+.I-8;In,inc
+.BR
+Same is "I,n", but uses an increment of "inc" for this
+insert and resets the global line increment value to
+"inc".
+.I-8;In;inc
+.BR
+Same as "I,n", but uses an increment of "inc" for this
+insert, and does NOT change the global line increment.
+.I-8;In!m
+.BR
+Same as "In", but automatically selects an increment
+that will allow insertion of "m" new lines. If no
+such increment can be found, an error message is given.
+.I-8;I/n
+.BR
+Begin inserting text on a new page after page "n"
+using the global starting line number and global
+increment.
+.PAGE
+.I-16;_J
+.I-16;Purpose:	To allow concatenation of two lines of text.
+.B;
+.I-16;Syntax:	Jn
+.BR; Concatenate line "n" + 1 to the end of line "n".
+.PAGE
+.I-16;_JC
+.I-16;Purpose:	To allow centering of a range of lines.
+.B;
+.I-16;Syntax:	JC range
+.BR; Center the lines specified by "range" between LMAR and
+RMAR.
+.PAGE
+.I-16;_JL
+.I-16;Purpose:	To allow left justification of a range of lines.
+.B;
+.I-16;Syntax:	JL range
+.BR; Left justify the lines specified by "range" to the
+margin as specified by LMAR.
+.PAGE
+.I-16;_JR
+.I-16;Purpose:	To allow right justification of a range of lines.
+.B;
+.I-16;Syntax:	JR range
+.BR; Right justify the lines specified by "range" to the
+margin as specified by RMAR.
+.PAGE
+.I-16;_JU
+.I-16;Purpose:	To allow full justification of a range of lines.
+.B;
+.I-16;Syntax:	JU range
+.BR; Fully left and right justify the lines specified by
+"range", by placing as many complete words per line as
+possible, and then adding spaces between the words to
+square off the left and right margins as specified by
+LMAR and RMAR.
+.PAGE
+.I-16;_JW
+.I-16;Purpose:	To allow word level justification of a range of lines.
+.B;
+.I-16;Syntax:	JW range
+.BR; Word justify the lines specified by "range". This
+produces ragged-right text by placing as many complete
+words per line as possible as specified by LMAR and
+RMAR.
+.PAGE
+.I-16;_K
+.I-16;Purpose:	Remove page marks from a file.
+.B;
+.I-16;Syntax:	K/n
+.BR; Kill the page mark between page "n" and page "n-1".
+All subsequent pages are automatically renumbered.
+.I-8;K/n:/m
+.BR
+Kill the park marks between pages "n-1" and "m" All
+subsequent pages are automatically renumbered.
+.PAGE
+.I-16;_L
+.I-16;Purpose:	Provide a printer listing of a section of a file with
+page headings and optional line numbers.
+.B;
+.I-16;Syntax:	L range
+.BR; Write the lines specified by "range" to a disk file
+with page headings. The file will have a ".LPT"
+extension.
+.I-8;L range,U
+.BR
+Same as "L range", except that the resulting output
+will be unsequenced.
+.PAGE
+.I-16;_M
+.I-16;Purpose:	To place page marks in a file.
+.B;
+.I-16;Syntax:	M n
+.BR; Place a page mark before line "n". "n" may be any
+valid line number specification.
+.PAGE
+.I-16;_N/NEWCOMMAND
+.I-16;Purpose:	To allow renumbering the lines in all or part of the
+file.
+.B;
+.I-16;Syntax:	N inc,range,start
+.BR; To renumber the specified range of lines starting with
+the first line being given the number "start" and
+incrementing by "inc". If a page boundary is crossed,
+the numbering is restarted with the first line on the
+page being given the number "inc".
+.I-8;N inc,range
+.BR
+To renumber the specified range of lines using the
+"inc" as the starting value and the increment.
+.I-8;N inc
+.BR
+To renumber the current page with an increment of
+"inc", and using the global starting value.
+.I-8;N
+.BR
+To renumber the current page using the global line
+increment and starting values.
+.PAGE
+.I-16;_N/OLDCOMMAND
+.I-16;Purpose:	To allow renumbering the lines in all or part of the
+file.
+.B;
+.I-16;Syntax:	N inc,range,start
+.BR; To renumber the specified range of lines starting with
+the first line being given the number "start" and
+incrementing by "inc". If a page boundary is crossed,
+the numbering is restarted with the first line on the
+page being given the number "inc".
+.I-8;N inc,range
+.BR
+To renumber the specified range of lines using the
+"inc" as the starting value and the increment.
+.I-8;N inc
+.BR
+To renumber the current page with an increment of
+"inc", and using the global starting value.
+.I-8;N
+.BR
+To renumber the entire file using the global line
+increment and starting values.
+.PAGE
+.I-16;_NA
+.I-16;Purpose:	To allow renumbering the lines on a page to open a
+hole of a specified size for inserting new text.
+.B;
+.I-16;Syntax:	NA n,inc
+.BR; To open a hole of at least "n" lines after the current
+line, and renumber the rest of the page with an
+increment of "inc".
+.I-8;NA n
+.BR
+To open a hole of at least "n" lines after the current
+line, and renumber the rest of the page using the
+global line increment.
+.PAGE
+.I-16;_NF
+.I-16;Purpose:	To allow renumbering of an entire file.
+.B;
+.I-16;Syntax:	NF inc,start
+.BR; Renumber the entire file with the first line being
+given the number "start", and incrementing in steps of
+"inc". If a page boundary is crossed, the numbering
+is restarted with the first line on the page being
+given the number "inc".
+.I-8;NF inc
+.BR
+Renumber the entire file with the first line being
+given the number "inc", and incrementing in steps of
+"inc". If a page boundary is crossed, the numbering
+is restarted with the first line on the page being
+given the number "inc".
+.I-8;NF
+.BR
+Renumber the entire file with the first line being
+given the global starting value, and incrementing in
+steps given by the global increment value. If a page
+boundary is crossed, the numbering is restarted with
+the first line on the page being given the global
+increment.
+.PAGE
+.I-16;_NP
+.I-16;Purpose:	To allow renumbering of a file continuously across
+		page boundaries.
+.B;
+.I-16;Syntax:	NP inc,range,start
+.BR; To renumber the lines specified by "range" with the
+first line being given the number "start", and the
+rest of the "range" being numbered in steps of "inc"
+continuously across page boundaries.
+.I-8;NP inc,range
+.BR
+To renumber the lines specified by "range" with the
+first line being given the number "inc", and the rest
+of the "range" being numbered in steps of "inc"
+continuously across page boundaries.
+.I-8;NP inc
+.BR
+To renumber the entire file with the first line being
+given the number "inc", and the rest of the file being
+numbered in steps of "inc" continuously across page
+boundaries.
+.I-8;NP
+.BR
+To renumber the entire file with the first line being
+given the the global starting value, and the rest of
+the file being numbered in steps given by the global
+increment, continuously across page boundaries.
+.PAGE
+.I-16;_O
+.I-16;Purpose:	To allow copying of a portion of the file being edited
+to another file.
+.B;
+.I-16;Syntax:	O:file,range,U,x
+.BR;Output the lines specified by "range" to "file". "U"
+will result in the output file being unsequenced. "x"
+may be either "D" to supersede "file" if it exists, or
+"A" to append the results of this "O" command to the
+end of "file", if it already exists. If "A" is not
+specified, and the file already exists, the user is
+asked if he wishes to supersede the file. If the user
+responds "YES", the old copy is superseded by the new
+one; if the response is "NO", the "O" command is
+ignored.
+.I-8;O:file,U,x
+.BR
+The entire file is written out as specified by the "U"
+and "x" options described above.
+.PAGE
+.I-16;_OM
+.I-16;Purpose:	To output currently defined macros into a file.
+.B
+.I-16;Syntax:	OM:file,x
+.BR;Output all currently defined macros into "file" such that it can
+be read back in as an indirect command file, to redefine them. "x" may
+be either "D" to supersede "file" if it exists, or "A" to append the
+macros to the end of the already existing "file".
+.PAGE
+.I-16;_P
+.I-16;Purpose:	To allow output of the file being edited on the user's
+terminal in various formats.
+.B;
+.I-16;Syntax:	P range,x
+.BR; Print the lines specified by "range" on the user's
+terminal. "x" may be any of the following options
+separated by commas.
+.B;
+.I-8;Option	Meaning
+.B;
+.I-8;E	Eject to bottom of page when done.
+.I-8;F	E, U, and W options combined.
+.I-8;N	Print page numbers at bottom of page.
+.I-8;U	Unsequence the printed file.
+.I-8;W	Wait at the bottom of the page for
+.I-8;G	to continue and suppress wait.
+.I-8;Q	to quit and return to command mode.
+.I-8;<CR>	to continue.
+.PAGE
+.I-16;_R
+.I-16;Purpose:	Allow replacement of lines in the file with a single
+command (combines the effects of the "D" and "I"
+commands).
+.B;
+.I-16;Syntax:	R range,Y
+.BR; Delete the lines specified by "range" and enter insert
+mode starting with the first line number deleted and
+using the global step size for an increment. The ",Y"
+suffix inhibits asking for confirmation on full page
+replaces in "NOVICE" mode. ",Y" is assumed if EXPERT
+mode is in effect.
+.I-8;R range,inc,Y
+.BR
+Same as "R range,Y", but use a step size of "inc", and
+set the global default increment to "inc".
+.I-8;R range;inc,Y
+.BR
+Same as "R range,Y", but use a step size of "inc", and
+do NOT change the global step size.
+.PAGE
+.I-16;_S/NEWCOMMAND
+.I-16;Purpose:	To replace occurrences of one string of text in a file
+with another string of text.
+.B;
+.I-16;Syntax:	S
+.BR; Substitute using the last entered old and new strings,
+with the search starting at the line following the
+current one, and continuing until one substitution is
+made, or the end of the file is reached.
+.I-8;S$
+.BR
+Same as "S".
+.I-8;S$range
+.BR
+Same as "S", but the search is over the specified
+range and all occurrences of the old string are
+replaced by the new string.
+.I-8;S<oldstring>$<newstring>$
+.BR
+Substitute "<newstring>" for "<oldstring>", with the
+search starting at the line following the current one,
+and continuing until one substitution is made, or the
+end of the file is reached.
+.I-8;S<oldstring>$<newstring>$range
+.BR
+Same as "S<oldstring>$<newstring>$", but the search is
+over the specified range and all occurrences of the
+old string are replaced by the new string.
+.I-8;S<oldstring>$<newstring>$range,x,n
+.BR
+Replace the next "n" occurrences of "<oldstring>" by
+"<newstring>" on the specified range as defined by the
+search criteria "x".
+.I-8;S$range,x,n
+.BR
+Same as above, but searches for whatever string was
+given in the last "S" command.
+.B;.LM 8
+The following search or action criterion "x" may be one or
+more of the following:
+.B;.LM 16
+.I-8;E	Require exact case match on the search strings (see
+also /EXACT).
+.I-8;D	Enter decide mode on the specified line.
+.I-8;L	Print the line number of the found line only.
+.I-8;S	Do not print the found line.
+.I-8;T	Give a total of the lines found.
+.I-8;U	Print the line without line numbers.
+.B;
+.I-8;The decide mode options are immediate, and can be one of:
+.B;
+.I-8;<space>	Accept the change on this line.
+.I-8;<rub>	Do not accept the change on this line.
+.I-8;<CR>	Accept the change on this line.
+.I-8;A	Enter alter mode on this line.
+.I-8;E	Exit substitution and do not change this line.
+.I-8;G	Accept this and all other substitutions without asking.
+.I-8;H	Give a help text.
+.I-8;N	Do not accept the change on this line.
+.I-8;Q	Exit substitution and do not change this line.
+.I-8;Y	Accept the change on this line.
+.PAGE
+.I-16;_S/OLDCOMMAND
+.I-16;Purpose:	To replace occurrences of one string of text in a file
+with another string of text.
+.B;
+.I-16;Syntax:	S
+.BR; Substitute using the last entered old and new strings,
+with the search starting at the line following the
+current one, and continuing until one substitution is
+made, or the end of the file is reached.
+.I-8;S$
+.BR
+Same as "S".
+.I-8;S$range
+.BR
+Same as "S", but the search is over the specified
+range and all occurrences of the old string are
+replaced by the new string.
+.I-8;S<oldstring>$<newstring>$
+.BR
+Substitute "<newstring>" for "<oldstring>", with the
+search starting at the line following the current one,
+and continuing until one substitution is made, or the
+end of the file is reached.
+.I-8;S<oldstring>$<newstring>$range
+.BR
+Same as "S<oldstring>$<newstring>$", but the search is
+over the specified range and all occurrences of the
+old string are replaced by the new string.
+.I-8;S<oldstring>$<newstring>$range,x,n
+.BR
+Replace the next "n" occurrences of "<oldstring>" by
+"<newstring>" on the specified range as defined by the
+search criteria "x".
+.I-8;S$range,x,n
+.BR
+Same as above, but searches for whatever string was
+given in the last "S" command.
+.B;.LM 8
+The following search or action criterion "x" may be one or
+more of the following:
+.B;.LM 16
+.I-8;E	Require exact case match on the search strings (see
+also /EXACT).
+.I-8;L	Print the line number of the found line only.
+.I-8;N	Do not print the found line.
+.I-8;Q	Enter decide mode on the specified line.
+.I-8;S	Do not print the found line.
+.I-8;T	Give a total of the lines found.
+.I-8;U	Print the line without line numbers.
+.B;
+.I-8;The decide mode options are immediate, and can be one of:
+.B;
+.I-8;<space>	Accept the change on this line.
+.I-8;<rub>	Do not accept the change on this line.
+.I-8;<CR>	Accept the change on this line.
+.I-8;A	Enter alter mode on this line.
+.I-8;E	Exit substitution and do not change this line.
+.I-8;G	Accept this and all other substitutions without asking.
+.I-8;H	Give a help text.
+.I-8;N	Do not accept the change on this line.
+.I-8;Q	Exit substitution and do not change this line.
+.I-8;Y	Accept the change on this line.
+.PAGE
+.I-16;_T
+.I-16;Purpose:	Allows transfer of lines from one point to another
+within the current file.
+.B;
+.I-16;Syntax:	T n,range,inc1,inc2
+.BR; Move the lines given by "range" from their current
+location to be after line "n" with an increment of
+"inc1" to be used before a page mark, and "inc2" to be
+used after a page mark. "inc1" and "inc2" are
+optional, and may be omitted.
+.PAGE
+.I-16;_VL
+.I-16;Purpose:	To change the case of all alphabetic characters on a
+specified range to lower case.
+.B;
+.I-16;Syntax:	VL range
+.BR; Change all letters on the specified range to lower
+case.
+.PAGE
+.I-16;_VU
+.I-16;Purpose:	To change the case of all alphabetic characters on a
+specified range to upper case.
+.B;
+.I-16;Syntax:	VU range
+.BR; Change all letters on the specified range to upper
+case.
+.PAGE
+.I-16;_VV
+.I-16;Purpose:	To invert the case of all alphabetic characters on a
+specified range.
+.B;
+.I-16;Syntax:	VV range
+.BR; Invert the case of all letters on the specified range.
+.PAGE
+.I-16;_W/NEWCOMMAND
+.I-16;Purpose:	Update the file without exiting the editor. This
+provides a measure of protection against interruption
+of computer services.
+.B;
+.I-16;Syntax:	W
+.BR; Save the world (update the file without exiting SOS).
+.I-8;W:file
+.BR
+Save the world by writing everything onto "file". If
+":file" is used, it must be the last option in the
+list.
+.B;.LM 8
+The following 4 mutually exclusive characters may be suffixed
+to "W" prior to the ":" option if ":" is used.
+.B;.LM 16
+.I-8;C	Exit contiguous, unsequencing the file, and removing
+all page marks.
+.I-8;S	Leave sequence numbers on the file.
+.I-8;U	Unsequence the file.
+.I-8;X	Leave the sequencing format the same as the input file.
+.B;.LM 8
+The following 3 mutually exclusive characters may be suffixed
+to any of "C", "S", "U", "X", or, if none of these options is
+used, to "W".
+.B;.LM 16
+.I-8;B	Create a backup file.
+.I-8;N	Create no backup files.
+.I-8;O	Create .BAK and .OLD files.
+.PAGE
+.I-16;_W/OLDCOMMAND
+.I-16;Purpose:	Update the file without exiting the editor. This
+provides a measure of protection against interruption
+of computer services.
+.B;
+.I-16;Syntax:	W
+.BR; Save the world (update the file without exiting SOS).
+.I-8;W:file
+.BR
+Save the world by writing everything onto "file". If
+":file" is used, it must be the last option in the
+list.
+.B;.LM 8
+The following 3 mutually exclusive characters may be suffixed
+to "W" prior to the ":" option if ":" is used.
+.B;.LM 16
+.I-8;C	Exit contiguous, unsequencing the file, and removing
+all page marks.
+.I-8;S	Unsequence the file.
+.I-8;X	Leave the sequencing format the same as the input file.
+.B;.LM 8
+The following 3 mutually exclusive characters may be suffixed
+to any of "C", "S", "X", or, if none of these options is
+used, to "W".
+.B;.LM 16
+.I-8;B	Create no backup files.
+.I-8;O	Create .BAK and .OLD files.
+.PAGE
+.I-16;_X
+.I-16;Purpose:	Provide a single command for extending lines.
+.B;
+.I-16;Syntax:	X range,S
+.BR; Alter the lines specified by "range", by placing the
+cursor at the end of the line and entering insert
+mode. If ",S" is omitted, the entire line is printed
+and the cursor is left at the end of the line. If
+",S" is used, printing of the line is suppressed.
+Note that the range specification may be suffixed with
+";m" to specify a temporary line increment to be used
+to number new lines created in this eXtend operation.
+If <CR> is typed while in eXtend mode, a new line will
+will be started if use of the global line increment
+allow room for such a line and /XINSERT is on. If no
+room is available a <CR> returns you to SOS command
+mode. You may exit eXtend mode by typing ALTmode or
+ESCape followed by <CR>.
+.PAGE
+.I-16;__!
+.I-16;Purpose:	Type out an expanded macro string, completely resolved.
+.b
+.I-16;Syntax:	! text
+.BR;Type out the text with all macros fully expanded using the current
+definitions.
+.PAGE
+.I-16;_<
+.I-16;Purpose:	To delimit a macro name
+.B
+.I-16;Syntax:	<name>
+.BR;Expand the macro "name".
+.I-8;<name,n>
+.BR;Expand the macro "name" n times.
+.I-8;<name,*>
+.BR;Expand the macro "name" until a command error is generated.
+.I-8;<name(arg,arg)>
+.BR;Expand the macro "name" with arguments "arg".
+.B
+See also /DEFINE, /LDEFINE, /MACRO, and /PURGE for related information.
+.PAGE
+.I-16;_;
+.I-16;Purpose:	Provide a way to insert comments in an SOS indirect file.
+.B
+.I-16;Syntax:	; <comments>
+.BR;The ";" command must be used as the first character in
+a line to make that line a comment.
+.PAGE
+.I-16;_@
+.I-16;Purpose:	Provide a method for reading command files.
+.B
+.I-16;Syntax:	@ filespec
+.BR;Execute the contents of the file given by "filespec"
+just as though whatever is in the file had been typed
+at the terminal. Note that if no device is given in
+"filespec", devices DSK:, TED:, and SYS: are tried in
+that order in an effort to find the file. If no file
+extension is given in "filespec", the extensions .CCL, .CMD,
+and the null extension are tried in that order
+on each device.
+.I-8;@ filespec,n
+.BR;Repeat the contents of the filespec "n" times.
+.PAGE
+.I-16;__
+.I-16;_^E
+.I-16;Purpose:	To provide powerful search string pattern matching.
+.B
+.I-16;Syntax:	_^Echar
+.B
+.BR;The special match characters available with the FIND
+and SEARCH commands has been expanded. A complete
+list of the special match characters appear below.
+Note that the C128 representation of some of these
+special match characters has been removed. It is
+hoped that these are more consistent and easily
+remembered. They are all entered as a control-E
+followed by a character, as described below:
+.B;.NF;.LM 0
+_^E equiv meaning
+   char
+.B
+_^EC	match any character
+_^EA	match any alphanumeric (A-Z, a-z, 0-9)
+_^EL	match any letter (A-Z, a-z)
+_^EVU	match any upper case letter (A-Z)
+_^EVL	match any lower case letter (a-z)
+_^ED	match any digit (0-9)
+_^ES	match a separator
+_^E<space>	match a space or tab
+_^EZ	match end of line
+_^EB	match beginning of line
+
+_^EN	not the following character
+_^E*	zero or more of the following character
+_^E+	one or more of the following character
+_^EQ	quote the next character literally
+.B
+and on s output strings:
+.B
+_^EX	next match string from input side
+_^EnM	n-th match string from input side
+_^EnVU	Upper case equivalent n-th match string from input side
+_^EnVL	Lower case equivalent n-th match string from input side
+.LM 16
+.PAGE
+.I-16;_=
+.I-16;Purpose:	To allow reading of selected editing options during
+the edit.
+.B
+.I-16;Syntax:	= variable
+.BR;Output the current value of "variable".
+.B;Legal variables are given below.
+.B
+.I-16;VARIABLE	Meaning
+.B
+.I-16;AEXACT		Tell whether or not search strings in
+alter mode require exact case match.
+.I-16;ALTER		Tell what display / edit mode is in
+effect.
+.I-16;BACKSPACE	Tell what display / edit mode is in
+effect.
+.I-16;BAK		Tell what level of backup is in
+effect.
+.I-16;BASIC		Tell whether or not the input file is
+being read in /BASIC mode.
+.I-16;BAUD		Tell the current speed and the minimum speed for
+display alter mode update.
+.I-16;BIGPG		Tell what the largest page number in
+the file is.
+.I-16;BUFFER		Tell whether or not additional I/O
+buffers have been allocated.
+.I-16;CASE		Tell what display / edit mode is in
+effect.
+.I-16;CCEXIT		Tell whether or not the SOS Control-C
+intercept is enabled.
+.I-16;CCL		Tell whether or not attributes are to
+be remembered across edits in a given
+terminal session.
+.I-16;CONTIGUOUS	Tell the sequencing format of the output file.
+.I-16;CRLF		Tell what column was selected for the
+automatic CRLF feature. Zero means
+automatic CRLF is disabled.
+.I-16;C64		Tell what display / edit mode is in
+effect.
+.I-16;C128		Tell what display / edit mode is in
+effect.
+.I-16;DECIDE		Tell whether or not auto-decide mode
+for S(ubstitute) commands is enabled.
+.I-16;DEFINE		Tell the currently defined macros.
+.I-16;DELETE		Tell whether or not the "ED" command
+will delete the input file without
+asking for conformation.
+.I-16;DISK		List disk quotas for user's PPN.
+.I-16;DISPLAY		Tell what display / edit mode is in effect.
+.I-16;DPY		Tell what display / edit mode is in
+effect.
+.I-16;DPYALT		Tell what display / edit mode is in
+effect.
+.I-16;DSK		List disk quotas for user's PPN.
+.I-16;ERROR		Give the long form of the last error
+message.
+.I-16;EXACT		Tell whether or not exact case match
+is required on search strings in
+F(ind) and S(ubstitute) commands.
+.I-16;EXPERT		Tell whether expert or novice mode is
+in effect.
+.I-16;FILE		Type the SOS output file specification on the user's terminal.
+.I-16;FILL		Tell what TTY FILL is in use.
+.I-16;INCREMENT	Tell what insertion increment is set.
+.I-16;INFORM		Tell whether or not the numbers of the
+first and last lines affected by a
+delete or replace are to be printed.
+.I-16;INSERT		Tell if SOS will enter INSERT mode
+when creating a new file.
+.I-16;ISAVE		Tell what insertion save increment is
+in use.
+.I-16;LC		Tell the status of the case conversion in effect.
+.I-16;LDEFINE		Tell the currently defined macros
+.I-16;LENGTH		Tell what number of lines is to be
+printed between SOS page ejects when
+the "P" command is used for hard copy
+output.
+.I-16;LF		Tell what display / edit mode is in
+effect.
+.I-16;LMAR		Tell what column will be used for the
+left margin in text justification.
+.I-16;LOCATION	Give the number of the first line and
+page currently in the editing buffer.
+.I-16;LOWER		Tell what display / edit mode is in
+effect.
+.I-16;MACRO		Tell if the macro facility is enabled.
+.I-16;MAXLN		Tell what the maximum line number to
+be used on any SOS page is.
+.I-16;M33		Tell what display / edit mode is in
+effect.
+.I-16;M37		Tell what display / edit mode is in
+effect.
+.I-16;NAME		Type the SOS output file specification
+on the user's terminal.
+.I-16;NEWALTER	Tell the alter mode command set in use.
+.I-16;NEWCOMMAND	Tell the command set in use.
+.I-16;NOVICE		Tell whether expert or novice mode is
+in effect.
+.I-16;OLD		Tell what level of backup is in
+effect.
+.I-16;OLDALTER	Tell the alter mode command set in use.
+.I-16;OLDCOMMAND	Tell the command set in use.
+.I-16;PLINES		Tell what number of lines is to be
+printed for "P<CR>".
+.I-16;PMAR		Tell what column will be used for the
+first line of a paragraph in text
+justification.
+.I-16;PROGRAM		Tell the status of the case conversion in effect.
+.I-16;PROTECT		Tell what protection will be used for
+the file being output from the current
+edit.
+.I-16;QZBAK		Tell what level of backup is in
+effect.
+.I-16;R		Tell whether or not the file is open
+in readonly mode.
+.I-16;READONLY	Tell whether or not the file is open
+in readonly mode.
+.I-16;REFDLY		Tell what the refresh delay time for
+display terminals in milliseconds.
+.I-16;RMAR		Tell what column will be used for the
+right margin in text justification.
+.I-16;RONLY		Tell whether or not the file is open
+in readonly mode.
+.I-16;RULER		Type a column ruler on the terminal.
+.I-16;RUN		Tell what program is to be run if "G"
+is used to leave SOS.
+.I-16;SAVE		Tell how many file changing commands
+must occur between auto-"W" commands.
+.I-16;SEPARATOR	Tell whether or not "%", "$", and "."
+are to be treated as separators in F
+and S commands.
+.I-16;SEQUENCE	Tell the sequencing format of the
+output file.
+.I-16;STANDARD	Tell what display / edit mode is in
+effect.
+.I-16;START		Tell the sequence number to be used at
+the start of each page when reading in
+an unsequenced file.
+.I-16;STEP		Tell the line increment to be used to
+sequence an unsequenced file.
+.I-16;STRING		Tell what strings were used in the
+last F(ind) and S(ubstitute) commands.
+.I-16;TEXT		Tell the status of the case conversion in effect.
+.I-16;UC		Tell the status of the case conversion in effect.
+.I-16;UNSEQUENCE	Tell the sequencing format of the
+output file.
+.I-16;UPPER		Tell what display / edit mode is in
+effect.
+.I-16;WIDTH		Tell what the current TTY WIDTH is.
+.I-16;WINDOW		Tell what the current window size is.
+.I-16;WMAXIMUM	Tell what the current maximum window
+size is.
+.I-16;WMINIMUM	Tell what the current minimum window
+size is.
+.I-16;WRATIO		Tell what the current window ratio is.
+.I-16;X		Tell whether or not the file is open
+in readonly mode.
+.I-16;XINSERT		Tell whether or not the X(tend) command will insert
+new lines.
+.I-16;XSEQUENCE	Tell the sequencing format of the
+output file.
+.I-16;_#		Tell what the first line of the last
+line range specification was.
+.I-16;%		Tell what the last line in the last
+insert command was.
+.I-16;_.		Tell what the current line and page
+numbers are.
+.PAGE
+.I-16;_/
+.I-16;Purpose:	Allow setting of switches when in SOS command mode.
+.B
+.I-16;Syntax:	/variable
+.BR;Define an SOS option as indicated by "variable" (e.g., /AEXACT).
+.I-8;/variable=value
+.BR;This switch causes SOS to set  "variable"  to  "value"
+(e.g., /FILL=1).
+.I-8;/variable:value
+.BR;This syntax is equivalent to /variable=value.
+.B
+Help for a specific switch may be had by typing H/xxx, where  "xxx"
+is the switch name.  A highly abbreviated list of switches follows.
+.B;.NF;.LM 0
+/AEXACT (Alter EXACT) Exact case    /MACRO (MACRO) macro facility
+/ALTER (ALTER) Alter from insert    /MAXLN (MAXimum LiNe) Largest Line
+/BACKSPACE (BACKSPACE) _^H = RUBout  /NAME (file NAME) Edit file name
+/BAK (BAcKup) Create backup file    /NEWALTER (NEW ALTER) mode
+/BASIC (BASIC) Edit BASIC file      /NEWCOMMAND (NEW COMMAND) mode
+/BAUD (alter BAUD rate) update      /NOVICE (NOVICE) Beginner's mode
+/BUFFER (BUFFER) More data in core  /NUMBER (NUMBER) Type line numbers
+/C128 (Character 128) Data mode     /OLD (OLD) Secondary backup
+/C64 (Character 64) Data mode       /OLDALTER (OLD ALTER) mode
+/CCEXIT (Control-C EXIT) _^C trap    /OLDCOMMAND (OLD COMMAND) mode
+/CCL (command file) Remember edit   /OPTION (OPTION) Read SWITCH.INI
+/CONTIGUOUS no numbers or pages     /PLINES (Print LINES) Line count
+/CRLF(Carriage Return) Data mode    /PMAR (Paragraph MARgin) Indent
+/DECIDE (DECIDE) Ask on Substitute  /PROGRAM (PROGRAM) TTY UC
+/DECRYPT (DECRYPTion) Decrypt file  /PROTECT (PROTECT) File protection
+/DEFINE (DEFINE) macro names        /QZBAK (QZ BacKup) Multiple Backup
+/DELETE (DELETE file) Ask on ED     /R (Read only) Examine a file
+/DISPLAY (DISPLAY) For CRT's        /REFDLY (REFresh DeLaY) for
+/DPY (DisPlaY mode) For CRTs        /RMAR (Right MARgin) for text
+/DPYALT (DisPlaY ALTer) For CRTs    /RUN (RUN) Program to run
+/ENCRYPT (ENCRYPTion) Encrypt file  /SAVE (SAVE) Auto-update
+/EXACT (EXACT) Exact case           /SEPARATOR (SEPARATOR) for F and S
+/EXPERT (EXPERT) Expert mode        /SEQUENCE (SEQUENCE) Sequence file
+/FILE (FILE name) Edit file name    /STANDARD (STANDARD) Non-CRT TTY's
+/FILL (FILL) TTY FILL               /START (START) First Line number
+/INCREMENT (INCREMENT) Line incr.   /STEP (STEP) Step size
+/INFORM (INFORM) Tell on deletes    /TELL (TELL) Type file name
+/INITIALIZE Read SOS.INI on startup /TEXT (TEXT) TTY LC
+/INSERT (INSERT) Insert on create   /UC (UC) TTY UC
+/ISAVE (Insert SAVE) Auto-update    /UNSEQUENCE (UNSEQUENCE) No number
+/LC (Lower Case) TTY LC             /UPPER (UPPER) Data mode
+/LDEFINE (Line DEFINE) macro names  /WIDTH (WIDTH) TTY WIDTH
+/LENGTH (LENGTH) Lines per page     /WINDOW (WINDOW) In-core space
+/LF (LF) For CRT's                  /WMAXIMUM (Window MAXIMUM) space
+/LMAR (Left MARgin) for text        /WMINIMUM (Window MINIMUM) space
+/LOWER (LOWER) Data mode            /WRATIO (Window RATIO) Space ratio
+/M33 (Model 33) Data mode           /X (eXamine) Examine a file
+/M37 (Model 37) Data mode           /XINSERT (eXtend insert) new lines
+.F;.LM 16
+.PAGE
+.I-16;_/AEXACT
+.I-16;Purpose:	Allow specification of exact case match on alter mode
+search strings.
+.B
+.I-16;Syntax:	/AEXACT
+.BR;Require exact case match on alter mode search strings.
+.I-8;/NOAEXACT
+.BR;Do not require exact case match on alter mode search
+strings.
+.PAGE
+.I-16;_/ALTER
+.I-16;Purpose:	Allow alter mode to be entered from Insert mode.
+.B
+.I-16;Syntax:	/ALTER
+.BR;Enter alter mode if ALTmode or ESCape is typed while
+in Insert mode. If this switch is used, the only way
+to terminate insert mode is to type ALTmode or ESCape
+in response to a line number.
+.I-8;/NOALTER
+.BR;This switch disables both /DPYALT and /ALTER.
+.PAGE
+.I-16;_/BACKSPACE
+.I-16;Purpose:	Allow Control-H to be a substitute RUBout.
+.B
+.I-16;Syntax:	/BACKSPACE
+.BR;Make _^H (Control-H or Backspace) equivalent to RUBout.
+If this switch is enabled, _^H may still be entered in
+the text via the O sub-command in alter mode.
+.I-8;/NOBACKSPACE
+.BR;Make _^H (Control-H or Backspace) an ordinary text
+character.
+.PAGE
+.I-16;_/BAK
+.I-16;Purpose:	Allow SOS to create a backup file.
+.B
+.I-16;Syntax:	/BAK
+.BR;Create a backup (.BAK) file whenever a [Saving], W
+command, or E command is used. Refer to /OLD and
+/QZBAK for additional information.
+.I-8;/NOBAK
+.BR;This switch disables /BAK, /OLD, and /QZBAK, thus
+preventing creation of any backup files by SOS.
+.PAGE
+.I-16;_/BASIC
+.I-16;Purpose:	Allow SOS to process BASIC format files.
+.B
+.I-16;Syntax:	/BASIC
+.BR;Allow BASIC format pseudo-line numbers on the input
+file. This switch may be selected only on the SOS
+command line or via a SWITCH.INI file.
+.PAGE
+.I-16;_/BIGPG
+.I-16;Purpose:	To list the number of pages in the file.
+.B
+.I-16;Syntax:	=BIGPG
+.BR;The largest page number in the file is printed out.
+.PAGE
+.I-16;_/BAUD
+.I-16;Purpose:	To select a minimum baud rate at which display alter
+mode will update the line in place on a display terminal.
+.B
+.I-16;Syntax:	/BAUD:n
+.BR;Select baud rate "n" as the minimum baud rate at which
+display alter mode will update the line in place on a
+display terminal.
+.PAGE
+.I-16;_/BUFFER
+.I-16;Purpose:	Allow increased I/O buffer space.
+.B
+.I-16;Syntax:	/BUFFER
+.BR;Increase I/O buffer space allocation for better
+editing speed on large files. This switch may be
+selected only on the SOS command line or via a
+SWITCH.INI file.
+.I-8;/NOBUFFER
+.BR;Do not use extra large editing buffers. This switch
+may be selected only on the SOS command line or via a
+SWITCH.INI file.
+.PAGE
+.i-16;_/CASE
+.I-16;Purpose:	To tell what display/edit mode is in effect.
+.B
+.I-16;Syntax:	=CASE
+.BR;This will tell what display/edit mode is in effect.
+.PAGE
+.I-16;_/CCEXIT
+.I-16;Purpose:	Allow you to turn off SOS's Control-C trap.
+.B
+.I-16;Syntax:	/CCEXIT
+.BR;Allow SOS to exit to monitor mode when Control-C is
+typed.
+.I-8;/NOCCEXIT
+.BR;Make SOS intercept Control-C's, and allow the user the
+options of continuing the edit, or exiting to monitor.
+If /NOCCEXIT is set, any one of the following typeins
+may be used followed by a carriage return when SOS
+types "YES? " in response to a Control-C.
+.B
+.BR;H - to type the following list of legal responses.
+.BR;C - to CONTINue the edit automatically.
+.BR;M - to return to MONITOR immediately.
+.BR;R - to REENTEr SOS, terminating an F or S command.
+.BR;E - to END the edit normally
+.BR;Q - to abort (QUIT) the edit and delete scratch files.
+.PAGE
+.I-16;_/CCL
+.I-16;Purpose:	Allow SOS to remember attributes across edits.
+.B
+.I-16;Syntax:	/CCL
+.BR;Remember attributes across edits in a given terminal
+session. This is done via a temporary file named
+"nnnESF.TMP", where "nnn" is the current job number.
+These files should be deleted at the end of a terminal
+session to prevent them from accumulating over several
+sessions.
+.I-8;/NOCCL
+.BR;Do not retain attributes across edits in a given
+terminal session.
+.PAGE
+.I-16;_/CONTIGUOUS
+.I-16;Purpose:	Force unsequencing and page mark removal of the SOS
+output file.
+.B
+.I-16;Syntax:	/CONTIGUOUS
+.BR;This switch results in SOS writting an unsequenced
+output file free of page page marks in response to an
+"E", "G", or "W" command that does not specify "S",
+"U", or "X".
+.PAGE
+.I-16;_/CRLF
+.I-16;Purpose:	Allow automatic insertion of Carriage Returns in a
+file.
+.B
+.I-16;Syntax:	/CRLF:n
+.BR;Make SOS insert a Carriage Return in the file
+replacing the first blank space typed in or after
+character position "n". A value of 0 for "n" disables
+the automatic insertion of Carriage Returns. Note
+that the value of "n" includes the eight characters of
+the line number if /NUMBER has been selected.
+.B
+.I-8;/NOCRLF
+.BR;This switch, like /CRLF:0, deselects the automatic
+insertion of Carriage Returns.
+.PAGE
+.I-16;_/C64
+.I-16;Purpose:	Allow selection of normal character input mode.
+.B
+.I-16;Syntax:	/C64
+.BR;Select normal character input mode. This makes the
+apostrophe an ordinary input character instead of a
+special flag for control characters. This switch is
+the inverse of /C128.
+.PAGE
+.I-16;_/C128
+.I-16;Purpose:	Allow selection of special quoted-character input
+mode.
+.B
+.I-16;Syntax:	/C128
+.BR;Select special quoted-character input mode. This
+makes the apostrophe a special character used for
+entering control characters according to the following
+table. Lower case text may be entered by typing an
+apostrophe before each lower case character. This
+switch is the inverse of /C64 and is useful only when
+the terminal you are using has no control characters
+on the keyboard.
+.B;.LM 0;.NF
+/C128 Special Character Mapping Table.
+===================================================================
+Typed	Actual	Octal	Value	Typed	Actual	Octal	Value
+-------------------------------------------------------------------
+''	'	47	'"	_^B	2
+'1	_^V	26	'_#	_^C	3
+'2	_^W	27	'$	_^D	4
+'3	~	176	'%	_^E	5
+'4	_^Z	32	'&	_^F	6
+'6	_^Y	31	'(	_^H	10
+'7	_^_^	36	')	_^N	16
+'8	_^_	37	'*	_^O	17
+'9	_^X	30	'=	_^[	(ALT)	33
+'0	_^U	25	'@	`	140
+':	|	174	'[	{	173
+'_	_^R	22	'+	_^P	20
+',	_^Q	21	']	}	175
+'.	_^S	23	'<	_^\	34
+'/	_^T	24	'>	_^]	35
+'!	_^A	1
+===================================================================
+.LM 16;.F
+.PAGE
+.I-16;_/DECIDE
+.I-16;Purpose:	Enable Auto-decide mode on S(ubstitute) commands.
+.B
+.I-16;Syntax:	/DECIDE
+.BR;When /DECIDE is used, SOS will print each line after
+making the requested substitution, and wait for you to
+type Carriage Return or <space> to accept the
+substitution, RUBout to reject the substitution, or A
+to enter alter mode on this line. If you enter alter
+mode, type a carriage return to continue the
+substitute command.
+.B
+.I-8;/NODECIDE
+.BR;Do not pause after making each substitution.
+.PAGE
+.I-16;_/DECRYPT
+.I-16;Purpose:	Allow specification of a decryption password.
+.B
+.I-16;Syntax:	/DECRYPT
+.BR;This switch tells SOS to ask for a decryption password
+at the start of the edit. The password will not be
+echoed at your terminal when you type it in. If there
+is no password, simply type Carriage Return when SOS
+asks for the password. The decryption password allows
+you to read a file that has been previously encrypted
+with SOS. If you give the wrong password, or try to
+look at the file with something other than SOS, it
+will appear to be garbage. Exiting by any other means
+than EQ after having given an incorrect password may
+result in the destruction of your file. /DECRYPT is
+only valid on the SOS command line or in a SWITCH.INI
+file.
+.PAGE
+.I-16;_/DEFINE
+.I-16;Purpose:	To define a macro name
+.B
+.I-16;Syntax:	/DEFINE:name:string
+.BR;DEFINE the macro called "name" to be the text "string". "String"
+itself may contain other macros, which may be expanded at definition
+time (if expressed with single angle brackets <xxx>), or expanded
+it invocation time (if expressed with double angle brackets <<xxx>>).
+See also /LDEFINE, /MACRO, /PURGE for related information.
+.I-8;/DEFINE:name:"string1
+.I-8;##############string2"
+.BR;Like /DEFINE, except the macro definition is several lines long.
+.PAGE
+.I-16;_/DELETE
+.I-16;Purpose:	Allow SOS to delete the input file when ED is typed
+without asking for verification.
+.B
+.I-16;Syntax:	/DELETE
+.BR;If ED is typed and the input file is in readonly mode
+or is different from the output file, SOS will delete
+the input file without asking for verification. If
+the file is write protected, the ED request is treated
+as an E request.
+.I-8;/NODELETE
+.BR;Require SOS to ask for verification when ED is typed.
+You may respond with either "Y" or "N" followed by a
+Carriage Return. If "Y" is entered, SOS will proceed
+just as though /DELETE had been present. If "N" is
+typed, the ED request is treated as an E request.
+.PAGE
+.I-16;_/DISK
+.I-16;Purpose:	List disk quotas for your current job and PPN.
+.B
+.I-16;Syntax:	=DISK
+.BR;The current disk quotas for your job and PPN, as well as the
+total space available to the system are listed.
+.PAGE
+.I-16;_/DISPLAY
+.I-16;Purpose:	To allow optimum display handling for a given terminal.
+.B
+.I-16;Syntax:	/DISPLAY
+.BR;This switch enables SOS to do optimum display handling
+for the given terminal type as set to the monitor with
+the TERMINAL TYPE xxxx command.
+.B
+It will enable the following, depending on the type of
+terminal:
+.B
+Special handling of <rub>, _^U, _^R, _^W.
+.B
+Backspace up a line when print commands are given.
+.B
+Allow continuous update of a line in alter mode which
+causes SOS to continually update the line being
+altered so that its current state is always displayed
+on the terminal screen. Please note that this switch
+is not useful at transmission rates of less than 600
+baud because of the time required to update the entire
+line after a character is inserted or deleted from the
+middle of the line. Refer to /DPY, /DPYALT, and /LF
+for additional display features.
+.B
+.I-8;/NODISPLAY
+.BR;Disable the display features.
+.PAGE
+.I-16;_/DPY
+.I-16;Purpose:	Enable CRT display mode for editing.
+.B
+.I-16;Syntax:	/DPY
+.BR;This switch causes SOS to process RUBouts, _^R, and _^U
+itself. When a RUBout is entered, SOS will erase the
+deleted characters from the screen. This feature is
+especially useful in alter mode when backing up the
+cursor, as the cursor will simply move across the line
+without echoing characters. When _^R is typed, SOS
+retypes the line up to the current cursor position.
+When _^U is typed, SOS reprints the line number, but
+forgets the rest of the line. Refer to /C64, /C128,
+/M33, /M37, /LOWER, /STANDARD, and /UPPER for
+additional information.
+.PAGE
+.I-16;_/DPYALT
+.I-16;Purpose:	Position the cursor at end-of-line and enter alter
+mode from Insert mode when a ALTmode or ESCape is
+typed.
+.B
+.I-16;Syntax:	/DPYALT
+.BR;If /ALTER is used, but /DPYALT is not, SOS will enter
+alter mode after prompting you with the current line
+number. With /DPYALT enabled, SOS will enter alter
+mode at the end of the current line. /DPYALT also
+selects /ALTER. /DPYALT is intended primarily for use
+with /DPY, but functions with /STANDARD also.
+.PAGE
+.I-16;_/DSK
+.I-16;Purpose:	List disk quotas for your current job and PPN.
+.B
+.I-16;Syntax:	=DSK
+.BR;The current disk quotas for your job and PPN, as well as the
+total space available to the system are listed.
+.PAGE
+.I-16;_/ENCRYPT
+.I-16;Purpose:	Allow specification of a encryption password.
+.B
+.I-16;Syntax:	/ENCRYPT
+.BR;This switch tells SOS to ask for an encryption
+password for the input file and for the output file at
+the start of the edit. The password will not be
+echoed at your terminal when you type it in. If there
+is no password for a file, simply type Carriage Return
+when SOS requests the password for that file.
+Encryption of a file means that someone who does not
+know the password cannot interpret the data in the
+file. Thus, if you give the wrong the password for
+the file, or try to look at it with anything but SOS,
+it will appear to be garbage. Exiting by any other
+means than EQ after having given an incorrect password
+may result in the destruction of your file. /ENCRYPT
+is only valid on the SOS command line or in a
+SWITCH.INI file.
+.PAGE
+.I-16;_/ERROR
+.I-16;Purpose:	To list the long form on the last error message.
+.B
+.I-16;Syntax:	=ERROR
+.br;The long form of the last error message is printed. This is useful
+if /EXPERT is in effect, as /EXPERT outputs the short form of an error
+message.
+.PAGE
+.I-16;_/EXACT
+.I-16;Purpose:	Require exact case match in search strings on F(ind)
+and S(ubstitute) commands.
+.B
+.I-16;Syntax:	/EXACT
+.BR;Require exact case match in search strings on F and S
+commands.
+.I-8;/NOEXACT
+.BR;Do not require exact case match in search strings on F
+and S commands.
+.PAGE
+.I-16;_/EXPERT
+.I-16;Purpose:	This command tells SOS that you are an experienced
+user.
+.B
+.I-16;Syntax:	/EXPERT
+.BR;This command causes SOS to use 3 character
+abbreviations for error messages, with the full text
+of the message available for your inspection by
+typing "=ERROR". SOS will not ask for verification
+when a D(elete) or R(eplace) that would remove an
+entire page is attempted. In addition, SOS will allow
+the D and R commands to be used without a period
+(e.g., "D" becomes an acceptable substitute for "D.").
+/EXPERT is the inverse of /NOVICE.
+.I-8;/NOEXPERT
+.BR;This command, which is equivalent to /NOVICE, causes
+SOS to use full length error messages instead of 3
+character abbreviations. SOS will ask for
+verification when a D(elete) or R(eplace) that would
+remove an entire page is attempted. In addition, SOS
+will not allow the D and R commands to be used without
+a period (e.g., "D" is not an acceptable substitute
+for "D.").
+.PAGE
+.I-16;_/FILE
+.I-16;Purpose:	Define the output file name for the current edit.
+.B
+.I-16;Syntax:	/FILE:file spec.
+.BR;This option causes SOS to write the output of the edit
+to "file spec.", instead of updating the original
+file.
+.PAGE
+.I-16;_/FILLCLASS
+.I-16;Purpose:	Set the fill class for the terminal in the same manner
+as the monitor command
+.B
+_.SET TTY FILL n
+.B
+.I-16;Syntax:	/FILLCLASS:n
+.BR;Set the fill class for the terminal to "n". "n" may
+be 0, 1, 2, or 3. Note that /FILLCLASS:0 is equivalent to
+the monitor command
+.B
+_.SET TTY NO FILL
+.I-8;/NOFILL
+.BR;Set the fill class for the terminal to 0. /NOFILL is
+equivalent to /FILLCLASS:0 and to the monitor command
+.B
+_.SET TTY NO FILL
+.PAGE
+.I-16;_/INCREMENT
+.I-16;Purpose:	Establish an initial value for the default global line
+increment.
+.B
+.I-16;Syntax:	/INCREMENT:n
+.BR;Set the default global line increment to "n" at the
+start of each edit.
+.PAGE
+.I-16;_/INFORM
+.I-16;Purpose:	List line numbers of first and last lines (D)eleted or
+(R)eplaced.
+.B
+.I-16;Syntax:	/INFORM
+.BR;This switch tells SOS to type out how many lines were
+deleted by a D or R command, as well as the range of
+those lines.
+.I-8;/NOINFORM
+.BR;This switch tells SOS not to type out the numbers of
+the lines affected by a D or R command.
+.PAGE
+.I-16;_/INITIALIZE
+.I-16;Purpose:	To automatically perform setup functions when SOS
+is started.
+.B
+.I-16;Syntax:	/INITIALIZE
+.BR;The file SOS.INI is invoked as though it was an
+indirect command file, and the actions are taken
+accordingly. This happens whenever SOS is first
+started.
+.PAGE
+.I-16;_/INSERT
+.I-16;Purpose:	Cause SOS to prompt you with the first available line
+number when creating a new file.
+.B
+.I-16;Syntax:	/INSERT
+.BR;This switch tells SOS to automatically enter I(nsert)
+mode when creating a new file.
+.I-8;/NOINSERT
+.BR;This switch causes SOS to prompt you with an asterisk
+when creating a new file instead of prompting you with
+a line number.
+.PAGE
+.I-16;_/ISAVE
+.I-16;Purpose:	Make SOS automatically save the state of the file
+after a selected number of lines is added.
+.B
+.I-16;Syntax:	/ISAVE:n
+.BR;Make SOS automatically save the state of the file if
+"n" lines have been inserted since the last time the
+file was saved. This feature can minimize the loss of
+entered data in the event of an interruption of
+computer service. Refer to /SAVE for additional file
+preservation capabilities.
+.PAGE
+.I-16;_/LC
+.I-16;Purpose:	Enable entry of lower case text.
+.B
+.I-16;Syntax:	/LC
+.BR;Allow letters not specifically typed as upper case
+text to be interpreted as lower case text in the same
+manner as the monitor commands
+.B
+_.SET TTY LC
+or
+_.SET TTY NO UC
+.I-8;/NOLC
+.BR;This command causes all text to be interpreted as
+upper case text in the same manner as the monitor
+commands
+.B
+_.SET TTY NO LC
+or
+_.SET TTY UC
+.PAGE
+.I-16;_/LDEFINE
+.I-16;Purpose:	To define a macro name as a range specification.
+.B
+.I-16;Syntax:	/LDEFINE:name:range
+.BR;Define the macro "name" to be the resolved text form of the "range".
+Any single line specifier or a range specifier is legal. All special
+symbols and addition/subtraction will be resolved at definition time.
+For example, /LDEFINE:XX:200/.+1:*-5/10 might define XX as 00200/6:05500/10.
+See also /DEFINE, /MACRO, and /PURGE for related information.
+.PAGE
+.I-16;_/LENGTH
+.I-16;Purpose:	Define the number of lines per physical page of paper.
+.B
+.I-16;Syntax:	/LENGTH:n
+.BR;Set the number of lines that should be printed between
+SOS generated page ejects when the "P" command is used
+to "n". This command is most useful when doing output
+on hard copy devices directly from SOS.
+.PAGE
+.I-16;_/LF
+.I-16;Purpose:	Eliminate stray blank lines between printed lines on
+display terminals.
+.B
+.I-16;Syntax:	/LF
+.BR;This switch allows SOS to eliminate stray blank lines
+that may occur on a display terminal when the "P"
+command or the Line Feed key is used to type a file on
+your terminal.
+.I-8;/NOLF
+.BR;This switch disables the above feature.
+.PAGE
+.I-16;_/LMAR
+.I-16;Purpose:	Set the left margin for SOS text justification.
+.B
+.I-16;Syntax:	/LMAR:n
+.BR;This switch sets the left margin for text
+justification to character position "n". The left
+most character position in any line is considered to
+be position 1.
+.PAGE
+.I-16;_/LOCATION
+.I-16;Purpose:	To list the first line/page in the editing buffer.
+.B
+.I-16;Syntax:	=LOCATION
+.BR;The first line/page number in the editing buffer is listed. Note
+the current line/page may be found with the command "=."
+.PAGE
+.I-16;_/LOWER
+.I-16;Purpose:	Make lower case the default input mode for characters
+typed on a Model 33 Teletype.
+.B
+.I-16;Syntax:	/LOWER
+.BR;This switch makes all letters entered into a file be
+in lower case unless the letter is preceded by an
+apostrophe. When /LOWER is set, upper case characters
+in a line printed by SOS will be preceded by an
+apostrophe. Refer to /C64, /C128, /DPY, /M33, /M37,
+/STANDARD, and /UPPER for additional information.
+.PAGE
+.I-16;_/MACRO
+.I-16;Purpose:	To enable a macro facility.
+.B
+.I-16;Syntax:	/MACRO
+.BR;Allow macros to be expanded. A macro is expanded into text, and
+the text used in place. It can be used in any context, and can be
+some, all, or multiple commands, or used in insert mode.
+When /MACRO is enabled, angle brackets (< and >) are treated specially,
+and are used to delimit macro names.
+See also /DEFINE, /LDEFINE, and /PURGE for related information.
+.I-8;<name>
+.BR;Expand the macro "name".
+.I-8;<name,n>
+.BR;Expand the macro "name" n times.
+.I-8;<name,*>
+.BR;Expand the macro "name" until a command error is generated.
+.I-8;<name(arg,arg)>
+.BR;Expand the macro "name" with arguments "arg".
+.PAGE
+.I-16;_/MAXLN
+.I-16;Purpose:	Define the largest line number to allow on an SOS
+"page".
+.B
+.I-16;Syntax:	/MAXLN:n
+.BR;Set the largest line number allowed on any SOS page to
+"n". If, when doing an operation other than an
+insertion, the next line number would exceed "n", SOS
+will automatically insert a page mark in the file and
+restart the sequencing.
+.PAGE
+.I-16;_/M33
+.I-16;Purpose:	Inform SOS that you are using a Model 33 Teletype.
+.B
+.I-16;Syntax:	/M33
+.BR;When /M33 is used, SOS will provide character
+translation for left and right curly braces and the
+garroted bar. Control characters will be translated
+according to the table given with /C128. Since Model
+33 Teletypes do not have lower case, all lower case
+characters are preceded by an apostrophe. Refer to
+/C64, /C128, /DPY, /LOWER, /M37, /STANDARD, and /UPPER
+for additional information.
+.PAGE
+.I-16;_/M37
+.I-16;Purpose:	Inform SOS that you are using a Model 37 Teletype.
+.B
+.I-16;Syntax:	/M37
+.BR;When /M37 is used, SOS will not provide character
+translation for left and right curly braces and the
+garroted bar, as a Model 37 terminal has these
+characters. Control characters will be translated
+according to the table given with /C128. Since Model
+37 Teletypes have lower case, all lower case
+characters are printed as is. Refer to /C64, /C128,
+/DPY, /LOWER, /M33, /STANDARD, and /UPPER for
+additional information.
+.PAGE
+.I-16;_/NAME
+.I-16;Purpose:	Define the output file name for the current edit.
+.B
+.I-16;Syntax:	/NAME:file spec.
+.BR;This option causes SOS to write the output of the edit
+to "file spec.", instead of updating the original
+file.
+.PAGE
+.I-16;_/NEWALTER 
+.I-16;Purpose:	Allow the use of the new alter command set.
+.B
+.I-16;Syntax:	/NEWALTER
+.BR;This allows the use of a new alter command set with
+extended features and more mnomnic commands.
+.I-8;/OLDALTER
+.BR;The old alter command set is enabled again.
+.PAGE
+.I-16;_/NEWCOMMAND
+.I-16;Purpose:	To select a new command set.
+.B
+.I-16;Syntax:	/NEWCOMMAND
+.BR;This selects a new set of commands. For more information, see
+/OLDCOMMANDS for a list of changes.
+.PAGE
+.I-16;_/NOVICE
+.I-16;Purpose:	This switch tells SOS that you are not an expert user.
+.B
+.I-16;Syntax:	/NOVICE
+.BR;This command, which is equivalent to /NOEXPERT, causes
+SOS to use full length error messages instead of 3
+character abbreviations. SOS will ask for
+verification when a D(elete) or R(eplace) that would
+remove an entire page is attempted. In addition, SOS
+will not allow the D and R commands to be used without
+a period (e.g., "D" is not an acceptable substitute
+for "D."). /NOVICE is the inverse of /EXPERT.
+.PAGE
+.I-16;_/NUMBER
+.I-16;Purpose:	Print the line numbers at your terminal when editing.
+.B
+.I-16;Syntax:	/NUMBER
+.BR;This switch causes SOS to type the line number
+associated with a line whenever it must type the line.
+.B
+.I-8;/NONUMBER
+.BR;This switch prevents SOS from typing the line number
+associated with a line whenever a line must be typed.
+.PAGE
+.I-16;_/OLD
+.I-16;Purpose:	Allow two levels of backup files.
+.B
+.I-16;Syntax:	/OLD
+.BR;If /OLD is used, SOS will create a file of the same
+name as the one you are editing, but with the
+extension changed to .OLD provided such a file does
+not already exist. If a .OLD file does exist, SOS
+will create a .BAK file instead. Refer to /BAK and
+/QZBAK for additional information.
+.B
+.I-8;/NOBAK
+.BR;This switch disables /BAK, /OLD, and /QZBAK, thus
+preventing creation of any backup files by SOS.
+.PAGE
+.I-16;_/OLDALTER
+.I-16;Purpose:	Allow the use of the old format command set.
+.B
+.I-16;Syntax:	/OLDALTER
+.BR;The old alter command set is enabled again.
+.I-8;/NEWALTER
+.BR;This allows the use of a new alter command set with extended features
+and more mnonmic commands.
+.PAGE
+.I-16;_/OLDCOMMAND
+.I-16;Purpose:	To select an old command set, compatible with SOS version 21.
+.B
+.I-16;Syntax:	/OLDCOMMAND
+.BR;This makes commands that may have changed, compatible
+with SOS version 21/23 as much as possible, sometimes
+sacrificing new features or cleaner command
+implementations. This has the following effects:
+.B
+/QZBAK is the default. This writes *.Q?? and *.Z??
+backup files.
+.B
+/EXPERT defaults /NOINFORM, /NOVICE defaults /INFORM.
+.B
+Exit options S and B mean unsequence and nobackup,
+respectively.
+.B
+N is treated like NF (renumber file) instead of
+renumbering the current page only.
+.B
+The default STEP and START are 100, and not 10.
+.B
+In alter mode, V means invert case of word, _# means
+invert case to the end of the line, X means replace
+the current word, and T means to extend the line.
+.B
+.I-8;/NEWCOMMAND
+.BR;Disables /OLDCOMMAND, and the associated changed
+commands.
+.PAGE
+.I-16;_/OPTION
+.I-16;Purpose:	Select special editing options from SWITCH.INI.
+.B
+.I-16;Syntax:	/OPTIONS:name
+.BR;This switch causes SOS to process the line in
+SWITCH.INI beginning with "SOS:name/switches" in
+addition to the line beginning with "SOS/switches".
+.PAGE
+.I-16;_/PLINES
+.I-16;Purpose:	Define the default number of lines to print in
+response to a "P" command that does not specify a line
+range.
+.B
+.I-16;Syntax:	/PLINES:n
+.BR;Set the number of lines to print for a "P" command
+that does not specify a line range to "n". A "P"
+command with no line range will also terminate at a
+page boundary.
+.PAGE
+.I-16;_/PMAR
+.I-16;Purpose:	Set the paragraph margin for SOS text justification.
+.B
+.I-16;Syntax:	/PMAR:n
+.BR;This switch sets the indentation for the first line of
+a paragraph to character position "n". The left most
+character position in any line is considered to be
+position 1.
+.PAGE
+.I-16;_/PROGRAM
+.I-16;Purpose:	Disable entry of lower case text.
+.B
+.I-16;Syntax:	/PROGRAM
+.BR;This command causes all text to be interpreted as
+upper case text in the same manner as the monitor
+commands
+.B
+_.SET TTY NO LC
+or
+_.SET TTY UC
+.PAGE
+.I-16;_/PROTECT
+.I-16;Purpose:	To set the file protection for the output file from
+SOS.
+.B
+.I-16;Syntax:	/PROTECT:nnn
+.BR;This switch sets the file protection for the file to
+be written by SOS to "nnn".
+.PAGE
+.I-16;_/PURGE
+.I-16;Purpose:	To purge all currently defined macros.
+.b
+.I-16;Syntax:	/PURGE
+.BR;All currently defined macros are deleted. See also /DEFINE, /LDEFINE, and /MACRO for related information.
+.PAGE
+.I-16;_/QZBAK
+.I-16;Purpose:	Allow two levels of backup files in a manner similar
+to DEC release SOS.
+.B
+.I-16;Syntax:	/QZBAK
+.BR;When this switch is selected, the .BAK file will be
+given the extension of the form .Qxx, where xx is the
+last two letters in the original extension. For
+example, if the original extension was .MAC, the
+backup file with /QZBAK selected would become .QAC.
+Also, the .OLD file will be given an extension of .Zxx. Use of this 
+switch allows a user to keep backup files from files of the same 
+name but with different extensions simultaneously. Refer to /OLD 
+and /BAK for additional information.
+.B
+.I-8;/NOBAK
+.BR;This switch disables /BAK, /OLD, and /QZBAK, thus
+preventing creation of any backup files by SOS.
+.B
+.I-8;/NOQZBAK
+.BR;This switch disables /QZBAK without affecting /BAK or
+/OLD.
+.PAGE
+.I-16;_/R
+.I-16;Purpose:	Look at a file in Readonly mode.
+.B
+.I-16;Syntax:	/R
+.BR;This switch allows you to look at a file in a manner
+that prevents alterations to the file. Use of this
+switch saves most of the overhead of scanning a file,
+and this in turn speeds up the scanning process. Note
+that if "ED" is used to exit a file for which /R is
+selected, SOS will attempt to delete the file as
+described under /DELETE. /R can only be turned off by
+exiting SOS. Refer to /X for additional information.
+.PAGE
+.I-16;_/READONLY
+.I-16;Purpose:	Look at a file in Readonly mode.
+.B
+.I-16;Syntax:	/READONLY
+.BR;This switch allows you to look at a file in a manner
+that prevents alterations to the file. Use of this
+switch saves most of the overhead of scanning a file,
+and this in turn speeds up the scanning process. Note
+that if "ED" is used to exit a file for which /READONLY is
+selected, SOS will attempt to delete the file as
+described under /DELETE. /READONLY can only be turned off by
+exiting SOS. Refer to /X for additional information.
+.PAGE
+.I-16;_/REFDLY
+.I-16;Purpose:	Establish a delay time for screen refreshes.
+.B
+.I-16;Syntax:	/REFDLY:n
+.BR;This switch allows you to establish a minimum delay
+time before the screen is refreshed when /DISPLAY is
+selected. Normally, SOS will refresh the line after
+each character is entered. If /REFDLY:n is selected,
+SOS will refresh the line only if "n" milliseconds
+have elapsed since the last character was typed in.
+This reduces the number of characters transmitted to
+the terminal, while still maintaining the convenience
+of continuous updates.
+.PAGE
+.I-16;_/RONLY
+.I-16;Purpose:	Look at a file in RONLY mode.
+.B
+.I-16;Syntax:	/RONLY
+.BR;This switch allows you to look at a file in a manner
+that prevents alterations to the file. Use of this
+switch saves most of the overhead of scanning a file,
+and this in turn speeds up the scanning process. Note
+that if "ED" is used to exit a file for which /RONLY is
+selected, SOS will attempt to delete the file as
+described under /DELETE. /RONLY can only be turned off by
+exiting SOS. Refer to /X for additional information.
+.PAGE
+.I-16;_/RMAR
+.I-16;Purpose:	Set the right margin for SOS text justification.
+.B
+.I-16;Syntax:	/RMAR:n
+.BR;This switch sets the right margin for text
+justification to character position "n". The left
+most character position in any line is considered to
+be position 1.
+.PAGE
+.I-16;_/RULER
+.I-16;Purpose:	Provide a ruler for aligns columns.
+.B
+Syntax: =RULER
+A ruler labeling the columns will be typed out. It is
+of the form:
+123456789 123456789 .... to terminal width
+.PAGE
+.I-16;_/RUN
+.I-16;Purpose:	This switch allows setting the name of the program to
+be run in response to a "G" command.
+.B
+.I-16;Syntax:	/RUN:file spec
+.BR;This will cause the program given by "file spec" to
+be run when SOS is exited with a "G" command. The
+default program is "SYS:COMPIL", which will cause the
+last EXECUTE, LOAD, etc., command to be repeated.
+.PAGE
+.I-16;_/SAVE
+.I-16;Purpose:	Make SOS automatically save the state of the file
+after a selected number of modifications is made.
+.B
+.I-16;Syntax:	/SAVE:n
+.BR;Make SOS automatically save the state of the file if
+"n" lines have been modified since the last time the
+file was saved. This feature can minimize the loss of
+entered data in the event of an interruption of
+computer service. Refer to /ISAVE for additional file
+preservation capabilities.
+.PAGE
+.I-16;_/SEPARATOR
+.I-16;Purpose:	Allow "%", "$", and "." to be treated as delimiters in
+F(ind) and S(ubstitute) commands.
+.B
+.I-16;Syntax:	/SEPARATOR
+.BR;This switch causes "%", "$", and "." to be treated as
+separators in F and S commands. A separator is
+normally defined as any character which is not a
+letter, number, "$", "%", or ".".
+.B
+.I-8;/NOSEPARATOR
+.BR;This switch restores the default condition of treating
+"$", "%", and "." in the same manner as letters and
+digits in F and S commands.
+.PAGE
+.I-16;_/SEQUENCE
+.I-16;Purpose:	Force sequence numbering of the SOS output file.
+.B
+.I-16;Syntax:	/SEQUENCE
+.BR;This switch results in SOS writing a sequence numbered
+output file in response to an "E", "G", or "W" command
+that does not specify "S", "U", or "X".
+.I-8;/NOSEQUENCE
+.BR;This switch, which is equivalent to /UNSEQUENCE,
+results in SOS writing an unsequence numbered output
+file in response to an "E", "G", or "W" command that
+does not specify "S", "U", or "X".
+.PAGE
+.I-16;_/STANDARD
+.I-16;Purpose:	Inform SOS that you are using a standard terminal.
+.B
+.I-16;Syntax:	/STANDARD
+.BR;This switch informs SOS that the terminal in use is
+neither a CRT nor a Model 33 or 37 Teletype. SOS will
+process _^R, _^U, and RUBout itself. When _^R is typed,
+the entire line, including the line number, will be
+retyped up to the current cursor position. _^U will
+cause the line number to be retyped, but the rest of
+the line will be forgotten. RUBout will cause the
+characters passed over to be echoed, but they will be
+separated from the rest of the line by backslashes.
+Lower case text, special characters, and control
+characters are entered into the file by using the
+terminal keyboard, rather than by depending on SOS for
+character translations. Refer to /C64, /C128, /DPY,
+/LOWER, /M33, /M37, and /UPPER for additional
+information.
+.PAGE
+.I-16;_/START
+.I-16;Purpose:	Define the default starting value to use for the first
+line number on each page when reading in an
+unsequenced file.
+.B
+.I-16;Syntax:	/START:n
+.BR;Set the default value for the first line number on
+each page of an unsequenced file to "n". This switch
+may be selected only on the SOS command line or via a
+SWITCH.INI file.
+.PAGE
+.I-16;_/STEP
+.I-16;Purpose:	Define the default line increment to use for numbering
+each line on a given page when reading in an
+unsequenced file.
+.B
+.I-16;Syntax:	/STEP:n
+.BR;Set the default value for the line increment on a
+given page of an unsequenced file to "n". This switch
+may be selected only on the SOS command line or via a
+SWITCH.INI file.
+.PAGE
+.I-16;_/STRING
+.I-16;Purpose:	To list the current strings used in the last F(ind) and
+S(ubstitute) command.
+.I-16;Syntax:	=STRING
+.BR;The strings used in the last F(ind) and S(ubstitute) command are
+listed. If no strings are given in a F or S command, these strings
+will be used again.
+.PAGE
+.I-16;_/TELL
+.I-16;Purpose:	To inform the user what file name SOS used for output.
+.B
+.I-16;Syntax:	/TELL
+.BR;This switch will cause SOS to type out the name of its
+output file after a "E", "G", or "W" command is used.
+.I-8;/NOTELL
+.BR;This switch will prevent SOS from typing out the name
+of its output file after an "E", "G", or "W" command
+is used.
+.PAGE
+.I-16;_/TEXT
+.I-16;Purpose:	Enable entry of lower case text.
+.B
+.I-16;Syntax:	/TEXT
+.BR;Allow letters not specifically typed as upper case
+text to be interpreted as lower case text in the same
+manner as the monitor commands
+.B
+_.SET TTY LC
+or
+_.SET TTY NO UC
+.PAGE
+.I-16;_/UC
+.I-16;Purpose:	Disable entry of lower case text.
+.B
+.I-16;Syntax:	/UC
+.BR;This command causes all text to be interpreted as
+upper case text in the same manner as the monitor
+commands
+.B
+_.SET TTY NO LC
+or
+_.SET TTY UC
+.I-8;/NOUC
+.BR;Allow letters not specifically typed as upper case
+text to be interpreted as lower case text in the same
+manner as the monitor commands
+.B
+_.SET TTY LC
+or
+_.SET TTY NO UC
+.PAGE
+.I-16;_/UNSEQUENCE
+.I-16;Purpose:	Inhibit sequence numbering of the SOS output file.
+.B
+.I-16;Syntax:	/UNSEQUENCE
+.BR;This switch, which is equivalent to /NOSEQUENCE,
+results in SOS writing an unsequence numbered output
+file in response to an "E", "G", or "W" command that
+does not specify "S", "U", or "X".
+.PAGE
+.I-16;_/UPPER
+.I-16;Purpose:	Make upper case the default input mode for characters
+typed on a Model 33 Teletype.
+.B
+.I-16;Syntax:	/UPPER
+.BR;This switch makes all letters entered into a file be
+in upper case unless the letter is preceded by an
+apostrophe. When /UPPER is set, lower case characters
+in a line printed by SOS will be preceded by an
+apostrophe. Refer to /C64, /C128, /DPY, /M33, /M37,
+/STANDARD, and /LOWER for additional information.
+.PAGE
+.I-16;_/WIDTH
+Purpose: /WIDTH allows setting of the terminal line width.
+.B
+.I-16;Syntax:	/WIDTH:n
+.BR;This switch will set the terminal line width to "n"
+characters. "n" must lie between 16 and 200
+inclusive. If more than "n" characters are typed on a
+line, the operating system will break the line
+visually at your terminal and move the carriage to the
+beginning of the next line. The setting of this
+switch has no effect on the data entered in the file.
+To have a Carriage Return automatically inserted in
+the file at specified intervals, see /CRLF.
+.PAGE
+.I-16;_/WINDOW
+.I-16;Purpose:	This switch allows you to change the size of the SOS
+edit window.
+.B
+.I-16;Syntax:	/WINDOW:n
+.BR;"n" is the size of the in-core window to the file and
+defaults to about 1620 (decimal) words. If "n" is
+less than or equal to 256, it is the window size in
+nK;if greater than 256, it is the size in words.
+Larger window sizes can speed up editing on large
+files, but may degrade your response, as SOS will need
+more core. If the value of "n" is so large that SOS
+cannot get enough core to satisfy it, SOS will use the
+default window size. See /WMAXIMUM, /WMINIMUM, and
+/WRATIO for additional information.
+.PAGE
+.I-16;_/WMAXIMUM
+.I-16;Purpose:	This switch allows you to change the size of the
+largest possible edit window.
+.B
+.I-16;Syntax:	/WMAXIMUM:n
+.BR;"n" is the size of the largest possible in-core window
+to the file and defaults to 12K (decimal) words. If
+"n" is less than or equal to 256, it is the maximum
+window size in nK;if greater than 256, it is the
+size in words. SOS divides the file size by the value
+of /WRATIO, and then uses the result as the window
+size. If the computed size would be less than the
+/WMINIMUM value, the /WMINIMUM is used. If the
+computed size would exceed /WMAXIMUM, the /WMAXIMUM
+value is used. A user specified /WINDOW value will
+override the SOS computed value. Larger window sizes
+can speed up editing on large files, but may degrade
+your response, as SOS will need more core. Refer to
+/WINDOW, /WMINIMUM, and /WRATIO for additional
+information.
+.PAGE
+.I-16;_/WMINIMUM
+.I-16;Purpose:	This switch allows you to change the size of the
+smallest possible edit window.
+.B
+.I-16;Syntax:	/WMINIMUM:n
+.BR;"n" is the size of the smallest possible in-core
+window to the file and defaults to 1K (decimal) words.
+If "n" is less than or equal to 256, it is the minimum
+window size in nK;if greater than 256, it is the
+size in words. SOS divides the file size by the value
+of /WRATIO, and then uses the result as the window
+size. If the computed size would be less than the
+/WMINIMUM value, the /WMINIMUM is used. If the
+computed size would exceed /WMAXIMUM, the /WMAXIMUM
+value is used. A user specified /WINDOW value will
+override the SOS computed value. Larger window sizes
+can speed up editing on large files, but may degrade
+your response, as SOS will need more core. Refer to
+/WINDOW, /WMAXIMUM, and /WRATIO for additional
+information.
+.PAGE
+.I-16;_/WRATIO
+.I-16;Purpose:	This switch allows you to change the number SOS uses
+to compute the initial window size from the file size.
+.B
+.I-16;Syntax:	/WRATIO:n
+.BR;"n" is the number SOS will divide into the file size
+to get an initial estimate for a window size. /WRATIO
+defaults to 4. If the computed size would be less
+than the /WMINIMUM value, the /WMINIMUM is used. If
+the computed size would exceed /WMAXIMUM, the
+/WMAXIMUM value is used. A user specified /WINDOW
+value will override the SOS computed value. Larger
+window sizes can speed up editing on large files, but
+may degrade your response, as SOS will need more core.
+Values of /WRATIO in excess of 10 will greatly impair
+your response. Refer to /WINDOW, /WMAXIMUM, and
+/WMINIMUM for additional information.
+.PAGE
+.I-16;_/X
+.I-16;Purpose:	Look at a file in eXamine mode.
+.B
+.I-16;Syntax:	/X
+.BR;This switch allows you to look at a file in a manner
+that prevents alterations to the file. Use of this
+switch saves most of the overhead of scanning a file,
+and this in turn speeds up the scanning process. Note
+that if "ED" is used to exit a file for which /X is
+selected, SOS will attempt to delete the file as
+described under /DELETE. /X can only be turned off by
+exiting SOS. If the file is unsequenced, /X is the
+same as /R plus /NONUMBER. If the file is sequenced,
+/X is equivalent to /R.
+.PAGE
+.I-16;_/XINSERT
+.I-16;Purpose:	To control the inserting of new lines in eXtend mode.
+.B
+.I-16;Syntax:	/XINSERT
+.BR;Allow new lines to be inserted if <CR> is typed in
+eXtend mode, and the global line increment allows such
+a line.
+.I-8;/NOXINSERT
+.BR;Do not allow new lines to be inserted if a <CR> is
+typed in eXtend mode.
+.PAGE
+.I-16;_/XSEQUENCE
+.I-16;Purpose:	Write the SOS output file in the same sequencing
+format as the SOS input file.
+.B
+.I-16;Syntax:	/XSEQUENCE
+.BR;This switch results in SOS writing a file whose
+sequencing format is the same as that of the input
+file. If a file is being created, /XSEQUENCE is the
+same as /UNSEQUENCE. "S", "U", or "X" can be used on
+an "E", "G", or "W" command to override this switch
+setting.
+.ENDIF HLP

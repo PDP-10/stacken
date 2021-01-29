@@ -1,0 +1,497 @@
+%TITLE 'XPNOPN - Open a network link'
+MODULE xpnopn (
+               ENTRY ( XPN$OPEN ),
+               IDENT = '3'
+              ) =
+BEGIN
+!  COPYRIGHT (C) DIGITAL EQUIPMENT CORPORATION 1986.
+!  ALL RIGHTS RESERVED.
+!  
+!  THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED  AND
+!  COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE AND WITH
+!  THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS  SOFTWARE  OR
+!  ANY  OTHER  COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE
+!  AVAILABLE TO ANY OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE
+!  SOFTWARE IS HEREBY TRANSFERRED.
+!  
+!  THE INFORMATION IN THIS SOFTWARE IS  SUBJECT  TO  CHANGE  WITHOUT
+!  NOTICE  AND  SHOULD  NOT  BE CONSTRUED AS A COMMITMENT BY DIGITAL
+!  EQUIPMENT CORPORATION.
+!  
+!  DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF
+!  ITS SOFTWARE ON EQUIPMENT THAT IS NOT SUPPLIED BY DIGITAL.
+
+!++
+! FACILITY:
+!   Transportable BLISS interface to DECNET, TOPS10 implementation
+!
+! ABSTRACT:
+!   This module contains the BLISSnet OPEN function support routines.
+!
+! ENVIRONMENT:
+!   TOPS10 user mode.
+!
+! AUTHOR: Larry Campbell, CREATION DATE: 2 November, 1981
+!
+! MODIFIED BY: Andrew Nourse
+!
+! 04 - Start TOPS-10 support [Doug Rayner]
+! 03 - Make FAL debugging hack work
+! 02 - Make connect format 1 work
+! 01 - The beginning
+! 
+! Start using the DIL standard edit history format.
+!
+! Edit (%O'2', '12-Apr-84', 'Sandy Clemens')
+!  %( Add the TOPS-10 BLISSnet sources for DIL V2.  )%
+!
+! Edit (%O'6', '5-Oct-84', 'Sandy Clemens')
+!  %( Add new format of COPYRIGHT notice.  FILES:  ALL )%
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+FORWARD ROUTINE
+    xpn$open,                           ! First level routine
+    xpn$$open;                          ! Actual work routine
+!
+! INCLUDE FILES:
+!
+LIBRARY 'BLI:XPORT';                    ! XPORT definitions
+LIBRARY 'BLISSNET';                     ! BLISSnet definitions
+LIBRARY 'BLI:UUOSYM';                   ! TOPS10 monitor definitions
+LIBRARY 'BLSN10';                       ! BLISSnet-10 internal definitions
+LIBRARY 'UUODEF';			! UUO definition macros
+LIBRARY 'BLI:TENDEF';			! System dependant macros
+!
+! MACROS:
+!
+
+!
+! EQUATED SYMBOLS:
+!
+
+!
+! UNDELCARED SYMBOLS: Some problems with UUO macros defined in UUOSYM
+!
+UNDECLARE
+    %QUOTE OUTPUT,
+    %QUOTE WAIT;
+
+!
+! OWN STORAGE:
+!
+
+!
+! EXTERNAL REFERENCES:
+!
+
+EXTERNAL ROUTINE
+    xpn$$uuo_error,			! Interpret NSP. error codes
+    xpn$$valid_nlb,                     ! Validate an NLB
+    xpn$$int_set : NOVALUE,             ! Set up for interrupts for a link
+    xpn$pmr;                            ! Negotiate poor-man's routing
+
+GLOBAL ROUTINE xpn$open (nlb, success_routine, failure_routine) =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   This is the first level imperative routine for the OPEN function.
+!   The expansion of the $XPN_OPEN macro calls this routine.  xpn$$open
+!   is called to perform the OPEN function.  The completion code is
+!   checked, and the success or failure action routine is called, as
+!   appropriate.
+!
+! FORMAL PARAMETERS:
+!   nlb                 - address of the Network Link Block
+!   success_routine     - address of a success action routine, or zero if
+!                         no action routine is to be called
+!   failure-routine     - address of a failure action routine, or zero if
+!                         no action routine is to be called
+!
+! IMPLICIT INPUTS:
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!   NLB$G_COMP_CODE is set based on the return code from the success or
+!   failure action routine.  NLB$G_2ND_CODE may be set if a failure occurs;
+!   in particular, if a NSP. error occurs it is set to the error code.
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   The completion code from the success or failure action routine is
+!   returned as the routine value, if an action routine is called.
+!   Otherwise, the completion code from xpn$$open is returned.
+!
+! SIDE EFFECTS:
+!   A network link is opened.
+!
+!--
+    BEGIN
+
+    MAP
+        nlb : REF $XPN_NLB();
+
+    LOCAL
+        original_primary_code,
+        primary_code,
+        secondary_code,
+        retcode;
+
+    nlb_binds;                          ! create nice names for NLB fields
+    !
+    ! validate the NLB
+    !
+    retcode = xpn$$valid_nlb (.nlb);
+    IF NOT .retcode
+    THEN
+        BEGIN
+        original_primary_code = XPN$_BAD_NLB;
+        secondary_code = .retcode
+        END
+    ELSE
+        BEGIN
+        !
+        ! Initialize all common fields and bits.
+        !
+        nlb[NLB$V_DATA_REQ] = 0;
+        nlb[NLB$V_END_MSG] = 0;
+        nlb[NLB$V_STRING] = 0;
+        nlb[NLB$V_ABORTALL] = 0;
+        nlb[NLB$V_CONN_REQ] = 0;
+        nlb[NLB$V_ABORTED] = 0;
+        nlb[NLB$V_DISCONNECTED] = 0;
+        nlb[NLB$V_IRPT_MSG] = 0;
+        nlb[NLB$V_OPEN] = 0;
+        nlb[NLB$V_CONNECTED] = 0;
+        nlb[NLB$V_VALIDITY] = 0;
+	nlb[NLB$V_INT_SET] = 0;
+        !
+        ! If allowing poor-man's routing, do it that way, otherwise
+        ! do simple open
+        !
+        IF .nlb[NLB$V_PMR]
+        THEN
+            original_primary_code = xpn$pmr (.nlb)
+        ELSE
+            BEGIN
+            original_primary_code = xpn$$open (.nlb);
+            !
+            ! If caller specified OPTION = WAIT, and there are no errors so far,
+            ! wait for an event.
+            !
+            IF .nlb[NLB$V_WAIT] AND (.original_primary_code)
+		THEN
+		BEGIN
+                LOCAL
+                    nlb_vec : VECTOR[2];
+                nlb_vec[0] = 1;
+                nlb_vec[1] = .nlb;
+                xpn$$int_set (nlb_vec);     ! Set up for interrupts
+
+                original_primary_code = $XPN_EVENT_INFO (NLB = .nlb,
+                                                      FAILURE = 0,
+                                                      OPTION = WAIT);
+		END;
+	    END;
+        nlb[NLB$G_COMP_CODE] = .original_primary_code;
+        secondary_code = .nlb[NLB$G_2ND_CODE]
+        END;
+    !
+    ! Check completion code and call success or failure routine as required
+    !
+    IF .original_primary_code
+    THEN
+        IF .success_routine NEQ 0
+        THEN
+            primary_code =
+                (.success_routine) (XPN$K_OPEN, .original_primary_code,
+                    .secondary_code, .nlb)
+        ELSE
+            primary_code = .original_primary_code
+    ELSE
+        IF .failure_routine NEQ 0
+        THEN
+            primary_code =
+                (.failure_routine) (XPN$K_OPEN, .original_primary_code,
+                    .secondary_code, .nlb)
+        ELSE
+            primary_code = .original_primary_code;
+    !
+    ! Unless the NLB was bad, store the completion code there
+    !
+    IF .original_primary_code NEQ XPN$_BAD_NLB
+    THEN
+        nlb[NLB$G_COMP_CODE] = .primary_code;
+    RETURN (.primary_code);
+
+    END;			!End of XPN$OPEN
+
+ROUTINE xpn$$open (nlb) =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   This is the work routine for xpn$open.
+!
+! FORMAL PARAMETERS:
+!   nlb         - address of the Network Link Block
+!
+! IMPLICIT INPUTS:
+!   nlb[NLB$V_ACTIVE]
+!   nlb[NLB$V_PASSIVE]
+!
+! IMPLICIT OUTPUTS:
+!   nlb[NLB$H_JFN]              - gets JFN for the link
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   XPN$_NORMAL		- normal (success) return
+!   XPN$_NO_OPEN	- DECnet-10 failed to open link
+!     various
+!
+!   XPN$_BUG		- bug, or not-yet-implemented function
+!
+! SIDE EFFECTS:
+!   NONE
+!
+!--
+    BEGIN
+
+    MAP
+        nlb : REF $XPN_NLB ();
+
+    LOCAL
+	nsp_arg_blk : MONBLOCK[$NSAA1+1] INITIAL (0),
+	nsp_connect_blk : VECTOR[$NSCUD+1]
+		INITIAL ($NSCUD+1, REP $NSCUD OF (0)),
+	nsp_dest_proc_blk : VECTOR[$NSDPN+1]
+		INITIAL ($NSDPN+1, REP $NSDPN OF (0)),
+	nsp_src_proc_blk : VECTOR[$NSDOB+1]
+		INITIAL ($NSDOB+1),
+	nsp_node_string_ptr : VECTOR[XPN$K_HOSTN_MAX_LEN_W]
+		INITIAL (XPN$K_HOSTN_MAX_LEN_W),
+	nsp_dest_task_string_ptr : VECTOR[XPN$K_TASKN_MAX_LEN_W]
+		INITIAL (XPN$K_TASKN_MAX_LEN_W),
+	nsp_userid_string_ptr : VECTOR[XPN$K_USRID_MAX_LEN_W]
+		INITIAL (XPN$K_USRID_MAX_LEN_W),
+	nsp_account_string_ptr : VECTOR[XPN$K_ACCNT_MAX_LEN_W]
+		INITIAL (XPN$K_ACCNT_MAX_LEN_W),
+	nsp_password_string_ptr : VECTOR[XPN$K_PASWD_MAX_LEN_W]
+		INITIAL (XPN$K_PASWD_MAX_LEN_W),
+	nsp_optdt_string_ptr : VECTOR[XPN$K_OPTDT_MAX_LEN_W]
+		INITIAL (XPN$K_OPTDT_MAX_LEN_W);
+
+    REGISTER
+	t1;
+
+    BIND
+	nsp_node_size = nsp_node_string_ptr[0],
+	nsp_dest_task_size = nsp_dest_task_string_ptr[0],
+	nsp_userid_size = nsp_userid_string_ptr[0],
+	nsp_account_size = nsp_account_string_ptr[0],
+	nsp_password_size = nsp_password_string_ptr[0],
+	nsp_optdt_size = nsp_optdt_string_ptr[0];
+
+    nlb_binds;                          ! Get short names for popular fields
+
+    !
+    ! Copy node name to connect block
+    !
+    nsp_connect_blk[$NSCND] = nsp_node_string_ptr[0];
+    IF  (nsp_node_size<lh> =.remote_host[STR$H_LENGTH]) GTR 0
+    THEN
+	$STR_COPY (STRING = remote_host,
+	    TARGET = (XPN$K_HOSTN_MAX_LEN_C,
+		CH$PTR (nsp_node_string_ptr[1],0,8)))
+    ELSE
+	!
+	! Since DECnet-10 will not default the node to the local
+	! node, we have to do it here.  Get the local node in SIXBIT
+	! from the DNET. UUO.  Another problem with DECnet-10 is that
+	! the node name can not have spaces in it.  So, we have to
+	! check for sixbit spaces, and convert only the non-space sixbit
+	! characters to 8-bit ASCII.
+	!
+	BEGIN
+	LOCAL
+	    dnet_arg_blk : VECTOR[3],
+	    cnt,
+	    ptr1,
+	    ptr2;
+	REGISTER
+	    t1;
+	t1 = dnet_arg_blk[0];
+	dnet_arg_blk[0] = (DN$FLE + ($DNLNN ^ 18) + 3);
+	IF DNET$_UUO(t1)
+	THEN
+	    BEGIN
+	    ptr1 = CH$PTR(dnet_arg_blk[2],0,6);
+	    ptr2 = CH$FIND_CH(6,.ptr1,0);	!look for SIXBIT <space>
+	    IF CH$FAIL(.ptr2) THEN cnt = 6 ELSE cnt = CH$DIFF(.ptr2,.ptr1);
+	    nsp_node_size<lh> = .cnt;
+	    ptr2 = CH$PTR (nsp_node_string_ptr[1],0,8);
+	    INCR i FROM 1 TO .cnt DO
+	    CH$WCHAR_A((CH$RCHAR_A(ptr1) + %C' '),ptr2);
+	    END;
+	END;
+
+    !
+    ! Build dummy local process descriptor block
+    !
+    nsp_connect_blk[$NSCSD] = nsp_src_proc_blk[0];
+    nsp_src_proc_blk[$NSDFM] = 0;		!Format 0
+    nsp_src_proc_blk[$NSDOB] = %O'345';		!arbitrary user definable object
+						! type.  Needed to keep VMS
+						! happy.
+
+    !
+    ! Build remote process descriptor block
+    !
+    nsp_connect_blk[$NSCDD] = nsp_dest_proc_blk[0];
+    IF active
+    THEN
+    BEGIN
+    CASE remote_format FROM 0 TO 2 OF
+	SET
+	[0] :			!Format 0: object type must be non-zero
+	    BEGIN
+	    IF remote_object_type EQL 0
+	    THEN
+		RETURN (XPN$_NO_OBJECT);
+	    nsp_dest_proc_blk[$NSDOB] = remote_object_type;
+	    END;
+	[1] :			!Format 1: connect by task name, object must = 0
+	    BEGIN
+	    IF (remote_object_type NEQ 0
+		OR .remote_descriptor[STR$H_LENGTH] GTR XPN$K_TASKN_MAX_LEN_C)
+	    THEN
+		RETURN (XPN$_IVFORMAT);
+	    nsp_dest_proc_blk[$NSDFM] = 1;
+	    nsp_dest_proc_blk[$NSDPN] = nsp_dest_task_string_ptr[0];
+	    nsp_dest_task_size<lh> = .remote_descriptor[STR$H_LENGTH];
+	    $STR_COPY (STRING = remote_descriptor,
+			TARGET = (XPN$K_TASKN_MAX_LEN_C,
+			CH$PTR (nsp_dest_task_string_ptr[1],0,8)));
+	    END;
+	[2] :			!Format 2: connect by user/group and task name
+	    BEGIN
+	    RETURN (XPN$_BUG)	! *** not implemented
+	    END;
+	TES;
+    END
+    ELSE
+    BEGIN
+    CASE local_format FROM 0 TO 2 OF
+	SET
+	[0] :			!Format 0: object type must be non-zero
+	    BEGIN
+	    IF local_object_type EQL 0
+	    THEN
+		RETURN (XPN$_NO_OBJECT);
+	    nsp_dest_proc_blk[$NSDOB] = local_object_type;
+	    END;
+	[1] :			!Format 1: connect by task name, object must = 0
+	    BEGIN
+	    IF (local_object_type NEQ 0
+		OR .local_descriptor[STR$H_LENGTH] GTR XPN$K_TASKN_MAX_LEN_C)
+	    THEN
+		RETURN (XPN$_IVFORMAT);
+	    nsp_dest_proc_blk[$NSDFM] = 1;
+	    nsp_dest_proc_blk[$NSDPN] = nsp_dest_task_string_ptr[0];
+	    nsp_dest_task_size<lh> = .local_descriptor[STR$H_LENGTH];
+	    $STR_COPY (STRING = local_descriptor,
+			TARGET = (XPN$K_TASKN_MAX_LEN_C,
+			CH$PTR (nsp_dest_task_string_ptr[1],0,8)));
+	    END;
+	[2] :			!Format 2: connect by user/group and task name
+	    BEGIN
+	    RETURN (XPN$_BUG)	! *** not implemented
+	    END;
+	TES;
+    END;
+
+    !
+    ! Copy user_id to connect block if it is provided
+    !
+    IF user_ID NEQ 0
+    THEN
+	BEGIN
+	IF .user_ID[STR$H_LENGTH] GTR XPN$K_USRID_MAX_LEN_C
+	THEN
+	    RETURN (XPN$_IVUSERLEN);
+	nsp_connect_blk[$NSCUS] = nsp_userid_string_ptr[0];
+	IF (nsp_userid_size<lh> = .user_ID[STR$H_LENGTH]) NEQ 0
+	THEN
+	$STR_COPY (STRING = user_ID,
+		TARGET = (XPN$K_USRID_MAX_LEN_C,
+			CH$PTR (nsp_userid_string_ptr[1],0,8)));
+	END;
+    !
+    ! Copy password to connect block if it is provided
+    !
+    IF password NEQ 0
+    THEN
+	BEGIN
+	IF .password[STR$H_LENGTH] GTR XPN$K_PASWD_MAX_LEN_C
+	THEN
+	    RETURN (XPN$_IVPWDLEN);
+	nsp_connect_blk[$NSCPW] = nsp_password_string_ptr[0];
+	IF (nsp_password_size<lh> = .password[STR$H_LENGTH]) NEQ 0
+	THEN
+	$STR_COPY (STRING = password,
+		TARGET = (XPN$K_PASWD_MAX_LEN_C,
+			CH$PTR (nsp_password_string_ptr[1],0,8)));
+	END;
+    !
+    ! Copy account to connect block if it is provided
+    !
+    IF account NEQ 0
+    THEN
+	BEGIN
+	IF .account[STR$H_LENGTH] GTR XPN$K_ACCNT_MAX_LEN_C
+	THEN
+	    RETURN (XPN$_IVACCTLEN);
+	nsp_connect_blk[$NSCAC] = nsp_account_string_ptr[0];
+	IF (nsp_account_size<lh> = .account[STR$H_LENGTH]) NEQ 0
+	THEN
+	$STR_COPY(STRING = account,
+		TARGET = (XPN$K_ACCNT_MAX_LEN_C,
+			CH$PTR (nsp_account_string_ptr[1],0,8)));
+	END;
+
+    !
+    ! Copy optional user data to connect block if it is provided
+    !
+    IF optional NEQ 0
+    THEN
+	BEGIN
+	IF .optional[STR$H_LENGTH] GTR XPN$K_OPTDT_MAX_LEN_C
+	THEN
+	    RETURN (XPN$_IVOPTLEN);
+	nsp_connect_blk[$NSCUD] = nsp_optdt_string_ptr[0];
+	IF (nsp_optdt_size<lh> = .optional[STR$H_LENGTH]) NEQ 0
+	THEN
+	$STR_COPY (STRING = optional,
+		TARGET = (XPN$K_OPTDT_MAX_LEN_C,
+			CH$PTR (nsp_optdt_string_ptr[1],0,8)));
+	END;
+
+    nsp_arg_blk[$NSAFN,NS$AFN] = 
+	(IF active THEN $NSFEA ELSE $NSFEP);		!function
+    nsp_arg_blk[$NSAFN,NS$ALN] = $NSAA1 + 1;		!size of block
+    nsp_arg_blk[$NSACH,$WORD] = 0;			!will return channel
+    nsp_arg_blk[$NSAA1,$WORD] = nsp_connect_blk[0];	!pointer to connect blk
+    t1 = nsp_arg_blk[0,$WORD];
+
+    IF NOT NSP$_UUO(t1)
+    THEN
+	RETURN (xpn$$uuo_error (.nlb,.t1));
+    nlb[NLB$H_JFN] = .nsp_arg_blk[$NSACH,NS$ACH];
+    nlb[NLB$V_OPEN] = 1;
+    IF active
+    THEN
+	nlb[NLB$V_CONN_REQ] = 1;
+    RETURN (XPN$_NORMAL)
+    END;			!End of xpn$$open
+
+END				!End of module XPNOPN
+ELUDOM

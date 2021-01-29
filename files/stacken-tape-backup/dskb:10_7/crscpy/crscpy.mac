@@ -1,0 +1,3472 @@
+TITLE	CRSCPY  -- Copy / Log crashes dumped by the monitor
+SUBTTL	G.M. Uhler/GMU/TARL/DPM/RCB
+
+
+;This program is based on CRSDMP, a program written by Bill Meier
+;at DEC/IPC.
+
+
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION
+; 1979,1980,1984,1985,1986,1987,1988.
+;ALL RIGHTS RESERVED.
+;
+;
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+;ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+;INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+;COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+;OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+;TRANSFERRED.
+;
+;THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+;AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+;CORPORATION.
+;
+;DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+;SOFTWARE ON EQUIPMENT THAT IS NOT SUPPLIED BY DIGITAL.
+
+
+	SEARCH	JOBDAT,MACTEN,SCNMAC,UUOSYM
+	.TEXT	|,REL:SCAN/SEARCH,REL:HELPER|
+	.DIRECTIVE .XTABM,FLBLST
+	SALL		;Clean up listing
+
+
+;Show versions of universal files
+
+	%%JOBD==%%JOBD
+	%%MACT==%%MACT
+	%%SCNM==%%SCNM
+	%%UUOS==%%UUOS
+
+
+	CCPVER==1	;DEC version
+	CCPMIN==2	;DEC minor version
+	CCPEDT==61	;DEC edit number
+	CCPWHO==0	;Who last edited
+
+	TWOSEG
+	RELOC	400000
+	LOC	.JBVER
+	VRSN.	(CCP)	;Version number to job data area
+	RELOC
+
+
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1979,1988.  ALL RIGHTS RESERVED.
+\;END COPYRIGHT MACRO
+
+	SUBTTL	Revision history
+
+
+COMMENT	`
+
+[1]    5-Nov-79	If the date/time of the dump is zero, print Unknown
+		instead of junk.
+[2]    6-Nov-79	If the STOPCD name extracted from the dump is not
+		three alphanumeric characters, use SER.  This keeps
+		the output filename from being junk.
+[3]   13-Nov-79	Add the CBEGIN and CEND commands to allow the user to
+		restrict the report to crashes copied (as opposed to
+		dumped) between the specified times.
+[4]   13-Nov-79	Add a block to each entry containing the disposition
+		of the crash.  Add the DISPOSITION command to allow
+		a systems programmer to give a disposition for a crash.
+[5]   14-Nov-79	Allow the report restriction switches to be placed on
+		the REPORT command line in addition to being typed as
+		commands.
+[6]   18-Nov-79	Change the syntax of the /STRUCTURE command to allow
+		the system administrator to specify one or more sets
+		of structures to be load balanced across.  Also allow
+		the minimum acceptable number of blocks remaining on
+		a structure to be specified for each structure.
+[7]   19-Nov-79	Change the REPORT format to print the uptime
+		immediately after the crash date/time instead of after
+		the copy date/time.
+[10]  19-Nov-79	Add the /PRIMETIME switch to restrict the report to
+		those crashes which occured during prime time
+		(0800-1700).
+[11]  19-Nov-79	Add the PURGE FILE command which will delete
+		SYS:CRASH.SYS but maintain the header so that the
+		sequence numbers will continue from the current value.
+[12]  26-Nov-79	Add the /UNDISPOSED switch to only report on those
+		crashes which have not been disposed
+[13]  17-Dec-79	Fix an off-by-one bug in /UNDISPOSED processing which
+		caused us to flag some disposed crashes as undisposed.
+[14]  28-Dec-79	Read the .EXE directory of the crash being copied and
+		only copy the number of blocks specified.  This saves
+		disk space when copying crashes dumped onto CRASH.EXE's
+		which are bigger that the amount of memory actually dumped.
+[15]  18-Mar-80	Add the [NO]DELETE command to allow the user to
+		delete the crash file when it is disposed.
+[16]  25-Mar-80	Check for -1 in word 30 of the crash and call the output
+		file SERnnn if it is.
+[17]  25-Mar-80	If the symbol DFTPPN is set to a PPN, don't clear JACCT
+		if FILDAE is not running and CRSCPY is running under that
+		PPN.  This is for field test sites which do not run FILDAE
+		so that DEC can update CRASH.SYS.
+[20]  15-May-80	Edit 17 wasn't sufficient for the REPORT command.  Add
+		a missing FO.PRV in OPNSYB.
+; Revision history continued
+
+
+[21]  21-May-80	Add the /[NO]HEADER switch/command to enable/disable
+		the printing of the headers on the REPORT command.
+		The headers are a lose on a slow terminal.  Default is
+		still /HEADER.
+[22]  21-May-80	Change the /SEQUENCE switch to allow a range of sequence
+		numbers.  The new syntax is /SEQUENCE:m:n.
+[23]  21-May-80	Change the syntax of the DISPOSITION command to allow
+		more flexibility in the disposition of crashes.  The new
+		syntax is: DISPOSITION filespec/switches, where filespec
+		is a filespec that appears in CRASH.SYS and switches are
+		the switches that can be specified on the REPORT command.
+		This means that the old syntax of DISPOSITION nn is now
+		DISPOSITION/SEQUENCE:nn.
+[24]  06-Jun-80	Memorize switches read from SWITCH.INI as sticky defaults
+		for typed commands.
+[25]  19-Jan-81	Add the MOVE command to move a crash to another
+		structure/filespec and update the CRASH.SYS data base.
+[26]  16-Jun-81	If any I/O operation fails with status bits returned,
+		make sure an error message and the bits get typed.
+[27]  24-Jul-81	Preserve the state of the .RBEXT (RH), .RBPRV, .RBVER,
+		and .RBSPL words when a crash is MOVEd.
+[30]  20-Mar-82	Add a new bit CR.ACT, Crash is Active. This is used in
+		conjuction with the CR.DSP (disposed) bit to indicate that
+		although disposed, the crash still exists and is being worked
+		on. A crash can now be in any of 3 states: new, active, and
+		deleted. UNDISPOSED contains new, ACTIVE contains active, and
+		INACTIVE contains deleted. The CR.ACT bit is cleared by
+		disposing the crash with the /DELETE switch.
+[31]  14-jul-82	Make the MOVE command understand /INACTIVE and /ACTIVE,
+		and default to /NOINACTIVE instead of /UNDISPOSED so that
+		we can move ACTIVE crash dumps around.
+[32]   4-Feb-83	Empty S/L before logging out so structures in SSL don't
+		get their mount counts messed up.
+[33]   2-May-83 Copy crashes in the order of the system dump list.
+[34]  15-may-84	Six character stopcodes.
+[35]  25-Oct-84	Wait for FILDAE if started on FRCLIN.
+[36]  25-Oct-84	Treat device ALL as generic DSK in ALIASD routine to
+		allow a CLEAR ALL: command to do the expected thing.
+[37]  14-Nov-84	Store ST%RLD and use it to display reloads.
+[40]  28-Nov-84	Add /SUMMARY:[ALL!STOPCODES!TOTALS] which will append
+		to the end of the REPORT listing a summary by stopcode names
+		and the total numbers of crashes, active, undisposed, and
+		reload stopcodes.
+[41]  28-Dec-84	Defend against holes in the SDL.
+[42]  21-Jan-84	Don't include weekends in prime time check.
+[43]  23-Jan-84	Eliminate XPN device from CRASH.SYS by copying the FILOP.
+		returned filespec to the appropriate places.
+[44]   5-Feb-85	System startup is still too slow.  If the file daemon
+		isn't running wait the entire .FDTIM seconds before
+		proceeding.
+[45]   6-Feb-85	Only compare Load number of MONVER.  Customers use
+		LH for unrelated things
+[46]  15-Aug-85 Do Copyrights.
+[47]   3-Oct-85	Teach /STOPCD: to handle wild-carded stopcode name.
+		Fix a bug at FIXFI2-1 which can clobber P.
+[50]  29-May-86	Fix REPORT command to default to DSK: if any part of a filespec
+		was typed, and to go to TTY:CRASH.LOG[-] only if no filespec
+		was given.
+[51]  29-May-86	Make debugging easier by not getting rid of VMDDT and not
+		demanding physical-only SYS:CRASH.SYS when loaded with DDT.
+[52]  30-Jun-86	Fix to use SUSET. rather than USETO for Super-I/O.
+[53]   4-Aug-87	Fix to check MBTCOM as well as RIBSTS when deciding whether
+		to copy a random crash file.
+[54]  12-Aug-87	Fix bug in [53] that lost the confirmation from a CLEAR.
+[55]  10-Sep-87	Add facility to assign crash to an owner.  Also add /NAME
+		to selectively list crashes assigned to a particular person.
+		Unfortunately, names must consist of up to three initialials
+		to avoid changing the file format.
+[56]  10-Sep-87 Add MNAME and MTEXT to make disposition easier.  On a
+		DISPOSE command, an MNAME switch will allow skipping the
+		"Assign to" prompt, and an MTEXT value will skip the
+		"Disposition" prompt.
+[57]  10-Sep-87	Be more defensive about MBTCOM.  Make sure that it agrees
+		with BOOTPA before believing it.
+[60]  17-Mar-88	Don't get so confused by EOF when appending new crashes.
+		After all, sometimes an entry does just fill a block.
+[61]  21-Jun-88	Edit 60 wasn't enough.  Be even less paranoid.
+
+
+`	;End revision history
+	SUBTTL	Symbol definitions
+
+
+;AC definitions
+
+	F==0		;Flags
+	T1==1		;First of four temporaries
+	T2==2
+	T3==3
+	T4==4
+	P1==5		;First of four preserved registers
+	P2==6
+	P3==7
+	P4==10
+	N==P3		;SCAN convention
+	C==P4		;SCAN convention
+	P==17		;PDL pointer
+
+
+;Parameter definitions
+
+	ND .PDLEN,50	;Length of PDL
+	ND .MXSTR,^D20	;Max number of STRs which may be specified in
+			;all sets in the /STRUCTURE command/switch
+	ND .MXSET,4	;Max number of sets which may be specified in
+			;the /STRUCTURE command/switch
+	ND .SLSTR,2	;Number of structures in the system search
+			;  from which to create the job search list
+			;  if run by the system on FRCLIN
+	ND .FDTIM,^D30	;Number of seconds to wait for a file daemon
+			;  start.
+	ND .BFBLK,^D150	;Number of blocks to read at one time while
+			;  copying a crash
+	ND .PGLEN,^D50	;Number of report lines to print per page
+	ND .MXERR,^D15	;Maximum number of times to retry on ERFBM%
+			;  in FILOPF
+	ND .SLTIM,5	;Number of seconds to sleep between tries in
+			;  FILOPF
+	ND .DSLEN,^D15	;Number of words containing disposition in
+			;  entry
+	ND .STPNM,^D500	;Number of different stopcodes in the monitor
+	ND BLKSIZ,200	;Size of a disk block
+	ND B2WLSH,7	;Amount to shift a block count to get words
+	ND W2BLSH,-7	;Amount to shift a word count to get blocks
+	ND P2WLSH,^D9	;Amount to shift pages to get words
+	ND K2WLSH,^D10	;Amount to shift K to get words
+	ND W2PLSH,-P2WLSH ;Amount to shift words to get pages
+	ND ABSTAB,410	;Absolute core address of NUMTAB
+	ND CRSHWD,30	;Word to check for -1 (system SHUT)
+	ND MBTCOM,411	;Place to look to detect system sleep vs. real dump
+	ND BOOTPA,20	;Place to find physical address of BOOT
+	ND EXESIZ,1000	;Size of crash file EXE directory
+	ND .RBSLF,177	;Offset of self pointer in RIB
+	ND RB.CNT,<0,,^-RB.NSE> ;Count field in RH of .RBCNT
+
+			;Continued on the next page
+			;Continued from the previous page
+	ND DFTPPN,0	;Define this symbol to be the PPN into which
+			;DEC logs in during field test to look at crashes.
+			;If it is set non-zero and FILDAE is not running,
+			;CRSCPY will not clear JACCT if it is running under
+			;that PPN so that DEC can dispose of crashes.
+			;Set it zero if not under field test or if you
+			;run FILDAE.
+	ND .SDLNM,^D36	;Maximum number of structures in the system dump list
+	ND DEBUG$,0	;No debug features
+;Channel definitions
+
+	ND CRS,1	;Channel on which crash file is read
+	ND CPY,2	;Channel on which output crash file is written
+	ND SYS,3	;Channel on which CRASH.SYS is read
+	ND RPT,4	;Channel on which to write report
+
+
+;Flag bits in F
+
+	FL.ERR==1B0		;Fatal error issued
+	FL.WRN==1B1		;Warning message issued
+	FL.TEL==1B2		;Informative message issued
+	FL.DSK==1B3		;Device is generic DSK
+	FL.RBS==1B4		;CRSCPY run by system on FRCLIN
+	FL.NST==1B5		;Zero if first call to NXTSTR
+	FL.ODV==1B6		;Output device is generic disk
+	FL.OFL==1B7		;Output filename is wild
+	FL.XFL==1B8		;APLDFL saw a wild filename
+	FL.TTY==1B9		;Report device is a TTY
+
+	FL.ZER==^-FL.RBS	;Flags to clear on each command
+	SUBTTL	Macro definitions
+
+
+;The following symbols define the error option selected by the third
+;argument to the ERROR, WARN, and TELL macros.
+;
+	EO.NUL==0		;No option given
+	EO.STP==1		;Stop program on this error
+	EO.NCR==2		;No CRLF at end of this message
+	EO.MAX==2		;Max number of error options
+
+
+;Macro to type a fatal error message.  The arguments are:
+;
+;	PRFX	- Error prefix, e.g., the XXX in ?CCPXXX ...
+;	FIRST	- The message to be typed
+;	OPTION	- Error option;may be STOP, NOCRLF, or blank
+;	LABEL	- Label to jump to after message is issued
+;
+	DEFINE	ERROR	(PRFX,FIRST,OPTION,LABEL), <
+	  ERRFLG==EO.NUL
+	  IFIDN	<OPTION>,<STOP>,   <ERRFLG==EO.STP>
+	  IFIDN	<OPTION>,<NOCRLF>, <ERRFLG==EO.NCR>
+
+E..'PRFX: PUSHJ	P,.ERR
+	  XLIST
+	  IFNB	<LABEL>, <CAIA ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]
+			  JRST LABEL
+			 >
+	  IFB	<LABEL>, <CAI  ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]>
+	  LIST
+	> ;End DEFINE ERROR
+;Macro to type a warning message.  The arguments are:
+;
+;	PRFX	- Error prefix, e.g., the XXX in %CCPXXX ...
+;	FIRST	- The message to be typed
+;	OPTION	- Error option;may be STOP, NOCRLF, or blank
+;	LABEL	- Label to jump to after message is issued
+;
+	DEFINE	WARN	(PRFX,FIRST,OPTION,LABEL), <
+	  ERRFLG==EO.NUL
+	  IFIDN	<OPTION>,<STOP>,   <ERRFLG==EO.STP>
+	  IFIDN	<OPTION>,<NOCRLF>, <ERRFLG==EO.NCR>
+
+W..'PRFX: PUSHJ	P,.WARN
+	  XLIST
+	  IFNB	<LABEL>, <CAIA ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]
+			  JRST LABEL
+			 >
+	  IFB	<LABEL>, <CAI  ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]>
+	  LIST
+	> ;End DEFINE WARN
+
+
+;Macro to type an informative message.  The arguments are:
+;
+;	PRFX	- Error prefix, e.g., the XXX in [CCPXXX ...]
+;	FIRST	- The message to be typed
+;	OPTION	- Error option;may be STOP, NOCRLF, or blank
+;	LABEL	- Label to jump to after message is issued
+;
+	DEFINE	TELL	(PRFX,FIRST,OPTION,LABEL), <
+	  ERRFLG==EO.NUL
+	  IFIDN	<OPTION>,<STOP>,   <ERRFLG==EO.STP>
+	  IFIDN	<OPTION>,<NOCRLF>, <ERRFLG==EO.NCR>
+
+T..'PRFX: PUSHJ	P,.TELL
+	  XLIST
+	  IFNB	<LABEL>, <CAIA ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]
+			  JRST LABEL
+			 >
+	  IFB	<LABEL>, <CAI  ERRFLG,[XWD ''PRFX'',[ASCIZ\FIRST\]]>
+	  LIST
+	> ;End DEFINE TELL
+;Macro to type debug information on entry to a subroutine. Debugging
+;information is typed if one of the following conditions is met:
+;
+;	1. CRSCPY is assembled with DEBUG$ non-zero to assemble
+;	   the debugging package.
+;	2. The location DEBALL is deposited non-zero.  This will
+;	   type debugging information for all subroutines.
+;	3. If information about a particular routine in desired,
+;	   leave DEBALL zero and change the SKIPE DEBALL before
+;	   each call to .DEBUG to a JFCL.
+;
+;the arguments are as follows:
+;
+;	$NAME - Name of the routine
+;	$LIST - List of locations to type on entry
+;
+;If the switch DEBUG$ is zero, this macro assembles
+;nothing.
+
+	DEFINE	TRACE$	($NAME,$LIST), <
+	  IFN DEBUG$, <		;;Assemble only if debug is on
+	    SKIPE DEBALL	;;Type only if wanted
+	    XLIST
+	    PUSHJ P,.DEBUG	;;Call debug routine
+	    CAI	  [SIXBIT/$NAME/	;;Generate routine name
+	    IFNB <$LIST>, <
+	      IRP $LIST, <		;;For all elements of $LIST
+	        EXP   $LIST	;;Plus address
+	      >	;;End IRP $LIST
+	    >	;;End IFNB $LIST
+	    XWD   -1,0]		;-1,,0 terminates block
+	    LIST
+	  >	;;End IFN DEBUG$
+	>	;;End DEFINE TRACE$
+;Macro to relocate to the high segment if not already there.
+
+	DEFINE	$HIGH, <
+	  IFL	<.-400000>, <
+	    XLIST
+	    LIT
+	    RELOC
+	    LIST
+	  >
+	>
+
+
+;Macro to relocate to the low segment if not already there.
+
+	DEFINE	$LOW, <
+	  IFGE	<.-400000>, <
+	    XLIST
+	    LIT
+	    RELOC
+	    LIST
+	  >
+	>
+;Macro to store a constant in consecutive memory locations (The one in
+;MACTEN doesn't work right for FIRST==LAST).  Note that this macro has
+;the restriction that it must be called only after the locations
+;specified by FIRST and LAST are defined.  If this restriction is not
+;met, MACRO will generate phase errors since it doesn't know how many
+;words to generate on pass 1.
+;The arguments are:
+;
+;	AC	- AC to use
+;	FIRST	- FIRST location into which to store
+;	LAST	- Last location into which to store
+;	CONS	- Constant to store
+
+	DEFINE	STORE(AC,FIRST,LAST,CONS), <
+	  IFB <LAST>,< LAST%%==FIRST>	;;If no last, assume first
+	  IFNB <LAST>,<LAST%%==LAST>	;;Otherwise use last
+	  IFL <LAST%%-FIRST>,<
+	    PRINTX % Final location .LT. starting location in STORE macro
+	  >
+	  IFE <CONS>,<  SETZM	FIRST>	;;If CONS=0, clear FIRST
+	  IFE <CONS>+1,<SETOM	FIRST>	;;If CONS=-1, set first to -1
+	  IFN <CONS>*<<CONS>+1>, <
+	    MOVX	AC,<CONS>	;;Else do it
+	    MOVEM AC,FIRST		;;the hard way
+	  >
+	  XLIST
+	  IFG <LAST%%-FIRST>,<		;;If more than one location
+	    MOVE  AC,[FIRST,,FIRST+1]
+	    BLT   AC,LAST%%		;;Distribute the constant
+	  >
+	  LIST
+	>
+	SUBTTL	CRASH.SYS header format
+
+
+	$LOW
+
+HEADER:
+
+	PHASE	0
+
+.CHVER==2			;File format version
+
+.CHEAD:! BLOCK	1		;Lengths/version
+	CH.HED==777B8		;Length of header
+	CH.FIL==777B17		;Length of file entry
+	CH.VER==777B35		;File version number
+.CHFDT:! BLOCK	1		;Universal date/time of first entry
+.CHLDT:! BLOCK	1		;Universal date/time of last entry
+.CHSEQ:! BLOCK	1		;Sequence number of last crash copied
+.CHCNT:! BLOCK	1		;Number of entries in this file
+
+.CHLEN:!			;Length of header
+
+	DEPHASE
+	SUBTTL	CRASH.SYS entry format
+
+
+;Filespec block offsets used in entry block below
+
+	PHASE	0
+
+.CFDEV:! BLOCK	1		;Device name
+.CFFIL:! BLOCK	1		;Filename
+.CFEXT:! BLOCK	1		;Extension
+.CFPTH:! BLOCK	.PTMAX-.PTPPN	;Path block (including zero terminator)
+
+.CFLEN:!			;Length of block
+
+	DEPHASE
+
+
+
+FENTRY:
+
+	PHASE	0
+
+.CRCDT:! BLOCK	1		;Universal date/time of copy
+.CRDDT:! BLOCK	1		;Universal date/time of dump
+.CRUPT:! BLOCK	1		;System uptime in milliseconds at dump
+.CRSTC:! BLOCK	1		;STOPCD which caused dump
+.CRVER:! BLOCK	1		;Monitor version
+.CRMNM:! BLOCK	5		;ASCIZ monitor name
+.CRFFL:! BLOCK	.CFLEN		;Filespec from where copied
+.CRTFL:! BLOCK	.CFLEN		;Filespec to which copied
+.CRFLG:! BLOCK	1		;Flags for this entry
+	 CR.DSP==1B0		;Disposition given for crash
+	 CR.ACT==1B1		;Crash is still active (not deleted)
+	 CR.DST==3B1		;Combination of DSP and ACT
+	   CRA.DL==2		;Combination of DSP and ACT to form DELETED
+	   CRA.AC==3		;Combination of DSP and ACT to form ACTIVE
+	 CR.RLD==1B2		;Stopcode resulted in a reload
+	 CR.WHO==777777B35	;Crash owner in SIXBIT
+.CRDSP:! BLOCK	.DSLEN		;ASCIZ disposition of crash
+
+.CRLEN:!			;Length of entry
+
+	DEPHASE
+
+	$HIGH
+	SUBTTL	CRSCPY switch definitions
+
+
+;Define the valid switches for SCAN
+
+DEFINE	SWTCHS,<
+  XLIST
+  SN	ACTIVE,F.ACTI,FS.NFS			;[NO]ACTIVE
+  SP	BEGIN,F.BGN,.SWDTP##,,FS.NFS!FS.VRQ	;BEGIN:date:time
+  SP	CBEGIN,F.CBGN,.SWDTP##,,FS.NFS!FS.VRQ	;CBEGIN:date:time
+  SP	CEND,F.CEND,.SWDTP##,,FS.NFS!FS.VRQ	;CEND:date:time
+  SP	CLEAR,MSCCMD,$CLEAR,,FS.NFS		;CLEAR filespec
+  SP	COPY,MSCCMD,$COPY,,FS.NFS		;COPY filespec=filespec
+  SN	DELETE,F.DELE,FS.NFS			;[NO]DELETE
+  SL	DETAIL,F.DETL,DTL,DTLALL,FS.NFS		;DETAIL:[ALL,DISPOSITION]
+  SP	DISPOSITION,MSCCMD,$DISP,,FS.NFS	;DISPOSITION filespec
+  SP	END,F.END,.SWDTP##,,FS.NFS!FS.VRQ	;END:date:time
+  SN	INACTIVE,F.INAC,FS.NFS			;[NO]INACTIVE
+  SL	INFORM,S.INF,INF,INFUSER,FS.NFS		;INFORM:[USER,OPR]
+  SN	HEADER,F.HEAD,FS.NFS			;[NO]HEADER
+  SP	MNAME,F.MNAM,.SWSIX##,,FS.NFS!FS.VRQ	;MNAME:new-crash-owner
+  SP	MONVER,F.MNV,.OCTNW##,,FS.NFS!FS.VRQ	;MONVER:n
+  SP	MOVE,MSCCMD,$MOVE,,FS.NFS		;MOVE filespec=filespec
+  SP	MTEXT,<*P,<POINT 65-.DSLEN,F.MTXT>>,.SWASQ##,,FS.NFS!FS.VRQ
+						;MTEXT:"new-disposition"
+  SP	NAME,F.NAME,.SWSIX##,,FS.NFS!FS.VRQ	;NAME:crash-owner
+  SN	PRIMETIME,F.PRTM,FS.NFS			;[NO]PRIMETIME
+  SP	PURGE,MSCCMD,$PURGE,,FS.NFS		;PURGE FILE
+  SP	REPORT,MSCCMD,$REPORT,,FS.NFS		;REPORT filespec
+  SP	SEQUENCE,F.SEQ,GETSEQ,,FS.NFS!FS.VRQ	;SEQUENCE:number
+  SP	STOPCD,F.STCD,GETSCD,,FS.NFS!FS.VRQ	;STOPCD:xxx
+  SP	STRUCTURE,MSCCMD,$STRUC,,FS.NFS!FS.VRQ	;STRUCTURE:(x,x,x)
+  SL	SUMMARY,F.SUMM,SUM,SUMALL,FS.NFS	;SUMMARY:[ALL,STOPCODES,TOTALS]
+  SN	UNDISPOSED,F.UNDS,FS.NFS		;[NO]UNDISPOSED
+  LIST
+>
+
+KEYS	INF,<USER,OPR>
+KEYS	DTL,<ALL,DISPOSITION>
+KEYS	SUM,<ALL,STOPCODES,TOTALS>
+
+
+;Generate the scan tables for SCAN
+
+DOSCAN	(CCPSW)
+	SUBTTL	High segment data locations
+
+
+;.ISCAN block
+
+.ISCBK:	IOWD	1,PRGNAM	;IOWD table of legal monitor commands
+	XWD	OFFSET,'CCP'	;Addr of starting offset,,SIXBIT CCL name
+	XWD	0,W.TTY		;Addr of TTY input rtn,,Output rtn
+	EXP	0		;Pointer to indirect file block
+	XWD	PROMPT,MONRET	;Address of prompt rtn,,MONRT rtn
+.ISCBL==.-.ISCBK
+
+
+;.OSCAN block
+
+.OSCBK:	IOWD	CCPSWL,CCPSWN	;IOWD to legal switch names
+	XWD	CCPSWD,CCPSWM	;Default switch area,,processor table
+	XWD	0,CCPSWP	;0,,switch pointers for storing
+.OSCBL==.-.OSCBK
+
+
+;.VSCAN block
+
+.VSCBK:	IOWD	CCPSWL,CCPSWN	;IOWD to legal switch names
+	XWD	CCPSWD,CCPSWM	;Default switch area,,Processor switch table
+	XWD	0,CCPSWP	;0,,Switch pointers for storing
+	EXP	-1		;Let HELPER provide the help
+	XWD	FLEN,FBGN	;Len,,address of F.xxx area
+	XWD	0,SBGN		;0,,address of S.xxx area
+.VSCBL==.-.VSCBK
+
+PRGNAM:	SIXBIT/CRSCPY/		;Our name
+
+BUFIOW:	IOWD	BLKSIZ,BUF	;IOWD to BUF
+	0
+HDRIOW:	IOWD	.CHLEN,HEADER	;IOWD to HEADER
+	0
+APEIOW:	IOWD	BLKSIZ*2,BUF ;IOWD to append an entry
+	0
+
+;The following tables contain the GETTAB arguments that we need plus
+;the default values if the GETTAB fails.  The order of the tables is
+;important and must remain the same as that of GTBVAL in the low seg.
+
+GTBTAB:	%LDSYS			;SYS PPN
+	%LDCRP			;XPN PPN
+	%CNTIC			;Number of jiffies per second
+GTBTBL==.-GTBTAB
+
+GTBDFL:	1,,4			;Default for SYS
+	10,,1			;Default for XPN
+	^D60			;Default for number of jiffies per second
+	SUBTTL	Low segment data areas
+
+
+	$LOW
+
+BGNZER:!			;Start of block to zero at initialization
+
+SM.BEG:!			;Start of summary data
+WIDTH:	BLOCK	1		;Maximum column count
+SUMNUM:	BLOCK	1		;Number of entries in stopcode tables
+CRSNUM:	BLOCK	1		;Count of crashes
+ACTNUM:	BLOCK	1		;Count of active crashes
+UNDNUM:	BLOCK	1		;Count of undisposed crashes
+RLDNUM:	BLOCK	1		;Count of reloads
+STPNAM:	BLOCK	.STPNM		;Table of stopcode names
+STPCNT:	BLOCK	.STPNM		;Table of stopcode counts
+SM.END:!			;End of summary data
+
+.ISLOW:	BLOCK	.ISCBL		;Lowseg .ISCAN block
+ISCBLK:	BLOCK	.FXLEN		;Input scan block
+OSCBLK:	BLOCK	.FXLEN		;Output scan block
+CSCBLK:	BLOCK	.FXLEN		;MOVE command copy scan block
+CURBLK:	BLOCK	1		;Current block read in GETTAB simulation
+NUMTAB:	BLOCK	1		;Address of NUMTAB in crash
+FILSIZ:	BLOCK	1		;Size of input file in blocks
+CORBLK:	BLOCK	1		;Address of copy buffer
+CORNUM:	BLOCK	1		;Number of blocks in copy buffer
+LINCNT:	BLOCK	1		;Count of lines left on current page
+PAGCNT:	BLOCK	1		;Page number
+SEQNUM:	BLOCK	1		;Sequence number of current entry
+LBSEQN:	BLOCK	1		;Lower bound from /SEQUENCE
+UBSEQN:	BLOCK	1		;Upper bound from /SEQUENCE
+UPDFIR:	BLOCK	1		;Word address of first word of CRASH.SYS
+				;  now in BUF
+UPDLAS:	BLOCK	1		;Last word now in BUF
+MOVBLK:	BLOCK	4		;Block in which to save .RBEXT, .RBPRV,
+				;  .RBVER, and .RBSPL from the LOOKUP
+				;  block on a MOVE command
+
+
+				;Continued on the next page
+				;Continued from the previous page
+
+FILBLK:				;Start of FILOP./LOOKUP blocks
+FLPBLK:	BLOCK	.FOMAX		;FILOP. block
+LKPBLK:	BLOCK	.RBSTS+1	;LOOKUP block
+PTHBLK:	BLOCK	.PTMAX		;PATH. block
+FSPBLK:	BLOCK	.FOFMX		;Returned filespec block
+DELBLK:	BLOCK	4		;FILOP. delete rename block
+FILBLE==.-1			;End of FILOP./LOOKUP blocks
+
+				;Keep the following two blocks together
+GSTBLK:	BLOCK	.DFGNM+1	;GOBSTR block
+STUBLK:	BLOCK	<.FSDFL*.SLSTR>+.FSFCN+1 ;STRUUO block
+				;End of order dependence
+
+DSCBLK:	BLOCK	.DCPSD+1	;DSKCHR block
+MSCCMD:	BLOCK	1		;Location into which to store unused
+				;values of commands (COPY, CLEAR, etc.)
+NEXTST:	BLOCK	1		;Pointer to the next structure in the SDL
+SDLBLK: BLOCK	.SDLNM+1	;system dump list (SDL)
+
+BGNSTZ:				;Start of block to zero on entry to $STRUC
+SETTAB:	BLOCK	.MXSET		;Set pointers to STRTAB for /STRUCTURE
+STRTAB:	BLOCK	.MXSTR+.MXSET+1	;Structure names in each set for /STRUCTURE
+BLKTAB:	BLOCK	.MXSTR+.MXSET+1	;Blocks remaining for /STRUCTURE
+ENDSTZ==.-1			;End of block to zero on entry to $STRUC
+
+BUF:	BLOCK	BLKSIZ*2	;General purpose buffer
+ENDZER==.-1			;End of block to zero at initialization
+
+
+BGNONE:				;Start of block to set to -1 at initialization
+
+
+				;Continued on the next page
+				;Continued from the previous page
+
+;The S.xxxx locations contain the sticky values of commands/switches.
+;They must be in the same relative order as the F.xxxx locations.  Any
+;S.xxxx values that do not have corresponding F.xxxx locations must
+;apppear after those that do.
+
+SBGN:
+S.ACTI:	BLOCK	1		;Value of [NO]ACTIVE
+S.BGN:	BLOCK	1		;Value of BEGIN:date:time
+S.CBGN:	BLOCK	1		;Value of CBEGIN:date:time
+S.CEND:	BLOCK	1		;Value of CEND:date:time
+S.DELE:	BLOCK	1		;Value of [NO]DELETE
+S.DETL:	BLOCK	1		;Value of DETAIL:[ALL,DISPOSITION]
+S.END:	BLOCK	1		;Value of END:date:time
+S.HEAD:	BLOCK	1		;Value of [NO]HEADER
+S.INAC:	BLOCK	1		;Value of [NO]INACTIVE
+S.MNAM:	BLOCK	1		;Value of MNAME:new-crash-owner
+S.MNV:	BLOCK	1		;Value of MONVER:n
+S.MTXT:	BLOCK	.DSLEN		;Value of MTEXT:"new-disposition"
+S.NAME:	BLOCK	1		;Value of NAME:crash-owner
+S.PRTM:	BLOCK	1		;Value of [NO]PRIMETIME
+S.SEQ:	BLOCK	1		;Value of SEQUENCE:m:n
+S.SUMM:	BLOCK	1		;Value of SUMMARY:[ALL,STOPCODES,TOTALS]
+S.UNDS:	BLOCK	1		;Value of [NO]UNDISPOSED
+				;*** Must be last in step with F.xxx *** (See APLSTK)
+S.STCD:	BLOCK	1		;Value of STOPCD:xxx
+S.STCM:	BLOCK	1		;Mask  of STOPCD:xxx
+
+;*** Must be after /STOPCD stuff, since has no F area ***
+S.INF:	BLOCK	1		;Value of INFORM:[USER,OPR]
+SEND==.-1
+
+
+;The F.xxx locations contain the values of commands/switches which are
+;local to this command.
+
+FBGN:
+F.ACTI:	BLOCK	1		;Value of /[NO]ACTIVE
+F.BGN:	BLOCK	1		;Value of /BEGIN:date:time
+F.CBGN:	BLOCK	1		;Value of /CBEGIN:date:time
+F.CEND:	BLOCK	1		;Value of /CEND:date:time
+F.DELE:	BLOCK	1		;Value of /[NO]DELETE
+F.DETL:	BLOCK	1		;Value of /DETAIL:[ALL,DISPOSITION]
+F.END:	BLOCK	1		;Value of /END:date:time
+F.HEAD:	BLOCK	1		;Value of /[NO]HEADER
+F.INAC:	BLOCK	1		;Value of /[NO]INACTIVE
+F.MNAM:	BLOCK	1		;Value of /MNAME:new-crash-owner
+F.MNV:	BLOCK	1		;Value of /MONVER:n
+F.MTXT:	BLOCK	.DSLEN		;Value of /MTEXT:"new-disposition"
+F.NAME:	BLOCK	1		;Value of /NAME:crash-owner
+F.PRTM:	BLOCK	1		;Value of /[NO]PRIMETIME
+F.SEQ:	BLOCK	1		;Value of /SEQUENCE:m:n
+F.SUMM:	BLOCK	1		;Value of /SUMMARY:[ALL,STOPCODES,TOTALS]
+F.UNDS:	BLOCK	1		;Value of /[NO]UNDISPOSED
+				;*** Must be last *** (See MEMSTK)
+F.STCD:	BLOCK	1		;Value of /STOPCD:xxx
+F.STCM:	BLOCK	1		;Mask  of /STOPCD:xxx
+FEND==.-1
+FLEN==FEND-FBGN+1
+
+
+
+ENDONE==.-1			;End of block to set to -1
+
+
+				;Continued on the next page
+				;Continued from the previous page
+
+
+GTBVAL:				;The following table is order dependent
+				;See GTBTAB
+SYSPPN:	BLOCK	1		;SYS PPN
+XPNPPN:	BLOCK	1		;XPN PPN
+TICSEC:	BLOCK	1		;Number of jiffies per second
+				;End of order dependence
+
+				;The following block must remain in
+				;  this order.
+DSPCOD:	BLOCK	1		;.TODSP for TRMOP.
+OPRLIN:	BLOCK	1		;UDX of central site OPR
+ASCPTR:	BLOCK	1		;.+1 for TRMOP.
+ASCCHR:	BLOCK	1		;Character to output
+				;End of order dependence
+
+OFFSET:	BLOCK	1		;Entry point offset
+MINCOR:	BLOCK	1		;Initial value of .JBFF
+MYJOB:	BLOCK	1		;Number of my job
+MYLINE:	BLOCK	1		;My line number
+CURDAT:	BLOCK	1		;Current date/time
+RPTBUF:	BLOCK	3		;Report output buffer header
+SYSBUF:	BLOCK	3		;CRASH.SYS input buffer header
+PDL:	BLOCK	.PDLEN		;Push down list
+
+	$HIGH
+	SUBTTL	Initialization
+
+
+CRSCPY:	PORTAL	.+2		;Allow protected execution
+	PORTAL	.+2		;Ditto for CCL entry
+	TDZA	T1,T1		;Clear CCL entry flag and skip
+	  MOVEI	T1,1		;Indicate CCL entry
+	MOVEM	T1,OFFSET	;Store for SCAN
+	RESET			;Clear the world
+	MOVE	P,[IOWD .PDLEN,PDL] ;Setup a PDL
+	SETZM	F		;Clear flags
+	MOVEI	T1,CRSCPY	;Get restart address
+	MOVEM	T1,.JBREN	;Save for reenter
+	SETOM	T1		;-1 means our line
+	GETLCH	T1		;Get our line number
+	HRRZM	T1,MYLINE	;Save for later
+	TXZ	T1,.UXTRM	;Clear universal bit
+	MOVX	T2,%CNFLN	;GETTAB to return FRCLIN TTY number
+	GETTAB	T2,		;Get it
+	  SETOM	T2		;Insure no match
+	CAIE	T2,(T1)		;Are we running on FRCLIN?
+	  JRST	CRSCP1		;No
+	MOVSI	T1,.UXTRM(T1)	;Setup UDX,,0 for detach
+	ATTACH	T1,		;Detach from FRCLIN
+	  JFCL			;Shouldn't happen
+	TXOA	F,FL.RBS	;Set run by system flag and don't clear JACCT
+CRSCP1:	PUSHJ	P,CLRJAC	;Conditionally clear JACCT
+	PUSHJ	P,CRSINI	;Initialize program
+	MOVE	T1,[.ISCBK,,.ISLOW] ;Setup to BLT .ISCAN block to
+	BLT	T1,.ISLOW+.ISCBL-1  ;  the low segment
+	TXNE	F,FL.RBS	;Run by system?
+	  SETZM	.ISLOW		;Yes, disallow RESCANs
+	MOVE	T1,[.ISCBL,,.ISLOW] ;Point to .ISCAN block
+	PUSHJ	P,.ISCAN##	;Initialize SCAN
+	MOVE	T1,[.OSCBL,,.OSCBK] ;Get pointer to .OSCAN block
+	PUSHJ	P,.OSCAN##	;Read options file
+	PUSHJ	P,MEMSTK	;Memorize as sticky defaults
+	TXNN	F,FL.RBS	;Run by system?
+	  JRST	CRSCP2		;No, continue
+	PUSHJ	P,CLRSCB	;Yes, clear scan blocks
+	PUSHJ	P,FDACHK	;WAIT FOR FILE DEAMON IF NECESSARY
+	PUSHJ	P,$COPYD	;Copy using all defaults
+	PUSHJ	P,.MONRT##	;  and LOGOUT
+	JRST	.-1		;On the very unlikely chance we come back
+
+CRSCP2:	TXZ	F,FL.ZER	;Clear volatile flags
+	MOVE	T1,[.VSCBL,,.VSCBK] ;Point to .VSCAN block
+	PUSHJ	P,.VSCAN##	;Do a command
+	  PUSHJ	P,.MONRT##	;Exit if last command
+	JRST	CRSCP2		;Try again if more commands or CONTINUE
+	SUBTTL	CLEAR command -- Clear unprocessed dump bit
+
+
+;Routine to process the clear command.  Clear the unprocessed dump
+;bit in the RIBs of the specified files.
+;The call is:
+;	PUSHJ	P,$CLEAR
+;	 <Return here always>
+
+$CLEAR:	TRACE$	$CLEAR		;Type debugging info
+	PUSHJ	P,CLRSCB	;Clear input and output scan blocks
+	JUMPLE	C,$CLEA1	;Go if no filespec seen
+	PUSHJ	P,.FILIN##	;Read filespec
+	JUMPG	C,E.INCL##	;Error if not EOL now
+$CLEA1:	MOVEI	T1,ISCBLK	;Point to where to copy scan block
+	MOVX	T2,.FXLEN	;  and length of scan block
+	PUSHJ	P,.GTSPC##	;Copy to our area
+	MOVE	T1,['DSK',,'EXE'] ;Setup defaults for device and extension
+	MOVE	T2,[SIXBIT/CRASH/] ;  and filename
+	MOVE	T3,SYSPPN	;  and PPN
+	MOVEI	T4,ISCBLK	;Point to scan block
+	PUSHJ	P,APLDFL	;Apply defaults
+	  POPJ	P,		;Failed, return
+	TXZ	F,FL.DSK!FL.NST ;Initialize call to NXTSTR
+$CLEA2:	MOVE	T3,ISCBLK+.FXDEV ;Get device from scan block
+	PUSHJ	P,NXTSTR	;Get next structure to process
+	  POPJ	P,		;No more, return
+	MOVEM	T3,ISCBLK+.FXDEV ;Save STR name for next call
+	MOVEI	T1,ISCBLK	;Point to scan block
+	MOVEI	T2,FLPBLK+.FOIOS ;Point to OPEN block part of FILOP. block
+	MOVEI	T3,LKPBLK	;Point to LOOKUP block
+	PUSHJ	P,.STOPN##	;Convert scan block to FILOP./LOOKUP blocks
+	  JRST	E..SCF		;Failed, give message and return
+	MOVX	T1,FO.PRV!INSVL.(CRS,FO.CHN)!.FORED ;Setup channel,function
+	PUSHJ	P,FILOPD	;Setup FILOP. block, do function
+	  POPJ	P,		;Failed
+	PUSHJ	P,CLEAR0	;Clear bit from this file
+	  JRST	E..UMC		;Failed
+	JRST	$CLEA2		;Loop for next structure
+
+CLEAR0:	PUSHJ	P,CLRBIT	;Clear the bit
+	  POPJ	P,		;Propagate failure
+	TELL	FMC,<File >,NOCRLF
+	PUSHJ	P,TYPISB	;Give filename
+	MOVEI	T1,[ASCIZ/ marked as copied]
+/]
+	PUSHJ	P,.TSTRG##	;Finish message and end the line
+	JRST	.POPJ1##	;Success return
+
+
+	ERROR	UMC,<Unable to mark file >,NOCRLF
+	PUSHJ	P,TYPISB
+	MOVEI	T1,[ASCIZ/ as copied
+/]
+	PJRST	.TSTRG##	;Finish message and end line
+	SUBTTL	COPY command -- Copy crash to XPN
+
+
+;Routine to process the COPY command.  Copy one or more crashes
+;specified by the input specs to the files specified by the output
+;specs.  Enter at $COPYD when run by the system to use all defaults.
+;The call is:
+;	PUSHJ	P,$COPY
+;	 <Return here always>
+
+$COPY:	TRACE$	$COPY		;Type debugging info
+	PUSHJ	P,.SAVE1##	;Save P1
+	PUSHJ	P,CLRSCB	;Clear input and output scan blocks
+	JUMPLE	C,$COPYD	;Go if no filespec seen
+	PUSHJ	P,.FILIN##	;Read a filespec
+	CAIE	C,"="		;See an output spec terminated by
+	 CAIN	C,"_"		;  an equal or underline?
+	  CAIA			;Yes
+	   JRST	$COPY1		;No, continue
+	MOVEI	T1,OSCBLK	;Point to scan block
+	MOVX	T2,.FXLEN	;Get length of scan block
+	PUSHJ	P,.GTSPC##	;Copy scan block to our area
+	PUSHJ	P,.CLRFL##	;Clear filespec area again
+	PUSHJ	P,.FILIN##	;Read input filespec
+$COPY1:	JUMPG	C,E.INCL##	;Must have EOL now
+	MOVEI	T1,ISCBLK	;Point to scan block
+	MOVX	T2,.FXLEN	;Get length of scan block
+	PUSHJ	P,.GTSPC##	;Copy scan block to our area
+$COPYD:	MOVE	T1,['DSK',,'EXE'] ;Setup defaults for device and extension
+	MOVE	T2,[SIXBIT/CRASH/] ;Default input filename is CRASH
+	MOVE	T3,SYSPPN	;  from 1,4
+	MOVEI	T4,ISCBLK	;Point at scan block
+	PUSHJ	P,APLDFL	;Apply defaults
+	  POPJ	P,		;Failed
+	MOVE	T3,ISCBLK+.FXDEV ;Get input device
+	PUSHJ	P,ALIASD	;Is it generic disk?
+	  JRST	$COPY2		;No
+	SKIPE	OSCBLK+.FXNAM	;Yes, filename specified in output spec?
+	  ERROR	OFI,<Output filename illegal with multiple input files>,,.POPJ##
+$COPY2:	MOVE	T1,['DSK',,'EXE'] ;Setup device and extension defaults
+	MOVEI	T2,0		;Output filename setup later
+	MOVE	T3,XPNPPN	;Default PPN is 10,1
+	MOVEI	T4,OSCBLK	;Point at scan block
+	PUSHJ	P,APLDFL	;Apply defaults
+	  POPJ	P,		;Failed
+	TXZE	F,FL.XFL	;Wild filename seen?
+	  TXO	F,FL.OFL	;Yes, set flag for output file
+	MOVE	T3,OSCBLK+.FXDEV ;Get output device name
+	PUSHJ	P,ALIASD	;Is it generic disk?
+	  TXZA	F,FL.ODV	;No
+	TXO	F,FL.ODV	;Yes, set flag
+	TXZ	F,FL.DSK!FL.NST	;Initialize call to NXTSTR
+	PUSHJ	P,GETCOR	;Get core for copy buffer
+	  POPJ	P,		;Failed, return
+	PUSHJ	P,OPNSYS	;Open CRASH.SYS
+	  POPJ	P,		;Must have the file
+$COPY3:	MOVE	T3,ISCBLK+.FXDEV ;Get device from scan block
+	PUSHJ	P,NXTSTR	;Get next structure to process
+	  PJRST	CLSSYS		;Close CRASH.SYS and return
+	MOVEM	T3,ISCBLK+.FXDEV ;Store for next call
+	MOVEI	T1,ISCBLK	;Point to scan block
+	MOVEI	T2,FLPBLK+.FOIOS ;Point to OPEN part of FILOP. block
+	MOVEI	T3,LKPBLK	;Point to LOOKUP block
+	PUSHJ	P,.STOPN##	;Convert scan block to FILOP./LOOKUP block
+	  JRST	E..SCF		;Return after issuing message
+	MOVX	T1,FO.PRV!INSVL.(CRS,FO.CHN)!.FORED ;Setup chn,fnc
+	PUSHJ	P,FILOPD	;Open the file
+	  JRST	$COPY3		;Failed, try next
+	TXNN	F,FL.DSK	;Was input device specified?
+	JRST	$COPY4		;Yes, don't check whether we want to
+	MOVX	T1,RP.DMP	;Get unprocessed dump bit
+	TDNN	T1,LKPBLK+.RBSTS ;Is it set in this RIB?
+	JRST	$COPY3		;No, ignore it
+	PUSHJ	P,GTBINI	;Yes, look for page zero
+	MOVEI	T1,MBTCOM	;Communication word for system sleep
+	PUSHJ	P,PEKDSK	;Fetch it from the file
+	  JRST	$COPY3		;Garbage dump
+	SKIPN	NUMTAB		;If GETTAB is valid
+	JRST	$COPY3		;No, punt it
+	JUMPE	T1,$COPY5	;Copy if not system sleep
+	HRRZ	T3,T1		;Preserve the page number
+	MOVEI	T1,BOOTPA	;Word with physical address of BOOT
+	PUSHJ	P,PEKDSK	;Fetch from the file
+	  JRST	$COPY3		;Garbage dump
+	LSH	T1,W2PLSH	;Convert address to page number
+	CAIE	T3,(T1)		;Is this a sleep dump?
+	JRST	$COPY5		;No--copy it despite MBTCOM
+	PUSHJ	P,CLEAR0	;Clear the RIBSTS bit
+	  PUSHJ	P,E..UMC	;Notify of error
+	JRST	$COPY3		;Garbage dump
+$COPY4:	PUSHJ	P,GTBINI	;Didn't look for MBTCOM, init the file here
+$COPY5:	MOVEI	T1,ISCBLK	;Point to the input scan block
+	PUSHJ	P,FIXFIL	;Update with actual filespec
+	PUSHJ	P,MOVIFS	;Move input filespec to entry
+	PUSHJ	P,GTBCRS	;Read needed GETTABs from crash
+	PUSHJ	P,CMPSIZ	;Compute and store FILSIZ
+	PUSHJ	P,OPTSTR	;Select output device
+	  JRST	CLSSYS		;Give up
+	PUSHJ	P,CLRFLB	;Clear FILOP./LOOKUP blocks
+	MOVEI	T1,OSCBLK	;Point to output scan block
+	MOVEI	T2,FLPBLK+.FOIOS ;Point to OPEN part of FILOP. block
+	MOVEI	T3,LKPBLK	;Point to LOOKUP block
+	PUSHJ	P,.STOPN##	;Convert scan block
+	  ERROR	SCF,<Scan block conversion failed>,,CLSSYS
+	MOVX	T1,FO.PRV!INSVL.(CPY,FO.CHN)!.FOWRT ;Setup chn, fnc
+	PUSHJ	P,FILOPD	;Setup FILOP. block, do function
+	  JRST	$COPY3		;Failed, try next
+	MOVEI	T1,OSCBLK	;Point to the output scan block
+	PUSHJ	P,FIXFIL	;Update with actual filespec
+	PUSHJ	P,MOVOFS	;Move output filespec to entry
+	PUSHJ	P,DOCOPY	;Copy the file
+	  JRST	$COPY3		;Failed
+	PUSHJ	P,APNENT	;Append file entry to the file
+	  ERROR	EAF,<Entry append to SYS:CRASH.SYS failed>,,$COPY3
+	TELL	CPY,<Copied >,NOCRLF ;Tell him what we did
+	PUSHJ	P,TYPISB	;Type input filename
+	MOVEI	T1,[ASCIZ/ to /]
+	PUSHJ	P,.TSTRG##	;Type separator
+	PUSHJ	P,TYPOSB	;Type output filespec
+	PUSHJ	P,.TRBRK##	;Type right bracket
+	PUSHJ	P,.TCRLF##	;  and end line
+	PUSHJ	P,CLRBIT	;Clear unprocessed dump bit
+	  PUSHJ	P,E..UMC	;Failed, give message
+	PUSHJ	P,UPDHDR	;Make sure file header is correct
+	  ERROR	HUF,<Header update of SYS:CRASH.SYS failed>
+	JRST	$COPY3		;Try next file
+	SUBTTL	DISPOSITION command -- Give disposition of crash
+
+
+;Routine to process the DISPOSTION command.  Allow the user to give
+;a disposition for the crash.
+;The call is:
+;	PUSHJ	P,$DISP
+;	 <Return here always>
+
+$DISP:	TRACE$	$DISP		;Type debugging info
+	PUSHJ	P,.SAVE2##	;Save P1-P2
+	PUSHJ	P,CLRSCB	;Clear out scan blocks
+	SKIPG	C		;End of line here?
+	  ERROR	ARD,<Argument required on DISPOSITION command>,,.POPJ##
+	PUSHJ	P,.FILIN##	;Read the filespec and switches
+	JUMPG	C,E.INCL##	;Must have end of line now
+	PUSHJ	P,APLSTK	;Apply sticky defaults
+	MOVEI	T1,ISCBLK	;Point at scan block in our area
+	MOVX	T2,.FXLEN	;Get length of scan block
+	PUSHJ	P,.GTSPC##	;Ask SCAN to copy it to our area
+	HRLOI	T1,'DSK'	;Device is DSK, extension is wild
+	SETOM	T2		;Filename is wild
+	MOVE	T3,XPNPPN	;Default PPN is 10,1
+	MOVEI	T4,ISCBLK	;Point to scan block
+	PUSHJ	P,APLDFL	;Apply defaults to filespec
+	  POPJ	P,		;Illegal filespec typed
+	SKIPL	F.SEQ		;/SEQUENCE specified?
+	  JRST	$DISP1		;Yes, already verified so continue
+	SETZM	LBSEQN		;Make it look like he typed
+	MOVX	T1,1B1		;  /SEQUENCE:1:large number
+	MOVEM	T1,UBSEQN	;  so that the routines have some values
+
+
+				;Continued on the next page
+				;Continued from the previous page
+
+
+;Here after validating the command string to actually start disposing
+;the specified entries.  Note that if /SEQUENCE is not specified we
+;have to make a pass througout the entire file to dispose of a crash.
+;As a result, it's much more efficient to specify at least a range
+;of sequence numbers to put us in the ballpark so that the entire file
+;need not be searched.
+
+$DISP1:	PUSHJ	P,OPNSYS	;No, open SYS:CRASH.SYS
+	  POPJ	P,		;Failed
+	SKIPA	P1,LBSEQN	;Get initial value to dispose
+$DISP2:	AOS	P1,LBSEQN	;Increment lower bound
+	MOVEM	P1,SEQNUM	;Save number for printing routines
+	CAMG	P1,UBSEQN	;Done all that he wants?
+	 CAML	P1,HEADER+.CHCNT ;Done all of file?
+	  PJRST	CLSSYS		;Yes, close file and return
+	PUSHJ	P,FNDENT	;Find corresponding entry
+	  ERROR	ENF,<Missing entry >,NOCRLF,$DISP3
+	MOVEI	P2,(T1)		;Save relative block in file of entry
+	PUSHJ	P,CHKDSP	;This entry match the restrictions?
+	  JRST	$DISP2		;No, do next
+	PUSH	P,F.DETL	;Save current value of /DETAIL
+	MOVX	T1,DTLDIS	;Get value for /DETAIL:DISPOSITION
+	MOVEM	T1,F.DETL	;Make it look like that
+	PUSHJ	P,PRTENO	;Print entry and current disposition
+	POP	P,F.DETL	;Restore /DETAIL value
+	PUSHJ	P,REDDSP	;Read disposition
+	  JRST	$DISP2		;Didn't change so don't have to update
+	SKIPLE	T1,F.DELE	;/DELETE specified?
+	  PUSHJ	P,DELFIL	;Yes, delete the file
+	PUSHJ	P,UPDENT	;Rewrite entry
+	  ERROR	CUE,<Cannot update entry >,NOCRLF,$DISP3
+	JRST	$DISP2		;  and loop
+
+$DISP3:	AOS	T1,LBSEQN	;Get failing sequence number, make it 1 based
+	PUSHJ	P,.TDECW##	;Type it
+	MOVEI	T1,[ASCIZ/ in SYS:CRASH.SYS
+/]				;Tell him which entry that
+	PUSHJ	P,.TSTRG##	;  we found the error on
+	PJRST	CLSSYS		;Close file and return
+	SUBTTL	MOVE command -- Move a crash from one filespec to another
+
+
+;Routine to process the MOVE command.  Move the input file to the output
+;file and update the CRASH.SYS data base to reflect the move.
+;The call is:
+;	PUSHJ	P,$MOVE
+;	 <Return here always>
+
+$MOVE:	TRACE$	$MOVE		;Type debugging info
+	PUSHJ	P,.SAVE2##	;Save P1-P2
+	PUSHJ	P,CLRSCB	;Clear input, output and move scan blocks
+	SKIPG	C		;Have an argument?
+	  ERROR	ARM,<Argument required on MOVE command>,,.POPJ##
+	PUSHJ	P,.FILIN##	;Read the filespec
+	CAIE	C,"="		;Have an input spec?
+	 CAIN	C,"_"		;...
+	  CAIA			;Yes, proceed
+	   ERROR OSR,<Output filespec required on MOVE command>,,.POPJ##
+	MOVEI	T1,OSCBLK	;Get address of output scan block
+	MOVX	T2,.FXLEN	;  and its length
+	PUSHJ	P,.GTSPC##	;Copy it to our area
+	PUSHJ	P,.CLRFL##	;Clear SCANs copy of the scan block
+	PUSHJ	P,.FILIN##	;Read the input filespec
+	JUMPG	C,E.INCL##	;Must have end of line here
+	MOVEI	T1,ISCBLK	;Get address of input scan block
+	MOVX	T2,.FXLEN	;  and its length
+	PUSHJ	P,.GTSPC##	;Copy it to our area
+	SKIPGE	S.UNDS		;Was [NO]UNDISPOSED specified?
+	 SKIPL	F.UNDS		;  How about /[NO]UNDISPOSED?
+	  JRST	$MOVE1		;One or the other
+	SKIPGE	S.ACTI		;Was [NO]ACTIVE specified?
+	 SKIPL	F.ACTI		;   how about /[NO]ACTIVE?
+	  JRST	$MOVE1		;one or the other
+	SKIPGE	S.INAC		;Was [NO]INACTIVE specified?
+	 SKIPL	F.INAC		;   how about /[NO]INACTIVE?
+	  JRST	$MOVE1		;one or the other
+	SETZM	F.INAC		;Force a /NOINACTIVE on this command
+$MOVE1:	PUSHJ	P,APLSTK	;Apply sticky defaults
+	MOVE	T1,['DSK',,'EXE'] ;Get default device and extension
+	SETOM	T2		;Input filename may be wild
+	MOVE	T3,XPNPPN	;Default PPN is 10,1
+	MOVEI	T4,ISCBLK	;Get scan block address
+	PUSHJ	P,APLDFL	;Apply defaults
+	  POPJ	P,		;Failded, give non-skip return
+	MOVE	T1,['DSK',,'EXE'] ;Get default device and extension
+	MOVEI	T2,0		;Filename setup later
+	MOVE	T3,XPNPPN	;Default PPN is 10,1
+	MOVEI	T4,OSCBLK	;Get scan block address
+	PUSHJ	P,APLDFL	;Apply defaults
+	  POPJ	P,		;Failed, return
+	PUSHJ	P,GETCOR	;Get core for the copy buffer
+	  POPJ	P,		;Failed, can't do much
+	SKIPL	F.SEQ		;/SEQUENCE specified?
+	  JRST	$MOVE2		;Yes, already verified so continue
+	SETZM	LBSEQN		;Make it look like he typed
+	MOVX	T1,1B1		;  /SEQUENCE:1:large number
+	MOVEM	T1,UBSEQN	;  so that the routines have some values
+$MOVE2:	PUSHJ	P,OPNSYS	;Open SYS:CRASH.SYS
+	  POPJ	P,		;Failed
+	SKIPA	P1,LBSEQN	;Get initial value to process
+$MOVE3:	AOS	P1,LBSEQN	;Increment lower bound
+	MOVEM	P1,SEQNUM	;Save number for printing routines
+	CAMG	P1,UBSEQN	;Done all that he wants?
+	 CAML	P1,HEADER+.CHCNT ; Done all of file?
+	  PJRST	CLSSYS		;Yes, close file and return
+	PUSHJ	P,FNDENT	;Find corresponding entry
+	  JRST	E..ENF		;Failed, type message and return
+	MOVEI	P2,(T1)		;Save relative block in file of entry
+	PUSHJ	P,CHKDSP	;This entry match the restrictions?
+	  JRST	$MOVE3		;No, try the next one
+	PUSHJ	P,SETTFB	;Setup FILOP./LOOKUP blocks from entry
+	MOVX	T1,FO.PRV!INSVL.(CRS,FO.CHN)!.FORED ;Get channel, function
+	PUSHJ	P,FILOPD	;Open the input file
+	  JRST	$MOVE3		;Failed, try the next
+	PUSHJ	P,CMPSIZ	;Compute the size of the file
+	MOVE	T1,[OSCBLK,,CSCBLK] ;Get set to BLT output scan block
+	BLT	T1,CSCBLK+.FXLEN-1 ;Move it to the copy scan block
+	MOVE	T1,FENTRY+.CRTFL+.CFFIL	;Get input filename
+	SKIPN	CSCBLK+.FXNAM	;Did the user specify a different name?
+	  MOVEM	T1,CSCBLK+.FXNAM ;No, store the input filename
+	PUSHJ	P,SCLFLB	;Save needed values and clear blocks
+	MOVEI	T1,CSCBLK	;Get address of scan block
+	MOVEI	T2,FLPBLK+.FOIOS ;Get address of OPEN part of FILOP. block
+	MOVEI	T3,LKPBLK	;Get address of LOOKUP block
+	PUSHJ	P,.STOPN##	;Convert scan block to FILOP./LOOKUP blocks
+	  JRST	E..SCF		;Shouldn't happen
+	PUSHJ	P,MOVFLB	;Restore values to preserve to LOOKUP block
+	MOVX	T1,FO.PRV!INSVL.(CPY,FO.CHN)!.FOWRT ;Get channel, function
+	PUSHJ	P,FILOPD	;Open the output file
+	  JRST	$MOVE3		;Failed, try the next one
+	MOVEI	T1,CSCBLK	;Point to the crash scan block
+	PUSHJ	P,FIXFIL	;Update with actual filespec
+	PUSHJ	P,DOCOPY	;Copy the input to the output file
+	  JRST	$MOVE3		;Failed, try the next one
+	SETOM	T1		;No message from DELFIL
+	PUSHJ	P,DELFIL	;Delete the input file
+	TELL	MOV,<Moved >,NOCRLF ;Start of message
+	PUSHJ	P,TYPLEB	;Type input filespec (setup by DELFIL)
+	MOVEI	T1,[ASCIZ/ to /] ;Get the separator
+	PUSHJ	P,.TSTRG##	;Type it
+	MOVEI	T1,CSCBLK	;Get address of copy scan block
+	PUSHJ	P,.TFBLK##	;Type output filespec
+	PUSHJ	P,.TRBRK##	;Type a bracket
+	PUSHJ	P,.TCRLF##	;End the line
+	PUSHJ	P,MOVCFS	;Move new filespec to entry
+	PUSHJ	P,UPDENT	;Update the entry
+	  JRST	E..CUE		;Failed
+	JRST	$MOVE3		;Try next file
+	SUBTTL	PURGE command -- Delete CRASH.SYS but maintain header
+
+
+;Routine to process the PURGE FILE command.  Allow the user to delete
+;the data in SYS:CRASH.SYS without deleting the header so that the
+;sequence numbers do go back to zero.
+;The call is:
+;	PUSHJ	P,$PURGE
+;	 <Return here always>
+
+$PURGE:	TRACE$	$PURGE		;Type debugging info
+	SKIPG	C		;Can't have end of line here
+	  ERROR	AFR,<Argument "FILE" required on PURGE command>,,.POPJ##
+	PUSHJ	P,.SIXSW##	;Get the argument
+	CAME	N,[SIXBIT/FILE/] ;Require that FILE be typed to avoid
+	  JRST	E..AFR		 ;  accidentally deleting the file
+	JUMPG	C,E.INCL##	;Must have end of line now
+	PUSHJ	P,OPNSYS	;Open CRASH.SYS and read the header
+	  POPJ	P,		;Failed
+	SETZM	HEADER+.CHFDT	;No first or last dates
+	SETZM	HEADER+.CHLDT	;  of crashes yet
+	SETZM	HEADER+.CHCNT	;No entries in file
+	PUSHJ	P,SETSYS	;Setup FILOP./LOOKUP blocks
+	MOVX	T1,FO.PRV!INSVL.(SYS,FO.CHN)!.FOWRT ;Setup function/channel
+	PUSHJ	P,FILOPF	;Do the function
+	  POPJ	P,		;Failed
+	STORE	T1,BUF,BUF+BLKSIZ-1,0 ;Clear buffer
+	PUSHJ	P,UPDHDI	;Write initial header
+	  POPJ	P,		;Failed
+	PJRST	CLSSYS		;Close file and return
+	SUBTTL	REPORT command -- List entries in CRASH.SYS
+
+
+;Routine to process the REPORT command.  List entries from
+;SYS:CRASH.SYS.
+;The call is:
+;	PUSHJ	P,$REPORT
+;	 <Return here always>
+
+$REPORT:TRACE$	$REPORT		;Type debugging info
+	PUSHJ	P,.SAVE1##	;Need storage
+	PUSHJ	P,CLRSCB	;Clear scan blocks
+	JUMPLE	C,$REPO1	;Go if end of line
+	PUSHJ	P,.FILIN##	;Get filespec
+	JUMPG	C,E.INCL##	;Error if not end of line now
+	SKIPA	P1,T1		;Preserve return from .FILIN
+$REPO1:	SETZ	P1,		;No filespec typed for .FILIN
+	PUSHJ	P,APLSTK	;Apply stick defaults
+	MOVEI	T1,ISCBLK	;Point at where to copy scan block
+	MOVX	T2,.FXLEN	;  and length
+	PUSHJ	P,.GTSPC##	;Copy scan block to our area
+	MOVE	T1,['TTY',,'LOG'] ;Setup defaults for device and extension
+	SKIPGE	P1		;Unless something of a filespec was typed,
+	HRLI	T1,'DSK'	;Then default to DSK:
+	MOVE	T2,[SIXBIT/CRASH/] ;Setup default filename
+	MOVEI	T3,0		;Default PPN is [-]
+	MOVEI	T4,ISCBLK	;Point to scan block
+	PUSHJ	P,APLDFL	;Apply defaults
+	  POPJ	P,		;Failed
+	MOVE	T1,ISCBLK+.FXDEV ;Get device name
+	DEVCHR	T1,		;Get it's characteristics
+	TXNE	T1,DV.TTY	;Is it TTY?
+	  TXO	F,FL.TTY	;Yes, set flag for later
+	MOVEI	T1,ISCBLK	;Point to scan block
+	MOVEI	T2,FLPBLK+.FOIOS ;Point to OPEN part of FILOP. block
+	MOVEI	T3,LKPBLK	;Point to LOOKUP block
+	PUSHJ	P,.STOPN##	;Convert scan block to FILOP./LOOKUP blocks
+	  JRST	E..SCF		;Give error message and return
+	MOVX	T1,INSVL.(RPT,FO.CHN)!.FOWRT ;Setup channel, function
+	MOVX	T2,.IOASC	;Mode is ASCII
+	MOVSI	T3,RPTBUF	;Setup output buffer header address
+	PUSHJ	P,FILOPB	;Setup block, do function
+	  POPJ	P,		;Failed, return
+	PUSHJ	P,OPNSYB	;Open SYS:CRASH.SYS in buffered mode
+	  POPJ	P,		;Return
+	SETZM	PAGCNT		;Reset page and
+	SETZM	LINCNT		;  line count
+	MOVEI	T1,RPTCHR	;Address of routine to type characters
+	PUSHJ	P,.TYOCH##	;Use this one in report mode
+	PUSH	P,T1		;  and save previous
+	PUSHJ	P,SUMINI	;Initialize summary storage
+	PUSHJ	P,REDHDR	;Read header
+	  JRST	$REPO4		;Failed
+	SETZM	SEQNUM		;Clear sequence number count
+$REPO2:	PUSHJ	P,REDENT	;Get next entry from file
+	  JRST	$REPO3		;Done
+	PUSHJ	P,CHKENT	;Does entry meet restrictions?
+	  CAIA			;No, try next
+	PUSHJ	P,PRTENT	;Yes, print it
+	AOS	SEQNUM		;Count this entry
+	JRST	$REPO2		;  and loop for next
+$REPO3:	PUSHJ	P,SUMMARY	;Print summary
+	CLOSE	RPT,		;Close report file
+$REPO4:	RELEAS	RPT,		;  and release input and
+	RELEAS	SYS,		;  output channels
+	POP	P,T1		;Restore original typeout address
+	PJRST	.TYOCH##	;  and tell SCAN
+	SUBTTL	STRUCTURE command -- Select output structure
+
+
+;Routine to process the STRUCTURE command.  Store the default output
+;structures in STRTAB and the block count in BLKTAB.
+;The call is:
+;	PUSHJ	P,$STRUCTURE
+;	 <Never return here>
+;	 <Return here always to prevent scan storing a value>
+
+$STRUC:	TRACE$	$STRUC		;Type debugging info
+	PUSHJ	P,.SAVE2##	;Save P1-P2
+	STORE	P1,BGNSTZ,ENDSTZ,0 ;Clear switch blocks
+	HRLOI	P1,-<.MXSET+1>	;Build AOBJP pointer to SETTAB
+	HRLOI	P2,-<.MXSTR+1>	;Build AOBJP pointer to STRTAB
+$STRU1:	MOVEI	T1,2(P2)	;Get next pointer to STRTAB
+	AOBJN	P1,.+2		;Room in SETTAB?
+	  ERROR	TST,<Too many sets specified in STRUCTURE command>,,.POPJ##
+	MOVEM	T1,SETTAB(P1)	;Store pointer to STRTAB
+	PUSHJ	P,.TIALT##	;Get next character
+	CAIN	C," "		;Space?
+	  PUSHJ	P,.TIALT##	;Yes, flush it
+	CAIE	C,"<"		;Start of set?
+	  JRST	E..SES		;No, syntax error
+$STRU2:	AOBJN	P2,.+2		;Check for block overflow
+	  ERROR	TMS,<Too many structures specified in STRUCTURE command>,,.POPJ##
+	PUSHJ	P,.TIALT##	;Get next character
+	CAIE	C," "		;Space?
+	  PUSHJ	P,.REEAT##	;No, put it back
+	PUSHJ	P,.SIXSW##	;Get structure name
+	SKIPN	N		;Name non-null
+	  ERROR	NSI,<Null structure illegal in STRUCTURE command>,,.POPJ##
+	MOVEM	N,STRTAB(P2)	;Store name in STRTAB
+	CAIE	C,":"		;Block count specified?
+	  ERROR	BCR,<Block count required in STRUCTURE command>,,.POPJ##
+	PUSHJ	P,.DECNW##	;Get block count
+	MOVEM	N,BLKTAB(P2)	;Store in table
+	CAIN	C," "		;Space here?
+	  PUSHJ	P,.TIALT##	;Yes, flush it
+	CAIN	C,","		;Another structure coming?
+	  JRST	$STRU2		;Yes, go get it
+	CAIE	C,">"		;End of set marker?
+	  ERROR	SES,<Syntax error in STRUCTURE command>,,.POPJ##
+	SETZM	STRTAB+1(P2)	;Terminate this set
+	AOBJP	P2,E..TMS	;Must have room for zero terminator
+	PUSHJ	P,.TIALT##	;Get next character
+	CAIN	C," "		;Space?
+	  PUSHJ	P,.TIALT##	;Yes, flush it
+	CAIE	C,","		;Another set comming?
+	  JRST	.POPJ1##	;No, return
+	JRST	$STRU1		;Yes, loop
+	SUBTTL	Input/Output default processing
+
+
+;Routine to apply defaults for device, filename, extension and PPN
+;to a scan block.
+;The call is:
+;	MOVE	T1,[XWD Device,Extension] ;EXtension=-1 if wild default
+;	MOVE	T2,Filename	;Filename=-1 if wild default
+;	MOVE	T3,PPN
+;	MOVE	T4,Address of scan block
+;	PUSHJ	P,APLDFL
+;	 <Return here if errors with message issued>
+;	 <Return here if scan block defaulted>
+
+APLDFL:	TRACE$	APLDFL,<T1,T2,T3,T4> ;Type debugging info
+	PUSHJ	P,.SAVE1##	;Save P1
+	MOVX	P1,FX.NDV	;Get null device bit
+	TDNN	P1,.FXMOD(T4)	;Null device typed?
+	 SKIPN	.FXDEV(T4)	;  or nothing at all?
+	  CAIA			;Yes, do defaults
+	   JRST	APLDF1		;No, use existing device
+	HLLZM	T1,.FXDEV(T4)	;Store default extension
+	ANDCAM	P1,.FXMOD(T4)	;  and clear bit in both flags
+	ANDCAM	P1,.FXMOM(T4)	;  and mask words
+APLDF1:	SETCM	P1,.FXNMM(T4)	;Get filename mask
+	JUMPE	P1,APLDF3	;No defaults if fully specified
+	AOSN	P1		;Filename is legal if none
+	 SKIPE	.FXNAM(T4)	;  was specified
+	  CAIA			;If wild filename, continue checking
+	   JRST	APLDF2		;No filename specified, apply default
+	CAME	T2,[-1]		;Wild filenames are legal if default is wild
+	  ERROR	WIF,<Wildcard illegal in filename>,,.POPJ##
+	JRST	APLDF3		;Leave the wild filename as is
+APLDF2:	MOVEM	T2,.FXNAM(T4)	;Store default filename
+	AOSE	T2		;Was default filename wild?
+	  SETOM	T2		;No, use full mask
+	MOVEM	T2,.FXNMM(T4)	;Store filename mask
+	TXOA	F,FL.XFL	;Set wild filename flag
+APLDF3:	TXZ	F,FL.XFL	;  else make sure it's cleared
+	HRRES	T1		;Extend the sign on the default extension
+	HRRZ	P1,.FXEXT(T4)	;Get extension mask
+	CAIN	P1,777777	;OK if
+	  JRST	APLDF5		;  fully specified
+	SKIPN	.FXEXT(T4)	;  Or if no extension typed
+	  JRST	APLDF4		;So go default it
+	CAME	T1,[-1]		;  or if default extension is wild
+	  ERROR	WIE,<Wildcard illegal in extension>,,.POPJ##
+	JRST	APLDF5		;Leave the wild extension alone
+
+
+				;Continued on the next page
+				;Continued from the previous page
+
+
+APLDF4:	HRLOM	T1,.FXEXT(T4)	;Store default extension and full mask
+	AOSN	T1		;was default extension wild?
+	  HLLZS	.FXEXT(T4)	;Yes, zero the mask
+APLDF5:	MOVX	T1,FX.DIR	;Get directory specified bit
+	TDNN	T1,.FXMOM(T4)	;Any directory seen at all?
+	  JRST	[MOVEM	T3,.FXDIR(T4)	;No, store default PPN
+		 SETOM	.FXDIM(T4)	;  and full mask
+		 SKIPE	T3		;Make it [-] if default was 0
+		 IORM	T1,.FXMOD(T4)	;Indicate directory seen
+		 IORM	T1,.FXMOM(T4)	;  and in mask word
+		 JRST	.POPJ1##	;Give skip return
+		]
+	TDNN	T1,.FXMOD(T4)	;[-] specified?
+	  JRST	.POPJ1##	;Yes, no wildcards possible
+	SETCM	T1,.FXDIM(T4)	;Get mask for PPN
+	JUMPN	T1,APLDF7	;Illegal if wildcards
+	MOVEI	T1,.FXDIR+2(T4)	;Point at first SFD in path
+	HRLI	T1,-<.FXLND-1>	;Make it an AOBJN pointer
+APLDF6:	SKIPN	0(T1)		;End of path seen?
+	  JRST	.POPJ1##	;Yes, give skip return
+	SETCM	T2,1(T1)	;Get mask for this SFD
+	SKIPE	T2		;Illegal if wildcards
+APLDF7:	  ERROR	WID,<Wildcard illegal in directory specification>,,.POPJ##
+	ADDI	T1,1		;Skip mask word in scan block
+	AOBJN	T1,APLDF6	;  and loop for all
+	JRST	.POPJ1##	;Give skip return
+;Routine to return the next structure from the system dump list.
+;Call with FL.NST and FL.DSK cleared and the structure in T3 on the first call.
+;The call is:
+;	PUSHJ	P,NXTSTR
+;	 <Return here if no more structures>
+;	 <Return here with next structure in T3>
+
+NXTSTR:	TRACE$	NXTSTR,<F,T3>	;Type debugging info
+	TXOE	F,FL.NST	;First call?
+	  JRST	NXTST2		;No, don't need to test again
+	PUSHJ	P,ALIASD	;Is STR generic disk?
+	  JRST	.POPJ1##	;No, just return name
+	TXO	F,FL.DSK	;Set generic disk flag
+	MOVE	T3,[-<.SDLNM+1>-1,,-1] ;Predecremented AOBJN pointer
+	MOVEM	T3,NEXTST	;Save
+	SETZ	T3,		;Initialize SYSSTR argument
+NXTST1:	SYSSTR	T3,		;Get next structure in the system
+	  POPJ	P,		;Should never happen
+	JUMPE	T3,NXTST2	;We've seen all of them
+	MOVEM	T3,DSCBLK+.DCNAM ;Store in DSKCHR block
+	MOVE	T1,[.DCPSD+1,,DSCBLK] ;Setup for DSKCHR
+	DSKCHR	T1,		;Do it
+	  JRST	NXTST1		;Failed, try next
+	SKIPL	T1,DSCBLK+.DCPSD ;This structure in the SDL?
+	MOVEM	T3,SDLBLK(T1)	;Yes, store it away in it's proper place
+	JRST	NXTST1		;  and go do it again
+NXTST2: TXNN	F,FL.DSK	;Return if not
+	  POPJ	P,		;  generic disk
+	MOVE	T1,NEXTST	;Get AOBJN pointer
+NXTST3:	AOBJP	T1,.POPJ##	;Return if end of SDL
+	MOVEM	T1,NEXTST	;Update for next time
+	SKIPN	T3,SDLBLK(T1)	;Get structure name
+	JRST	NXTST3		;Ignore empty slots
+	JRST	.POPJ1##	;Return
+;Routine to select the output device for a crash copy from the
+;STRTAB table.  The structure selected is the first one found in
+;searching the sets which meets the block restrictions and has
+;the most space of all structures in the same set.  If /STRUCTURE
+;was not specified, XPN is returned.  Call with FILSIZ containing
+;the size of the file to copy in blocks.
+;The call is:
+;	PUSHJ	P,OPTSTR
+;	 <Return here if /STR specified and not enough space>
+;	 <Return here with name stored in scan block
+
+OPTSTR:	TRACE$	OPTSTR,T1	;Type debugging info
+	TXNN	F,FL.ODV	;Output device specified?
+	  JRST	.POPJ1##	;Yes, use that one
+	PUSHJ	P,.SAVE4##	;Save P1-P4
+	MOVSI	P1,-.MXSET	;Get AOBJN pointer to SETTAB
+OPTST1:	SKIPN	P2,SETTAB(P1)	;Get next pointer to STRTAB
+	  JRST	OPTST4		;Go at end of table
+	SETZB	P3,P4		;P3=name, P4=size of best match in set
+OPTST2:	SKIPN	T1,STRTAB-1(P2) ;Get next structure from table
+	  JRST	OPTST3		;Done with this set
+	MOVEM	T1,DSCBLK+.DCNAM ;Store name in DSKCHR block
+	MOVE	T1,[.DCFCT+1,,DSCBLK] ;Point to block
+	DSKCHR	T1,		;Ask the monitor how much space is left
+	  AOJA	P2,OPTST2	;Ignore if not known
+	MOVE	T1,DSCBLK+.DCFCT ;Get blocks remaining on this STR
+	SUB	T1,FILSIZ	;Minus amount we want to copy
+	CAML	T1,BLKTAB-1(P2)	;Meet the space restriction?
+	 CAMG	T1,P4		;Yes, have we seen a better match?
+	  AOJA	P2,OPTST2	;Yes, ignore this one
+	MOVE	P4,T1		;Copy size of best match so far
+	MOVE	P3,STRTAB-1(P2)	;  and name of best match
+	AOJA	P2,OPTST2	;Loop for next structure in set
+OPTST3:	JUMPN	P3,OPTST6	;Go if found a match in this set
+	AOBJN	P1,OPTST1	;Advance to next set and try that one
+OPTST4:	TRNN	P1,-1		;/STRUCTURE specified?
+	  JRST	OPTST5		;No, return XPN
+	ERROR	ISC,<Insufficient space to copy >,NOCRLF
+	PUSHJ	P,TYPISB	;Type offending filespec
+	PJRST	.TCRLF##	;End line and return
+OPTST5:	MOVSI	P3,'XPN'	;Return XPN
+OPTST6:	MOVEM	P3,OSCBLK+.FXDEV ;Store in output scan block
+	JRST	.POPJ1##	;Return
+;Routine to memorize sticky defaults.  These defaults are copied from
+;the area starting at FBGN to the area starting at SBGN if and only if
+;the FBGN area switch was specified and the SBGN area switch was not.
+;The call is:
+;	PUSHJ	P,MEMSTK
+;	 <Return here always>
+
+MEMSTK:	TRACE$	MEMSTK		;Type debugging info
+	MOVSI	T1,-<FLEN-2>	;Build AOBJN pointer to switches
+				; (Excluding /STOPCD and mask)
+MEMST1:	SETCM	T2,SBGN(T1)	;Get value of next switch
+	JUMPN	T2,MEMST2	;Don't default if specified
+	SETCM	T2,FBGN(T1)	;Get local default
+	JUMPE	T2,MEMST2	;Skip if no local default
+	SETCAM	T2,SBGN(T1)	;Default the switch
+MEMST2:	AOBJN	T1,MEMST1	;Loop for all switches
+	DMOVE	T1,S.STCD	;Get sticky stopcode info
+	CAMN	T1,T2		;Don't default if specified
+	CAME	T1,[-1]		;Check both ways
+	POPJ	P,		;Return
+	DMOVE	T1,F.STCD	;Get local stopcode info
+	DMOVEM	T1,S.STCD	;Default the switch
+	POPJ	P,		;Return
+
+
+;Routine to apply sticky defaults.  These defaults are stored starting
+;at SBGN and transferred to the area starting at FBGN if and only if
+;the local switch is not specified and the sticky default was specified.
+;The call is:
+;	PUSHJ	P,APLSTK
+;	 <Return here always>
+
+APLSTK:	TRACE$	APLSTK		;Type debugging info
+	MOVSI	T1,-<FLEN-2>	;Build AOBJN pointer to switches
+				; (Excluding /STOPCD and mask)
+APLST1:	SETCM	T2,FBGN(T1)	;Get value of next switch
+	JUMPN	T2,APLST2	;Don't default if specified
+	SETCM	T2,SBGN(T1)	;Get sticky default
+	JUMPE	T2,APLST2	;Skip if no sticky default
+	SETCAM	T2,FBGN(T1)	;Default the switch
+APLST2:	AOBJN	T1,APLST1	;Loop for all switches
+	MOVE	T1,F.SEQ	;Get values for /SEQUENCE
+	HLREM	T1,LBSEQN	;Store lower bound in 1 word
+	HRREM	T1,UBSEQN	;  and upper bound in 1 word
+	DMOVE	T1,F.STCD	;Get stopcode info
+	CAMN	T1,T2		;Don't default if specified
+	CAME	T1,[-1]		;Check both ways
+	POPJ	P,		;Return
+	DMOVE	T1,S.STCD	;Get sticky stopcode info
+	CAMN	T1,T2		;Don't default if specified
+	CAME	T1,[-1]		;Check both ways
+	POPJ	P,		;Return
+	DMOVEM	T1,F.STCD	;Default the switch
+	POPJ	P,		; and return
+;Routine to determine if a device is generic disk or some abbreviation
+;thereof, e.g., D:, DS:, DSK:.
+;The call is:
+;	MOVE	T3,Device
+;	PUSHJ	P,ALIASD
+;	 <Return here not if generic disk>
+;	 <Return here if generic disk>
+
+ALIASD:	TRACE$	ALIASD,T3	;Type debugging info
+	CAMN	T3,['ALL   ']	;All structures?
+	JRST	.POPJ1##	;Yes--call it generic DSK of a sort
+	PUSHJ	P,.MKMSK##	;Make mask of name, return in T1
+	MOVSI	T2,'DSK'	;Get generic disk
+	AND	T2,T1		;Mask to how much was typed
+	CAMN	T2,T3		;Match?
+	  AOS	0(P)		;Yes, give skip return
+	POPJ	P,		;Return
+	SUBTTL	CRASH.SYS interface routines
+
+
+;Routine to open SYS:CRASH.SYS and read in the header.  Builds a
+;new header if the file doesn't exist.
+;The call is:
+;	PUSHJ	P,OPNSYS
+;	 <Return here if something failed>
+;	 <Return here with file open on channel SYS>
+
+OPNSYS:	TRACE$	OPNSYS		;Type debugging info
+	PUSHJ	P,SETSYS	;Setup FILOP./LOOKUP blocks
+	MOVX	T1,FO.PRV!INSVL.(SYS,FO.CHN)!.FOSAU ;Get chn, fnc
+	PUSHJ	P,FILOPF	;Setup FILOP. block, do function
+	  POPJ	P,		;Failed
+	INPUT	SYS,HDRIOW	;Read header
+	GETSTS	SYS,T1		;Get status
+	TRNE	T1,IO.ERR	;Any errors?
+	  JRST	OPNSY2		;Yes
+	TRNE	T1,IO.EOF	;Creating new file?
+	  JRST	OPNSY1		;Yes
+	LDB	T1,[POINTR HEADER+.CHEAD,CH.VER] ;Get version of header
+	CAIE	T1,.CHVER	;Same as this one
+	  ERROR	VSF,<Version skew for SYS:CRASH.SYS>,,.POPJ##
+	JRST	.POPJ1##	;Yes, just return
+OPNSY1:	SETSTS	SYS,.IODMP	;Clear errors
+	MOVX	T1,INSVL.(.CHLEN,CH.HED)!INSVL.(.CRLEN,CH.FIL)!INSVL.(.CHVER,CH.VER)
+				;Setup first word of header
+	MOVEM	T1,HEADER+.CHEAD ;Store in block
+	PUSHJ	P,.GTNOW##	;Get current universal date/time
+	MOVEM	T1,HEADER+.CHFDT ;Store as first date/time in file
+	MOVEM	T1,HEADER+.CHLDT ;  and last date/time
+	SETZM	HEADER+.CHSEQ	;Zero sequence number
+	SETZM	HEADER+.CHCNT	;  and count of entries
+	STORE	T1,BUF,BUF+BLKSIZ-1,0 ;Clear buffer
+	PJRST	UPDHDI		;Write initial header and return
+OPNSY2: ERROR	IEC,<I/O error on SYS:CRASH.SYS>,NOCRLF
+	PUSHJ	P,TYPSTS	;Type status
+	JRST	CLSSYS		;Close file and return
+
+
+;Routine to open SYS:CRASH.SYS in buffered mode for the REPORT
+;code.
+;The call is:
+;	PUSHJ	P,OPNSYB
+;	 <Return here if error>
+;	 <Return here with file open on channel SYS>
+
+OPNSYB:	TRACE$	OPNSYB		;Type debugging info
+	PUSHJ	P,SETSYS	;Setup FILOP./LOOKUP blocks
+	MOVX	T1,FO.PRV!INSVL.(SYS,FO.CHN)!.FORED ;Get channel, function
+	MOVX	T2,.IOIMG	;Mode is image
+	MOVEI	T3,SYSBUF	;Point at input buffer header
+	PJRST	FILOPB		;Do function, return
+;Routine to close SYS:CRASH.SYS, and release the channel.
+;The call is:
+;	PUSHJ	P,CLSSYS
+;	 <Return here always>
+
+CLSSYS:	TRACE$	CLSSYS		;Type debugging info
+	CLOSE	SYS,		;Close file
+	RELEASE	SYS,		;Release channel
+	POPJ	P,		;  and return
+
+
+;Routine to setup the FILOP./LOOKUP blocks for SYS:CRASH.EXE.
+;The call is:
+;	PUSHJ	P,SETSYS
+;	 <Return here always>
+
+SETSYS:	TRACE$	SETSYS		;Type debugging info
+	PUSHJ	P,CLRFLB	;Clear FILOP./LOOKUP blocks
+	MOVX	T1,UU.PHS	;Get physical only bit
+	SKIPN	.JBDDT		;Unless debugging,
+	MOVEM	T1,FLPBLK+.FOIOS ;Store in block
+	MOVSI	T1,'SYS'	;Device name is SYS:
+	MOVEM	T1,FLPBLK+.FODEV ;Store in block
+	MOVEM	T1,LKPBLK+.RBEXT ;Store as extension also
+	MOVE	T1,[SIXBIT/CRASH/] ;Filename is CRASH
+	MOVEM	T1,LKPBLK+.RBNAM ;Store in block
+	SETOM	UPDFIR		;No entries in BUF
+	SETOM	UPDLAS		;...
+	POPJ	P,		;Return
+;Routine to update the CRASH.SYS header with the new information
+;stored in the in-core copy.
+;The call is:
+;	PUSHJ	P,UPDHDR
+;	 <Return here if errors>
+;	 <Return here if successful>
+
+UPDHDR:	TRACE$	UPDHDR		;Type debugging info
+	PUSHJ	P,.GTNOW##	;Get universal date/time
+	MOVEM	T1,HEADER+.CHLDT ;Store as last date/time
+	AOS	HEADER+.CHCNT	;Bump the number of entries
+	MOVEI	T1,0		;Header is in relative block 0
+	PUSHJ	P,REDBUF	;Read that block
+	  POPJ	P,		;Failed
+UPDHDI:	MOVE	T1,[HEADER,,BUF] ;Setup to BLT header
+	BLT	T1,BUF+.CHLEN-1	;Copy header to buffer
+	MOVEI	T1,0		;Header is in relative block 0
+	PJRST	WRTBUF		;Write block and return
+
+
+;Routine to append an entry to the end of CRASH.SYS.
+;The call is:
+;	PUSHJ	P,APNENT
+;	 <Return here if errors>
+;	 <Return here if successful>
+
+APNENT:	TRACE$	APNENT		;Type debugging info
+	STORE	T1,BUF,BUF+<BLKSIZ*2>-1,0 ;Clear buffer
+	MOVE	T1,HEADER+.CHCNT ;Get count of entries now in file
+	SUBI	T1,1		;Minus one to include the previous one
+	IMULI	T1,.CRLEN	;Times entry length
+	ADDI	T1,.CHLEN	;Plus header length
+	IDIVI	T1,BLKSIZ	;Compute block and offset in block
+	ADDI	T2,.CRLEN	;Point to where our entry will be
+	CAIG	T2,BLKSIZ	;Will our predecessor fit in one block?
+	SKIPA	T3,[BUFIOW]	;Yes, read in one block
+	MOVEI	T3,APEIOW	;No, read up to two blocks
+	PUSHJ	P,REDBLK	;Into BUF
+	  CAIA			;Analyze failure
+	JRST	APNEN1		;Continue if success
+	MOVE	T1,HEADER+.CHCNT ;No, restore our calculation
+	SUBI	T1,1		;Since the error message clobbered it
+	IMULI	T1,.CRLEN
+	ADDI	T1,.CHLEN
+	IDIVI	T1,BLKSIZ
+	ADDI	T2,.CRLEN
+	SKIPN	.CRTFL-.CRLEN+.CFPTH+BUF(T2) ;Is the previous entry there?
+	POPJ	P,		;No, fail
+	GETSTS	SYS,T3		;Yes, get the status
+	ANDI	T3,IO.MOD	;Keep only the mode bits
+	SETSTS	SYS,(T3)	;Clear the errors and blunder onward
+
+APNEN1:	MOVEI	T3,(T2)		;Copy offset in block to T3
+	ADD	T3,[FENTRY,,BUF] ;Setup BLT pointer to move entry
+	BLT	T3,BUF+.CRLEN-1(T2) ;Move to buffer
+	MOVEI	T3,APEIOW	;Point at IOWD
+	PJRST	WRTBLK		;Write 2 blocks and return
+;Routine to find an entry in CRASH.SYS and move it to FENTRY.
+;The call is:
+;	MOVEI	P1,Entry sequence number
+;	PUSHJ	P,FNDENT
+;	 <Return here if errors>
+;	 <Return here if successful>
+;Returns with P1=Offset in BUF of where entry came from
+;	      T1=Relative block in file of first block
+
+FNDENT:	TRACE$	FNDENT,P1	;Type debugging info
+	MOVE	T1,P1		;Copy sequence number
+	IMULI	T1,.CRLEN	;Times entry length
+	ADDI	T1,.CHLEN	;Plus header length
+	MOVEI	T2,.CRLEN-1(T1)	;Get last word of entry in T2
+	CAML	T1,UPDFIR	;Is this entry completely in
+	 CAMLE	T2,UPDLAS	;  core already?
+	  JRST	FNDEN1		;No, have to read it in
+	SUB	T1,UPDFIR	;T1:=Offset in BUF of start of entry
+	MOVE	T2,UPDFIR	;Get word number of first word in BUF
+	IDIVI	T2,BLKSIZ	;Compute block in file of first word
+	EXCH	T1,T2		;Exchange for code at FNDEN2
+	JRST	FNDEN2		;  and continue
+FNDEN1:	IDIVI	T1,BLKSIZ	;Compute block and offset in block
+	MOVEI	T3,(T1)		;Copy block to t3
+	IMULI	T3,BLKSIZ	;Compute first word in BUF
+	MOVEM	T3,UPDFIR	;Store for next time
+	MOVEI	T3,.CRLEN-1(T2)	;Get offset of final word in entry
+	CAILE	T3,BLKSIZ-1	;Cross block boundary?
+	SKIPA	T3,[APEIOW]	;Yes, read 2 blocks
+	SKIPA	T3,[BUFIOW]	;No, read 1 block
+	SKIPA	T4,[<BLKSIZ*2>-1] ;Len-1 of buffer for 2 blocks
+	MOVEI	T4,BLKSIZ-1	;Ditto for 1 block
+	ADD	T4,UPDFIR	;Compute last word in buffer
+	MOVEM	T4,UPDLAS	;Store for next time
+	PUSHJ	P,REDBLK	;Read the block(s)
+	  POPJ	P,		;Failed
+FNDEN2:	MOVEI	P1,(T2)		;Return offset in block in P1
+	ADD	T2,[FENTRY,,BUF] ;Make swapped BLT pointer
+	MOVSS	T2		;Swap halves
+	BLT	T2,FENTRY+.CRLEN-1 ;Move entry to FENTRY
+	JRST	.POPJ1##	;Give skip return
+;Routine to update (rewrite) the entry in FENTRY.  Call with the
+;one or two blocks from which the entry came in BUF.
+;The call is:
+;	MOVEI	P1,Offset in BUF of first word of entry
+;	MOVEI	P2,Relative block number in file of first block
+;	PUSHJ	P,UPDENT
+;	 <Return here if errors>
+;	 <Return here if successful>
+
+UPDENT:	TRACE$	UPDENT,P1	;Type debugging info
+	MOVEI	T1,(P1)		;Copy offset in BUF
+	ADD	T1,[FENTRY,,BUF] ;Make BLT pointer
+	BLT	T1,BUF+.CRLEN-1(P1) ;Move it back into the buffer
+	MOVEI	T1,(P2)		;Move block number to T1
+	MOVEI	T3,.CRLEN-1(P1)	;Get last word in this entry
+	CAILE	T3,BLKSIZ-1	;Does entry cross block boundary?
+	 SKIPA	T3,[APEIOW]	;Yes, write 2 blocks
+	  MOVEI	T3,BUFIOW	;No, just 1
+	PJRST	WRTBLK		;Rewrite blocks and return
+;Routine to read one or more blocks from SYS:CRASH.SYS.
+;The call is:
+;	MOVEI	T1,Relative block in file
+;	MOVEI	T3,Address of IOWD
+;	PUSHJ	P,REDBLK
+;	 <Return here if errors>
+;	 <Return here if successful>
+;Preserves T2
+;Enter at REDBUF to read data into BUF
+
+REDBUF:	TRACE$	REDBUF,T1	;Type debugging info
+	MOVEI	T3,BUFIOW	;Point at IOWD
+;;	PJRST	REDBLK		;Fall into REDBLK
+
+
+REDBLK:	TRACE$	REDBLK,<T1,T3>	;Type debugging info
+	USETI	SYS,1(T1)	;Set to read correct block
+	STATZ	SYS,IO.ERR!IO.EOF ;Errors?
+	  JRST	REDBL1		;Yes
+	INPUT	SYS,(T3)	;Read the data
+	STATZ	SYS,IO.ERR!IO.EOF ;Errors?
+REDBL1:	  ERROR	ERC,<Error reading SYS:CRASH.SYS>,NOCRLF,SYSSTS
+	JRST	.POPJ1##	;Give skip return
+
+
+;Routine to write one or more blocks to SYS:CRASH.SYS.
+;The call is:
+;	MOVEI	T1,Relative block in file
+;	MOVEI	T3,Address of IOWD
+;	PUSHJ	P,WRTBLK
+;	 <Return here if errors>
+;	 <Return here if successful>
+;Preserves T2
+;Enter at WRTBUF to write data from BUF
+
+WRTBUF:	TRACE$	WRTBUF,T1	;Type debugging info
+	MOVEI	T3,BUFIOW	;Point at IOWD
+;;	PJRST	WRTBLK		;Fall into WRTBLK
+
+
+WRTBLK:	TRACE$	WRTBLK,<T1,T3>	;Type debugging info
+	USETO	SYS,1(T1)	;Set to write correct block
+	STATZ	SYS,IO.ERR!IO.EOF ;Errors?
+	  JRST	WRTBL1		;Yes
+	OUTPUT	SYS,(T3)	;Write the data
+	STATZ	SYS,IO.ERR!IO.EOF ;Errors?
+WRTBL1:	  ERROR	EWC,<Error writing SYS:CRASH.SYS>,NOCRLF,SYSSTS
+	JRST	.POPJ1##	;Give skip return
+	SUBTTL	Report generation routines
+
+
+;Routine to check the CRASH.SYS entry in FENTRY to see if it matches
+;the restrictions imposed by the DISPOSITION command.
+;The call is:
+;	PUSHJ	P,CHKDSP
+;	 <Return here if it doesn't>
+;	 <Return here is it does>
+
+CHKDSP:	TRACE$	CHKDSP		;Type debugging info
+	MOVE	T3,ISCBLK+.FXDEV ;Get device specified
+	PUSHJ	P,ALIASD	;Was it generic disk?
+	  SKIPA	T3,ISCBLK+.FXDEV ;No, restore name
+	JRST	CHKDS1		;Yes, that matches everything
+	CAME	T3,[SIXBIT/ALL/] ;So do ALL:
+	 CAMN	T3,[SIXBIT/XPN/] ;  and XPN:
+	  JRST	CHKDS1		;So continue
+	CAME	T3,FENTRY+.CRTFL+.CFDEV ;Exact match with copied device?
+	  POPJ	P,		;No, don't do this one
+CHKDS1:	MOVE	T1,FENTRY+.CRTFL+.CFFIL ;Get filename of copied crash
+	XOR	T1,ISCBLK+.FXNAM ;Match with the one he typed
+	AND	T1,ISCBLK+.FXNMM ;  and allow wildcarding
+	JUMPN	T1,.POPJ##	;Go if no match
+	HLLZ	T1,FENTRY+.CRTFL+.CFEXT ;Get extension of copied crash
+	XOR	T1,ISCBLK+.FXEXT ;Match with the one he typed
+	HRLZ	T2,ISCBLK+.FXEXT ;Get extension mask
+	AND	T1,T2		;Allow wildcards
+	JUMPN	T1,.POPJ##	;Go if no match
+	MOVX	T1,FX.DIR	;Get directory specified bit
+	TDNN	T1,ISCBLK+.FXMOD ;[-] not allowed because it's hard
+	  POPJ	P,		;So don't match this one
+	MOVE	T1,ISCBLK+.FXDIR ;Get PPN from scan block
+	TLNN	T1,-1		;[,pn] specified?
+	  HLL	T1,.MYPPN##	;Yes, default it
+	TRNN	T1,-1		;[p,] specified?
+	  HRR	T1,.MYPPN##	;Yes, default it
+	CAME	T1,FENTRY+.CRTFL+.CFPTH ;Match with copied crash?
+	  POPJ	P,		;No, no match
+	MOVSI	T1,-<.FXLND-1>	;Get AOBJN pointer to path in scan block
+	MOVEI	T2,0		;And to path in entry
+CHKDS2:	MOVE	T3,ISCBLK+.FXDIR+2(T1) ;Get next word from scan block
+	CAME	T3,FENTRY+.CRTFL+.CFPTH+1(T2) ;Match entry?
+	  POPJ	P,		;No, no match
+	ADDI	T1,1		;Skip mask word in scan block
+	ADDI	T2,1		;Step to next word in entry
+	SKIPE	T3		;Terminate on a zero word?
+	  AOBJN	T1,CHKDS2	;No, step to next entry and loop
+;;	PJRST	CHKENT		;Check the switches also and return
+;Routine to check the CRASH.SYS entry in FENTRY to see if it should
+;be printed given the report selection command restrictions.
+;The call is:
+;	PUSHJ	P,CHKENT
+;	 <Return here if it shouldn't>
+;	 <Return here if it should>
+
+CHKENT:	TRACE$	CHKENT		;Type debugging info
+	MOVE	T1,FENTRY+.CRDDT ;Get date/time of dump
+	SETCM	T2,F.BGN	;Get /BEGIN value
+	JUMPE	T2,CHKEN1	;Go if not specified
+	CAMGE	T1,F.BGN	;Entry later than /BEGIN?
+	  POPJ	P,		;No, return
+CHKEN1:	SETCM	T2,F.END	;Get /END value
+	JUMPE	T2,CHKEN2	;Go if not specified
+	CAMLE	T1,F.END	;Entry earlier than /END?
+	  POPJ	P,		;No, return
+CHKEN2:	SKIPG	F.PRTM		;/PRIMETIME specified?
+	  JRST	CHKEN3		;No
+	HRRZ	T3,T1		;Save time
+	HLRZS	T1		;Isolate date
+	IDIVI	T1,7		;Figure out the day
+	CAIL	T2,3		;Saturday??
+	CAILE	T2,4		;Or Sunday??
+	SKIPA			;No--a weekday
+	POPJ	P,		;Ignore weekends
+	CAIL	T3,252525	;Earlier than 0800?
+	 CAILE	T3,552526	;  or later than 1700?
+	  POPJ	P,		;Yes, ignore it
+CHKEN3:	MOVE	T1,FENTRY+.CRCDT ;Get date/time of copy
+	SETCM	T2,F.CBGN	;Get /CBEGIN value
+	JUMPE	T2,CHKEN4	;Go if not specified
+	CAMGE	T1,F.CBGN	;Entry later than /CBEGIN?
+	  POPJ	P,		;No, return
+CHKEN4:	SETCM	T2,F.CEND	;Get /CEND value
+	JUMPE	T2,CHKEN5	;Go if not specified
+	CAMLE	T1,F.CEND	;Entry earlier than /CEND?
+	  POPJ	P,		;No, return
+CHKEN5:	SETCM	T1,F.MNV	;Get value of /MONVER
+	JUMPE	T1,CHKEN6	;Go if not specified
+	XOR	T1,FENTRY+.CRVER ;Mask with value from entry
+	HRROS	T1		;[45] Ignore LH
+	AOJN	T1,.POPJ##	;Go if no match
+CHKEN6:	MOVE	T1,F.STCD	;Get value of /STOPCD
+	CAMN	T1,[-1]		;Check value
+	JRST	CHKEN7		;Go if not specified
+	XOR	T1,FENTRY+.CRSTC ;Mask with value from entry
+	TDNE	T1,F.STCM	;Any extra bits lit?
+	POPJ	P,		;Yes, this one won't do
+CHKEN7:	SETCM	T1,F.SEQ	;Get value of /SEQUENCE
+	JUMPE	T1,CHKEN8	;Give skip return if not specified
+	MOVE	T1,SEQNUM	;Get current sequence number
+	CAML	T1,LBSEQN	;Lower than lower bound?
+	 CAMLE	T1,UBSEQN	;  or greater than upper bound?
+	  POPJ	P,		;Yes, that won't do
+CHKEN8:	SKIPGE	F.UNDS		;Check to see if we care about /UNDISPOSED
+	  JRST	CHKEN9		;Go if not specified
+	LDB	T1,[POINTR FENTRY+.CRFLG,CR.DSP] ;Get disposed bit in entry
+	XOR	T1,F.UNDS	;Match with /UNDISPOSED switch
+	JUMPE	T1,.POPJ##	;If senses don't match, return saying no.
+CHKEN9:	SKIPGE	T2,F.ACTI	;Check to see if we care about /ACTIVE
+	  JRST	CHKE10		;proceed if not specified
+	LDB	T1,[POINTR FENTRY+.CRFLG,CR.DSP!CR.ACT] ;Get bits for active
+	CAIN	T1,CRA.AC	;Check for active (disposed but not deleted)
+	  JUMPN	T2,CHKE10	;entry is active and user wants active, proceed
+	CAIE	T1,CRA.AC	;check for not active this time
+	  JUMPE	T2,CHKE10	;Not active and user wants not active crashes
+	POPJ	P,		;User wants something this crash isn't
+CHKE10:	SKIPGE	T2,F.INAC	;Check to see if we care about /INACTIVE
+	  JRST	CHKE11		;proceed if not specified
+	LDB	T1,[POINTR FENTRY+.CRFLG,CR.DST] ;get bits for active
+	CAIN	T1,CRA.DL	;Inactive is defined as deleted
+	  JUMPN	T2,CHKE11	;Crash is Inactive, and user wants inactive
+	CAIE	T1,CRA.DL	;Check for Not Inactive (still exists)
+	  JUMPE	T2,CHKE11	;Crash isn't deleted and user wants that.
+	POPJ	P,		;Crash doesn't match
+CHKE11:	HRLZ	T1,FENTRY+.CRFLG ;Get crash owner
+	MOVE	T2,F.NAME	;And requested name
+	CAME	T1,T2		;Match?
+	CAMN	T2,[EXP -1]	;Or none specified?
+	JRST	CHKE12		;Press on
+	CAMN	T2,['NOBODY']	;Wat unassigned crashes?
+	JUMPE	T1,CHKE12	;Let that match
+	POPJ	P,		;Crash doesn't match
+CHKE12:	JRST	.POPJ1##	;Return with this crash as good.
+
+;Routine to print the CRASH.SYS entry from FENTRY in a readable
+;format.
+;The call is:
+;	PUSHJ	P,PRTENT
+;	 <Return here always>
+;Enter at PRTENO to ignore the header
+
+PRTENT:	TRACE$	PRTENT		;Type debugging info
+	SOSGE	LINCNT		;Room for more lines on this page?
+	  PUSHJ	P,PRTHDR	;No, eject page and print header
+PRTENO:	MOVE	T2,SEQNUM	;Get sequence number
+	ADDI	T2,1		;Make it 1 based instead of 0 based
+	PUSHJ	P,PRT3DG	;Print as three decimal digits
+	PUSHJ	P,SUMCRS	;Count the crash and type
+	MOVE	T2,FENTRY+.CRFLG ;Get flags for this entry
+	MOVEI	T1," "		;Default to a space (no flag, deleted crashes)
+	TXNE	T2,CR.ACT	;Test for crash being active
+	  MOVEI	T1,"A"		;Crash is active, flag with an A
+	TXNN	T2,CR.DSP	;Has crash even been disposed?
+	  MOVEI	T1,"U"		;nope, override with a U
+	PUSHJ	P,.TCHAR##	;Print flag
+	MOVEI	T1," "		;Default to a space (no reload)
+	TXNE	T2,CR.RLD	;Stopcode caused a reload?
+	MOVEI	T1,"R"		;Yes
+	PUSHJ	P,.TCHAR##	;Print flag
+	PUSHJ	P,.TSPAC##	;SPACE OVER ONE
+	MOVE	T2,[POINT 7,FENTRY+.CRMNM] ;Point to monitor name
+	MOVEI	T3,^D25		;Do full 25 characters
+PRTEN1:	ILDB	T1,T2		;Get next character
+	JUMPE	T1,PRTEN2	;Go when hit null
+	PUSHJ	P,.TCHAR##	;Type it
+	SOJG	T3,PRTEN1	;Loop for all
+PRTEN2:	PUSHJ	P,.TSPAC##	;Pad to the right with spaces
+	SOJG	T3,PRTEN2	;  to the full width
+	HRRZ	T1,FENTRY+.CRVER ;Get version number
+	PUSHJ	P,.TOCTW##	;Type in octal
+	PUSHJ	P,.TSPAC##	;Type a space
+	MOVE	T2,[POINT 6,FENTRY+.CRSTC] ;Point at STOPCD name
+	MOVEI	T3,6		;Do full 6 characters
+PRTEN3:	ILDB	T1,T2		;Get next character of STOPCD
+	ADDI	T1," "-' '	;Convert to ASCII
+	PUSHJ	P,.TCHAR##	;Type it
+	SOJG	T3,PRTEN3	;Loop for all
+	PUSHJ	P,.TSPAC##	;Type a space
+
+				;Continued on the next page
+				;Continued from the previous page
+
+
+	SKIPE	T1,FENTRY+.CRDDT ;Get date/time of dump
+	  JRST	PRTEN4		;Go if reasonable
+	MOVEI	T1,[ASCIZ/         Unknown      /] ;Illegal, give message
+	PUSHJ	P,.TSTRG##	;Type it
+	CAIA			;Skip date/time type
+PRTEN4:	PUSHJ	P,.TDTTM##	;Type it
+	PUSHJ	P,.TSPAC##	;Add a space
+	SKIPL	T1,F.DETL	;/DETAIL specified?
+	 CAXE	T1,DTLALL	;Yes, was it /DETAIL:ALL?
+	  JRST	PRTEN5		;No, skip this
+	MOVE	T1,FENTRY+.CRUPT ;Get uptime
+	PUSHJ	P,.TTIME##	;Print it
+	PUSHJ	P,.TSPAC##	;Add a space
+	MOVE	T1,FENTRY+.CRCDT ;Get copy date/time
+	PUSHJ	P,.TDTTM##	;Type it
+	PUSHJ	P,.TSPAC##	;Add a space
+	MOVEI	T1,FENTRY+.CRFFL ;Point at filespec of source file
+	PUSHJ	P,PRTFIL	;Print it
+	MOVEI	T1,[ASCIZ/     /];5 spaces for formatting
+	PUSHJ	P,.TSTRG##	;Print it
+PRTEN5:	MOVEI	T1,FENTRY+.CRTFL ;Point at filespec of destination file
+	PUSHJ	P,PRTFIL	;Print it
+	PUSHJ	P,.TCRLF##	;End the line
+	MOVX	T1,CR.DSP	;Get disposition bit
+	SKIPLE	F.DETL		;/DETAIL specified?
+	 TDNN	T1,FENTRY+.CRFLG ;Yes, does this one have a disposition?
+	  POPJ	P,		;No, return
+	SOS	LINCNT		;Decrement line count remaining on page
+	MOVEI	T1,[ASCIZ/      /] ;Move the disposition over
+	PUSHJ	P,.TSTRG##	;  6 spaces for formatting
+	HRRZ	T1,FENTRY+.CRFLG ;GET OWNER NAME
+	JUMPE	T1,PRTEN6	;NO OWNER ASSIGNED
+	LSH	T1,14		;Position
+	TDO	T1,['[   ] ']	;Enclose in brackets
+	PUSHJ	P,.TSIXS##	;Print owner
+PRTEN6:	MOVEI	T1,FENTRY+.CRDSP ;Point to disposition string
+	PUSHJ	P,.TSTRG##	;Put it out
+	PJRST	.TCRLF##	;End the line
+;Routine to print a header for the REPORT command.
+;The call is:
+;	PUSHJ	P,PRTHDR
+;	 <Return here always>
+
+PRTHDR:	TRACE$	PRTHDR		;Type debugging info
+	TXNE	F,FL.TTY	;Output going to TTY?
+	  JRST	PRTHD2		;Yes, skip page headers
+	MOVEI	T1,[BYTE (7).CHCRT,.CHFFD] ;Setup to generate
+	PUSHJ	P,.TSTRG##	;  a page feed
+	SKIPN	F.HEAD		;/NOHEADER specified?
+	  JRST	PRTHD1		;Yes, skip the rest
+	MOVEI	T1,[ASCIZ/Report by CRSCPY V/] ;Get start of title
+	PUSHJ	P,.TSTRG##	;Put it out
+	MOVE	T1,.JBVER	;Get our version number
+	PUSHJ	P,.TVERW##	;Type it
+	MOVEI	T1,[ASCIZ/  /]	;Space
+	PUSHJ	P,.TSTRG##	;    over
+	MOVE	T1,CURDAT	;Get current date/time
+	PUSHJ	P,.TDTTM##	;Print it
+	MOVEI	T1,[ASCIZ/  Page /]
+	PUSHJ	P,.TSTRG##	;Print start of page number
+	AOS	T1,PAGCNT	;Increment and get page count
+	PUSHJ	P,.TDECW##	;Print it
+	MOVEI	T1,[ASCIZ/
+
+/]
+	PUSHJ	P,.TSTRG##	;Put out 2 CRLFs
+PRTHD1:	SKIPA	T1,[.PGLEN]	;Get length of page and skip
+PRTHD2:	MOVX	T1,1B1		;If TTY, don't print any more headers
+	MOVEM	T1,LINCNT	;Store lines left on page
+	SKIPN	F.HEAD		;/NOHEADER specified?
+	  POPJ	P,		;Yes, done
+	MOVEI	T1,[ASCIZ\
+Seq         Monitor name        Ver   Why    Crash date/time  \]
+	PUSHJ	P,.TSTRG##	;Print start of header
+	SKIPL	T1,F.DETL	;/DETAIL specified?
+	 CAXE	T1,DTLALL	;Yes, was it /DETAIL:ALL?
+	  JRST	PRTHD3		;No
+	MOVEI	T1,[ASCIZ\  Uptime    Copy date/time       Copied from    \]
+	PUSHJ	P,.TSTRG##	;Print rest if /DETAIL
+PRTHD3:	MOVEI	T1,[ASCIZ/     Copied to
+---   ------------------------ ----- ------ ------------------ /]
+	PUSHJ	P,.TSTRG##	;Finish first line, start second
+	SKIPL	T1,F.DETL	;/DETAIL specified?
+	 CAXE	T1,DTLALL	;Yes, was it /DETAIL:ALL?
+	  JRST	PRTHD4		;No
+	MOVEI	T1,[ASCIZ/-------- ------------------ ------------------- /]
+	PUSHJ	P,.TSTRG##	;Type underlining for optional part
+PRTHD4:	MOVEI	T1,[ASCIZ/-----------------
+/]
+	PJRST	.TSTRG##	;Finish line and return
+;Routine to print a filespec from the FENTRY block.
+;The call is:
+;	MOVEI	T1,address of start of filespec
+;	PUSHJ	P,PRTFIL
+;	 <Return here always>
+
+PRTFIL:	TRACE$	PRTFIL,T1	;Type debugging info
+	MOVE	T4,T1		;Make a safe copy of the pointer
+	MOVE	T1,.CFDEV(T4)	;Get device
+	PUSHJ	P,.TSIXN##	;Type in SIXBIT
+	PUSHJ	P,.TCOLN##	;Add a colon
+	MOVE	T1,.CFFIL(T4)	;Get filename
+	PUSHJ	P,.TSIXN##	;Type it
+;[TN]	MOVEI	T1,"."		;Get dot
+;[TN]	PUSHJ	P,.TCHAR##	;Type it
+;[TN]	HLLZ	T1,.CFEXT(T4)	;Get extension
+;[TN]	PUSHJ	P,.TSIXN##	;Type it
+	MOVEI	T1,.CFPTH(T4)	;Point at start of path
+	TLO	T1,TS.DRP	;Tell SCAN it's a path block
+	PJRST	.TDIRB##	;Let SCAN type it
+
+;Routine to print a decimal number left padded to size three with
+;spaces.
+;The call is:
+;	MOVEI	T2,number
+;	PUSHJ	P,PRT3DG
+;	 <Return here always>
+
+PRT3DG:	TRACE$	PRT3DG,T2	;Type debugging info
+	CAIGE	T2,^D100	;Less than 3 digits?
+	  PUSHJ	P,.TSPAC##	;Yes, pad with space
+	CAIGE	T2,^D10		;Less than 2 digits?
+	  PUSHJ	P,.TSPAC##	;Yes, pad with space
+	MOVE	T1,T2		;Move number to T1
+	PJRST	.TDECW##	;Print it and return
+;Routine to read the header from SYS:CRASH.SYS in buffered mode.
+;The call is:
+;	PUSHJ	P,REDHDR
+;	 <Return here if error>
+;	 <Return here if successful>
+
+REDHDR:	TRACE$	REDHDR		;Type debugging info
+	MOVSI	T2,-.CHLEN	;Get AOBJN pointer to header
+REDHD1:	PUSHJ	P,REDWRD	;Read word from file
+	MOVEM	T1,HEADER(T2)	;Store in header
+	AOBJN	T2,REDHD1	;Loop for all
+	LDB	T1,[POINTR HEADER+.CHEAD,CH.VER] ;Get version number
+	CAIE	T1,.CHVER	;Same as this one?
+	  JRST	E..VSF		;No, give message and return
+	JRST	.POPJ1##	;Give skip return
+
+
+;Routine to read one entry from SYS:CRASH.SYS in buffered mode.
+;The call is:
+;	PUSHJ	P,REDENT
+;	 <Return here if no more>
+;	 <Return here if successful>
+
+REDENT:	TRACE$	REDENT		;Type debugging info
+	SOSGE	HEADER+.CHCNT	;Any more to do?
+	  POPJ	P,		;No, return non-skip
+	MOVSI	T2,-.CRLEN	;Get AOBJN pointer to entry
+REDEN1:	PUSHJ	P,REDWRD	;Get a word
+	MOVEM	T1,FENTRY(T2)	;Store in entry
+	AOBJN	T2,REDEN1	;Loop for all
+	JRST	.POPJ1##	;Return
+;Routine to read one word from SYS:CRASH.SYS in buffered mode.
+;The call is:
+;	PUSHJ	P,REDWRD
+;	 <Return here always with word in T1>
+
+REDWRD:	TRACE$	REDWRD		;Type debugging info
+	SOSG	SYSBUF+.BFCTR	;More in buffer?
+	  INPUT	SYS,		;No, fill it up
+	ILDB	T1,SYSBUF+.BFPTR ;Get next word
+	POPJ	P,		;Return
+
+
+;Routine to store one character into the report output buffer.
+;The call is:
+;	MOVEI	T1,character
+;	PUSHJ	P,RPTCHR
+;	 <Return here always>
+
+RPTCHR:	SOSG	RPTBUF+.BFCTR	;Room in the buffer?
+	 OUTPUT	RPT,		;No, flush it
+	IDPB	T1,RPTBUF+.BFPTR ;Store in buffer
+	POPJ	P,		;Return
+;Routine to read the number or numbers for the /SEQUENCE switch.
+;The call is:
+;	PUSHJ	P,GETSEQ
+;	 <Return here with lower,,upper bound in N>
+
+GETSEQ:	TRACE$	GETSEQ		;Print debugging info
+	PUSHJ	P,.DECNW##	;Get lower bound sequence number
+	SKIPLE	N		;Lower bound illegal?
+	 TLNE	N,-1		;  or too big?
+	  CAIA			;Yes
+	   JRST	GETSE1		;No, continue
+	WARN	ILB,<Illegal lower bound for /SEQUENCE; 1 assumed>
+	MOVEI	N,1		;Do what we told him
+GETSE1:	PUSH	P,N		;Save it
+	CAIN	C,":"		;Was an upper bound specified?
+	  PUSHJ	P,.DECNW##	;Yes, get the upper bound
+	TLNN	N,-1		;Upper bound too big?
+	 CAMGE	N,0(P)		;Insure greater or equal than lower bound
+	  CAIA			;Error, give message and default
+	   JRST	GETSE2		;It is, continue
+	WARN	IUB,<Illegal upper bound for /SEQUENCE; Value of lower bound assumed>
+	MOVE	N,0(P)		;Get value of lower bound
+GETSE2:	SUBI	N,1		;Make value of upper bound 0 based
+	SOS	0(P)		;Ditto for lower bound
+	HRL	N,0(P)		;Put lower bound in LH
+	POP	P,0(P)		;Flush stack
+	POPJ	P,		;Return and let SCAN store upper bound
+;Routine to read the stopcode name for the /STOPCD switch.
+;The call is:
+;	PUSHJ	P,GETSCD
+;	<Return here with specified name in N, mask in F.STCM>
+
+GETSCD:	TRACE$	GETSCD		;Print debugging info
+	PUSHJ	P,.NAMEW##	;Get name and mask
+	PUSHJ	P,.LEFTX##	;In case junk names given in octal
+	MOVEM	T1,F.STCM	;Save mask since SCAN doesn't
+	POPJ	P,		;Return and let SCAN store name
+	SUBTTL	Utility routines
+
+
+;Routine to clear the unprocessed dump bit in the RIBSTS word of a
+;file.  Call with the file open on channel CRS.
+;The call is:
+;	PUSHJ	P,CLRBIT
+;	 <Return here if failed>
+;	 <Return here if successful>
+
+CLRBIT:	TRACE$	CLRBIT		;Type debugging info
+	USETI	CRS,0		;Set to read RIB of file
+	STATZ	CRS,IO.ERR!IO.EOF ;Errors?
+	  JRST	CLRBI1		;Yes, tell of error
+	INPUT	CRS,BUFIOW	;Read the RIB
+	STATZ	CRS,IO.ERR!IO.EOF ;Errors?
+	  JRST	CLRBI1		;Yes
+	MOVEI	T1,CRS		;Get channel file is open on
+	MOVEM	T1,DSCBLK+.DCNAM ;Store for DSKCHR
+	MOVE	T1,[.DCUPN+1,,DSCBLK] ;Get DSKCHR arg pointer
+	DSKCHR	T1,		;Need physical pack name
+	  POPJ	P,		;Failed
+	RELEAS	CRS,		;Release the channel
+	MOVX	T1,UU.PHS!.IODMP ;Physical device in dump mode
+	MOVE	T2,DSCBLK+.DCUPN ;Get physical device name
+	MOVEI	T3,0		;No buffers
+	OPEN	CRS,T1		;OPEN the channel
+	  POPJ	P,		;Failed
+	MOVX	T1,RP.DMP	;Get unprocessed dump bit
+	ANDCAM	T1,BUF+.RBSTS	;Clear in status word
+	MOVE	T1,BUF+.RBSLF	;Fetch block number
+	TXO	T1,<<CRS>B12!SU.SOT> ;Set for Super-output
+	SUSET.	T1,		;Super-USETO
+	  JRST	CLRBI1		;Error, make sure to clear super I/O mode
+	OUTPUT	CRS,BUFIOW	;Rewrite the RIB
+	STATZ	CRS,IO.ERR!IO.EOF ;Errors?
+	  JRST	CLRBI1		;Yes, give error message
+	RELEAS	CRS,		;Insure super I/O mode is cleared
+	JRST	.POPJ1##	;Give skip return
+
+;Here if an error was detected in an I/O operation to give the message
+;and the status
+
+CLRBI1:	GETSTS	CRS,T1		;Get status bits
+	RELEAS	CRS,		;Insure super I/O mode is cleared
+	ERROR	ERR,<Error rewriting RIB of crash file>,NOCRLF
+	PJRST	TYPSTS		;Type the status
+;Routine to read the DISPOSITION command response string and store it
+;in FENTRY+.CRDSP.
+;The call is:
+;	PUSHJ	P,REDDSP
+;	 <Return here if disposition was not changed>
+;	 <Return here if disposition was changed>
+
+REDDSP:	TRACE$	REDDSP		;Type debugging info
+	PUSHJ	P,.SAVE3##	;Save P1-P3
+
+;Assign crash owner
+	MOVE	P1,F.MNAM	;Get new owner from switch value
+	CAME	P1,[-1]		;Was it specified?
+	JRST	REDDS2		;Yes--just use it
+	MOVEI	T1,[ASCIZ/Assign to:   /]
+	PUSHJ	P,.TSTRG##	;Prompt for assignment
+	SETZ	P1,		;Init destination
+	MOVE	P3,[POINT 6,P1] ;Byte pointer for storage
+REDDS1:	PUSHJ	P,.TICHT##	;Get a character
+	JUMPLE	C,REDDS2	;Done?
+	CAIN	C," "		;Space?
+	JUMPN	P1,REDDS1	;Ignore leading space
+	PUSHJ	P,.TIMUC##	;Convert case if necessary
+	CAIL	C,"0"		;Digits?
+	CAILE	C,"9"		;...
+	CAIL	C,"A"		;Upper
+	CAILE	C,"Z"		; case?
+	JRST	E.ILSC##	;Junk character
+	TRNE	P1,77		;Overflow?
+	JRST	REDDS1		;Ignore character
+	SUBI	C," "		;Convert ASCII to SIXBIT
+	IDPB	C,P3		;Store character
+	JRST	REDDS1		;Loop back for more
+REDDS2:	PUSH	P,P1		;Save temporarily
+
+;Read disposition text
+	MOVEI	P1,<.DSLEN*5>-1	;Get max characters in string
+	MOVE	P2,[POINT 7,FENTRY+.CRDSP] ;Get byte pointer to string
+	MOVE	P3,P2		;Copy to suppress trailing spaces
+	MOVE	T4,[PUSHJ P,.TICHT##] ;Instruction to read a character
+	MOVEI	T1,[ASCIZ/Disposition: /]
+	SETO	T3,		;Value for comparison
+	CAME	T3,F.MTXT	;Did we get a value by switch?
+	SKIPA	T4,[ILDB C,T3]	;Yes, just use that
+	PUSHJ	P,.TSTRG##	;No--Ask for disposition for this crash
+	MOVE	T3,[POINT 7,F.MTXT] ;Pointer for reading from core
+REDDS3:	XCT	T4		;Get next character
+	JUMPLE	C,REDDS5	;Go if end of line
+	CAIE	C," "		;Space?
+	JRST	REDDS4		;No, no special checking
+	CAMN	P2,[POINT 7,FENTRY+.CRDSP] ;Seen any characters yet?
+	JRST	REDDS3		;No, suppress leading spaces
+REDDS4:	SOSL	P1		;Too many in string?
+	IDPB	C,P2		;No, store it
+	CAIE	C," "		;Space?
+	MOVE	P3,P2		;Copy pointer for trailing space suppression
+	JRST	REDDS3		;Loop for next
+REDDS5:	MOVEI	T1,0		;Get a null to make string ASCIZ
+	CAME	P2,[POINT 7,FENTRY+.CRDSP] ;See any characters at all?
+	IDPB	T1,P3		;Store, chopping off trailing spaces
+
+;See if entry has changed
+	POP	P,T1		;Get name back
+	MOVE	T2,FENTRY+.CRFLG ;Preserve old name
+	CAMN	T1,['NOBODY']	;Want to remove an assignment?
+	TDZA	T1,T1		;Clear name
+	SKIPE	T1		;Name change?
+	HLRM	T1,FENTRY+.CRFLG ;Save results
+	LDB	T1,[POINTR T2,CR.DST] ;Save disposition type
+	CAME	T2,FENTRY+.CRFLG ;Did it change?
+	JRST	REDDS6		;Yes--give changed return
+	SKIPE	F.MTXT		;Explicitly give a null text?
+	CAME	P2,[POINT 7,FENTRY+.CRDSP] ;See any characters at all?
+	JRST	REDDS6		;Give 'changed' return
+	CAIE	T1,CRA.DL	;If already deleted,
+	SKIPG	F.DELE		;Or not about to be,
+	POPJ	P,		;Give unchanged return
+REDDS6:	MOVX	T2,CR.DSP!CR.ACT ;Get flag indicating disposition
+	CAIE	T1,CRA.DL	;Don't change status if deleted
+	IORM	T2,FENTRY+.CRFLG ;Store in flags word
+	SKIPN	F.MTXT		;Explicit null text?
+	SETZM	FENTRY+.CRDSP	;Yes--do it
+	CAIN	T1,CRA.DL	;If deleted,
+	JRST	.POPJ1##	;Just give changed return now
+	MOVX	T1,CR.DST	;Otherwise, get set to undispose it
+	HRLZ	T2,FENTRY+.CRFLG ;Get owner
+	IOR	T2,FENTRY+.CRDSP ;Merge in text
+	SKIPN	T2		;If just deassigned it,
+	ANDCAM	T1,FENTRY+.CRFLG ;Make it undisposed again
+	JRST	.POPJ1##	;Return indicating entry changed
+;Routine to delete the file specified by the .CFTFL block in
+;FENTRY.  Gives error message on error, informative message on
+;successful delete (if T1 non-negative).
+;The call is:
+;	MOVE	T1,[negative for no message, non-negative for message]
+;	PUSHJ	P,DELFIL
+;	 <Return here always>
+
+DELFIL:	TRACE$	DELFIL,T1	;Type debugging info
+	PUSH	P,T1		;Save the message flag
+	PUSHJ	P,SETTFB	;Setup FILOP./LOOKUP blocks
+	MOVX	T1,FO.PRV!INSVL.(CRS,FO.CHN)!.FODLT ;Get channel,function
+	PUSHJ	P,FILOPD	;Delete the file
+	  JRST	[JUMPE T1,DELFI1 ;If reason delete failed was FNF, mark deleted
+		JRST DELFI2]	;Error deleting crash, message given by FILOPE
+	SKIPGE	0(P)		;Caller want the message?
+	  JRST	DELFI1		;No, don't print it then
+	TELL	DLT,<Deleted >,NOCRLF
+	PUSHJ	P,TYPLEB	;Type the filename
+	PUSHJ	P,.TRBRK##	;Type right bracket
+	PUSHJ	P,.TCRLF##	;End the line
+DELFI1:	MOVX	T1,CR.ACT	;Active bit
+	ANDCAM	T1,FENTRY+.CRFLG ;Crash stops being active when it is deleted
+DELFI2:	RELEAS	CRS,		;Release the channel
+	JRST	TPOPJ		;Bring stack into phase and return
+
+
+;Routine to setup the FILOP./LOOKUP blocks from the "to" filespec
+;stored in the current entry.
+;The call is:
+;	PUSHJ	P,SETTFB
+;	 <Return here always>
+
+SETTFB:	TRACE$	SETTFB		;Type debugging info
+	PUSHJ	P,CLRFLB	;Clear FILOP./LOOKUP blocks
+	SETZM	FLPBLK+.FOIOS	;Clear mode word in FILOP. block
+	MOVE	T1,FENTRY+.CRTFL+.CFDEV ;Get device name
+	MOVEM	T1,FLPBLK+.FODEV ;Store in FILOP. block
+	MOVE	T1,FENTRY+.CRTFL+.CFFIL ;Get filename
+	MOVEM	T1,LKPBLK+.RBNAM ;Store in LOOKUP block
+	MOVSI	T1,DELBLK	;Get address of delete block
+	MOVEM	T1,FLPBLK+.FOLEB ;Store as address of RENAME block
+	MOVE	T1,FENTRY+.CRTFL+.CFEXT ;Get extension
+	MOVEM	T1,LKPBLK+.RBEXT ;Store in LOOKUP block
+	MOVE	T1,[FENTRY+.CRTFL+.CFPTH,,PTHBLK+.PTPPN] ;Setup to BLT path
+	BLT	T1,PTHBLK+.PTMAX-1 ;Move entire block
+	MOVEI	T1,PTHBLK	;Get address of PATH. block
+	MOVEM	T1,LKPBLK+.RBPPN ;Store in LOOKUP block
+	POPJ	P,		;Return
+;Routine to read the .EXE directory from the crash about to be copied
+;and compute the actual size of the crash which was dumped.  Stores
+;the size of the file in blocks in FILSIZ.
+;The call is:
+;	PUSHJ	P,CMPSIZ
+;	 <Return here always>
+
+CMPSIZ:	TRACE$	CMPSIZ		;Type debugging info
+	USETI	CRS,1		;Set to read the .EXE directory
+	MOVE	T1,CORBLK	;Get address of buffer
+	SUBI	T1,1		;Offset for IOWD
+	HRLI	T1,-EXESIZ	;Make it an IOWD for the .EXE directory
+	MOVEI	T2,0		;Terminate it properly
+	INPUT	CRS,T1		;Read the directory
+	STATZ	CRS,IO.ERR!IO.EOF ;Any errors?
+	  JRST	CMPSI1		;Yes, use .RBSIZ
+	HLRZ	T2,1(T1)	;Get entry code from first word
+	CAIE	T2,.SVDIR	;Is this an .EXE directory?
+	  JRST	CMPSI1		;No
+	HRRZ	T2,1(T1)	;Get size of directory
+	ADDI	T1,-1(T2)	;Point to last of directory chunks
+	LDB	T2,[POINTR .SVFPF(T1),SV%FPN] ;Get file page number
+	LDB	T3,[POINTR .SVPPC(T1),SV%REP] ;  plus repeat count
+	ADDI	T2,1(T3)	;Include directory for page size of file
+	LSH	T2,P2WLSH	;Convert to words
+	CAMGE	T2,LKPBLK+.RBSIZ ;Larger than actual file size?
+	  MOVEM	T2,LKPBLK+.RBSIZ ;No, store useful size of file
+CMPSI1:	MOVE	T2,LKPBLK+.RBSIZ ;Get size (actual or useful) back
+	ADDI	T2,BLKSIZ-1	;Round up to a block
+	LSH	T2,W2BLSH	;Convert to blocks
+	MOVEM	T2,FILSIZ	;Store for DOCOPY
+	POPJ	P,		;Return
+;Routine to copy one file to another.  Call with FILSIZ containing
+;the size of the input file in blocks.
+;The call is:
+;	PUSHJ	P,DOCOPY
+;	 <Return here if failed with message issued>
+;	 <Return here if succeeded>
+
+DOCOPY:	TRACE$	DOCOPY,FILSIZ	;Type debugging info
+	USETI	CRS,1		;Set to read first block
+	MOVE	T1,CORBLK	;Get address of buffer
+	SUBI	T1,1		;  minus 1 for IOWD
+	MOVEI	T2,0		;Terminate IOWD with a zero
+	MOVE	T3,FILSIZ	;Get size of file
+DOCOP1:	JUMPLE	T3,DOCOP4	;Done at end
+	CAMLE	T3,CORNUM	;Want to do more blocks than we have?
+	 SKIPA	T4,CORNUM	;Yes, use max
+	  MOVE	T4,T3		;No, do just that many
+	LSH	T4,B2WLSH	;Convert to words
+	MOVNS	T4		;Make it negative
+	HRL	T1,T4		;Move to IOWD
+	IN	CRS,T1		;Read some blocks
+	  JRST	DOCOP2		;Continue if no errors
+	ERROR	IEF,<Input error on >,NOCRLF
+	PUSHJ	P,TYPISB	;Type filename
+	GETSTS	CRS,T1		;Get file status
+	PJRST	TYPSTS		;Type status and return
+DOCOP2:	OUT	CPY,T1		;Output the blocks
+	  JRST	DOCOP3		;Continue if no errors
+	ERROR OEF,<Output error on >,NOCRLF
+	PUSHJ	P,TYPOSB	;Type filename
+	GETSTS	CPY,T1		;Get file status
+	PJRST	TYPSTS		;Type status and return
+DOCOP3:	SUB	T3,CORNUM	;Decrement block count
+	JRST	DOCOP1		;  and loop
+DOCOP4:	CLOSE	CPY,		;Close output
+	RELEAS	CPY,		;  file
+	JRST	.POPJ1##	;  and give skip return
+;Routine to allocate core for the crash copy buffer.
+;The call is:
+;	PUSHJ	P,GETCOR
+;	 <Return here if couldn't get core>
+;	 <Return here if allocated>
+;Sets CORBLK to the first address in the buffer,
+;     CORNUM to the number of blocks we got
+
+GETCOR:	TRACE$	GETCOR,<.JBFF,.JBREL> ;Type debugging info
+	SKIPE	CORBLK		;Already have a buffer
+	  JRST	.POPJ1##	;Yes, return
+	PUSH	P,.JBFF		;Save current value of .JBFF
+	MOVEI	T1,.BFBLK	;Get number of blocks we need
+	MOVEM	T1,CORNUM	;Assume we can get enough core
+	LSH	T1,B2WLSH	;Convert to words
+	ADDB	T1,.JBFF	;Move .JBFF beyond buffer
+	CAMG	T1,.JBREL	;Have that much already?
+	  JRST	GETCO1		;Yes
+	CORE	T1,		;Try to get it
+	  CAIA			;Failed, try to get less
+	JRST	GETCO1		;Exit
+	LSH	T1,K2WLSH	;Convert available amount to words
+	HRRZ	T2,.JBHRL	;Get highest address used in the highseg
+	SUBI	T1,-<400000-1>(T2) ;Subtract amount used by highseg
+	MOVEM	T1,.JBFF	;Adjust .JBFF
+	SOS	T2,T1		;Back up one and copy to T2
+	SUB	T2,0(P)		;Compute number of words available
+	LSH	T2,W2BLSH	;Convert to blocks
+	MOVEM	T2,CORNUM	;Store as number available
+	CAIL	T2,.BFBLK/^D10	;Need at least 10% of what we wanted
+	 CORE	T1,		;Ask for it
+	  JRST	GETCO2		;Give error and return
+GETCO1:	POP	P,CORBLK	;Point to first address in buffer
+	JRST	.POPJ1##	;and return
+GETCO2:	POP	P,.JBFF		;Restore .JBFF
+	ERROR	ICB,<Insufficient core for copy buffer>
+	POPJ	P,		;Return
+;Routine to setup a FILOP. block, do the UUO and sleep if the error
+;returned in ERFBM%.
+;The call is:
+;	MOVE	T1,Channel,,function
+;	PUSHJ	P,FILOPF
+;	 <Return here if with message issued>
+;	 <Return here if function completed>
+
+FILOPF:	TRACE$	FILOPF,T1	;Type debugging info
+	PUSHJ	P,.SAVE1##	;Save P1
+	MOVNI	P1,2		;Initialize error retry count
+FILPF1:	MOVX	T2,.IODMP	;Mode is dump
+	MOVEI	T3,0		;No buffers
+	PUSHJ	P,FILOP		;Do function
+	  CAIA			;Failed, check error
+	JRST	.POPJ1##	;Give skip return
+	AOSN	P1		;Doing second retry?
+	  TELL	WCI,<Waiting for CRASH.SYS interlock> ;Yes, tell him
+	CAIG	P1,.MXERR-2	;Too many tries?
+	 CAIE	T1,ERFBM%	;No, was it FBM?
+	  JRST	FILOPE		;No, give message and return
+	MOVEI	T1,.SLTIM	;Get time to sleep
+	SLEEP	T1,		;Go away for awhile
+	HLLZS	LKPBLK+.RBEXT	;Clear error code from LOOKUP block
+	MOVE	T1,FLPBLK+.FOFNC ;Get function back
+	JRST	FILPF1		;Try again
+
+
+;Routine to setup a FILOP. block and do the UUO.
+;The call is:
+;	MOVE	T1,Channel,,Function
+;	MOVEI	T2,Data mode
+;	MOVE	T3,Output buffer,,Input buffer addresses
+;	PUSHJ	P,FILOPB
+;	 <Return here if error with message issued>
+;	 <Return here if function completed successfully>
+;Enter at FILOPD to set mode to .IODMP and buffer addresses to 0.
+
+FILOPD:	TRACE$	FILOPD,T1	;Type debugging info
+	MOVX	T2,.IODMP	;Mode is dump
+	MOVEI	T3,0		;No buffers
+;;	PJRST	FILOPB		;Fall into FILOPB
+
+
+FILOPB:	TRACE$	FILOPB,<T1,T2,T3> ;Type debugging info
+	PUSHJ	P,FILOP		;Do function
+	  JRST	FILOPE		;Failed, give error message
+	JRST	.POPJ1##	;Give skip return
+;Routine to print an error message when a FILOP. failue occurs.
+;The call is:
+;	MOVEI	T1,error code
+;	PUSHJ	P,FILOPE
+;	 <Return here always>
+
+FILOPE:	TRACE$	FILOPE,T1	;Type debugging info
+	PUSH	P,T1		;save error code for caller
+	ERROR	FLF,<FILOP. error >,NOCRLF
+	PUSHJ	P,.TOCTW##	;Type error code
+	MOVEI	T1,[ASCIZ/ for /] ;Get separator
+	PUSHJ	P,.TSTRG##	;Type it
+	PUSHJ	P,TYPLEB	;Type filespec
+	PUSHJ	P,.TCRLF##	;End the line and return
+	JRST	TPOPJ		;Return, putting error code in t1
+
+
+;Routine to setup a FILOP. block and do the UUO.
+;The call is:
+;	MOVE	T1,Channel,,Function
+;	MOVEI	T2,Data mode
+;	MOVE	T3,Output buffer,,Input buffer addresses
+;	PUSHJ	P,FILOP
+;	 <Return here if error with code in T1>
+;	 <Return here if successful>
+
+FILOP:	TRACE$	FILOP,<T1,T2,T3> ;Type debugging info
+	MOVEM	T1,FLPBLK+.FOFNC ;Store channel,,Function
+	DPB	T2,[POINTR FLPBLK+.FOIOS,IO.MOD] ;Store mode
+	MOVEM	T3,FLPBLK+.FOBRH ;Store addresses of buffers
+	MOVEI	T2,0		;Assume no buffers
+	TLNE	T3,-1		;Output buffer address specified?
+	  HRLI	T2,-1		;Yes, use default number
+	TRNE	T3,-1		;Input buffer address specified?
+	  HRRI	T2,-1		;Yes, use default number
+	MOVEM	T2,FLPBLK+.FONBF ;Store number of buffers
+	MOVEI	T1,LKPBLK	;Point to LOOKUP block
+	HRRM	T1,FLPBLK+.FOLEB ;Store in FILOP. block
+	MOVE	T1,[.FOFMX,,FSPBLK] ;Point to the returned filespec block
+	MOVEM	T1,FLPBLK+.FOFSP ;Store in FILOP. block
+	MOVEI	T1,.RBSTS	;Get length of LOOKUP block
+	DPB	T1,[POINTR LKPBLK+.RBCNT,RB.CNT] ;Store
+	MOVE	T1,[.FOMAX,,FLPBLK] ;Get pointer to FILOP. block
+	FILOP.	T1,		;Perform the function
+	  POPJ	P,		;Failed, return code in T1
+	JRST	.POPJ1##	;Give skip return
+;Routine to type the filespec that caused an operation to fail.
+;The call is:
+;	PUSHJ	P,TYPLEB
+;	 <Return here always>
+
+TYPLEB:	TRACE$	TYPLEB		;Type debugging info
+	MOVEI	T1,FLPBLK+.FOIOS ;Point at OPEN part of FILOP. block
+	MOVEI	T2,LKPBLK	;Point at LOOKUP block
+	PJRST	.TOLEB##	;Type filespec
+
+
+;Routines to type the input and output scan blocks.  TYPISB types
+;ISCBLK, TYPOSB types ISCBLK.
+;The call is:
+;	PUSHJ	P,TYP?SB
+;	 <Return here always>
+
+TYPOSB:	SKIPA	T1,[OSCBLK]	;Point at output scan block
+TYPISB:	MOVEI	T1,ISCBLK	;Ditto for input scan block
+	PJRST	.TFBLK##	;Let SCAN do the typing
+
+
+;Routine to initialize the input and output scan blocks.
+;The call is:
+;	PUSHJ	P,CLRSCB
+;	 <Return here always>
+
+CLRSCB:	TRACE$	CLRSCB		;Type debugging info
+	STORE	T1,FBGN,FEND,-1	;Clear local switch values
+	PUSHJ	P,.CLRFL##	;Clear SCAN's internal area
+	MOVEI	T1,CSCBLK	;Point to copy scan block
+	MOVX	T2,.FXLEN	;Get length
+	PUSHJ	P,.GTSPC##	;Copy virgin block to our area
+	MOVEI	T1,ISCBLK	;Point to input scan block
+	MOVX	T2,.FXLEN	;Get length
+	PUSHJ	P,.GTSPC##	;Copy virgin block to our area
+	MOVEI	T1,OSCBLK	;Point at output scan block
+	MOVX	T2,.FXLEN	;Get length
+	PJRST	.GTSPC##	;Initialize output block and return
+;Routine to save the values from the LOOKUP block for the MOVE
+;command that are to be preserved for the ENTER.  Also clears
+;the FILOP. and LOOKUP blocks.
+;The call is:
+;	PUSHJ	P,SCLFLB
+;	 <Return here always>
+
+SCLFLB:	TRACE$	SCLFLB		;Type debugging info
+	DMOVE	T1,LKPBLK+.RBEXT ;Get .RBEXT, .RBPRV
+	DMOVEM	T1,MOVBLK+0	;Save them away
+	DMOVE	T1,LKPBLK+.RBVER ;Get .RBVER, .RBSPL
+	DMOVEM	T1,MOVBLK+2	;Save them also
+;;	PJRST	CLRFLB		;Fall into CLRFLB
+
+
+;Routine to clear the FILOP. and LOOKUP blocks.
+;The call is:
+;	PUSHJ	P,CLRFLB
+;	 <Return here always>
+
+CLRFLB:	TRACE$	CLRBLB		;Type debugging info
+	STORE	T1,FILBLK,FILBLE,0 ;Clear the blocks
+	POPJ	P,		;Return
+
+
+;Routine to restore the preserved values from the LOOKUP block for
+;the MOVE command.  .RBEXT, .RBPRV, .RBVER, and .RBSPL were stored
+;in MOVBLK (in that order) by SCLFLB.  We restore them, but pay
+;attention to the /PROTECTION switch that the user may have typed.
+;The call is:
+;	PUSHJ	P,MOVFLB
+;	 <Return here always>
+
+MOVFLB:	TRACE$	MOVFLB		;Type debugging info
+	MOVE	T1,MOVBLK+0	;Get value of .RBEXT
+	HRRM	T1,LKPBLK+.RBEXT ;Restore creation/access dates
+	DMOVE	T1,MOVBLK+2	;Get value of .RBVER, .RBSPL
+	DMOVEM	T1,LKPBLK+.RBVER ;Restore them also
+	MOVE	T1,MOVBLK+1	;Get value of .RBPRV
+	MOVX	T2,FX.PRO	;Get mask for /PROT switch for SCAN
+	TDNE	T2,CSCBLK+.FXMOM ;Did the user specify a protection?
+	 TXZA	T1,RB.PRV	;Yes, clear the input file protection
+	  SETZM	LKPBLK+.RBPRV	;No, clear what SCAN setup
+	IORM	T1,LKPBLK+.RBPRV ;Restore protection, mode, creation
+	POPJ	P,		;Return
+;Routine to fix up the scan blocks with actual filespecs.  Must be
+;called after the channel is opened.
+;The call is:
+;	PUSHJ	P,FIXFIL
+;	 <Return here always>
+
+FIXFIL:	MOVSI	T2,-FIXLEN	;-length of translation table
+FIXFI1:	HLRZ	T3,FIXTAB(T2)	;Get returned filespec block offset
+	ADDI	T3,FSPBLK	;Index into the block
+	HRRZ	T4,FIXTAB(T2)	;Get scan block offset
+	ADDI	T4,(T1)		;Index into the block
+	MOVE	T3,(T3)		;Get data from returned filespec block
+	MOVEM	T3,(T4)		;Store in the scan block
+	AOBJN	T2,FIXFI1	;Loop
+	SETOM	.FXNMM(T1)	;Fix file name mask
+	HLLOS	.FXEXT(T1)	;Fix extension mask
+	SETOM	.FXDIM(T1)	;Fix directory mask
+	MOVSI	T2,-.FXLND	;-number of directory words
+	HRR	T2,T1		;Copy address of filespec block
+FIXFI2:	SKIPN	.FXDIR(T2)	;Have PPN or SFD?
+	POPJ	P,		;No--done
+	SETOM	.FXDIM(T2)	;Fix mask
+	ADDI	T2,1		;Account for two word entries
+	AOBJN	T2,FIXFI2	;Loop
+	POPJ	P,		;Return
+
+FIXTAB:	.FOFDV,,.FXDEV		;Device
+	.FOFFN,,.FXNAM		;File name
+	.FOFEX,,.FXEXT		;Extension
+	.FOFPP,,.FXDIR		;PPN
+	.FOFSF+0,,.FXDIR+2	;SFD #1
+	.FOFSF+1,,.FXDIR+4	;SFD #2
+	.FOFSF+2,,.FXDIR+6	;SFD #3
+	.FOFSF+3,,.FXDIR+10	;SFD #4
+	.FOFSF+4,,.FXDIR+12	;SFD #5
+FIXLEN==.-FIXTAB		;Length of table
+;Routines to copy input and output filespecs to the incore entry
+;block.  Call MOVIFS to move the input spec, MOVOFS to move the
+;output spec and MOVCFS to move the new "to" spec for the MOVE command.
+;The call is:
+;	PUSHJ	P,MOV?FS
+;	 <Return here always>
+
+MOVCFS:	TRACE$	MOVCFS		;Type debugging info
+	SETZM	FENTRY+.CRTFL	;Clear first word of "to" spec
+	MOVE	T1,[FENTRY+.CRTFL,,FENTRY+.CRTFL+1] ;Setup BLT pointer
+	BLT	T1,FENTRY+.CRTFL+.CFLEN-1 ;Clear it all
+	MOVEI	T1,CSCBLK	;Point to copy scan block
+	MOVEI	T2,FENTRY+.CRTFL ;and at entry slot
+	PJRST	MOVXFS		;Join common code
+
+MOVIFS:	TRACE$	MOVIFS		;Type debugging info
+	SETZM	FENTRY		;Clear first word of entry
+	MOVE	T1,[FENTRY,,FENTRY+1] ;Setup for BLT
+	BLT	T1,FENTRY+.CRLEN-1 ;Clear it all
+	MOVEI	T1,ISCBLK	;Point to input scan block
+	MOVEI	T2,FENTRY+.CRFFL ;  and at entry slot
+	PJRST	MOVXFS		;Join common code
+
+MOVOFS:	TRACE$	MOVOFS		;Type debugging info
+	MOVEI	T1,OSCBLK	;Point to output scan block
+	MOVEI	T2,FENTRY+.CRTFL ;  and at entry slot
+
+MOVXFS:	MOVE	T3,.FXDEV(T1)	;Get device from scan block
+	MOVEM	T3,.CFDEV(T2)	;Store in entry
+	MOVE	T3,.FXNAM(T1)	;Get filename from scan block
+	MOVEM	T3,.CFFIL(T2)	;Store in entry
+	HLLZ	T3,.FXEXT(T1)	;Get extension from scan block
+	MOVEM	T3,.CFEXT(T2)	;Store in entry
+	HRLI	T2,-.FXLND	;Get AOBJN pointer to directory
+MOVXF1:	SKIPN	T3,.FXDIR(T1)	;Get next word in directory
+	  POPJ	P,		;Return at end
+	MOVEM	T3,.CFPTH(T2)	;Store in block
+	ADDI	T1,2		;Skip mask word in scan block
+	AOBJN	T2,MOVXF1	;Loop for all
+	POPJ	P,		;Return
+;Routine to check the STOPCD name extracted from the crash to make
+;sure that it is really 3 alphanumeric characters.
+;The call is:
+;	PUSHJ	P,GETSTC
+;	 <Return here always>
+;Returns T2 = STOPCD name or 'SER' if none or STOPCD is bad
+
+GETSTC:	TRACE$	GETSTC		;Type debugging info
+	MOVE	T2,[POINT 6,FENTRY+.CRSTC] ;Get byte pointer to STOPCD
+	MOVEI	T3,3		;Need to check three characters
+GETST1:	ILDB	C,T2		;Get next character
+	ADDI	C," "-' '	;Convert to ASCII
+	PUSHJ	P,.TICAN##	;Alphanumeric?
+	  JRST	GETST2		;No, return SER
+	SOJG	T3,GETST1	;Do them all
+	SKIPA	T2,FENTRY+.CRSTC ;Return verified STOPCD name in T2
+GETST2:	  MOVSI	T2,'SER'	;Bad or none, return SER
+	POPJ	P,		;Return
+
+
+;Routine to type the status bits for a failing operation.
+;The call is:
+;	MOVE	T1,status bits
+;	PUSHJ	P,TYPSTS
+;	 <Return here always>
+;Enter at SYSSTS to type the status from channel SYS.
+
+SYSSTS:	TRACE$	SYSSTS		;Type debugging info
+	GETSTS	SYS,T1		;Get the status
+
+TYPSTS:	TRACE$	TYPSTS,T1	;Type debugging info
+	PUSH	P,T1		;Save the status
+	MOVEI	T1,[ASCIZ/, Status = /] ;Get the message
+	PUSHJ	P,.TSTRG##	;Type it
+	POP	P,T1		;Restore the status bits
+	PUSHJ	P,.TOCTW##	;Type them
+	PJRST	.TCRLF##	;End the line and return
+	SUBTTL	GETTAB simulation from disk
+
+
+;Routine to read needed GETTABs from the crash file and store the
+;values in the CRASH.SYS entry area.  Note that to improve efficiency,
+;values in the same table should be requested in increasing order.
+;The call is:
+;	PUSHJ	P,GTBCRS
+;	 <Return here always>
+
+GTBCRS:	TRACE$	GTBCRS		;Type debugging info
+	PUSHJ	P,.SAVE1##	;Save P1
+	MOVSI	P1,-5		;Setup AOBJN pointer to monitor name
+GTBCR1:	MOVX	T1,(%CNFG0)	;Get base entry
+	ADDI	T1,(P1)		;Offset to this one
+	MOVSS	T1		;Back to GETTAB pointer
+	PUSHJ	P,GTBDSK	;Read it
+	MOVEM	T1,FENTRY+.CRMNM(P1) ;Store in entry
+	AOBJN	P1,GTBCR1	;Loop for all
+	MOVX	T1,%CNVER	;Get version number
+	PUSHJ	P,GTBDSK	;  of monitor
+	MOVEM	T1,FENTRY+.CRVER ;Store in entry
+	MOVX	T1,%CNDTM	;Get universal
+	PUSHJ	P,GTBDSK	;  date/time of crash
+	MOVEM	T1,FENTRY+.CRDDT ;Store in entry
+	MOVX	T1,%CNSUP	;Get system uptime
+	PUSHJ	P,GTBDSK	;  in ticks
+	IMULI	T1,^D1000	;Compute number of milliseconds of
+	IDIV	T1,TICSEC	;  uptime from jiffies
+	MOVEM	T1,FENTRY+.CRUPT ;Store in entry
+	MOVX	T1,CRSHWD	;Get address of CRSHWD
+	PUSHJ	P,PEKDSK	;Read it
+	  MOVEI	T1,0		;Failed???
+	AOJE	T1,GTBCR2	;If -1, system was SHUT
+	MOVX	T1,%SYSPC	;Get name of last
+	PUSHJ	P,GTBDSK	;  STOPCD
+	TRZ	T1,-1		;Forget about the PC
+	TLNE	T1,003700	;Test magic quantity to see if fullword pc
+	JRST	GTBCR2		; or stopcode name
+	MOVX	T1,%SYSCD	;Get name of last
+	PUSHJ	P,GTBDSK	;  STOPCD
+GTBCR2:	MOVEM	T1,FENTRY+.CRSTC ;Store in entry
+	AOS	T1,HEADER+.CHSEQ ;Get next sequence number from header
+	PUSHJ	P,.MKPJN##	;Convert to SIXBIT
+	PUSHJ	P,GETSTC	;Get STOPCD name or SER in T2
+	HLL	T1,T2		;Build output filename
+	TXNE	F,FL.OFL	;Was output filename specified?
+	  MOVEM	T1,OSCBLK+.FXNAM ;Store in output scan block
+	PUSHJ	P,.GTNOW##	;Get universal date/time now
+	MOVEM	T1,FENTRY+.CRCDT ;  and store as date/time of copy
+	MOVX	T1,%CNDBG	;DEBUGF GETTAB
+	PUSHJ	P,GTBDSK	;Find in crash
+	MOVX	T2,CR.RLD	;Bit to set
+	TXNE	T1,ST%RLD	;This stopcode result in a reload?
+	IORM	T2,FENTRY+.CRFLG ;Yes--remember for display
+	POPJ	P,		;Return
+;Routine to initialize to simulate GETTABs from the crash file.
+;The call is:
+;	PUSHJ	P,GTBINI
+;	 <Return here always>
+
+GTBINI:	TRACE$	GTBINI		;Type debugging info
+	SETOM	CURBLK		;Disallow initial block match
+	MOVEI	T1,0		;Get first word
+	PUSHJ	P,PEKDSK	;  of crash file
+	  JRST	GTBIN1		;Failed
+	HLRZS	T1		;Isolate what should be directory code
+	CAXE	T1,.SVDIR	;Is it?
+	  JRST	GTBIN1		;No
+	MOVEI	T1,ABSTAB	;Get absolute pointer to GETTABs
+	PUSHJ	P,PEKDSK	;Get it
+	  JRST	GTBIN1		;Failed
+	MOVEM	T1,NUMTAB	;Save address of NUMTAB
+	CAILE	T1,ABSTAB	;See if the number is
+	 TLNE	T1,-1		;  reasonable
+	  JRST	GTBIN1		;No
+	MOVEI	T1,.GTSLF(T1)	;Point to self pointer
+	PUSHJ	P,PEKDSK	;Read it
+	  JRST	GTBIN1		;Failed
+	TLZ	T1,-1		;Clear any junk
+	CAME	T1,NUMTAB	;Is it consistent?
+GTBIN1:	  SETZM	NUMTAB		;No
+	POPJ	P,		;Return
+;Routine to read one GETTAB from a crash on disk.
+;The call is:
+;	MOVE	T1,GETTAB argument
+;	PUSHJ	P,GTBDSK
+;	 <Always return here with word in T1>
+
+GTBDSK:	TRACE$	GTBDSK,T1	;Type debugging info
+	PUSH	P,T1		;Save argument
+	ADD	T1,NUMTAB	;Offset to address of table
+	SKIPE	NUMTAB		;Can't read if no GETTABs
+	 PUSHJ	P,PEKDSK	;Read word in NUMTAB
+	  JRST	[POP	P,T1	;Failed, flush stack
+		 JRST	GTBDS1	;  and return 0
+		]
+	POP	P,T2		;Restore GETTAB argument
+	HLRZS	T2		;Keep offset in table
+	ADDI	T1,(T2)		;Point to word
+	PUSHJ	P,PEKDSK	;Get the word
+GTBDS1:	  MOVEI	T1,0		;Use standard default
+	POPJ	P,		;Return
+
+
+;Routine to read one word from a crash on disk.
+;The call is:
+;	MOVEI	T1,absolute address of word
+;	PUSHJ	P,PEKDSK
+;	 <Return here if failed>
+;	 <Return here if succeeded with word in T1>
+
+PEKDSK:	TRACE$	PEKDSK,T1	;Type debugging info
+	TLZ	T1,-1		;Clear junk in left half
+	CAIE	T1,0		;Reading EXE directory?
+	  ADDI	T1,EXESIZ	;No, offset for directory
+	IDIVI	T1,BLKSIZ	;Convert to block, offset in block
+	CAMN	T1,CURBLK	;See if block already in core
+	  JRST	PEKDS1		;Yes, just read from core
+	MOVEM	T1,CURBLK	;Save new one as current
+	USETI	CRS,1(T1)	;USETI to correct block
+	INPUT	CRS,BUFIOW	;Read block from crash
+	STATO	CRS,IO.ERR!IO.EOF ;Any errors?
+	  JRST	PEKDS1		;No, get word from core
+	SETSTS	CRS,.IODMP	;Clear errors
+	SETOM	CURBLK		;Force read of block
+	POPJ	P,		;Return errors
+PEKDS1:	MOVE	T1,BUF(T2)	;Get word from core
+	JRST	.POPJ1##	;  and give skip return
+FDACHK:	TXNN	F,FL.RBS	;STARTED ON FRCLIN?
+	POPJ	P,		;NO
+	MOVE	T1,[F%FDAE&<-1,,0>!.GTFET] ;CHECK FILDAE SUPPORT
+	GETTAB	T1,		;MONITOR BUILT FOR A FILE DEAMON?
+	  MOVEI	T1,0		;ASSUME NOT
+	TXNN	T1,F%FDAE&<0,,-1> ;FILE DAEMON MONITOR?
+	POPJ	P,		;NO NEED TO WAIT
+	MOVNI	T2,1		;INIT FLAG
+	JRST	FDACH2		;SEE IF A FILE DAEMON IS RUNNING
+FDACH1:	TELL	(WFD,<Waiting for file daemon to start>,,)
+	MOVEI	T1,.FDTIM	;TOTAL TIME TO WAIT
+	SLEEP	T1,		;ZZZZZZ
+FDACH2:	MOVE	T1,[%SIFDA]	;GETTAB ARGUMENT
+	GETTAB	T1,		;TRY TO READ THE FILE DAEMON PID
+	  MOVEI	T1,0		;NOT THERE
+	JUMPN	T1,.POPJ##	;RETURN IF IT'S RUNNING
+	AOJE	T2,FDACH1	;JUMP IF FIRST TIME THROUGH
+	WARN	(FDS,<The file daemon did not start; proceeding>,,)
+	POPJ	P,		;PROCEED
+	SUBTTL	Summary routines
+
+
+; Routine to initialize summary data storage
+SUMINI:	MOVE	T1,[SM.BEG,,SM.BEG+1] ;Set up BLT
+	SETZM	SM.BEG		;Clear first word
+	BLT	T1,SM.END-1	;Clear to end of summary data
+	TXNN	F,FL.TTY	;Output to a TTY?
+	JRST	SUMIN1		;No
+	MOVE	T1,[2,,T2]	;Set up UUO AC
+	MOVEI	T2,.TOWID	;Function code to read the width
+	MOVE	T3,ISCBLK+.FXDEV ;Get output device name
+	IONDX.	T3,		;Convert to a UDX
+	  SKIPA			;Strange ...
+	TRMOP.	T1,		;Read the width
+	  MOVEI	T1,^D80		;Default
+	JRST	SUMIN2		;Onward
+SUMIN1:	MOVEI	T1,^D80		;Assume normal listing
+	MOVE	T2,F.DETL	;Get /DETAIL
+	CAIN	T2,DTLALL	;All?
+	MOVEI	T1,^D132	;Yes--a wide listing
+SUMIN2:	IDIVI	T1,^D15		;Columns per stopcode summary display
+	MOVEM	T1,WIDTH	;Save count
+	POPJ	P,		;Return
+
+
+; Routine to check and account for the number of crashes and the types
+SUMCRS:	AOS	CRSNUM		;Count the crash
+	MOVE	T1,FENTRY+.CRFLG ;Get flags for this entry
+	TXNE	T1,CR.ACT	;Active?
+	AOS	ACTNUM		;Count it
+	TXNN	T1,CR.DSP	;Disposed?
+	AOS	UNDNUM		;No--must be undisposed
+	TXNE	T1,CR.RLD	;Crash caused a reload?
+	AOS	RLDNUM		;Count it
+	MOVSI	T1,-.STPNM	;Get -length of stopcode table
+	SKIPN	T2,FENTRY+.CRSTC ;Get stopcode name
+	MOVSI	T2,'???'	;Turn blank names into something readable
+SUMCR1:	SKIPN	T3,STPNAM(T1)	;Get name from table
+	JRST	SUMCR2		;Empty--go add
+	CAME	T2,T3		;A match?
+	AOBJN	T1,SUMCR1	;Search table
+	JUMPGE	T1,.POPJ##	;Return if no room in table
+	SKIPA			;Don't update number of table entries
+SUMCR2:	HRRZM	T1,SUMNUM	;Save new number of table entries
+	MOVEM	T2,STPNAM(T1)	;Add/overwrite name
+	AOS	STPCNT(T1)	;Count it
+	POPJ	P,		;And return
+SUMMAR:	SKIPN	CRSNUM		;Found any crashes?
+	POPJ	P,		;No summary needed
+	MOVE	T1,F.SUMM	;Get /SUMMARY
+	CAIE	T1,SUMALL	;All?
+	CAIN	T1,SUMSTOPCODES	;Stopcodes?
+	PUSHJ	P,SUMSTP	;Print summary by stopcode names
+	MOVE	T1,F.SUMM	;Get /SUMMARY
+	CAIE	T1,SUMALL	;All?
+	CAIN	T1,SUMTOTALS	;Totals?
+	PUSHJ	P,SUMPRT	;Print summary by crash types
+	POPJ	P,		;Return
+
+; Routine to display a summary of the different stopcodes
+SUMSTP:	PUSHJ	P,.SAVE4##	;Save some ACs
+	PUSHJ	P,SUMSRT	;Sort the stopcode tables
+	MOVEI	T1,[ASCIZ /
+Stopcode summary:/]
+	PUSHJ	P,.TSTRG##	;Print text
+	AOS	P1,SUMNUM	;Get number of table entries
+	IDIV	P1,WIDTH	;Compute lines of output needed
+	SKIPE	P2		;Overflow?
+	AOS	P1		;Need one more
+	MOVEI	P2,(P1)		;Save incremental adjustment
+	MOVNS	P1		;Negate
+	HRLZS	P1		;Make an AOBJN pointer
+SUMST1:	MOVEI	P3,1		;Init column counter
+	PUSHJ	P,.TCRLF##	;Start line with a CRLF
+SUMST2:	MOVEI	T1,[ASCIZ /     /]
+	PUSHJ	P,.TSTRG##	;Space over
+	MOVEI	P4,-1(P3)	;Get column number
+	IMULI	P4,(P2)		;Compute next entry needed
+	ADD	P4,P1		;Adjust pointer
+	SKIPN	T2,STPNAM(P4)	;Get a stopcode name
+	JRST	SUMST4		;Need to advance to next line
+	MOVEI	T3,6		;6 characters
+SUMST3:	LSHC	T1,6		;Get a character
+	ANDI	T1,77		;Strip off junk
+	ADDI	T1," "		;Convert to ASCII
+	PUSHJ	P,.TCHAR##	;Print character
+	SOJG	T3,SUMST3	;Loop through name
+	PUSHJ	P,.TSPAC##	;Space over
+	MOVE	T2,STPCNT(P4)	;Get count
+	CAIG	T2,^D999	;Above 999?
+	PUSHJ	P,.TSPAC##	;No
+	CAIG	T2,^D99		;Above 99?
+	PUSHJ	P,.TSPAC##	;no
+	CAIG	T2,^D9		;Above 9?
+	PUSHJ	P,.TSPAC##	;no
+	MOVE	T1,T2		;Get count
+	PUSHJ	P,.TDECW##	;Print it
+	CAMGE	P3,WIDTH	;Do all columns yet?
+	AOJA	P3,SUMST2	;No
+SUMST4:	AOBJN	P1,SUMST1	;Else start another line
+	CAIE	P3,1		;End of line already?
+	PUSHJ	P,.TCRLF##	;No--put us there
+	POPJ	P,		;Return
+
+
+; Routine to display summary of crashes
+SUMPRT:	PUSHJ	P,.SAVE1##	;SAVE P1
+	SKIPN	STPCNT		;Found any stopcodes?
+	POPJ	P,		;No
+	PUSHJ	P,.TCRLF##	;Start with a CRLF
+	MOVEI	T1,[ASCIZ /Total of /]
+	PUSHJ	P,.TSTRG##	;Print text
+	MOVNI	P1,1		;Init counter
+	SKIPG	T1,UNDNUM	;Any undisposed?
+	JRST	SUMPR1		;No
+	PUSHJ	P,SUMCNT	;Count this one
+	PUSHJ	P,.TDECW##	;Print number
+	MOVEI	T1,[ASCIZ / undisposed/]
+	PUSHJ	P,.TSTRG##	;Print text
+SUMPR1:	SKIPG	T1,ACTNUM	;Any active?
+	JRST	SUMPR2		;No
+	PUSHJ	P,SUMCNT	;Count this one
+	PUSHJ	P,.TDECW##	;Print number
+	MOVEI	T1,[ASCIZ / active/]
+	PUSHJ	P,.TSTRG##	;Print text
+SUMPR2:	SKIPG	T4,RLDNUM	;Any reloads?
+	JRST	SUMPR3		;No
+	PUSHJ	P,SUMCNT	;Count this one
+	MOVE	T1,T4		;Copy
+	PUSHJ	P,.TDECW##	;Print number
+	MOVEI	T1,[ASCIZ / reload/] ;Assume one
+	CAIE	T4,1		;Only one?
+	MOVEI	T1,[ASCIZ / reloads/] ;Nope
+	PUSHJ	P,.TSTRG##	;Print text
+SUMPR3:	MOVEI	T1,[ASCIZ / in /]
+	PUSHJ	P,.TSTRG##	;Print text
+	MOVE	T1,CRSNUM	;Get stopcode count
+	PUSHJ	P,.TDECW##	;Print number
+	MOVEI	T1,[ASCIZ / stopcode; /] ;Assume one
+	MOVE	T2,CRSNUM	;Get count again
+	CAIE	T2,1		;Only one?
+	MOVEI	T1,[ASCIZ / stopcodes; /] ;Make plural
+	PUSHJ	P,.TSTRG##	;Print text
+	MOVE	T1,UNDNUM	;Get total undisposed
+	ADD	T1,ACTNUM	;Add total active
+	MOVEI	P1,[ASCIZ / on disk/] ;Assume several exist
+	CAIN	T1,0		;Zero?
+	MOVEI	P1,[ASCIZ /none on disk/]
+	CAIN	T1,1		;One?
+	MOVEI	P1,[ASCIZ /one on disk/]
+	CAIL	T1,2		;Several exist?
+	PUSHJ	P,.TDECW##	;Yes
+	MOVE	T1,P1		;Point to text
+	PUSHJ	P,.TSTRG##	;Print it
+	PJRST	.TCRLF##	;End with a CRLF and return
+
+
+SUMCNT:	AOSN	P1		;First time here?
+	POPJ	P,		;Yes--just count it and return
+	PUSH	P,T1		;Save T1
+	PUSHJ	P,.TCOMA##	;Start with a comma
+	PUSHJ	P,.TSPAC##	;and a space
+	POP	P,T1		;Get T1 back
+	POPJ	P,		;Return
+
+
+SUMSRT:	MOVSI	P1,-.STPNM	;AOBJN pointer
+	MOVEI	P2,0		;Init counter
+SUMSR1:	DMOVE	T1,STPNAM(P1)	;Get two stopcode names
+	JUMPE	T2,SUMSR3	;Defend against odd number of entries
+	CAMG	T1,T2		;Need to swap?
+	JRST	SUMSR2		;No
+	EXCH	T1,T2		;Swap
+	DMOVEM	T1,STPNAM(P1)	;Replace
+	DMOVE	T1,STPCNT(P1)	;Get counts
+	EXCH	T1,T2		;Ditto
+	DMOVEM	T1,STPCNT(P1)	;Update
+	AOS	P2		;Count the change
+SUMSR2:	AOBJN	P1,SUMSR1	;Loop
+SUMSR3:	JUMPE	P2,.POPJ##	;Return if no more changes
+	JRST	SUMSRT		;Else do it again
+	SUBTTL	Program initialization routines
+
+
+;Routine to perform any initialization functions necessary.
+;The call is:
+;	PUSHJ	P,CRSINI
+;	 <Return here always>
+
+CRSINI:	TRACE$	CRSINI		;Type debugging info
+	STORE	T1,BGNONE,ENDONE,-1 ;Initialize switches to -1
+	STORE	T1,BGNZER,ENDZER,0 ;Initialize other variables to zero
+	MOVSI	T1,-GTBTBL	;Get AOBJN pointer to table of GETTABs
+CRSIN1:	MOVE	T2,GTBTAB(T1)	;Get next GETTAB argument
+	GETTAB	T2,		;Get value from monitor
+	  MOVE	T2,GTBDFL(T1)	;Shouldn't happen, but...
+	MOVEM	T2,GTBVAL(T1)	;Store in table
+	AOBJN	T1,CRSIN1	;Loop for all
+	PUSHJ	P,.GTNOW##	;Get current date/time
+	MOVEM	T1,CURDAT	;Store it
+	PJOB	T1,		;Get our job number
+	MOVEM	T1,MYJOB	;Store
+	MOVX	T1,.TODSP	;Get TRMOP. function to type characters
+	MOVEM	T1,DSPCOD	;Store in TRMOP. block
+	MOVE	T1,[SIXBIT/OPR0/] ;Need UDX of central site OPR
+	IONDX.	T1,		;Get it
+	  MOVEI	T1,0		;Shouldn't happen
+	MOVEM	T1,OPRLIN	;Store for /INFORM:OPR messages
+	MOVEI	T1,ASCCHR	;Point to character buffer
+	MOVEM	T1,ASCPTR	;Store in TRMOP. block
+	MOVE	T1,.JBFF	;Get minimum core value
+	MOVEM	T1,MINCOR	;Store
+	SKIPN	.JBDDT		;Protect VMDDT
+	CORE	T1,		;Reduce core to that
+	  JFCL			;Don't care
+	TXNE	F,FL.RBS	;Run by system, i.e., logged out?
+	  PUSHJ	P,SETSRC	;Yes, setup a search list so SCAN can
+				;  read SWITCH.INI from [2,5]
+	POPJ	P,		;Return
+;Routine to create a job search list for this job from the first
+;.SLSTR structures in the system search list.  This routine is
+;only needed until SCAN can be taught to read the system wide
+;options file (INI:SWITCH.INI).  Until then, we must setup a
+;job search list so that .OSCAN will find a SWITCH.INI in [2,5]
+;if one exists.
+;The call is:
+;	PUSHJ	P,SETSRC
+;	 <Return here always>
+
+SETSRC:	TRACE$	SETSRC		;Type debugging info
+	SETOM	GSTBLK+.DFGNM	;Set to get first STR in SSL
+	MOVSI	T1,-.SLSTR	;Get aobjn pointer to STRUUO block
+SETSR1:	MOVE	T2,[.DFGNM+1,,GSTBLK] ;Get pointer to GOBSTR block
+	GOBSTR	T2,		;Get next STR in SSL
+	  JRST	SETSR2		;Shouldn't happen
+	SKIPN	T2,GSTBLK+.DFGNM ;Get name, skip if not fence
+	  JRST	SETSR2		;Less than .SLSTR STRs in the SSL
+	MOVEM	T2,STUBLK+.FSCSO(T1) ;Store in STRUUO block
+	ADDI	T1,.FSDFL-1	;Skip past directory and status words
+	AOBJN	T1,SETSR1	;  and loop for more
+SETSR2:	MOVEI	T2,.FSSRC	;Code to define job search list
+	MOVEM	T2,STUBLK+.FSFCN ;Store in STRUUO block
+	MOVSI	T1,.FSCSO(T1)	;Get length of block in LH
+	HRRI	T1,STUBLK	;Point to block
+	STRUUO	T1,		;Define the search list
+	  JFCL			;Can't do much
+	POPJ	P,		;Return
+
+
+;Routine to conditionally clear JACCT.  If the symbol DFTPPN is set
+;non-zero and CRSCPY is running under that PPN and FILDAE is not running,
+;don't clear JACCT to allow DEC to dispose of crashes during field
+;test.  DFTPPN should be set to zero if you are not field testing or
+;if you run FILDAE.
+;The call is:
+;	PUSHJ	P,CLRJAC
+;	 <Return here always>
+
+CLRJAC:	TRACE$	CLRJAC		;Type debugging info
+IFN DFTPPN,<
+	MOVX	T1,%SIFDA	;GETTAB arg to get FILDAEs PID
+	GETTAB	T1,		;Get it
+	  MOVEI	T1,0		;Assume not running
+	JUMPN	T1,CLRJA1	;Go if running
+	GETPPN	T1,		;Get our PPN
+	  JFCL			;Avoid alternate return
+	CAXN	T1,DFTPPN	;Match with the DEC field test PPN?
+	  POPJ	P,		;Yes, don't clear JACCT
+CLRJA1:
+> ;End IFN DFTPPN
+	MOVE	T1,PRGNAM	;Get our name
+	SETNAM	T1,		;Clear JACCT
+	POPJ	P,		;Return
+	SUBTTL	Command output routines
+
+
+;Routine to issue a prompt to the terminal.
+;The call is:
+;	MOVEI	T1,prompt character or -1 if continuation
+;	PUSHJ	P,PROMPT
+;	 <Return here always>
+
+PROMPT:	TRACE$	PROMPT,T1	;Type debugging info
+	TXNE	F,FL.RBS	;Run by system?
+	  JRST	[PUSHJ P,.MONRT## ;Yes, let SCAN exit for us
+		 JRST  .	;No CONTINUEs
+		]
+	SKPINL			;Defeat ^O
+	  JFCL			;Don't care about return
+	SKIPL	T1		;Continuation line?
+	 OUTSTR	[ASCIZ/CRSCPY>/] ;No, issue standard prompt
+	SKIPGE	T1		;Continuation line?
+	 OUTSTR	[ASCIZ/#/]	;Yes, use pound sign
+	POPJ	P,		;  and return
+
+
+;Routine called from SCAN when an EXIT should be done.  If we are
+;logged out, do a LOGOUT instead.
+;The call is:
+;	PUSHJ	P,MONRET
+;	 <Return here if CONTINUE>
+
+MONRET:	PUSHJ	P,.ISLGI##	;Are we logged in?
+	  JRST	KJOB		;No, do a logout
+	RESET			;Yes, reset the world
+	MONRT.			;Exit quietly
+	POPJ	P,		;Return if continue
+
+KJOB:	MOVEI	T1,.FSDSL	;Function to define S/L
+	SETOB	T2,T3		;my job, my PPN
+	MOVX	T4,DF.SRM	;Delete all strs
+	MOVE	P1,[4,,T1]	;set up uuo AC
+	STRUUO	P1,		;kill S/L
+	  JFCL			;shouldn't fail
+	LOGOUT			;kjob
+;Routine to output one character.  Uses TRMOP. to device OPR
+;if FL.RBS is on or the user said /INFORM:OPR.
+;The call is:
+;	MOVEI	T1,character
+;	PUSHJ	P,W.TTY
+;	 <Return here always>
+
+W.TTY:	PUSH	P,T1		;Save the character
+	MOVE	T1,S.INF	;Get value of /INFORM
+	TXNN	F,FL.RBS	;Run by system?
+	 CAXLE	T1,INFUSER	;/INFORM:USER or none specified?
+	  JRST	W.TTY1		;No, use TRMOP.
+	OUTCHR	0(P)		;Output the character
+	JRST	TPOPJ		;  and return
+W.TTY1:	MOVE	T1,0(P)		;Get character back
+	DPB	T1,[POINT 7,ASCCHR,6] ;Store character in TRMOP. block
+	MOVE	T1,[3,,DSPCOD]	;Point to TRMOP. block
+	TRMOP.	T1,		;Output the character
+	  JFCL			;Can't do much
+TPOPJ:	POP	P,T1		;Restore character
+	POPJ	P,		;  and return
+	SUBTTL	Message processing routines
+
+
+;Routines to print a fatal, warning, or informative message on the TTY.
+;All are called as follows:
+;
+;		PUSHJ	P,.XXX
+;		CAI	Code,[XWD Prefix,[Message]]
+;		<return here unless EO.STP specified>
+;
+;Where Code is the error option code (see EO.XXX)
+;      Prefix is the CRSCPY error message prefix
+;      Message is the message to be printed
+
+.ERR:	TXO	F,FL.ERR	;Set fatal error flag
+	PUSHJ	P,.PSH4T##	;Save T1-T4
+	MOVX	T4,"?"		;Get error character
+	PJRST	ERRCOM		;Join common routine
+
+.WARN:	TXO	F,FL.WRN	;Set warning message flag
+	PUSHJ	P,.PSH4T##	;Save T1-T4
+	MOVX	T4,"%"		;Get error character
+	PJRST	ERRCOM		;Join common routine
+
+.TELL:	TXO	F,FL.TEL	;Set info message flag
+	PUSHJ	P,.PSH4T##	;Save T1-T4
+	MOVX	T4,"["		;Get error character
+;;	PJRST	ERRCOM		;Join common code
+
+ERRCOM:	MOVSI	T1,'CCP'	;Get our mnemonic
+	HRRZ	T2,-4(P)	;Get addr of CAI word (offset for .PSH4T)
+	MOVE	T2,@(T2)	;Get prefix,,Addr of message
+	HLR	T1,T2		;Add prefix error code
+	HRL	T2,T4		;Put in leading character
+	PUSHJ	P,.ERMSG##	;Let SCAN do the work
+	LDB	T1,[POINT 4,@-4(P),12] ;Get code from AC field of CAI word
+	TXZE	F,FL.TEL	;Was it informative?
+	 CAXN	T1,EO.NCR	;  or no CRLF wanted?
+	  CAIA			;Yes, don't type right bracket
+	   PUSHJ P,.TRBRK##	;Put out a right bracket
+	LDB	T1,[POINT 4,@-4(P),12] ;Get code back
+	CAXG	T1,EO.MAX	;Larger than max?
+	  JUMPN	T1,@[DOEXIT
+		     ERRCO1]-1(T1) ;Dispatch based on error code
+	PUSHJ	P,.TCRLF##	;End message with CRLF
+ERRCO1:	PUSHJ	P,.POP4T##	;Restore T1-T4
+	PJRST	.POPJ1##	;Return, skipping CAI word
+
+DOEXIT:	PUSHJ	P,.MONRT##	;Let SCAN kill the program
+	JRST	.-1		;No continue
+	SUBTTL	Debug package
+
+
+;Routine to print debug information upon entry to a subroutine.
+;Assembled and called only if the switch DEBUG$ is non-zero.
+;The call is:
+;
+;		PUSHJ	P,.DEBUG	;From TRACE$ macro
+;		CAI	[SIXBIT/NAME/	;Routine name
+;			 EXP	LOC1	;Address of first loc
+;			 EXP	LOC2	;Address of second loc
+;			     :
+;			 EXP	LOCN	;Address of nth loc
+;			 XWD	-1,0]	;-1,,0 terminates block
+;		<always return here>
+IFN DEBUG$, <			;Assemble only if debugging
+.DEBUG:	MOVEM	16,DEBAC+16	;Save AC 16
+	MOVX	16,<0,,DEBAC>	;Build BLT pointer
+	BLT	16,DEBAC+15	;Save all AC's
+	HRRZ	P1,@0(P)	;Get address of CAI block
+	MOVEI	T1,[BYTE (7)76,76,40,0,0] ;Two angle brackets and a space
+	PUSHJ	P,.TSTRG##	;Type it
+	MOVE	T1,(P1)		;Get SIXBIT routine name
+	PUSHJ	P,.TSIXN##	;Type in SIXBIT
+	MOVEI	T1,[ASCIZ/ called from PC /]
+	PUSHJ	P,.TSTRG##	;Type it
+	HRRZ	T1,-1(P)	;Get PC of caller of subroutine
+	SUBI	T1,1		;Make it point to the caller
+	MOVEI	P2,(T1)		;Save in P2
+	PUSHJ	P,.TOCTW##	;Type in octal
+	MOVEI	T1,[ASCIZ/ = /]	;Separator
+	PUSHJ	P,.TSTRG##	;Type it
+	PUSHJ	P,STSRCH	;Find PC symbolic loc and type it
+	PUSHJ	P,.TCRLF##	;End the line
+.DEBU1:	SKIPGE	1(P1)		;Done all of them yet?
+	  JRST	.DEBU2		;Yes
+	MOVEI	T1,[ASCIZ/	C(/] ;Prefix for location name
+	PUSHJ	P,.TSTRG##	;Type it
+	MOVE	P2,1(P1)	;Get address of location
+	PUSHJ	P,STSRCH	;Search symbol table for it
+	MOVEI	T1,[ASCIZ/) = /]
+	PUSHJ	P,.TSTRG##	;Type separator
+	CAIG	P2,16		;Is it an AC?
+	  MOVEI	P2,DEBAC(P2)	;Yes, point at AC block
+	MOVE	T1,(P2)		;Get value of address
+	PUSHJ	P,.TXWDW##	;Type as halfwords
+	PUSHJ	P,.TCRLF##	;End the line
+	AOJA	P1,.DEBU1	;Bump CAI block pointer and loop
+.DEBU2:	MOVX	16,<DEBAC,,0>	;Setup BLT pointer to restore AC's
+	BLT	16,16		;  and do so
+	PJRST	.POPJ1##	;Return skipping CAI word
+;Routine to search the symbol table for an address and print the
+;symbolic name of that address.  If no exact match is found, the closest
+;symbolic name plus offset from that name is printed.
+;The call is:
+;
+;		MOVEI	P2,Address to find
+;		PUSHJ	P,STSRCH
+;		 <always return here>
+
+STSRCH:	SKIPN	T2,.JBSYM	;Have a symbol table?
+	  JRST	[MOVEI	T1,(P2) ;No, get octal value of address
+		 PJRST	.TOCTW## ; and print it in octal
+		]
+	SETZB	P3,P4		;P3=Closest ST ptr, P4=Closest value
+STSRC1:	MOVE	T1,1(T2)	;Get value of next symbol
+	CAML	T1,P4		;If less than the closest we've seen
+	 CAILE	T1,(P2)		;  or greater than the one we want,
+	  JRST	STSRC2		; ignore it
+	MOVEI	P3,(T2)		;Save pointer to closest one we've seen
+	MOVE	P4,T1		; plus value of that symbol
+STSRC2:	AOBJP	T2,STSRC3	;Quit when we run out of symbol table
+	CAME	P2,T1		; or if we find an exact match
+	AOBJN	T2,STSRC1	;Else loop for next symbol
+STSRC3:	MOVE	T2,0(P3)	;Get RADIX50 name for the symbol
+	PUSHJ	P,PRDX50	; and print it
+	MOVEI	T1,(P2)		;Get address we wanted to find
+	SUB	T1,P4		;Compute offset from address we found
+	JUMPE	T1,.POPJ##	;If exact match, quit now
+	PUSH	P,T1		;Save offset
+	MOVEI	T1,"+"		;To indicate offset
+	PUSHJ	P,.TCHAR##	;Print the plus
+	POP	P,T1		;Restore the offset
+	PJRST	.TOCTW##	;Print it and return
+
+
+;Routine to print a radix 50 symbol on the terminal.  The
+;call is:
+;
+;		MOVE	T2,Symbol to print
+;		PUSHJ	P,PRDX50
+;		 <always return here>
+
+PRDX50:	MOVEI	T1,6		;Number of chars to print
+	TXZ	T2,17B3		;Clear code from symbol table
+	MOVEI	T4,0		;T4=Register in which to build SIXBIT name
+PRDX51:	IDIVI	T2,50		;Get next char in T3
+	ROT	T3,-1		;Index in RH, Halfword flag in 1B0
+	SKIPGE	T3		;Skip if character in LH of RDX50T
+	 SKIPA	T3,RDX50T(T3)	;Pick up RH character
+	  MOVS	T3,RDX50T(T3)	;Pick up LH character
+	LSHC	T3,-6		;Shift into accumulated SIXBIT word
+	SOJG	T1,PRDX51	;Loop for next character
+	MOVE	T1,T4		;Get accumulated SIXBIT equivalent
+	PJRST	.TSIXN##	;Print in SIXBIT and return
+;Table of SIXBIT equivalent characters indexed by the RADIX 50
+;character set.
+
+RDX50T:	XWD	' ','0'		;Space, Zero
+	XWD	'1','2'		;One, Two
+	XWD	'3','4'		;Three, Four
+	XWD	'5','6'		;Five, Six
+	XWD	'7','8'		;Seven, Eight
+	XWD	'9','A'		;Nine, A
+	XWD	'B','C'		;B, C
+	XWD	'D','E'		;D, F
+	XWD	'F','G'		;F, G
+	XWD	'H','I'		;H, I
+	XWD	'J','K'		;J, K
+	XWD	'L','M'		;L, M
+	XWD	'N','O'		;N, O
+	XWD	'P','Q'		;P, Q
+	XWD	'R','S'		;R, S
+	XWD	'T','U'		;T, U
+	XWD	'V','W'		;V, W
+	XWD	'X','Y'		;X, Y
+	XWD	'Z','.'		;Z, Period
+	XWD	'$','%'		;Dollar sign, Percent sign
+
+	$LOW
+DEBAC:	BLOCK	17		;AC save area
+DEBALL:	EXP	0		;Deposit non-zero to type info
+	$HIGH
+>	;End IFN DEBUG$
+
+
+
+	END	CRSCPY

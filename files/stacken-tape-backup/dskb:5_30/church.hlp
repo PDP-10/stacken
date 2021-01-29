@@ -1,0 +1,11 @@
+CHURCH {r ett demonstrationsprogram f|r Tektronix grafisk terminal
+som {r skrivet i programmeringsspr}ket SAIL och med anv{ndning av
+rutinbiblioteket OMNIGRAPH. Programmet riter en kyrka sedd fr}n en
+punkt som kan best{mmas med indata. Skymda linjer ritas.
+
+.R GAM:CHURCH
+svara: 5,5,5
+och    0,0,0
+d{refter kan indata varieras.
+
+	<Slut p} HLP:CHURCH.HLP, 76-07-29>

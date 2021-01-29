@@ -1,0 +1,49 @@
+TICTAC
+
+Matrix tic-tac-toe is played on a twenty by twenty matrix in a manner
+similar to ordinary tic-tac-toe. The player and the computer will
+alternately place a move at one of the matrix coordinates. Each will
+try to place five moves in a row to effect a win. The player will be
+able to define the playing strength of the program on a scale from 1
+to 10. The player may let the program start playing -- or not.
+
+
+The available commands are:
+
+Cursor control (arrows or digits)   -- moves cursor
+
+	Cursor movements may be given by either pressing arrow-marked keys
+	on the terminal or using the numeric keypad where the keys have
+	the following effect:
+	
+	+------+-------+-------+
+	!  7   !   8   !   9   !
+	! up&  !  up   !  up&  !
+	!left  !       ! right !
+	+------+-------+-------+
+	!  4   !   5   !   6   !
+	!left  ! error ! right !
+	+------+-------+-------+
+	!  1   !   2   !   3   !
+	!down& ! down  ! down& !
+	!left  !       ! right !
+	+------+-------+-------+
+	!  -   !   0   !   .   !
+	!2down ! 2down ! 2down !
+	!&left !       !&right !
+	+------+-------+-------+
+
+X				    -- place your move
+Q				    -- quit
+H				    -- short help text
+ESC ESC				    -- rewrite screen
+
+To start playing type:
+
+.RUN GAM:TICTAC
+
+Good luck!
+
+There is also a Swedish speaking version at GAM:LUFFAR.
+
+	<End of GAM:TICTAC.HLP - 830629/MO>

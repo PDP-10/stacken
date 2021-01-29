@@ -1,0 +1,19 @@
+Jacob Palme               FOOT.HLP    1983-02-05
+
+A football game for two terminals.
+
+FOOT is a football game program which is run from two terminals,
+one controlling one side of the game.
+
+One of the two terminals must be logged in, the other terminal
+not logged in.
+
+To run FOOT, you first start FOOT from the logged in terminal
+by R GAM:FOOT.
+
+Then connect the other terminal to the computer without logging
+in and give the INITIA command. You will then be given a TTY number
+which must be typed into the terminal on which FOOT was started.
+
+During the running of FOOT, type a question mark (?) to get
+a help text.

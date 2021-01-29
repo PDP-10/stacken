@@ -1,0 +1,549 @@
+! MDACOM.BLI - MDA COMMON DEFINITIONS
+!
+! COPYRIGHT (C) 1978, 1979 BY
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+! COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: MCB DUMP ANALYZER
+!
+! ABSTRACT:
+!
+!
+! THIS FILE CONTAINS DEFINITIONS COMMON TO ALL THE MODULES OF THE
+! DUMP ANALYZER
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 25-AUG-78
+!
+! MODIFIED BY:
+!
+!	Alan D. Peckham, 2-Jul-80 : VERSION 3
+! 01	- General update for MCB V3.0
+! 04    - Fix crash status bug in MDANLZ X3(6).
+!--
+
+!
+! INCLUDE FILES
+!
+
+require 'BLI:XPORT';
+
+!
+! MACROS
+!
+
+macro
+    XPO$PTR (ADDR, IDX) =
+	CH$PTR (ADDR, IDX, $XPO$BITS_BYTE) %;
+
+macro
+    POINTR (ADR, MASK) =
+	ADR <%nbitsu (MASK  AND  - MASK) - 1,
+	%nbitsu (MASK) - %nbitsu (MASK  AND  - MASK) + 1> %,
+    FLD (VAL, MASK) =
+	((VAL)^(%nbitsu (MASK  AND  - MASK) - 1)) %;
+
+!
+! Convenient character string macros
+!
+
+macro
+    CH$LEN (PTR) =				!Get length of ASCIZ string.
+	ch$diff (ch$find_ch (200, PTR, 0), PTR) %,
+    CH$SEQUENCE (CHARS, CS) =			!Allocate storage for string.
+	vector [ch$allocation (CHARS, CS)] %,
+    CH$ASCIC [] =				!A pointer to an ASCIC string.
+	ch$ptr (uplit (%string (%char (%charcount (%remaining)), %remaining)), 1) %,
+    CH$ASCII [] =				!A pointer to an ASCII string.
+	ch$ptr (uplit (%ascii %string (%remaining))) %,
+    CH$ASCIZ [] =				!A pointer to an ASCIZ string.
+	ch$ptr (uplit (%asciz %string (%remaining))) %;
+
+!
+! Field macros
+!
+
+macro
+    FL$MASK (F_LD) =
+	(1^%fieldexpand (F_LD, 2) - 1)^%fieldexpand (F_LD, 1) %,
+    FL$OFFSET (F_LD) =
+	(%fieldexpand (F_LD, 0)^1 + %fieldexpand (F_LD, 1)/8) %,
+    FL$SET (VALUE, F_LD) =
+	(((VALUE) and FL$MASK (F_LD)) neq 0) %;
+
+!
+! Make non-BLISS16 code more efficient
+! by using signed compares instead of unsigned.
+!
+
+macro
+    GEQ16 (ARG1, ARG2) =
+	CMP16 (%if %bpval gtr 16 %then geq %else gequ %fi, ARG1, ARG2) %,
+    GTR16 (ARG1, ARG2) =
+	CMP16 (%if %bpval gtr 16 %then gtr %else gtru %fi, ARG1, ARG2) %,
+    LEQ16 (ARG1, ARG2) =
+	CMP16 (%if %bpval gtr 16 %then leq %else lequ %fi, ARG1, ARG2) %,
+    LSS16 (ARG1, ARG2) =
+	CMP16 (%if %bpval gtr 16 %then lss %else lssu %fi, ARG1, ARG2) %,
+    CMP16 (ARG0, ARG1, ARG2) =
+	%if %null (ARG1, ARG2)
+	    %then ARG0
+	    %else (ARG1 ARG0 ARG2) %fi %;
+
+!
+! Bit checking routines
+!
+
+macro
+    BIT_SET (VALUE, BIT_TO_TEST) =
+	(((VALUE) and (BIT_TO_TEST)) neq 0) %,
+    BIT_CLEAR (VALUE, BIT_TO_TEST) =
+	(((VALUE) and (BIT_TO_TEST)) eql 0) %;
+
+!
+! Construct Radix-50 symbols
+!
+
+macro
+    RAD50 (TEXT) =
+	uplit (RAD50_CHARS (%explode (%string (TEXT)))) %,
+    RAD50_WORD (TEXT) =
+	RAD50_CHARS (%explode (%string (TEXT))) %,
+    RAD50_CHARS [CHAR1, CHAR2, CHAR3] =
+	(RAD50_CHAR (CHAR1)*40 + RAD50_CHAR (CHAR2))*40 + RAD50_CHAR (CHAR3) %,
+    RAD50_CHAR (CHAR) =
+	%if %null (CHAR) %then 0 %fi
+	%if %identical (' ', CHAR) %then 0 %fi
+	%if %identical ('A', CHAR) %then 1 %fi
+	%if %identical ('B', CHAR) %then 2 %fi
+	%if %identical ('C', CHAR) %then 3 %fi
+	%if %identical ('D', CHAR) %then 4 %fi
+	%if %identical ('E', CHAR) %then 5 %fi
+	%if %identical ('F', CHAR) %then 6 %fi
+	%if %identical ('G', CHAR) %then 7 %fi
+	%if %identical ('H', CHAR) %then 8 %fi
+	%if %identical ('I', CHAR) %then 9 %fi
+	%if %identical ('J', CHAR) %then 10 %fi
+	%if %identical ('K', CHAR) %then 11 %fi
+	%if %identical ('L', CHAR) %then 12 %fi
+	%if %identical ('M', CHAR) %then 13 %fi
+	%if %identical ('N', CHAR) %then 14 %fi
+	%if %identical ('O', CHAR) %then 15 %fi
+	%if %identical ('P', CHAR) %then 16 %fi
+	%if %identical ('Q', CHAR) %then 17 %fi
+	%if %identical ('R', CHAR) %then 18 %fi
+	%if %identical ('S', CHAR) %then 19 %fi
+	%if %identical ('T', CHAR) %then 20 %fi
+	%if %identical ('U', CHAR) %then 21 %fi
+	%if %identical ('V', CHAR) %then 22 %fi
+	%if %identical ('W', CHAR) %then 23 %fi
+	%if %identical ('X', CHAR) %then 24 %fi
+	%if %identical ('Y', CHAR) %then 25 %fi
+	%if %identical ('Z', CHAR) %then 26 %fi
+	%if %identical ('$', CHAR) %then 27 %fi
+	%if %identical ('.', CHAR) %then 28 %fi
+	%if %identical ('_', CHAR) %then 28 %fi
+	%if %identical ('0', CHAR) %then 30 %fi
+	%if %identical ('1', CHAR) %then 31 %fi
+	%if %identical ('2', CHAR) %then 32 %fi
+	%if %identical ('3', CHAR) %then 33 %fi
+	%if %identical ('4', CHAR) %then 34 %fi
+	%if %identical ('5', CHAR) %then 35 %fi
+	%if %identical ('6', CHAR) %then 36 %fi
+	%if %identical ('7', CHAR) %then 37 %fi
+	%if %identical ('8', CHAR) %then 38 %fi
+	%if %identical ('9', CHAR) %then 39 %fi %;
+
+!
+! These macros are specific to MDA
+!
+
+macro
+    SYMBOL_TABLE [] =
+	begin
+	external routine STBFIL;
+	STBFIL (plit (SYMBOL_FILE (%remaining)))
+	end %,
+    SYMBOL_FILE [FILE_NAME] =
+	CH$ASCIZ (FILE_NAME) %,
+    SYMBOL (NAME) =
+	begin
+	external routine STBSYM;
+	STBSYM (RAD50 (%string (
+	    %if %charcount (NAME) leq 3
+		%then NAME ,'   '
+		%else NAME
+	    %fi)))
+	end %,
+    DEFINED (SYMBOL_VALUE) =
+	((SYMBOL_VALUE) neq UNDEFINED) %;
+
+macro
+    BLISS_SYMBOL (TEXT) =
+	%string (BLISS_CHARS (%explode (TEXT))) %,
+    BLISS_CHARS [CHAR] =
+	%if %identical('.', CHAR) %then '_' %else CHAR %fi %;
+
+macro
+    IN_POOL (ADR) =
+	ADR lssu %o'120000' %,
+    PROCESS_NAME (PIX, PDBVB) =
+        (begin
+
+        bind
+            PHDNAM = %o'120000';
+
+        local
+            APR_SAVE,
+            NAME;
+
+        SMAP$ (APR_SAVE);
+        begin
+
+        local
+            PDB;
+
+	PDB = GETWRD (%if not %null (PDBVB) %then PDBVB %else SYMBOL ('.PDBVB') %fi + (pix)^1);
+
+	if .PDB eql 0 then PDB = GETWRD (%if not %null (PDBVB) %then PDBVB %else SYMBOL ('.PDBVB') %fi);
+
+        MAP$ (GETWRD (.PDB + FL$OFFSET (PDT$W_CODE_BIAS)));
+        end;
+        NAME = GETWRD (PHDNAM + %o'20000');
+        MAP$ (.APR_SAVE);
+        .NAME
+        end) %,
+    FATAL =
+	'*FATAL*  ' %,
+    WARNING =
+	'*WARNING*  ' %;
+
+!
+! MCB compatable macros
+!
+
+macro
+    MAP$ (BIAS) =
+         begin
+
+         external routine
+                  MAPAPR : novalue;
+
+         MAPAPR (6, BIAS);
+         end %,
+     SMAP$ (ADR) =
+         begin
+
+         external routine
+                  GETAPR;
+
+         ADR = GETAPR (6)
+         end %;
+
+!
+! Service macros
+!
+
+macro
+    $MDA_MAP_NAME_TO_PDB (NAME, PDB) =
+        begin
+        $CEX_PNMDEF
+
+        local
+            PNMTB;
+
+        PDB = 0;
+
+        if (PNMTB = GETWRD (SYMBOL ('.PNMTA'))) neq 0
+        then
+
+            decru INDEX from GETWRD (SYMBOL ('.PNMNM')) to 1 do
+                  begin
+
+                  if GETWRD (.PNMTB + FL$OFFSET (PNM$W_NAME)) eqlu NAME
+                  then
+                      begin
+                      PDB = GETWRD (.PNMTB + FL$OFFSET (PNM$A_PROCESS));
+                      exitloop;
+                      end;
+
+                  end;
+
+        .PDB neq 0
+        end %;
+
+!
+! I/O definitions
+!
+
+$LITERAL
+    F_READ = 0,
+    F_WRITE = $DISTINCT,
+    F_APPEND = $DISTINCT,
+    F_MODIFY = $DISTINCT,
+    F_UPDATE = $DISTINCT;
+
+$LITERAL
+    F_ASCII = 0,
+    F_BINARY = $DISTINCT;
+
+macro
+    PUTLN (SKIP, EDIT) [] =
+	begin
+	external routine PUTLIN : novalue;
+	%if %length gtr 2
+	%then
+	    local PRM_LIST : vector [%length - 2];
+	    macro PUTASG [PARAMETER] =
+		PRM_LIST [%count] = PARAMETER %quote %;
+	    PUTASG (%remaining);
+	    PUTLIN (SKIP, EDIT, PRM_LIST)
+	%else
+	    PUTLIN (SKIP, EDIT, 0)
+	%fi
+	end %,
+    TYPLN (SKIP, EDIT) [] =
+	begin
+	external routine TYPLIN : novalue;
+	%if %length gtr 2
+	%then
+	    local PRM_LIST : vector [%length - 2];
+	    macro TYPASG [PARAMETER] =
+		PRM_LIST [%count] = PARAMETER %quote %;
+	    TYPASG (%remaining);
+	    TYPLIN (SKIP, EDIT, PRM_LIST)
+	%else
+	    TYPLIN (SKIP, EDIT, 0)
+	%fi
+	end %;
+
+macro
+    BIT_LIST (ARG1) =		!For compile-time symbols
+	%if not %null (ARG1)
+	%then
+	    uplit (BIT_ENTRY (, ARG1, %remaining), 0)
+	%else
+	    uplit (0)
+	%fi %,
+    BITS_LIST (ARG1) =		!For run-time symbols
+	%if not %null (ARG1)
+	%then
+	    begin
+	    own LIST_OF_BITS : vector [%length*4 + 1]
+	    initial (BIT_ENTRY (0, ARG1, %remaining), 0);
+	    external ROUTINE STBLST;
+	    STBLST (LIST_OF_BITS)
+	    end
+	%else
+	    uplit (0)
+	%fi %,
+    BYTE_LIST (ARG1) =		!For compile-time symbols
+	%if not %null (ARG1)
+	%then
+	    uplit (BIT_ENTRY (, ARG1, %remaining), 0)
+	%else
+	    uplit (0)
+	%fi %,
+    BYTES_LIST (ARG1) =		!For run-time symbols
+	%if not %null (ARG1)
+	%then
+	   begin
+	   own LIST_OF_BYTES : vector [%length*4 + 1]
+	   initial (BIT_ENTRY (UNDEFINED, ARG1, %remaining), 0);
+	   external routine STBLST;
+	   STBLST (LIST_OF_BYTES)
+	   end
+	%else
+	    uplit (0)
+	%fi %,
+    BIT_ENTRY (DEFAULT) [NAME_PAIR] =
+	%if not %null (NAME_PAIR)
+	    %then BIT_DEFINITION (DEFAULT, %remove (NAME_PAIR))
+	    %fi %,
+    BIT_DEFINITION (DEFAULT, NAME, TEXT) =
+	%if not %null (DEFAULT)
+	%then
+	    RAD50_WORD (NAME),
+	    %if %charcount (NAME) leq 3 %then 0, %fi
+	    %if %declared (BIT_NAME (NAME))
+	    %then
+		BIT_NAME (NAME),
+	    %else
+		DEFAULT,
+	    %fi
+	%else
+	    -1, -1, NAME,
+	%fi
+	CH$ASCIC (%if %null (TEXT) %then NAME %else TEXT %fi) %,
+    BIT_NAME (NAME) =
+	%if %identical (NAME, %string (NAME))
+	%then
+	    %name (BLISS_SYMBOL (NAME))
+	%else
+	    NAME
+	%fi %,
+    FIELD_LIST (ARG1) =		!For compile-time symbols
+	%if not %null (ARG1)
+	%then
+	    uplit (FIELD_ENTRY (, ARG1, %remaining), 0)
+	%else
+	    uplit (0)
+	%fi %,
+    FIELDS_LIST (ARG1) =	!For run-time symbols
+	%if not %null (ARG1)
+	%then
+	    begin
+	    own LIST_OF_BITS : vector [%length*4 + 1]
+	    initial (FIELD_ENTRY (0, ARG1, %remaining), 0);
+	    external ROUTINE STBLST;
+	    STBLST (LIST_OF_BITS)
+	    end
+	%else
+	    uplit (0)
+	%fi %,
+    FIELD_ENTRY (DEFAULT) [NAME_PAIR] =
+	%if not %null (NAME_PAIR)
+	    %then FIELD_DEFINITION (DEFAULT, %remove (NAME_PAIR))
+	    %fi %,
+    FIELD_DEFINITION (DEFAULT, NAME, TEXT) =
+	%if not %null (DEFAULT)
+	%then
+	    RAD50_WORD (NAME),
+	    %if %charcount (NAME) leq 3 %then 0, %fi
+	    %if %declared (BIT_NAME (NAME))
+	    %then
+		FL$MASK (BIT_NAME (NAME)),
+	    %else
+		DEFAULT,
+	    %fi
+	%else
+	    -1, -1, FL$MASK (BIT_NAME (NAME)),
+	%fi
+	CH$ASCIC (%if %null (TEXT) %then NAME %else TEXT %fi) %;
+
+!
+! EQUATED SYMBOLS
+!
+
+literal
+    TRUE = 1 eql 1,				!Truisms.
+    FALSE = 1 eql 0,
+    NO_OPERATION = 0,
+    UNDEFINED = -1,				!Undefined symbol value.
+    MDA_SUPPORT = %C'X',			!Support code.
+    MDA_VERSION = 4,				!Version number.
+    MDA_UPDATE = 0,				!Update release number.
+    MDA_EDIT = 0,				!Edit number.
+    DEBUG = FALSE,				!No debugging available
+    M$$MGE = 0,					!This is for a memory management system.
+    DN20 = TRUE,				!Dump file is from a DN20.
+    VIRGIN = FALSE,				!File is virgin system image.
+    HUMEROUS = TRUE;				!Let's enjoy this while we're at it...
+
+macro
+    LST_FILE = %string ('Analysis of') %,
+    LST_TITLE = %string ('MCBDA - MCB Crash Dump Analyzer') %,
+    PROMPT = %string ('MCBDA') %;
+
+literal
+    MDA_MAX_FILES = 6,				!Maximum number of open files.
+    MDA_MAX_SYMBOLS = 8000,			!Maximum number of symbols.
+    MDA_MAX_TABLES = 10,			!Maximum number of symbol tables.
+    MDA_MAX_TSKS = 8,				!Maximum number of tasks requestable.
+    MDA_MAX_PRCS = 8,				!Maximum number of processes requestable.
+    MDA_MAX_DMPS = 4,				!Maximum number of dump ranges specifiable.
+    RSX_MAX_AST = 25,				!Maximum number of asynchronous trap entries.
+    RSX_MAX_ATD = 50,				!Maximum number of attachment descriptors.
+    RSX_MAX_ATL = 100,				!Maximum number of active tasks.
+    RSX_MAX_CLQ = 25,				!Maximum number of clock queue entries.
+    RSX_MAX_DCB = 50,				!Maximum number of DCBs.
+    RSX_MAX_ERL = 25,				!Maximum number of error log entries.
+    RSX_MAX_FRK = 100,				!Maximum number of forks.
+    RSX_MAX_FXD = 50,				!Maximum number of fixed tasks.
+    RSX_MAX_HDR = 600,				!Maximum size of task header in bytes.
+    RSX_MAX_LUN = 250,				!Maximum number of luns for a task.
+    RSX_MAX_MCR = 25,				!Maximum number of MCR command blocks.
+    RSX_MAX_PKA = 25,				!Maximum number of preallocated I/O packets.
+    RSX_MAX_PKT = 100,				!Maximum number of I/O packets.
+    RSX_MAX_PCB = 100,				!Maximum number of PCBs.
+    RSX_MAX_RCQ = 25,				!Maximum number of receive queue entries.
+    RSX_MAX_RRQ = 25,				!Maximum number of receive by reference entries.
+    RSX_MAX_STD = 200,				!Maximum number of system tasks.
+    RSX_MAX_UCB = 63,				!Maximum number of UCBs per DCB.
+    RSX_MAX_WND = 8,				!Maximum number of mapping windows.
+    RSX_MAX_WTQ = 50,				!Maximum number of PCB wait queue entries.
+    CEX_MAX_CCB = 200,				!Maximum number of CCBs.
+    CEX_MAX_PDV = 64,				!Maximum number of processes.
+    CEX_MAX_LNK = 63,				!Maximum number of NSP links.
+    CEX_MAX_MCH = 20,                           !Maximum mechanism vectors.
+    CEX_MAX_NOD = 63,				!Maximum number of NSP nodes.
+    CEX_MAX_RDB = 200,				!Maximum number of RDBs.
+    CEX_MAX_SDB = 63,				!Maximum number of SDBs.
+    CEX_MAX_SLT = 256;				!Maximum number of system lines.
+
+$LITERAL
+    !
+    ! General switches
+    !
+    M_ANALYZE = 0,				!Analyze the crash context.
+    M_VERSION = $DISTINCT,			!Display version.
+    M_HELP = $DISTINCT,				!Display HLP file.
+    M_EXIT = $DISTINCT,				!Exit switch specified.
+    M_WIDE = $DISTINCT,				!Use 142 column listing format.
+    M_BUF = $DISTINCT,				!Display this CCB's buffer contents.
+    M_MAX = M_BUF,
+    !
+    ! RSX switches
+    !
+    M_RSX = $DISTINCT,				!Starting RSX flag number.
+    M_RSX_CTXT = M_RSX,				!Display RSX context.
+    M_RSX_PARS = $DISTINCT,			!Display partition map.
+    M_RSX_PCBS = $DISTINCT,			!Display partition control blocks.
+    M_RSX_ATL = $DISTINCT,			!Display the active task list.
+    M_RSX_FXD = $DISTINCT,			!Display fixed tasks.
+    M_RSX_STD = $DISTINCT,			!Display system task directory.
+    M_RSX_HDR = $DISTINCT,			!Display task headers.
+    M_RSX_DRV = $DISTINCT,			!Display driver control blocks.
+    M_RSX_DEV = $DISTINCT,			!Display the device control blocks.
+    M_RSX_CLQ = $DISTINCT,			!Display the clock queue.
+    M_RSX_POOL = $DISTINCT,			!Display RSX pool.
+    M_RSX_DUMP = $DISTINCT,			!Dump data bases in octal.
+    M_RSX_MAX = M_RSX_DUMP,			!Maximum RSX flag.
+    !
+    ! Comm/EXec switches
+    !
+    M_CEX = $DISTINCT,				!Starting CEX flag number.
+    M_CEX_CTXT = M_CEX,				!Display crash context.
+    M_CEX_POOL = $DISTINCT,			!Display all CCBs.
+    M_CEX_BUFS = $DISTINCT,			!Display CCB buffer contents.
+    M_CEX_PDVS = $DISTINCT,			!Display the MCB process data bases.
+    M_CEX_SLTS = $DISTINCT,			!Display the MCB system line data bases.
+    M_CEX_FREE = $DISTINCT,			!Display the free buffer queue lists.
+    M_CEX_INTERPRET = $DISTINCT,		!Interpret buffer contents according to CCB owner.
+    M_CEX_DUMP = $DISTINCT,			!Dump data bases in octal.
+    M_CEX_MAX = M_CEX_DUMP,			!Maximum CEX flag.
+    !
+    ! Number of bits required
+    !
+    M_MAX_BITS = $DISTINCT;			!Maximum number of bits needed.
+
+! MDACOM.BLI - LAST LINE

@@ -1,0 +1,553 @@
+	TITLE	DNSNUP		DECnet-10 Message Trace program
+	SUBTTL	Tarl Neustaedter
+	SEARCH	DCN,SNUP,D36PAR,S
+	.REQUI REL:SNUP
+	SALL
+	.DIRECT	MACMPD
+	XP $ONLY,I.LUO!I.PRM!I.GTT
+	$INIT	MSG
+
+;Revision history.
+;1	Write the program.
+;2	Add code to make sure program is running on same type of processor
+;	it was assembled for. XBLT vs BLT data structures can look different.
+;3	Search DCN.
+;4	Don't call WAKJOB with the interlock set.
+;5	Avoid trashing T1 before calling SAVT.
+;6	Add entry point for local messages
+;7	Add checks for monitor skew, add error (^C) trapping.
+;10	Update for DECnet Phase IV monitor.
+;11	Update for DECnet in Section 7.
+;12	Croque for the KS to get DN section right, would be unnecessary
+;	if LOCK could allocate EVM mapped in DN space...
+;13	Undo much of edit 11, we've kroque'd the monitor till SNOOP can
+;	deal with section 7.
+;14	Update for 7.03 field test #1.
+;15	Add routine SVEUD for KS10 now that it isn't in KSSER anymore.
+;16	Remove KS crocks as this is fixed in first 7.03 autopatch tape.
+;17	Change references from UPTIME to SYSUPT, as UPTIME has been removed
+;	from the monitor.
+
+;Check for right version of SNUP.
+
+IFN V.SNUP-7,<
+	PRINTX ?Wrong version of SNUP. Please obtain the latest version.
+>
+
+;Make version global so we get a multiply defined if wrong version
+;rel file is loaded after using the right universal.
+	V.SNUP==:V.SNUP
+
+	XP BUFSIZ,12000			;Buffer size.
+	XP BPTN,30			;Number of breakpoints we will
+					; ask SNUP to handle.
+
+DEFINE POINTS,<
+ZZ=.
+	AT RTROTR,[PUSHJ %P,ORECVD]	;Output message received.
+	AT RTRITR,[PUSHJ %P,IRECVD]	;Input message received
+	AT RTRLTR,[PUSHJ %P,LRECVD]	;local message.
+	AT BP$000,[PUSHJ %P,INITAL]	;Initialization
+	AT BP$001,[PUSHJ %P,DESTRO]	;Destroy
+TOTBPT=.-ZZ
+>
+
+;To flag a word as 'needs to be relocated'
+DEFINE	.R.(SYM),<<SYM>
+	SYMCNT==SYMCNT+1
+	GENSYM(M,\SYMCNT)==.-1
+	GENSYM(A,\SYMCNT)==LOKADR
+>
+
+DEFINE	.M.(SYM),<0
+	SYMCNT==SYMCNT+1
+	GENSYM(M,\SYMCNT)==.-1
+	GENSYM(A,\SYMCNT)==<SYM>
+>
+
+SYMCNT==0
+
+;To generate a symbol given a numeric argument
+DEFINE GENSYM(PRE,NUM),<PRE'..'NUM>
+;To delete symbol defined above
+DEFINE DELSYM(PRE,NUM),<PURGE PRE'..'NUM>
+;to define a symbol for SNOOP.
+DEFINE SYMDEF(SYM),<SYM: AT SYM>
+
+VRSN.(0,1,0,17)
+
+
+	SUBTTL	Monitor code
+
+$LOSEG
+
+	%MB==%J			;Define the message block pointer
+
+
+;Input and output message breakpoint receivers.
+
+ORECVD:
+	CAIE	%T1,DF.XMT	;Output?
+	 POPJ	%P,		;no, ignore this one.
+	PUSHJ	%P,.M.(SAVT)	;Save our ACs
+	MOVSI	%T1,IOL.OT_9!TYP.MH ;Flag this is an output message
+	JRST	.R.(RECVD)	;Join common code
+LRECVD:	PUSHJ	%P,.M.(SAVT)	;Save acs
+	MOVSI	%T1,IOL.LO_9!TYP.MH ;Flag this as a local message
+	JRST	.R.(RECVD)	;join common code
+IRECVD:	PUSHJ	%P,.M.(SAVT)	;Save acs
+	MOVSI	%T1,IOL.IN_9!TYP.MH;Flag this is an input message
+RECVD:
+	JSP	%R,.M.(D36PIF)	;Call d36pif to turn avoid races
+	MOVEI	%T2,<MB.LEN+MH.LEN>*4;Length of the entry block. (in bytes)
+	XMOVEI	%T4,UD.DAT(%MB)	;Get possible pointer to user data
+	CAME	%T4,MD.ALA+UD.MSD(%MB) ;Compare against real pointer
+	 ADD	%T2,MD.ALL+UD.MSD(%MB)	;Get number of bytes we have allocated
+	ADDI	%T2,3		;Round up to nearest word.
+	ASH	%T2,-2		;Convert to words
+	MOVEI	%T3,.M.(%DLBSZ)	;Get largest default buffer size
+	ADDI	%T3,.M.(%RTEHS)	;Add in ethernet overhead bytes
+	ASH	%T3,-2		;Convert into words
+	ADDI	%T3,MB.LEN+MH.LEN ;Add overhead words
+	CAMLE	%T2,%T3		;Enough room in buffer?
+	 JRST	.R.(FULLBF)	;No, pretend buffer is full
+	SKIPN	%T3,.R.(DEPADR)	;Next address to store stuff in
+	 JRST	.R.(CONTIN)	;Must be unwinding. Ignore message.
+	MOVE	%T4,%T3		;Copy address
+	ADD	%T4,%T2		;point to where our block would end.
+	CAMGE	%T3,.R.(EXMADR)	;Is start above reader's current pointer?
+	 CAMGE	%T4,.R.(EXMADR)	;no, would this stomp on the reader's data?
+	  SKP			;We won't overwrite the user's message
+	 JRST	.R.(FULLBF)	;Would destroy un-read message. drop it.
+	CAMGE	%T4,.R.(TOPADR)	;Would we go past the end of the buffer?
+	 JRST	.R.(HAVADR)	;no, our pointer is good.
+	SETOM	(%T3)		;We have to wrap around. Flag the fact.
+	MOVE	%T3,.R.(ORGADR)	;Get start of buffer pointer
+	MOVE	%T4,%T3		;copy address
+	ADD	%T4,%T2		;Point to end of block
+	CAML	%T4,.R.(EXMADR)	;Make sure I am below taker's address.
+	 JRST	.R.(FULLBF)	;Would destroy un-read message. Drop it.
+HAVADR:	MOVEM	%T2,MH.LNG(%T3)	;save length of this entry
+	HRR	%T1,.R.(LSTMSG)	;Get cumulative number of lost messages
+	MOVEM	%T1,MH.FLG(%T3)	;save flags for this entry
+	MOVE	%T1,.M.(SYSUPT)	;Get system uptime as of this message
+	MOVEM	%T1,MH.UPT(%T3)	;save in time stamp for this entry
+	MOVE	%T1,.M.(DATE)	;Get udt of right now.
+	MOVEM	%T1,MH.UDT(%T3)	;save current date/time
+	SKIPE	%T1,RM.ICP(%MB)	;Get input circuit pointer
+	 MOVE	%T1,RC.LID(%T1)	;Get the line ID for this circuit
+	MOVEM	%T1,MH.ILN(%T3)	;Store input circuit circuit id
+	SKIPE	%T1,RM.OCP(%MB)	;Get output circuit pointer
+	 MOVE	%T1,RC.LID(%T1)	;Get the line ID for this circuit
+	MOVEM	%T1,MH.OLN(%T3)	;Store output circuit circuit id
+	MOVEM	%MB,MH.OMB(%T3)	;save original message block pointer
+	ADDI	%T3,MH.LEN	;Point past header part of message
+	MOVE	%T2,%MB		;Copy source pointer
+	MOVEI	%T1,MB.LEN	;Number of words to copy
+	JSP	%R,.R.(BLTR..)	;Copy the data
+	XMOVEI	%T2,UD.DAT(%MB)	;generate a possible pointer to user data
+	CAMN	%T2,MD.ALA+UD.MSD(%MB) ;Was the user data within the MB?
+	 JRST	.R.(GIVUSR)	;yes, just give current stuff to the user
+	MOVE	%T2,MD.ALA+UD.MSD(%MB) ;Pointer to user data block
+	SUB	%T4,%T3		;number of words to copy
+	MOVE	%T1,%T4		;Put where xblt can find it
+	JSP	%R,.R.(BLTR..)	;And copy the data
+GIVUSR:
+	MOVEM	%T3,.R.(DEPADR)	;Save new deposit address
+	AOS	%T1,.R.(PENMSG)	;Bump count of pending messages
+	TRNE	%T1,3		;Wake up every 4th message
+	 JRST	.R.(CONTIN)	;Not 4th message, continue
+	SKP			;Don't increment overflow count
+FULLBF:
+	AOS	.R.(LSTMSG)	;Bump count of lost messages
+	JSP	%R,.M.(D36PIN)	;Turn interrupts back on
+	MOVE	%T1,.R.(MYJOB)	;Get job to wake up
+	PUSHJ	%P,.M.(WAKJOB)	;Wake him up.
+	SKP			;don't try to turn them on twice.
+CONTIN:
+	JSP	%R,.M.(D36PIN)	;Turn interrupts back on.
+	POPJ	%P,		;Return to user
+
+;UUO-level initialization and termination code.
+INITAL:
+	MOVEI	%T2,BUFSIZ	;No, get some core to use as buffer
+	XMOVEI	%T1,.R.(BUFFER)	;*Get pointer to our buffer
+	MOVEM	%T1,.R.(ORGADR)	;set up start of buffer
+	MOVEM	%T1,.R.(EXMADR)	;Initialize user's pointer.
+	XMOVEI	%T2,BUFSIZ(%T1)	;Get pointer to end of buffer
+	MOVEM	%T2,.R.(TOPADR)	;save as top address of buffer
+	MOVEI	%T2,FH.LEN	;Size of this entry
+	MOVEM	%T2,FH.LNG(%T1)	;Save as first entry in buffer
+	MOVSI	%T2,TYP.FH	;message type
+	HRRI	%T2,MB.LEN	;Message block length.
+	MOVEM	%T2,FH.FLG(%T1)	;Save as second word in header
+	MOVE	%T2,.M.(SYSUPT)	;Get current uptime
+	MOVE	%T3,.M.(DATE)	;Universal date/time
+	DMOVEM	%T2,FH.UPT(%T1)	;say what time we started to trace
+	MOVE	%T2,.R.(.JBVER)	;Get program's version number
+	MOVE	%T3,.JBVER	;Get the monitor's real version
+	DMOVEM	%T2,FH.PVR(%T1)	;Save as version numbers
+	XMOVEI	%T3,FH.CFG(%T1)	;Where to copy config string to
+	XMOVEI	%T2,.M.(CONFIG)	;Where the config string is
+	MOVEI	%T1,^D5		;Number of words to copy
+	JSP	%R,.R.(BLTR..)	;and copy the data
+	MOVEM	%T3,.R.(DEPADR)	;And save deposit address, starting trace up.
+	AOS	.R.(PENMSG)	;Increment number of messages pending.
+	AOS	(%P)		;Bump return PC.
+	POPJ	%P,		;And return success.
+
+DESTROY:			;Entry to return freecore.
+	SETZM	.R.(DEPADR)	;Stop the trace.
+	SETZM	.R.(EXMADR)	;Wipe examine address.
+	SETZM	.R.(ORGADR)	;Clear start of freecore address
+	SETZM	.R.(TOPADR)	;Clear end of freecore address
+	POPJ	%P,		;And return
+
+;Routine to simulate an XBLT
+BLTR..:
+	SKIPN	.R.(CHKKLP)	;Extended monitor?
+	 JRST	.R.(BLTS..)	;No, go do hard way
+	EXTEND	%T1,.R.(.+2)	;do a real xblt
+	JRST	(%R)		;and return
+	XBLT			;extend opcode
+BLTS..:	EXCH	%T1,%T3		;Put length in a safe place
+	HRL	%T1,%T2		;Source of BLT data
+	ADDI	%T3,(%T1)	;point to first word after data
+	BLT	%T1,-1(%T3)	;Copy the data
+	HLRZ	%T2,%T1		;Point to first word we didn't copy
+	SETZ	%T1,		;and say zero words left to copy
+	JRST	(%R)
+	SUBTTL	General program variables
+	ADVANC	BPTN,BPTN	;Number of symbols to set SNUP up for.
+
+;^C intercept block
+CCBLOK:	XWD	4,CCEXIT	;Length,,where to go
+	ER.EIJ!ER.TLX!ER.QEX!ER.FUL!ER.OFL!ER.ICC!ER.IDV ;All errors trap
+	EXP	0		;Place for monitor to store PC.
+	EXP	0		;Place for monitor to store reason
+;Filop argument list to do dump mode O
+OUTFIL:	.FOOUT			;Argument block for FILOP
+
+;To expand POINTS macro into radix50 names.
+DEFINE	AT(NAME,STUFF),<
+	RADIX50 0,NAME
+>
+
+LOCS:	POINTS			;Define breakpoint symbols
+	ZZ=.			;Define other symbols we need
+	SYMDEF(SAVT)		;Coroutine to save t1-t4.
+	SYMDEF(WAKJOB)		;Routine to wake myself up.
+	SYMDEF(D36PIF)		;Routine to turn off interrupts
+	SYMDEF(D36PIN)		;Routine to turn interrupts back on
+	SYMDEF(%DLBSZ)		;Default largest buffer size in bytes
+	SYMDEF(%RTEHS)		;Ethernet header size in bytes
+	SYMDEF(SYSUPT)		;System uptime.
+	SYMDEF(DATE)		;Universal date/time kept by monitor
+	SYMDEF(CONFIG)		;Monitor name.
+CHKKLP:	AT	FTXMON
+CHKLEN:	AT	MB.LEN
+CHKDAT:	AT	UD.DAT
+CHKMSD:	AT	UD.MSD
+CHKALA:	AT	MD.ALA
+CHKALL:	AT	$MDALL
+CHKAT1:	AT	T1		;Make sure the acs are correct
+CHKAMB:	AT	MB		;Another AC
+	TOTADR=.-ZZ
+IFG <TOTADR-BPTN>,<PRINTX ?Quantity BPTN is set up incorrectly>
+
+$BLOCK	SNPARG,TOTBPT*2+2	;Argument block for snoop uuo
+$BLOCK	FOPBLK,.FOMAX
+$BLOCK	SCBLK,.FXLEN
+$BLOCK	LKBLK,.RBMAX
+$BLOCK	PTBLK,.PTMAX
+$BLOCK	BUFFER,BUFSIZ
+$BLOCK	OBUF,3			;Output buffer ring header
+
+$LVAR	LOKADR
+$LVAR	MYJOB
+
+;Words used to control buffer usage.
+$LVAR	ORGADR			;Contains address of start of buffer
+$LVAR	TOPADR			;Highest address in buffer.
+$LVAR	DEPADR			;Next address to deposit into (Changed by EXEC)
+$LVAR	EXMADR			;Next address to read from (Changed by USER)
+$LVAR	LSTMSG			;number of lost messages
+$LVAR	PENMSG			;Number of pending messages (Exec ups count
+				; when finished putting message, user
+				; decrements count when out to disk).
+$LVAR	RELOFF			;Used to convert monitor buffer addresses to
+				; user buffer addresses.
+$LOSEG
+	XLIST			;LIT
+	LIT
+	LIST
+
+	SUBTTL	Structure definitions
+	$HISEG
+
+;Note that these BEGSTRs are copied in DNTATL, the formatting program
+; for this trace.
+
+BEGSTR FH			;File Header
+	WORD	LNG		;Length of this header
+	FIELD	FLG,9		;Flags to indicate what kind of entry
+	FIELD	TYP,9		;Entry Type
+		XP TYP.FH,1	;  Entry type of header record
+	HWORD	MGL		;Length of a message block
+	WORD	UPT		;SYSUPT corresponding to UDT below
+	WORD	UDT		;Universal Date/Time corresp to SYSUPT
+	WORD	PVR		;Trace program version number (loc 137)
+	WORD	MVR		;Monitor Version (location 137)
+	WORD	CFG,5		;CONFIG string from this monitor
+ENDSTR
+
+BEGSTR MH			;Message Header
+	WORD	LNG		;Length of the entire entry
+	FIELD	FLG,6		;Flags to indicate what kind of entry
+	FIELD	IOL,3		;Input, output, or local
+		XP IOL.IN,1	;Input
+		XP IOL.OT,2	;Output
+		XP IOL.LO,3	;locals
+	FIELD	TYP,9		;Entry Type
+		XP TYP.MH,2	;  Entry type of message record
+	HWORD	LST		;Cumulative number of messages lost
+	WORD	UPT		;SYSUPT as of entry (reliable time stamp)
+	WORD	UDT		;Universal date/time (readable time stamp)
+	WORD	OMB		;Original MB pointer
+	WORD	ILN		;Input line ID (or zero if none)
+	WORD	OLN		;Output line ID (or zero if none)
+ENDSTR
+
+
+;To expand POINTS macro into pointers to values
+DEFINE	AT(NAME,STUFF),<IFIW STUFF> ;Define pointers
+
+VALS:	POINTS
+
+;Words which must have relocation added to them.
+ADDERS:
+ZZ=0
+REPEAT SYMCNT,<
+	ZZ=ZZ+1
+	XWD GENSYM(M,\ZZ),GENSYM(A,\ZZ)
+	DELSYM(M,\ZZ)
+	DELSYM(A,\ZZ)
+>
+	XWD 0,0			;End of list
+DEFINE .R.,<PRINTX ?Cannot define relocatables here.>
+DEFINE .M.,<PRINTX ?Cannot define monitor symbols here.>
+
+	SUBTTL	Startup code. Read filespec.
+DNSNUP:	$SETUP			;Initialize the world
+	MOVE	T1,[.STDEF,,[1,,.STDSB
+			4]]	;Set default large buffers to 4 blocks
+	SETUUO	T1,		;While this program runs.
+	 $WARN	CSL,<Can't set large buffers, code: >,.TOCTW##,T1
+GETFIL:	
+	MOVEI	T1,[ASCIZ \Trace file:\]
+	CALL	.TSTRG##	;Type the prompt
+	CALL	.FILIN##	;Get a filespec back
+	SKIPL	T1		;make sure we got a filespec
+	 $WARN	FSR,<File spec required>,,,GETFIL
+	MOVEI	T1,SCBLK	;address of my scan block
+	MOVEI	T2,.FXLEN	;length of my scan block
+	CALL	.GTSPC##	;get the specification
+
+;Default output extension to .MSG
+
+	MOVE	T1,.FXEXT+SCBLK	;Get extension user specified
+	TLNN	T1,-1		;Anything in the mask?
+	HRLOI	T1,'MSG'	;No, use default
+	MOVEM	T1,.FXEXT+SCBLK	;Restore defaulted extension
+
+	MOVE	T1,[.FXLEN,,SCBLK] ;args for .STOPB
+	MOVEI	T2,FOPBLK+1	;open block is hidden in the filop block
+	MOVE	T3,[.RBMAX,,LKBLK] ;lookup block
+	MOVEI	T4,PTBLK	;path block
+	CALL	.STOPB##	;create the lookup and open block stuff
+	 $ERROR	BFS,<Bad file spec>
+	MOVX	T1,FO.ASC!.FOWRT ;Assign me a channel, for writing
+	MOVX	T2,.IOIMG	;Image buffered mode.
+	DMOVEM	T1,FOPBLK+.FOFNC ;save as function for filop
+	MOVSI	T1,OBUF		;And define output buffer ring header
+	MOVSI	T2,1		;Set up 3 buffers
+	DMOVEM	T1,FOPBLK+.FOBRH ;Point to the ring headers
+	MOVEI	T1,LKBLK	;Pointer to the lookup block
+	MOVEM	T1,FOPBLK+.FOLEB
+;Now open our file
+	MOVE	T1,[.FOMAX,,FOPBLK]
+	FILOP.	T1,		;do the enter on the file
+	 $ERROR	FEF,<Filop enter failure, >,<flerr. t1,>,t1
+	HLL	T1,FOPBLK	;Get channel number
+	HLLM	T1,OUTFIL	;save in output block
+;Get our monitor symbols.
+	MOVE	T1,[TOTBPT+TOTADR,,LOCS] ;Pointer to our symbol names
+	CALL	GETADR##	;ask snup what the symbol values are
+;Initialize pointers and counters here **&&**
+	MOVE	T1,CHKLEN
+	CAXE	T1,MB.LEN
+	 JSP	T2,ERRMVS	;Skew, complain
+	MOVE	T1,CHKDAT
+	CAXE	T1,UD.DAT
+	 JSP	T2,ERRMVS	;Skew, complain
+	MOVE	T1,CHKMSD
+	CAXE	T1,UD.MSD
+	 JSP	T2,ERRMVS	;Skew, complain
+	MOVE	T1,CHKALA
+	CAXE	T1,MD.ALA
+	 JSP	T2,ERRMVS	;Skew, complain
+	MOVE	T1,CHKALL
+	CAXE	T1,MD.ALL
+	 JSP	T2,ERRMVS	;Skew, complain
+	MOVE	T1,CHKAT1
+	CAXE	T1,%T1		;Do we agree on AC definitions?
+	 JSP	T2,ERRMVS	;Skew, complain
+	MOVE	T1,CHKAMB	;Check other AC, message block pointer
+	CAXE	T1,%MB
+	 JSP	T2,ERRMVS	;Skew, complain
+	PJOB	T1,		;Find out what job I am
+	MOVEM	T1,MYJOB	;save it for later wakes.
+	MOVEI	T1,1		;An HPQ to put us into
+	HPQ	T1,		;WHAM!
+	 $WARN	HPQ,<HPQ set failed>
+	SUBTTL	Relocate and insert breakpoints
+;Following code must be nailed down.
+	MOVX	T1,5		;Lock us in EVM, don't bother with contiguous
+	LOCK	T1,		;Lock!
+	 $ERROR	CNL,<Could not lock, code >,.TOCTW##,T1
+	LSH	T1,^D9		;make it an address, rather than a page
+	HRRZM	T1,LOKADR	;save as displacement into the monitor
+;Now we are starting to be dangerous. Trap errors.
+	MOVEI	T1,CCBLOK	;Point to ^C intercept block
+	MOVEM	T1,.JBINT	;And set up trapping.
+;Relocate address
+	MOVEI	T4,ADDERS	;Pointer to list of addresses
+RELADR:	SKIPN	T1,(T4)		;Get a word
+	 JRST	SNPBPT		;do snoop breakpoints
+	MOVE	T2,(T1)		;Get relocation
+	MOVSS	T1		;pointer to word itself
+	ADDM	T2,(T1)		;add in the relocation
+	AOJA	T4,RELADR	;and go do another
+
+SNPBPT:	MOVEI	T4,TOTBPT	;number of addresses to transfer
+	MOVEI	T1,1+TOTBPT*2	;Size of argument block we are feeding it
+	MOVE	T2,CHKSUM	;Get the checksum that GETADR left us
+	DMOVEM	T1,SNPARG	;Save double word in argument list
+	MOVEI	T1,TOTBPT	;Number of breakpoints
+XFRBPT:	SOJL	T1,INSBPT	;After done copying points, insert them.
+	MOVE	T2,LOCS(T1)	;Get a breakpoint location
+	MOVE	T3,@VALS(T1)	;Get this breakpoint's value
+	ADD	T3,LOKADR	;relocate it.
+	MOVE	T4,T1		;Copy breakpoint number
+	ASH	T4,1		;multiply by 2..
+	DMOVEM	T2,SNPARG+2(T4)	;Store in breakpoints part of argument block
+	JRST	XFRBPT		;Transfer another breakpoint
+
+INSBPT:	MOVE	T1,[.SODBP,,SNPARG] ;Argument to define breakpoints
+	SNOOP.	T1,		;define them!
+	 $ERROR	BDF,<Breakpoint define failed! code >,.TOCTW##,T1
+	MOVSI	T1,.SOIBP	;Insert the breakpoints!
+	SNOOP.	T1,
+	 $ERROR	BIF,<Breakpoint insert failed!>
+	SUBTTL Setup buffer.
+;Now to set up the buffer
+	MOVE	T1,[.SONUL,,SNPARG] ;Execute null snoop function
+	SNOOP.	T1,		;To grab freecore.
+	 JSP	T1,QUIT		;Failed, get out of here quick.
+	SKIPE	T2,ORGADR	;Get address buffer starts at.
+	 SKIPN	T3,TOPADR	;Get address buffer ends in.
+	  JSP	T1,QUIT		;A bad address, quit.
+	MOVE	T1,ORGADR	;Get monitor address of buffer
+	SUBI	T1,BUFFER	;subtrace user address of buffer
+	MOVEM	T1,RELOFF	;Save as relocation offset
+	$INFORM	TIS,<Trace is starting at >,.TDATN##
+	SUBTTL	Main loop.
+LOOP:	INCHRS	T1		;Get a character if there is one
+	JRST	LOOP1		;nope, sleep for a while
+	CAIL	T1,140		;Are we in upper case range?
+	 SUBI	T1,40		;no, put us there.
+	CAIN	T1,"Q"		;Quit command?
+	  JRST	ABORT		;yes, exit!!!
+	CAIN	T1,"Z"-100	;^Z command?
+	  JRST	ABORT		;yes, exit!!!
+	CAIN	T1,"E"		;Exit command?
+	  JRST	ABORT		;yes, exit!!!
+	CAIN	T1,"D"		;is this a DDT command?
+	 JRST	GODDT		;do to DDT.
+	$WARN	UNC,<Unknown command >,.TCHAR##,T1
+	JRST	LOOP
+
+GODDT:	SKIPN	.JBBPT		;Make sure we have a breakpoint address first
+	 $WARN	NDL,<No ddt loaded, continuing...>,,,LOOP
+	JSR	@.JBBPT		;and go to DDT
+	JRST	LOOP
+
+LOOP1:	SKIPE	P2,PENMSG	;Any messages pending?
+	 JRST	REDMSG		;Yes, read them out of the buffer
+	MOVX	T1,<HB.RTL!HB.RTC!HB.RWJ!HB.RWP!HB.RWT>
+	HIBER	T1,		;Go to sleep for a minute
+	 $ERROR	HUF,<Hiber UUO failed, aborting>,,,ABORT
+	JRST	LOOP		;Got woken up for something
+
+CCEXIT:	$ERROR	FEJ,<Fatal error in job, exiting>,,,.+1
+ABORT:	CLOSE
+	EXIT			;Implicit reset removes breakpoints
+
+QUIT:	RESET			;First thing, clean up neat
+	$ERROR	FAE,<Fatal dangerous error at user PC >,.TXWDW##,T1,.+1
+	EXIT
+
+ERRMVS:	RESET			;First thing, clean up
+;	$ERROR	MVS,<DNSNUP version skew, rebuild with new universals>,,,.+1;Production message
+	$ERROR	MVS,<Not built for current monitor, reassemble, detected at PC >,.TXWDW##,T2,.+1;Handy for debugging DNSNUP
+	EXIT
+	SUBTTL	Buffered mode I/O routine.
+REDMSG:	SKPINC			;Command pending?
+	 SKIPA			;No, read messages
+	JRST	LOOP		;Yes, go process command
+	MOVE	P3,EXMADR	;Get address of next message
+	SUB	P3,RELOFF	;Relocate to user virtual address
+	SKIPL	T1,(P3)		;Get length of the entry
+	 JRST	OUTMSG		;Length is good, send it out
+	JUMPE	T1,[$ERROR ZER,<Zero word encountered in buffer>,,,ABORT]
+	MOVE	P3,ORGADR	;Get starting address of buffer
+	MOVEM	P3,EXMADR	;save as address for next buffer
+	SUB	P3,RELOFF	;Relocate to user virtual address
+	MOVE	T1,(P3)		;Length of message to copy
+OUTMSG:	MOVE	T2,P3		;Pointer to message
+OUTMS1:	SETZ	T4,		;Number of words left over for next pass
+	MOVE	T3,OBUF+2	;Get number of words left in buffer
+	SUB	T3,T1		;Get number of words left after us
+	JUMPGE	T3,OUTMS2	;If it fits, we are o.k.
+	MOVN	T4,T3		;Number of words left for next pass
+	SETZ	T3,		;Number of words left in current buffer
+	MOVE	T1,OBUF+2	;Number of words we can actually copy this time
+	JUMPE	T1,OUTMS4	;If we can't copy anything, just do an out.
+OUTMS2:	MOVEM	T3,OBUF+2	;set current number of words left
+	HRRZ	T3,OBUF+1	;get current pointer-1 to disk buffer
+	ADD	T1,T3		;make pointer to last word to copy
+	AOJ	T3,		;Point to first word to leave data in
+	HRL	T3,T2		;Point to first word to take data from
+	BLT	T3,(T1)		;Copy the data
+	HLRZ	T2,T3		;Get new source address
+	HRRM	T1,OBUF+1	;and save updated byte pointer
+	SKIPE	OBUF+2		;Are there any words left in the buffer?
+	 JRST	OUTMS3		;Yes, continue
+	JUMPE	T4,OUTMS3	;Return to caller
+OUTMS4:	MOVE	T1,[1,,OUTFIL]	;Args for filop
+	FILOP.	T1,		;Do an out UUO
+	 $ERROR	OUF,<OUT uuo failed, code: >,.TOCTW##,T1
+OUTMS3:	SKIPE	T1,T4		;Any words left to do?
+	JRST	OUTMS1		;and do the rest of this buffer
+	ADD	P3,(P3)		;Point to next message in sequence
+	ADD	P3,RELOFF	;Convert to exec vm address
+	MOVEM	P3,EXMADR	;Save as location for next message we look for
+	SOSG	PENMSG		;Decrement number of messages pending
+	 JRST	LOOP		;none pending, go to sleep
+	JRST	REDMSG		;Messages pending, go read them
+
+	XLIST
+	LIT
+	LIST
+
+	END	DNSNUP

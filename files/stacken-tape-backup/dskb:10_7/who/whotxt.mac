@@ -1,0 +1,597 @@
+	TITLE	WHOTXT -- FORMATTED TEXT OUTPUT ROUTINES
+
+	SEARCH	WHOMAC
+
+	$SETUP	(WHOTXT)
+
+SUBTTL	Error message handler -- .ERROR - Entry point
+
+
+.ERROR::MOVEM	T1,CRSHAC+T1		;SAVE T1
+	MOVE	T1,[T2,,CRSHAC+T2]	;SETUP FOR BLT
+	BLT	T1,CRSHAC+P1		;SAVE T2-P1
+	SETZM	ERBLK			;CLEAR BLOCK
+	MOVE	T1,[ERBLK,,ERBLK+1]	;SETUP FOR BLT
+	BLT	T1,ERBLK+$MXERR		;ZERO IT
+	MOVE	T1,@(P)			;GET CAIA TYPE,'PFX'
+	TLZ	T1,777000		;CLEAR JUNK
+	MOVEM	T1,ERBLK+.ERPFX		;STORE
+	AOS	(P)			;ADVANCE TO NEXT WORD
+	MOVE	T1,@(P)			;GET AOBJN WORD
+	MOVEI	T3,.ERTXT		;STORE HERE
+ELOOP:	MOVE	T2,(T1)			;GET WORD
+	MOVEM	T2,ERBLK(T3)		;SAVE
+	ADDI	T3,1			;ADVANCE
+	AOBJN	T1,ELOOP		;AND LOOP
+	AOS	(P)			;SETUP FOR RETURN
+	LDB	P1,[POINT 4,ERBLK+.ERPFX,12];GET ERROR CODE
+ERR.02:	HLRZ	T1,ERBLK+.ERTYP		;GET ADDR TO TYPEOUT
+	CAIN	T1,0			;SEE IF ZERO
+	  MOVE	T1,DFADDR(P1)		;YES--GET DEFAULT
+	PUSHJ	P,.TYOCH##		;TELL SCAN
+	PUSH	P,T1			;AND SAVE OLD ONE
+	HLRZ	T1,ERBLK+.ERSER		;GET SEVERITY
+	HRRZ	T2,-1(P)		;GET CALLING ADDR
+	SUBI	T2,3			;CORRECT FOR ABOVE AOS'S
+	MOVE	T3,P1			;GET TYPE
+	HRRZ	T4,ERBLK+.ERSER		;GET SEVERITY ROUTINE
+	CAIN	T4,0			;SEE IF ANY
+	  MOVE	T4,DFSEVE(P1)		;NO--USE DEFAULT
+	JUMPE	T4,ERR.0X		;JUMP IF NO ADDRESS
+	PUSHJ	P,(T4)			;CALL ROUTINE TO CHECK
+	  JRST	ERR.03			;CALLER WANTS NO MESSAGE
+ERR.0X:	HRRZ	T1,ERBLK+.ERPFX		;GET SIXBIT PREFIX
+	HRL	T1,ERPFX		;INCLUDE MODULE CODE
+	HRLZ	T2,DFCHAR(P1)		;LOAD INITIAL MSG CHAR
+	HRR	T2,ERBLK+.ERTXT		;GET TEXT ADDR
+	PUSHJ	P,.ERMSG##		;TYPE ERROR MESSAGE
+	HLRZ	T2,ERBLK+.ERTXT		;GET CONTINUATION ADDR
+	JUMPE	T2,ERR.01		;SKIP IF NONE
+	TRNN	T1,JWW.FL		;SEE IF /MESSAGE:FIRST
+	  JRST	ERR.01			;YES--DONT CALL ROUTINE
+	MOVEM	T2,CONADR		;SAVE ADDR TO CALL
+	MOVE	P1,[CRSHAC+T1,,T1]	;RESTORE ALL ACS
+	BLT	P1,P1			;..
+	PUSHJ	P,@CONADR		;CALL ROUTINE TO CONTINUE
+	LDB	P1,[POINT 4,ERBLK+.ERPFX,12];GET ERROR CODE BACK
+ERR.01:	CAIN	P1,.ERINF		;SEE IF INFORMATIONAL
+	  PUSHJ	P,.TRBRK##		;YES--CLOSE BRACKER
+	CAIE	P1,.ERFAT		;SEE IF FATAL
+	  PUSHJ	P,.TCRLF##		;YES--EXTRA LINE FOR SPACING
+ERR.03:	HRRZ	T1,ERBLK+.ERTYP		;GET FINAL DISPATCH ADDR
+	CAIN	T1,0			;SEE IF ZERO
+	  MOVE	T1,DFDISP(P1)		;YES--GET DEFAULT
+	CAIN	P1,.ERHLT		;PROCESSING A HALT?
+	  AOS	T1,-1(P)		;YES--BE SURE WE GET IT
+	CAIE	T1,0			;ANY ADDRESS?
+	  HRRM	T1,-1(P)		;YES--STORE NEW ONE
+	CAIN	P1,.ERSTP		;STOP ERROR?
+	 JRST	ERR.04			;YES--SPECIAL HANDLING
+	POP	P,T1			;GET OLD TYPEOUT ADDR
+	PUSHJ	P,.TYOCH##		;TELL SCAN
+	MOVE	P1,[CRSHAC+T1,,T1]	;RESTORE ALL ACS
+	BLT	P1,P1			;..
+	POPJ	P,			;AND RETURN
+
+ERR.04:	MOVEI	T1,[ASCIZ/[This error is not expected to occur. Please contact a systems programmer]
+/]
+	PUSHJ	P,.TSTRG##		;TYPE THE EXTRA STUFF
+	POP	P,T1			;GET OLD TYPEOUT ADDR
+	PUSHJ	P,.TYOCH##		;TELL SCAN
+	MOVEI	T1,CRSHAC		;POINT TO AC BLOCK
+	MOVEM	T1,135			;IN CASE NO SYMBOLS
+	HRROI	T1,.GTPRG		;GET PROGRAM NAME
+	GETTAB	T1,			;...
+	 MOVEI	T1,0			;OH WELL
+	SETNAM	T1,			;CLEAR JACCT, XONLY, ETC
+	MOVE	P1,[CRSHAC+T1,,T1]	;RESTORE ALL ACS
+	BLT	P1,P1			;..
+	MOVEM	0,CRSHAC+0		;SAVE 0
+	MOVE	0,[1,,CRSHAC+1]		;BLT THEM INTO MEMORY TOO
+	BLT	0,CRSHAC+17		;AS SAVE COMMAND ZAPS REAL ONES
+	EXIT	1,			;EXIT QUICKLY
+	JRST	.-1			;SORRY
+SUBTTL	Error message handler -- .ERXTY - Set error type
+
+
+;SUBROUTINE .ERXTY - SET ERROR TYPE FOR $ERROR MACRO
+;CALL:
+;	MOVEI	T1,TYPE			;GET DEFAULT ERROR TYPE
+;	PUSHJ	P,.ERXTY		;SET NEW TYPE
+;	<RETURN>			;WITH T1 = OLD TYPE
+
+.ERXTY::EXCH	T1,ERTYP		;EXCHANGE WITH LAST TYPE
+	POPJ	P,			;AND RETURN
+SUBTTL	Error message handler -- .ERXPF - Set prefix
+
+
+;SUBROUTINE .ERXPF -  SET 3 CHAR MODULE CODE PREFIX
+;CALL:
+;	MOVEI	T1,'MCD'		;LOAD MODULE CODE
+;	PUSHJ	P,.ERXPF		;SET NEW PREFIX
+;	<RETURN>			;WITH T1 = OLD PREFIX
+
+.ERXPF::EXCH	T1,ERPFX		;EXCHANGE WITH LAST PREFIX
+	POPJ	P,			;AND RETURN
+SUBTTL	Error message handler -- .ERX?? - Set default dispatch addresses
+
+
+;SUBROUTINE .ERX?? - SET DEFAULT DISPATCH ADDRESSES FOR ERROR ROUTINES
+;CALL:
+;	MOVEI	T1,ADDR			;LOAD NEW DEFAULT ADDR
+;	TLO	T1,BITS			;SET ERROR TYPES FOR THIS ADDR
+;	PUSHJ	P,.ERX??		;SET NEW DISPATCH ADDR
+;
+;BITS MAY BE ANY COMBINATION OF ER.HLT, ER.OPR, ER.INF, ER.WRN, ER.FAT
+;OR IF NONE, DEFAULTS TO ALL
+;THIS ROUTINE SETS THE DEFAULT ADDRESSES TO TYPEOUT ERROR MESSAGES
+;(.ERXAD), FOR FINAL ERROR DISPATCH (.ERXDI), AND FOR TESTING SEVERITY
+;LEVELS (.ERXSE)
+
+.ERXAD::MOVEI	T3,DFADDR		;LOAD DFADDR
+	JRST	XSET			;AND PROCESS
+.ERXDI::SKIPA	T3,[DFDISP]		;LOAD DFDISP
+.ERXSE::MOVEI	T3,DFSEVER		;LOAD DFSEVER
+XSET:	TLNN	T1,-1			;LH ZERO?
+	  TLO	T1,(ER.ALL)		;YES--SET ALL BITS
+	MOVSI	T2,(1B0)		;GET BIT ZERO
+	HRLI	T3,-$MXTYP		;GET AOBJN WORD
+ERXAD:	TDNE	T1,T2			;BIT SET?
+	  HRRZM	T1,(T3)			;YES--STORE NEW ADDR
+	LSH	T2,-1			;SHIFT TO NEXT BIT
+	AOBJN	T3,ERXAD		;LOOP FOR ALL
+	POPJ	P,			;AND RETURN
+
+DFCHAR:	"?"
+	"["
+	"$"
+	"%"
+	"?"
+	"?"
+
+	$LOW
+
+ERTYP:	BLOCK	1			;CURRENT ERROR TYPE FOR $ERROR
+ERPFX:	BLOCK	1			;3 CHAR PREFIX
+
+CONADR:	BLOCK	1			;CONTINUATION ADDR
+CRSHAC:	BLOCK	20			;SAVED AC BLOCK
+
+DFADDR:	BLOCK	$MXTYP			;TYPEOUT
+DFDISP:	BLOCK	$MXTYP			;FINAL DISPATCH
+DFSEVE:	BLOCK	$MXTYP			;SEVERITY LEVEL PROCESSING
+
+ERBLK:	BLOCK	$MXERR+1		;TEMP STORAGE OF ERROR BLOCK
+
+	$HIGH
+SUBTTL	Type out routines -- .TDOW/.TDOWN - Day of week
+
+
+.TDOWN::PUSHJ	P,.GTNOW##		;GET TODAYS DATE
+.TDOW::	HLRZS	T1			;GET DAY
+	IDIVI	T1,7			;GET WEEKDAY
+	MOVE	T1,.DOW(T2)		;GET WEEKDAY
+	PJRST	.TSTRG##		;TYPE AND RETURN
+
+.DOW:	[ASCIZ/Wednesday/]
+	[ASCIZ/Thursday/]
+	[ASCIZ/Friday/]
+	[ASCIZ/Saturday/]
+	[ASCIZ/Sunday/]
+	[ASCIZ/Monday/]
+	[ASCIZ/Tuesday/]
+SUBTTL	Type out routines -- .TEFIL - FILOP. UUO errors
+
+
+; Translate FILOP. UUO error codes to text
+; Call:	MOVE	T1, error code
+;	PUSHJ	P,.TENOD
+
+.TEFIL::MOVE	T2,[-FILELN,,FILERR]	;POINT TO TRANSLATION TABLE
+	PJRST	.TEMAP			;CONVERT TO TEXT AND RETURN
+
+FILERR:	ERFNF%,,[ASCIZ/Non-existent file/]
+	ERIPP%,,[ASCIZ/Non-existent UFD/]
+	ERPRT%,,[ASCIZ/Protection failure/]
+	ERFBM%,,[ASCIZ/File being modified/]
+	ERAEF%,,[ASCIZ/Already existing file/]
+	ERISU%,,[ASCIZ/Illegal sequence of monitor calls/]
+	ERTRN%,,[ASCIZ/Rib or directory read error/]
+	ERNSF%,,[ASCIZ/Not a saved file/]
+	ERNEC%,,[ASCIZ/Not enough core/]
+	ERDNA%,,[ASCIZ/Device not availible/]
+	ERNSD%,,[ASCIZ/No such device/]
+	ERILU%,,[ASCIZ/No two register relocation capability/]
+	ERNRM%,,[ASCIZ/No room or quota exceeded/]
+	ERWLK%,,[ASCIZ/Write-lock error/]
+	ERNET%,,[ASCIZ/Not enough free core/]
+	ERPOA%,,[ASCIZ/Partial allocation only/]
+	ERBNF%,,[ASCIZ/Block not free on allocated position/]
+	ERCSD%,,[ASCIZ/Can't supersede existing directory/]
+	ERDNE%,,[ASCIZ/Can't delete non-empty directory/]
+	ERSNF%,,[ASCIZ/Non-existent SFD/]
+	ERSLE%,,[ASCIZ/Search list empty/]
+	ERLVL%,,[ASCIZ/SFD nested too deep/]
+	ERNCE%,,[ASCIZ/No create/]
+	ERSNS%,,[ASCIZ/Segment not on the swapping space/]
+	ERFCU%,,[ASCIZ/Can't update file/]
+	ERLOH%,,[ASCIZ/Low segment overlaps high segment/]
+	ERNLI%,,[ASCIZ/Not logged in/]
+	ERENQ%,,[ASCIZ/Outstanding locks set/]
+	ERBED%,,[ASCIZ/Bad EXE file directory/]
+	ERBEE%,,[ASCIZ/Bad EXE extension/]
+	ERDTB%,,[ASCIZ/EXE directory too big/]
+	ERENC%,,[ASCIZ/Network capacity exceeded/]
+	ERTNA%,,[ASCIZ/Task not available/]
+	ERUNN%,,[ASCIZ/Unknown network node/]
+	ERSIU%,,[ASCIZ/SFD in use by another job/]
+	ERNDR%,,[ASCIZ/NDR lock on/]
+	ERJCH%,,[ASCIZ/Too many readers/]
+	ERSSL%,,[ASCIZ/Cant rename SFD to lower level/]
+	ERCNO%,,[ASCIZ/Channel not open/]
+	ERDDU%,,[ASCIZ/Device detached/]
+	ERDRS%,,[ASCIZ/Device is restricted/]
+	ERDCM%,,[ASCIZ/Device is controlled by MDA/]
+	ERDAJ%,,[ASCIZ/Device in use by another job/]
+	ERIDM%,,[ASCIZ/Illegal data mode/]
+	ERUOB%,,[ASCIZ/Undefined OPEN bits set/]
+	ERDUM%,,[ASCIZ/Device in use on MPX channel/]
+	ERNPC%,,[ASCIZ/No core for extended channel table/]
+	ERNFC%,,[ASCIZ/No free channels available/]
+	ERUFF%,,[ASCIZ/Unknown FILOP function/]
+	ERCTB%,,[ASCIZ/Channel number too big/]
+	ERCIF%,,[ASCIZ/Channel illegal for operation/]
+FILELN==.-FILERR
+SUBTTL	Type out routines -- JOBPEK UUO errors
+
+
+; Translate JOBPEK UUO error codes to text
+; Call:	MOVE	T1, error code
+;	PUSHJ	P,.TENOD
+
+.TEJPK::MOVE	T2,[-JPKLEN,,JPKERR]	;POINT TO TRANSLATION TABLE
+	PJRST	.TEMAP			;CONVERT TO TEXT AND RETURN
+
+JPKERR:	JKNPV%,,[ASCIZ "Job not privileged"]
+	JKIJN%,,[ASCIZ "Illegal job number"]
+	JKSWP%,,[ASCIZ "Job swapped out or in transit"]
+	JKIAD%,,[ASCIZ "Illegal address"]
+	JKDNA%,,[ASCIZ "Data not addressable"]
+	JKPNC%,,[ASCIZ "Page not in core"]
+JPKLEN==.-JPKERR
+SUBTTL	Type out routines -- .TEMAP - Map a UUO error code
+
+
+;Call:
+;	MOVEI	T1,error-code
+;	MOVE	T2,[-LEN,,TAB]		;Pointer to error code tables
+;	PUSHJ	P,E$MAP##
+;	 <error>			;T1/ [ASCIZ/Unknown error code/]
+;	<normal>			;T1/ [ASCIZ/text of error/]
+
+.TEMAP::HLRE	T3,(T2)			;Get error code from table
+	CAME	T3,T1			;Match?
+	 AOBJN	T2,.TEMAP		;No--Loop for all
+	JUMPL	T2,MAP.1		;Jump if match found
+	MOVEI	T1,[ASCIZ/Unknown error code/];No--unknown message
+	POPJ	P,			;Error return
+
+MAP.1:	HRRZ	T1,(T2)			;Get address of string
+	JRST	.POPJ1##		;Normal return
+SUBTTL	Type out routines -- .TENOD - NODE. UUO errors
+
+
+; Translate NODE. UUO error codes to text
+; Call:	MOVE	T1, error code
+;	PUSHJ	P,.TENOD
+
+.TENOD::MOVE	T2,[-NODERR,,NODELN]	;POINT TO TRANSLATION TABLE
+	PJRST	.TEMAP			;CONVERT TO TEXT AND RETURN
+
+NODERR:	NDIAL%,,[ASCIZ "Illegal argument list"]
+	NDINN%,,[ASCIZ "Illegal node name/number"]
+	NDPRV%,,[ASCIZ "Caller not privileged"]
+	NDNNA%,,[ASCIZ "Node not available"]
+	NDNLC%,,[ASCIZ "Job not locked in core"]
+	NDTOE%,,[ASCIZ "Time out error"]
+	NDRNZ%,,[ASCIZ "Reserved word non-zero"]
+	NDNND%,,[ASCIZ "I/O channel not open to or not network device"]
+	NDIOE%,,[ASCIZ "I/O error occurred"]
+	NDNFC%,,[ASCIZ "No free core"]
+	NDIAJ%,,[ASCIZ "In use by another job"]
+	NDNMA%,,[ASCIZ "No message available"]
+	NDTNA%,,[ASCIZ "Terminal not available"]
+	NDNLT%,,[ASCIZ "Not a legal terminal"]
+	NDISF%,,[ASCIZ "Illegal sub function"]
+	NDRBS%,,[ASCIZ "Receive buffer too small"]
+	NDNUG%,,[ASCIZ "No ungreeted nodes"]
+NODELN==.-NODERR
+SUBTTL	Type out routines -- .TEPAG - PAGE. UUO error
+
+
+; Translate PAGE. UUO error codes to text
+; Call:	MOVE	T1, error code
+;	PUSHJ	P,.TEPAG
+
+.TEPAG::MOVE	T2,[-PAGELN,,PAGERR]
+	PJRST	.TEMAP
+
+PAGERR:	PAGUF%,,[ASCIZ "Unimplemented function"]
+	PAGIA%,,[ASCIZ "Illegal argument"]
+	PAGIP%,,[ASCIZ "Illegal page number"]
+	PAGCE%,,[ASCIZ "Page can't exist but does"]
+	PAGME%,,[ASCIZ "Page must exist but doesn't"]
+	PAGMI%,,[ASCIZ "Page must be in core but isn't"]
+	PAGCI%,,[ASCIZ "Page can't be in core but is"]
+	PAGSH%,,[ASCIZ "Page is in a sharable hi-seg"]
+	PAGIO%,,[ASCIZ "Paging I/O error"]
+	PAGNS%,,[ASCIZ "No swapping space available"]
+	PAGLE%,,[ASCIZ "Core limit exceeded"]
+	PAGIL%,,[ASCIZ "Illegal if locked"]
+	PAGNX%,,[ASCIZ "Can not create page with virtual limit equal to zero"]
+	PAGNP%,,[ASCIZ "Not privileged"]
+PAGELN==.-PAGERR
+SUBTTL	Type out routines -- .TERRC - Prefix for LOOKUP/ENTER/RENAME/FILOP.
+
+
+;Call:
+;	MOVEI	T1,error code
+;	PUSHJ	P,.TERRC
+;Uses T1-2
+
+.TERRC::PUSHJ	P,.TEFIL		;Map the error code
+	 JFCL				;Not found (use unknown message)
+	PJRST	.TSTRG##		;Type and return
+SUBTTL	Type out routines -- .TERRF - FILOP. UUO error and filespec
+
+
+;Call:
+;	MOVEI	T1,addr of FILOP. block
+;	PUSHJ	P,.TERRF
+;Uses T1-4
+
+.TERRF::PUSHJ	P,.SAVE1##		;Save P1
+	MOVE	P1,T1			;Remember ADDR of FILOP. block
+	MOVE	T4,.FOLEB(P1)		;Get ADDR of LOOKUP/ENTER block
+	HRRZ	T1,.RBEXT(T4)		;Get error code from extension
+	PUSHJ	P,.TERRC		;Type in english
+	PUSHJ	P,.TSPAC##		;Space
+	HRRZ	T1,.RBEXT(T4)		;Get error code
+	PUSHJ	P,.TOCTP		;Type in octal in ()
+	PUSHJ	P,.TSPAC##		;Space again
+	HRRZ	T1,.FOFNC(P1)		;Get FILOP. function
+	CAILE	T1,LN$FNC		;See if in known range
+	 SETO	T1,			;No--Use general text
+	MOVE	T1,FILFNC(T1)		;Get corrosponding text
+	PUSHJ	P,.TSTRG##		;Type it
+	PUSHJ	P,.TSPAC##		;Space
+	MOVEI	T1,(P1)			;Point to FILOP. block
+	PJRST	.TFLPB			;Type file pec and return
+
+;Table of ASCIZ text corrosponding to FILOP. function codes
+;Must be in same order as FILOP. functions defined in UUOSYM
+
+	[ASCIZ/file/]
+FILFNC:	[ASCIZ/???/]
+	[ASCIZ/Reading/]
+	[ASCIZ/Creating/]
+	[ASCIZ/Writing/]
+	[ASCIZ/Updating/]
+	[ASCIZ/Updating/]
+	[ASCIZ/Appending to/]
+	[ASCIZ/Closing/]
+	[ASCIZ/Checkpointing/]
+	0				;USETI
+	0				;USETO
+	[ASCIZ/Renaming/]
+	[ASCIZ/Deleting/]
+	[ASCIZ/Preallocating/]
+	LN$FNC==.-FILFNC
+SUBTTL	Type out routines -- .TFLPB - FILOP. or OPEN/LOOKUP.ENTER/RENAME block
+
+
+;Call:
+;	MOVEI	T1,addr of FILOP. block
+; or
+;	MOVE	T1,[OPEN block,,LOOKUP/ENTER/RENAME block]
+;	PUSHJ	P,.TFLPB
+
+.TFLPB::TLNN	T1,-1			;FILOP. block?
+	 JRST	TERR1			;Yes--Get block
+	HRRZ	T2,T1			;No--Point to LOOKUP/ENTER block
+	HLRZS	T1			;Point to OPEN block
+	PJRST	.TOLEB##		;Type file spec and return
+TERR1:	MOVE	T2,.FOLEB(T1)		;Get LOOKUP block addr
+	MOVEI	T1,.FODEV-1(T1)		;Get OPEN block addr
+	PJRST	.TOLEB##		;Type and return
+SUBTTL	Type out routines -- .TIOER - I/O error message and status
+
+
+;Call:
+;	MOVEI	T1,GETSTS bits
+;	PUSHJ	P,.TIOER
+;Uses T1-T4
+
+.TIOER::MOVEI	T2,(T1)			;Save GETSTS word
+	MOVEI	T1,[ASCIZ"I/O error "]	;Load general message
+	TXNE	T2,IO.IMP		;See if IO.IMP
+	 MOVEI	T1,[ASCIZ/Improper mode /];Yes--Load that text
+	TXNE	T2,IO.DER		;See if IO.DER
+	 MOVEI	T1,[ASCIZ/Hardware device error /];Yes--Load that text
+	TXNE	T2,IO.DTE		;See if IO.DTE
+	 MOVEI	T1,[ASCIZ/Parity error /];Yes--Load that text
+	TXNE	T2,IO.BKT		;See if IO.BKT
+	 MOVEI	T1,[ASCIZ/Block too large or quota exceeded /];Yes--Load that text
+	PUSHJ	P,.TSTRG##		;Issue explaination of error
+	MOVEI	T1,(T2)			;Get GETSTS word
+	PJRST	.TOCTP			;Type in parathesis and return
+SUBTTL	Type out routines -- .TOERR - INPUT/OUTPUT/CLOSE error
+
+
+;Call:
+;	MOVEI	T1,addr of FILOP. block
+; or
+;	MOVE	T1,[OPEN block addr,,LOOKUP block addr]
+;	MOVEI	T2,GETSTS result
+;	PUSHJ	P,.TIERR/.TOERR/.TCERR
+;Uses T1-T4
+
+.TOERR::MOVEI	T3,2			;Flag OUTPUT error
+	JRST	TERR			;And process
+.TIERR::TDZA	T3,T3			;Flag INPUT error
+.TCERR::MOVEI	T3,1			;Flag CLOSE error
+TERR:	PUSH	P,T1			;Save ADDR of FILOP. block
+	PUSH	P,T3			;Save error type
+	MOVE	T1,T2			;Get GETSTS word
+	PUSHJ	P,.TIOER		;Issue message
+	POP	P,T2			;Get error type
+	MOVE	T1,[ [ASCIZ/ reading /]
+		     [ASCIZ/ closing /]
+		     [ASCIZ/ writing /] ](T2);Load corrosponding function
+	PUSHJ	P,.TSTRG##		;Type it
+	POP	P,T1			;Get pointer to FILOP. block
+	PJRST	.TFLPB			;Type block and return
+SUBTTL	Type out routines -- .TPRLA/.TPLRS - Pluralize strings
+
+
+;.TPLRS/.TPLRA -- Type string with optional s(.TPLRS) OR 's(.TPLRA)
+;CALL:
+;	MOVE	T1,NUMBER
+;	MOVEI	T2,[ASCIZ/STRING/]
+;	PUSHJ	P,.TPLRS/.TPLRA
+
+	ENTRY	.TPLRA,.TPLRS
+.TPLRA::SKIPA	T3,[[ASCIZ/'s/]]
+.TPLRS::MOVEI	T3,[ASCIZ/s/]
+	PUSH	P,T1
+	PUSH	P,T3
+	PUSH	P,T2
+	PUSHJ	P,.TDECW##
+	PUSHJ	P,.TSPAC##
+	POP	P,T1
+	PUSHJ	P,.TSTRG##
+	POP	P,T1
+	POP	P,T2
+	CAIE	T2,1
+	  PJRST	.TSTRG##
+	POPJ	P,
+SUBTTL	Type out routines -- .TSTRM - Type an ASCIZ string from ADDR+1
+
+
+;Call:
+;	PUSHJ	P,.TSTRM##
+;	ASCIZ/string/
+;Uses T1
+
+.TSTRM::HRLI	T1,(POINT 7,)		;FORM ASCII BYTE POINTER
+	HLLM	T1,(P)			;INCLUDE WITH ADDR OF STRING
+TSTR.1:	ILDB	T1,(P)			;GET A CHAR
+	JUMPE	T1,.POPJ1##		;RETURN IF NULL
+	PUSHJ	P,.TCHAR##		;WRITE IT
+	JRST	TSTR.1			;AND LOOP
+SUBTTL	Type out routines -- .TTIMS - Time in seconds as HH:MM:SS
+
+
+;.TTIMS -- type time in standard format of hh:mm:ss
+;CALL:
+;	MOVEI	T1,TIME IS SEC SINCE MIDNIGHT
+;	PUSHJ	P,.TTIMS/.TTIMN
+;	<return>
+;Uses T1-4
+
+.TTIMS::IDIVI	T1,^D3600	;Get hours
+	MOVE	T4,T2		;Save rest
+	MOVEI	T2," "		;Fill with space
+	PUSHJ	P,.TDEC2##	;Type two digits
+	PUSHJ	P,.TCOLN##	;Type colon
+	MOVE	T1,T4		;Restore rest
+	IDIVI	T1,^D60		;Get mins
+	MOVE	T4,T2		;Save rest
+	PUSHJ	P,TDEC2Z	;Type two digits with 0 filler
+	PUSHJ	P,.TCOLN##	;Type colon
+	MOVE	T1,T4		;Restore the rest
+TDEC2Z:	MOVEI	T2,"0"		;Fill with 0
+	PJRST	.TDEC2##	;Type and return
+SUBTTL	Type out routines -- .TTME/.TTMN -  Time as HH:MM
+
+
+;.TTME -- type time (in T1 minutes since midnite) as hh:mm
+;.TTMN -- type todays time as hh:mm
+;CALL:
+;	MOVE	T1,TIME (MINUTES SINCE MIDNITE)
+;	PUSHJ	P,.TTME
+;	<return>
+;Uses T1-3
+
+.TTMN::	MSTIME	T1,			;Get current time
+	IDIVI	T1,^D60000		;In minutes
+.TTME::	IDIVI	T1,^D60			;Get hours
+	PUSH	P,T2			;Save minutes
+	MOVEI	T2," "			;Fill w/ space
+	PUSHJ	P,.TDEC2##		;Type 2 digits
+	PUSHJ	P,.TCOLN##		;Seperate w/ colon
+	POP	P,T1			;Get minutes back
+	MOVEI	T2,"0"			;Fill w/ zero
+	PJRST	.TDEC2##		;Type 2 digits and return
+SUBTTL	Type out routines -- .TUFTM -- Time in universal format
+
+
+.TUFTM::MUL	T1,[^D24*^D60*^D60]	;CONVERT TO SECONDS
+	ASHC	T1,^D17			;POSITION
+	PJRST	.TTIMS			;TYPE AND RETURN
+SUBTTL	Type out routines -- .TWDTM - Weekday,date/time
+
+
+.TWDTM::PUSH	P,T1			;SAVE T1
+	HLRZS	T1			;GET DAYS
+	IDIVI	T1,7			;GET WEEKDAY
+	MOVEI	T1,[ASCIZ/Wed/
+		    ASCIZ/Thu/
+		    ASCIZ/Fri/
+		    ASCIZ/Sat/
+		    ASCIZ/Sun/
+		    ASCIZ/Mon/
+		    ASCIZ/Tue/](T2)	;TYPE
+	PUSHJ	P,.TSTRG##		;..
+	PUSHJ	P,.TSPAC##		;SPACE OVER
+	POP	P,T1			;RESTORE DATE
+	PJRST	.TDTTM##		;TYPE DATE:TIME AND RETURN
+SUBTTL	Type out routines -- .TxxxP - Word inside paranthesis
+
+
+;CALL:
+;	MOVE	T1,WORD
+;	PUSHJ	P,.TSIXP/.TDECP/.TOCTP/.TXXXP
+;	<return>
+;Uses T1-4
+
+.TSIXP::MOVEI	T2,.TSIXN##		;Load SIXBIT typeout routine
+	JRST	.TXXXP			;And start
+.TDECP::SKIPA	T2,[.TDECW##]		;Load decimal typeout routine
+.TOCTP::MOVEI	T2,.TOCTW##		;Load octal typeout routine
+.TXXXP::PUSH	P,T1			;Save word
+	PUSHJ	P,.TLPRN		;Type "("
+	POP	P,T1			;Get word back
+	PUSHJ	P,(T2)			;Call routine
+	PJRST	.TRPRN			;Type ")" and return
+SUBTTL	Special character typeout
+
+
+.TDOT::	MOVEI	T1,"."
+	PJRST	.TCHAR##
+
+.TLPRN::MOVEI	T1,"("
+	PJRST	.TCHAR##
+
+.TRPRN::MOVEI	T1,")"
+	PJRST	.TCHAR##
+
+.TLBRK::MOVEI	T1,"["
+	PJRST	.TCHAR##
+
+;.TRBRK::MOVEI	T1,"]"
+;	PJRST	.TCHAR##
+SUBTTL	End
+
+
+	END

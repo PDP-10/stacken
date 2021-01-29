@@ -1,0 +1,1313 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  MACDLX ASSEMBLER REFERENCE MANUAL
+
+                              V31(1065)
+
+
+
+
+                         
+    INTRODUCTION
+    ------------
+
+
+MACDLX is a two-pass assembler which operates on the  DECsystem-10  or
+DECsystem-20  and  assembles MACRO-11 source code for use on a PDP-11.
+With the exception of the variations listed in this manual, MACDLX  is
+compatible  with  the  MACRO-11  assembly language as described in the
+PDP-11 MACRO-11 Assembly Language Reference Manual (DEC-11-OIMRA).
+
+
+
+THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY ONLY BE USED 
+OR COPIED IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE.
+
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1976,1977,1978,1984,1986.
+ALL RIGHTS RESERVED.
+		    
+
+MACDLX ASSEMBLER REFERENCE MANUAL                               PAGE 2
+V31(1065)
+
+
+1.0  OPERATING PROCEDURES
+
+While MACDLX is designed to be language compatible with  the  MACRO-11
+language, its operating environment necessitates a different style op-
+erating procedure.
+
+The assembler makes two passes over the source, outputting the  binary
+and  listing  files  during  pass  two and appending a symbol or cross
+reference/symbol table to the listing file.  Memory is dynamically al-
+located for large symbol table and macro storage.
+
+
+1.1  Loading MACDLX
+
+MACDLX is available as a CUSP and is called by typing a command to the
+monitor as follows:
+
+          .R MACDLX
+
+
+1.2  Initial Dialogue
+
+When the assembler is ready to accept the user's  command  string,  it
+will  prompt  with  "*".  The user must now type his command string on
+the same line.  MACDLX will ignore any spaces or tabs that are typed.
+
+The general form of the command string is:
+
+     Binary outut, listing output = source input(s)
+
+Each input/output specification consists of the group:
+
+     DEV:FILNAM.EXT[PROJ,PROG]/SWITCH:ARG
+or
+     DEV:[PROJ,PROG]FILNAM.EXT/SWITCH:ARG
+
+     1.  DEV is any device that is capable of handling  the  input  or
+         output  data  file(s)  correctly.  The device defaults are as
+         follows:
+
+         Binary File:            System disk
+         Listing File:           Device used for binary file
+
+         Source File 1:          System disk
+         Source File 2 to n:     Device used for source file 1 or
+                                 last source file
+         User Macro Libraries:   System disk if macro library file
+                                 is specified first, else device used
+                                 by last source file
+         System Macro Library:   System disk
+         .REQ/.INSERT File:      System disk
+         .LIBRARY File:          System disk
+         Indirect File:          System disk
+
+     2.  FILNAM is the file name of the appropriate file.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                               PAGE 3
+V31(1065)
+
+
+     3.  EXT is the file name extension for that file.
+
+         If not specified, the defaults are:
+ 
+        Binary File:       .BIN
+        Listing File:      .LST
+        Source Files:      Last source extension, .P11, .PAL, <null>,
+  		           .MAC, .M11
+        Library Files:     .MLB, .SML, same as source files
+
+      .REQ/.INSERT File: .REQ, .INS
+        .LIBRARY File:     .MLB
+        Indirect File:     .CMD, .CCL
+
+     4.  [PROJ, PROG] is the project-programmer  number  assigned  for
+         the disk area to be used.  If not specified, the user's local
+         area is assumed.  Once specified, the number pair becomes the
+         new  default  assumption  for  the  following input or output
+         files.
+
+     5.  Switches are specified by preceding each with a  slash  char-
+         acter.  Switch arguments are preceded by colons.  See Section
+         2.0.
+
+
+
+1.3  Command String Examples
+
+          OBJECT,LIST = SOURCE
+
+Assemble from the user disk area.  Binary to disk as  file  OBJECT.BIN
+and listing to disk as file LIST.LST.
+
+          BETA.BIN, BETA.LST/CRF/N = BETA.PAL
+
+Assemble file BETA.PAL from the disk.  Binary to disk  file  BETA.OBJ.
+Listing,  with  cross reference table appended, to disk file BETA.LST.
+
+Suppress error messages to the console.
+
+          BETA, BETA/CRF/N = BETA
+
+
+Same results as above.
+
+          FOO, FOO/DOC/CPU:45 = FOOBAR/ML, FOO
+
+Assemble file FOO (or FOO.PAL, FOO.MAC, etc)  using  file  FOOBAR  (or
+FOOBAR.MLB)  as  a  macro  library file.  Binary to disk file FOO.BIN.
+Listing with document sequence numbers to disk file FOO.LST.  Use only
+permanent  symbols  that are available on the PDP-11/45 during the as-
+sembly.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                               PAGE 4
+V31(1065)
+
+
+2.0  COMMAND STRING SWITCHES
+
+
+
+2.1  /NL and /LI
+
+The command string syntax contains the equivalent of all the  MACRO-11
+.LIST and .NLIST functions.  Many of the source level arguments are of
+primary interest at command string level but can be used in the source
+to modify default settings.
+
+The command string equivalents of .LIST and .NLIST are  /LI  and  /NL,
+respectively.   Arguments are specified by preceding them with colons.
+Thus, /NL:BEX:CND is the equivalent of .NLIST CND,BEX.
+
+In all cases, command string  switches  override  their  source  level
+
+equivalents  (as well as previous occurrences in the command string or
+SWITCH.INI file).  Effectively, specification of a function in a  com-
+mand  string  will  cause  all its source level equivalents (and their
+complements) to be ignored;  i.e., /LI:ME would enable the listing  of
+macro  expansions and cause all ".LIST/.NLIST ME" directives to be ig-
+nored.
+
+/LI  (no  arguments)  causes  everything  to  be  listed,  while   /NL
+suppresses  the  listing of all but error lines, the symbol table, and
+the cross reference tables.
+
+MACDLX has the following arguments in addition to those already avail-
+able in MACRO-11:
+
+
+
+     LVL       When NLISTed will cause macro and  conditional  nesting
+	       level indicators to be suppressed in the listing.
+
+     HDR       When NLISTed this will cause all  header  lines  to  be
+               suppressed  in  the listing file.  The page and subpage
+               numbers will not be incremented and no form  feed  will
+               take place.
+
+     LDA       When NLISTed will  cause  all  .LIST/.NLIST  directives
+               with arguments to be suppressed in the listing.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                               PAGE 5
+V31(1065)
+
+
+2.2  /EN and /DS
+
+As an alternative to the proliferation of  directives,  MACRO-11  uses
+one  complementary pair, .ENABL/.DSABL, with arguments.  Their command
+string equivalents are /EN and /DS.  The relationship between  command
+string  and  source statement specification, as well as their argument
+specification, is the same as in /LI and /NL.   MACDLX  has  following
+arguments in addition to those already available in MACRO-11:
+
+
+     ERF       Error flags can be selectively suppressed (or  enabled)
+               by  specifying  ERF,  directly followed by the selected
+               error characters, "/DS:ERFAM" would cause "M"  and  "A"
+               errors  to be ignored, "/DS:ERF" would cause all errors
+               to be ignored, and "/EN:ERFX"  would  cause  "X"  flags
+               (JMP'S which could have been BR'S) to be flagged.
+
+     TIM       Causes  instruction   timing   information   (for   the
+               PDP-11/20 only) to be output on the listing.
+
+     WRP       When enabled long lines will be wrapped around  to  the
+               next  line  on the listing.  These extension lines will
+               be forced to the right hand margin.  At the end of  the
+               assembly  a  "WRAP-AROUND"  percentage  will  be given.
+         
+               This percentage is  the  percentage  of  characters  by
+	       which the line must be increased/decreased to fit.
+
+     COM       Strip comments preceeded by  two  adjacent  semi-colons
+               from statements within macro definitions.
+
+     CRF       Selectively cross reference symbols in a block of code.
+               ".ENABL CRF"   will   enable   cross   referencing  and
+               ".DSABL CRF"  will  disable  cross  referencing.    The
+               "/CRF"  switch  must have been specified in the command
+	       string.
+
+     HEX       When enabled and the current radix is 16, terms of  ex-
+               pressions  which begin with A-F are assumed to be hexa-
+               decimal numbers rather than symbols.  E.g.:   with  HEX
+               enabled, MOV #A,R0 loads 12(octal) into R0 (see section
+	       5.7).
+
+MACDLX ASSEMBLER REFERENCE MANUAL                               PAGE 6
+V31(1065)
+
+
+2.3  Cross Reference Listing
+
+     /CRF      Append a cross reference table  to  the  listing  file.
+               MACDLX accomplishes this in the following manner:
+
+               1.  The listing file is generated  in  the  normal  way
+                   during pass two.
+
+               2.  Simultaneously, a temporary file (XXXCRF.TMP, where
+                   XXX  is  the job number) is created.  This contains
+                   encoded CREF information.
+
+               3.  At the end of pass two, the temporary file is  read
+                   and  the  CREF  information  is integrated into the
+                   symbol table and listing file.  When  through,  the
+	           temporary file is deleted.
+
+               The cross reference table format is as follows:
+
+               1.  The  symbol's  name,  its   table   value,   unless
+                   .NLIST SYM  was  specifed.   Therefore  the  symbol
+                   table itself is always pre-empted.
+               
+	       2.  All references to the symbol, except that  no  more
+                   than one  reference to a given source line will  be
+                   listed.  Symbols in generated text always refer  to
+                   the previous source line.
+
+               3.  Symbol definitions are flagged with "#".
+        
+               4.  Destructive references  are  flagged  with  a  "*".
+                
+		   These  are defined to be all symbols encountered in
+                   op-code fields which store into a  memory  location
+                   or a register.  Thus, the first field of a JSR, the
+                   second field of an ADD, but neither of  the  fields
+                   in a CMP instruction.
+
+               5.  As many references per listing  line  as  possible,
+	           depending  upon the "TTM" mode, are used.  This can
+                   be increased by suppressing "SYM".
+
+               Symbols can be selectively cross referenced by  append-
+               ing  one  or  more  of  the following attributes to the
+               "/CRF" switch:
+
+                   SYM - cref user generated symbols
+                   REG - cref register symbols
+                   MAC - cref macro names
+                   PST - cref permanent symbols and directives
+
+               Thus "/CRF:SYM:REG" will cause only  user  symbols  and
+               register  symbols  to be cross referenced.  The default
+               condition is equivalent to "/CRF:SYM:MAC".
+
+MACDLX ASSEMBLER REFERENCE MANUAL                               PAGE 7
+V31(1065)
+
+
+2.4  Output Line Sequencing
+
+     /SOL      Sequence output lines.  Listings  are  normally  source
+               oriented in the following manner:
+       
+	       1.  Sequence numbers reflect the source line number.
+
+               2.  Macro expansion lines have their nesting level,  in
+                   parentheses, in the sequence number field.
+
+               3.  Lines containing nothing but a form  feed  are  not
+                   listed  but  cause the sequence number to be incre-
+                   mented.
+
+               4.  Page numbers reflect physical input  pages  (incre-
+                   mented  only upon encountering a form feed).  Pages
+                   forced by the assembler have a -N to reflect an ex-
+                   tension  page.  i.e.;  if the assembler had encoun-
+                   tered 3 form feeds and was  on  its  third  listing
+                   page since the last one, it would be "PAGE 4-2".
+
+               When /SOL is specified, listings are output oriented in
+               the following manner:
+
+               1.  Listed lines have consecutive numbers,  except  for
+                   binary extension lines.
+
+    
+               2.  Page numbers reflect the number of pages listed.
+
+
+2.5  Source Reproduction
+
+     /GNS      Generate a new source.  This causes the listing file to
+               take   on   the   appearance   of   the   source  file
+.
+               Specifically, it:
+
+               1.  Suppresses the listing  of  headers,  error  flags,
+                   summary blocks, and any other output over which the
+                   user otherwise would have no control.
+
+               2.  Simulates a /NL:SEQ:LOC:BIN:BEX:ME:TOC.
+               
+		   Therefore, by itself, it recreates the source file.
+                   Normal usage would have supplementary switches fol-
+                   lowing it, i.e., /GNS/NL:MD:MC/LI:ME would  replace
+                   macros/repeats/irps   with  their  generated  code.
+                   /GNS/NL:CND would purge conditionals.
+
+               3.  If a numeric  arg  follows  the  /GNS  switch,  all
+                   macro/repeat/irp  expansion levels greater than the
+                   arg will not be processed or listed, i.e.  /GNS:1.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                               PAGE 8
+V31(1065)
+
+
+2.6  Symbol Definition
+
+     /EQ       Equate the following symbols to zero.  This is a method
+               for  introducing conditional arguments without creating
+               special parameter tapes.
+
+               "/EQ:SYM1:SYM2" is the equivalent of the source  state-
+               ments "SYM1=0" and "SYM2=0".
+
+
+
+2.7  Binary Output Formatting
+
+     /I        output binary in image mode (one byte per 36 bit word).
+               This switch must be used to PIP directly to paper tape.
+
+     /P        pack binary output.  This is the default case  and  the
+               switch  is  not needed.  The information is packed into
+               four bytes per word, right justifying the bytes on bits
+               17, 9, 35, and 27 of the 36-bit word.
+
+To queue the packed binary object file to the paper  tape  punch,  use
+the following command:
+
+
+     .PU FILE.OBJ/FILE:ELEVEN
+
+or if you use the remote station punching program REMPUN, use the fol-
+lowing command:
+
+     .R REMPUN
+     FILE: FILE.OBJ/E
+
+
+
+2.8  Page Numbering
+
+     /DOC      Sequence each listing page.  On the  extreme  right  of
+               the  first  title  line  (column 120) a unique SEQ XXXX
+               number (similiar to those generated by DECDOC) will  be
+               printed  for  each  page  generated.  If no argument is
+               specified with the switch, then the SEQ  number  +1  of
+               the  last  assembly  will be used.  This number is ini-
+	       tially set to 1 when MACDLX is loaded.
+
+     /PAGNUM   This switch is similiar to the /DOC switch but it  con-
+               trols  the  page number.  Subpage numbers will still be
+               created.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                               PAGE 9
+V31(1065)
+
+
+2.9  Macro Libraries
+
+     /ML       Declare that a source file is an  ascii  macro  library
+               file.   The  library  lookup  algorithm is identical to
+	       that of MACRO-11 with the following exception:
+
+               1.  If the .MCALL'ed macro is not found in any  of  the
+                   /ML libraries, try the SYSMAC.SML library.
+
+               2.  If no SYSMAC library is found in  the  users  area,
+                   look for the library under [5,3].
+
+
+                   NOTE:  If the SYSMAC library is found in the  users
+              area, no attempt will be made to search for the li-
+	      brary in [5,3].
+
+               3.  If any nested .MCALL's were seen and all  .MCALL'ed
+                   macros  have not been defined repeat the search al-
+                   gorithm.
+
+               4.  If the macro is not found in any  library  flag  an
+                   error.
+
+               The default /ML library file extensions are ".MLB" then
+               ".SML".   A  maximum  of  5  macro library files can be
+               specified in a command string.
+
+
+
+2.10  CPU Specifications
+
+     /CPU      This switch will permit the user to selectively  tailor
+               the  permanent  symbol table being used for this assem-
+               bly.  The form of this switch  is  /CPU:45:LSI:40  etc.
+               The currently implemented CPU's are
+
+      
+	       03 - same as LSI
+               05 - same as 20
+               20 - use only symbols available on the 11/20
+               40 - use only symbols available on the 11/40
+               45 - use only symbols available on the 11/45
+               70 - same as 45
+               LSI - use only symbols available on the LSI
+               NULL - use only assembler directives
+
+           
+       	       The default is to use all symbols.   This  switch  must
+               appear in the listing file specification.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 10
+V31(1065)
+
+
+2.11  Expanded Statistics
+  
+   /EX       This switch gives the following additional  statistical
+             information at the end of the assembly:
+
+                         USER SYMBOLS
+                         MACRO NAMES
+                         UNDEFINED SYMBOLS
+                         *DISK BLOCKS READ
+                         *DISK BLOCKS WRITTEN
+                         *KILO CORE SECONDS 
+
+   * not available on DECsystem-20 monitors.
+
+
+2.12  Pass Selection
+
+     /PA:1     Assemble the associated source file during pass 1 only.
+
+     /PA:2     Assemble the associated source file during pass 2 only.
+
+               These switches apply only to the source file immediate-
+               ly preceding the switch.
+
+
+2.13  Card Reader Input
+
+     /CDR      Simulate card reader input.  This is actually  indepen-
+               dent of the physical input device but causes the assem-
+               bler to ignore all characters on a line after the 72nd.
+               This functions as /EN:CDR.
+
+
+2.14  Other
+ Switches
+
+     /NSQ      Suppress  listing  of  DECsystem-10/20  style  sequence
+               numbers.
+
+     /N        Suppress error messages to the teletype (unless  it  is
+               also the listing device).
+
+     /E        Output binary data on the listing file.
+
+     /HELP     Type a help message instructing the user  to  refer  to
+               this manual.
+
+     /H        Same as "/HELP".
+
+     /CR       Same as "/CRF".
+
+     /SP,/NOSP These switches are no-op's and are  here  for  MACRO-11
+               compatability.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 11
+V31(1065)
+
+
+3.0  ASSEMBLY INFORMATION
+
+
+
+3.1  Assembly Statistics
+
+When the assembler has completed a run, it will print  the  number  of
+errors  detected  (hard  and soft);  the original command string;  the
+runtime  in  seconds  for  pass  1,  pass  2  and  symbol   table/CREF
+processing;   the  runtime  ratio;   and  the core used rounded to the
+nearest 1K and memory page.
+
+A document page count, a  wrap  around  percentage  and  the  expanded
+statistics  will be printed if the /DOC, /EN:WRP and /EX switches res-
+pectively were seen.
+
+If the /N switch was specified in the command string, only the  errors
+detected  and  default globals generated will be output to the console
+teletype.
+
+
+
+3.2  Assembly Listing
+
+The MACDLX assembler produces a side-by-side assembly listing of  sym-
+bolic  source statements, their octal equivalents, assigned addresses,
+conditional nesting levels, and error codes.   Teletype  listing  mode
+
+compresses  the listing format to accomodate the reduced number of co-
+lumns available.
+
+Teletype listing mode is selected by specifying the listing device  as
+TTY:   or a /LI:TTM switch specification.  All other combinations will
+cause /NL:TTM format.  When MACDLX is ready to accept initial teletype
+input for each pass, it will print READY on the users teletype.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 12
+V31(1065)
+
+
+4.0  ADDITIONAL ASSEMBLER DIRECTIVES
+
+The following directives are available in MACDLX but may not be in any
+current  MACRO-11 assembler.  Caution should be used with these direc-
+tives due to their nature and implementation.
+
+
+4.1  .DUBL Directive
+
+This directive has the form:
+
+          .DUBL NUM1, NUM2,...,NUMx
+
+The .DUBL assembler directive may have one or more operands  separated
+by  commas.  Each operand is stored in two successive words of the ob-
+ject program.  Each operand must be a string of digits  that  will  be
+interpreted  in  the  current  radix.   A leading "+" is ignored and a
+leading "-" causes the two's complement of the numbers absolute  value
+to be stored in the two word entry (most significant then least signi-
+ficant).  Absolute values exceeding 31 bits will be truncated from the
+left and flagged with a "T" error.
+
+
+4.2  .EQUIV Directive
+
+When a macro contains a macro definition the inner macro  is  not  de-
+fined  until  the  outer  macro  is  called.   If this definition is a
+re-definition of the outer macro, the original definition is complete-
+ly expanded and the new definition is not used until the next call.
+
+In some applications it is desirable to remember the original so  that
+it can be reinstated at a later time.  The mechanism is the .EQUIV di-
+rective.
+
+A symbol may be defined as precisely equivalent to any  other  already
+defined symbol (including permanent symbols) as follows:
+
+               .EQUIV   DEFSYM, ANYSYM
+
+where the symbol ANYSYM is made logically equivalent to DEFSYM.
+
+To "remember" a macro, the procedure is to .EQUIV its name to a tempo-
+rary symbol prior to redefinition.  The macro can now be redefined and
+reinstated at a later time.  For example:
+    
+      .EQUIV SWPMAC, TEMP
+          .MACRO SWPMAC
+                 .
+	         .
+          .ENDM SWPMAC
+                 .
+                 .
+      .EQUIV TEMP, SWPMAC
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 13
+V31(1065)
+
+
+4.3  .ROUND and .TRUNC Directives
+
+Floating point numbers are normally rounded.  This is accomplished  by
+adding  the  high order excess bit to the low order retained bit.  The
+particular bits used depend upon whether context calls for one, two or
+four  word  precision.   Rounding  can  be inhibited by the use of the
+.TRUNC directive (also .ENABL FPT).  Rounding can be re-enabled at any
+time  through  the  use  of  the complementary directive, .ROUND (also
+.DSABL FPT).  For example:
+
+041105    070244    .FLT2     12.34     ;ROUND-DEFAULT MODE
+                    .TRUNC              ;ENTER TRUNCATION MODE
+041105    070243    .FLT2     12.34     ;TRUNCATE
+041110    172702    .FLT2     12.56     ;CONTINUE TRUNCATION
+                    .ROUND              ;RETURN TO ROUND MODE
+041110    172703    .FLT2     12.56     ;ROUND
+
+
+
+4.4  .PHASE and .DEPHASE Directives
+
+These directives provide a means to assemble a block of code with  ad-
+dress  references  that  will allow it to execute properly in a memory
+area different from where it resides in the binary object module.
+
+For example:
+
+A:  .BLKW       200             ;RESERVE 200 (OCTAL) WORDS
+      .
+      .
+      .
+B:  .PHASE      A               ;CODE THAT MUST
+      .                         ;BE MOVED TO THE
+      .         		;AREA AT "A"
+      .                         ;PRIOR TO EXECUTION
+C:  .PHASE      A               
+      .                         ;MORE CODE THAT
+      .                         ;MUST BE MOVED TO
+      .   			;"A" PRIOR TO EXECUTION
+
+Blocks A, B, and C will reside in unique memory locations at load time
+but common memory locations at run time.  A likely use of this feature
+is for overlays.  Blocks B and C could be written to disk and  at  run
+time selectively brought into block A for execution.
+
+The complementary directive .DEPHASE brings the load time and the  run
+time location counters back into synchronization.
+
+D:  .DEPHASE    ;CODE WILL LOAD
+	        ;AND RUN AT "D"
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 14
+V31(1065)
+
+
+4.5  .LEVEL Directive
+
+This directive permits the program to control the listing of macro ex-
+pansion lines.  For example:
+
+ 
+         .LEVEL 3
+
+will cause only macro expansion lines of nesting level 3 and above  to
+be  listed  if  macro  expansion  lines have been enabled to be listed
+(.LIST MEB or ME).  A .LEVEL value which is negative  will  cause  the
+listing  of  nesting level lines one to the .LEVEL value.  .LEVEL with
+no argument will cause all expansion lines of all nesting levels to be
+listed.
+
+This directive is treated as a listing control directive in  the  same
+manner as the .LIST/.NLIST directives with no arguments.
+
+
+
+4.6  .PDP10 Directive
+
+This directive is a NOP in MACDLX.  It is included only  for  compati-
+bility with previous DECsystem-10 MACRO-11 assembler's.
+
+
+
+4.7  .OPDEF Directive
+
+This directive permits one line macro definitions and is of the form:
+
+          .OPDEF   name   dummy args   [expansion text]
+
+where "name" is the .OPDEF name, "dummy args" are the dummy args to be
+substituted for in the expansion text and "expansion text" is the text
+to be expanded and is delimited by brackets "[]".  .OPDEF's  are  used
+as follows:
+
+          .OPDEF JUMP X [BR X]
+          .OPDEF SET X,Y, [MOV R0,'X'Y]
+          .OPDEF FALSE [INC R1]
+          .OPDEF GO X,Y [MOV X,Y]
+
+Each .OPDEF is similar to the following macro definition example.  All
+features   of   macro's  are  available  in  the  .OPDEF  syntax  (eg.
+concatenation, argument generation, etc.).
+
+          .MACRO GO X,Y
+           MOV X,Y
+          .ENDM
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 15
+V31(1065)
+
+
+4.8  .FIELD, .VFD and .VFDB Directives
+
+The variable field definition directives provide a mechanism for pack-
+ing  bytes  of a user specified length.  .VFD and .FIELD pack bytes of
+up to 16 bits in length into single/multiple  words  and  .VFDB  packs
+bytes  of up to 8 bits in length into single/multiple bytes.  The syn-
+tax for the variable field directives is as follows:
+
+          .VFD   size   arg,arg,arg,arg,...,argn
+    
+      .VFDB  size   arg,arg,arg,arg,...,argn
+
+where "size" is a decimal value from 1 to 16 (1 to 8 for .VFDB)  which
+represents the byte length of the args to be packed.  The "arg...argn"
+represents the argument values to be masked and packed.  These  values
+are  masked  to  the correct byte length and packed from right to left
+with unused bits on the left set to zero.  For example:
+
+     
+     .VFD 3 1,2,3,4,5    will generate the word 054321 and,
+     .VFDB 2 1,1,1,1     will generate the byte 125.
+
+If the agrument will not fit into the current word or byte, it will be
+used as the first argument of the next word or byte.  For example:
+
+     .VFD   3 7,4,2,7,3,5,1   generates the words 037247 and 000015.
+     .FIELD 3 7,4,2,7,3,5,1   generates the same as above.
+
+.VFD or .FIELD with a byte size of 16 will default to .WORD and  .VFDB
+with a byte size of 8 will default to .BYTE.
+
+NOTE:  All arguments must be absolute.  That is, no global value which
+is  undefined in this assembly may be used as a variable field defini-
+tion argument.
+
+
+
+4.9  .REM Directive
+
+This directive takes the form:
+
+          .REM    !
+	LINES OF TEXT
+        LINES OF TEXT
+            !
+
+All lines of text between the matching delimiters (!  in the above ex-
+ample)  are  treated as comments.  This directive is available in some
+MACRO-11 assemblers.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 16
+V31(1065)
+
+
+4.10  .REQ and .INSERT Directives
+
+The .REQ and .INSERT directives allow the programmer to insert another
+source  file  within  the  current source file.  When encountered, the
+current point in the current source file is "stacked",  and  the  file
+specified  by  the  directive  is  read  in.   When  the  end  of  the
+.REQ/.INSERTed file is reached, the old file is "popped" and  assembly
+is  resumed  at  the  line  following  the directive.  A file which is
+.REQ/.INSERTed can itself .REQ/.INSERT another file up  to  a  nesting
+level of 6.
+
+The syntax of the directives are:
+
+         .REQ filespec
+         .INSERT filespec
+
+Where "filespec" is any  string  legal  to  the  outer  (TTY)  command
+scanner.   This  means  that devices, ppn's and assumed extensions are
+permitted.  The defaults are system disk, the current user's ppn,  and
+the extensions of .REQ and .INS.
+
+
+
+4.11  .LIBRARY Directive
+
+
+The .LIBRARY directive specifies a macro library to be  searched  when
+the  .MCALL  directive is issued.  The file specified is placed in the
+/ML library list (see section 2.9).  The syntax of the directive is:
+
+        .LIBRARY filespec
+
+The "filespec" string syntax is identical to that of the  .REQ/.INSERT
+directives (see section 4.10).  The default extension is .MLB.
+
+
+4.12  .ASCIC Directive
+
+The .ASCIC directive is identical to the .ASCII directive with the ex-
+ception  that  the  first byte of the string is the count of the char-
+acters in the string.  The count byte (first byte) is not included  in
+the count.
+
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 17
+V31(1065)
+
+
+5.0  ADDITIONAL MACDLX FEATURES
+
+This section outlines additional features  available  in  MACDLX  that
+have not been covered by previous sections.
+
+
+
+5.1  MACRO Argument Generation
+
+A mechanism is provided to substitute a symbolic name (or  characters)
+if  an  argument in a macro call is preceeded by two backslashes.  The
+argument expression is treated as a .RAD50 number and the  represented
+3  character symbol (leading spaces will be ignored) is substituted in
+the macro expansion.  For example:
+
+          .MACRO    FOO N
+          BR       .+N
+          .ENDM     FOO
+
+          N=32
+
+          FOO       N     ;GENERATES BR .+N
+          FOO       \N    ;GENERATES BR .+32
+  
+          FOO       \\N   ;GENERATES BR .+Z
+
+No trailing spaces are generated.  A zero value is represented as  one
+space.
+
+
+
+5.2  Conditional Assembly Arguments
+
+Six  additional  conditional  assembly  conditions  are  available  in
+MACDLX.  They are:
+
+          .IF EN   ARG    -assemble if ARG is enabled.
+          .IF DS   ARG    -assemble if ARG is disabled.
+          .IF LI   ARG    -assemble if ARG is listed.
+          .IF NL   ARG    -assemble if ARG is not listed.
+          .IF P1          -assemble if pass 1.
+          .IF P2          -assemble if pass 2.
+
+In the above cases where an argument is required, it must be  a  valid
+EN/DS or LI/NL argument.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 18
+V31(1065)
+
+
+5.3  RAD50 Term Capability
+
+An additional up-arrow unary operator "^R" is provided in MACDLX.  The
+form of the operator is:
+
+          ^RABC       ;GENERATE THE .RAD50 VALUE FOR "ABC"
+          ^R<ABC>     ;SAME AS ABOVE
+
+This operator will permit RAD50 values of up to  3  characters  to  be
+used  as  terms  in expressions.  If more than 3 characters are speci-
+fied, an error will be flagged.
+
+
+
+5.4  Byte Swapped Term Capabilities
+
+Two additional up-arrow unary operators, "^S" and "^H", are  available
+in  MACDLX.   "^H" will evaluate the following term as a 16-bit value,
+swap the high and low bytes, and zero the high  byte  of  the  result.
+For example:
+
+          ^H400       ;WILL GENERATE 000001
+          ^H601       ;WILL GENERATE 000001
+
+"^S" will evaluate the following term and swap the high and low bytes.
+For example:
+
+          ^S2077      ;WILL GENERATE 037404
+          ^S601       ;WILL GENERATE 100401
+
+
+
+5.5  Exclusive Or Expression Capability
+
+An additional binary expression operator is provided in  MACDLX.   The
+binary  operator  "@" will preform a logical XOR of the right and left
+half's of the expression.  For example:
+
+          TAG@77     ;XOR's TAG and 77
+
+The same rules that apply for the binary operators *-+/&!  also  apply
+for XOR "@".
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 19
+V31(1065)
+
+
+5.6  Logical Shift Operator
+
+An additional binary operator "_" (underscore or left arrow) is recog-
+nized  in  expression  evaluation.  "A_B" is evaluated as the value of
+"A" shifted left "B" bits.  If "B" is negative, "A" is shifted  right.
+Both  "A"  and  "B" may be any valid term, including a bracked expres-
+sion.
+
+A common use for this operator is in defining symbolic values for  bit
+masks.   For example, "READY=1_7" defines the READY bit mask as a 1 in
+bit 7.
+
+
+
+5.7  Hexadecimal Numbers
+
+Hexadecimal numbers, using the digits 0-9 and letters A-F, may be used
+via  extensions  of  the existing radix control functions.  .RADIX ac-
+cepts 16 as a valid operand to set the current default radix to  hexa-
+decimal.   A  temporary  radix control unary operator "^X" is also in-
+cluded.
+
+When using hexadeccimal as the default radix it is necessary to prefix
+numbers  beginning with A-F by a 0, otherwise they would be treated as
+normal user symbols.  Use of .ENABL HEX eliminates this  need  at  the
+cost of making symbols beginning with A-F, and used as terms, inacces-
+sible (see section 2.2).
+
+
+
+5.8  "Z" Errors
+
+The "Z" error capability has been enhanced to flag as soft errors  all
+directives  and arithmetic operations that are not compatible with the
+Macro-11 assembler.  The "Z" error flagging is now turned off and  can
+be  turned on by using the command string switch /EN:ERFZ (see section
+2.2).
+
+All lines that cause "Z" errors will be assembled  correctly  and  the
+error will be counted as a soft error.
+
+
+
+5.9  Unsupported Features
+
+MACDLX curently does not support macros with keyword arguments.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 20
+V31(1065)
+
+
+6.0  INDIRECT COMMAND INTERFACE
+
+When assembling systems involving large numbers of programs it is time
+consuming  to type all commands individually.  It is desirable to pre-
+pare the assembly commands ahead of time  and  put  them  in  a  file.
+Then,  using  the indirect command interface, MACDLX can take its com-
+mand string from the prepared file instead of the keyboard.
+
+Stated simply, the commands you would  normally  type  to  MACDLX  are
+placed  in a file.  You then tell MACDLX to read its commands from the
+given file by specifying the "@" character followed by the  file  name
+and  a  carriage return or the file name followed by the "@" character
+and a carriage return.
+
+For example, assume you wanted to assemble and make CREF  listings  of
+files A through D.  A command file named PAUL.CMD would contain:
+
+          A,A/CRF = A.MAC
+          B,B/CRF = B.M11
+          C,C/CRF = C.M11
+          D,D/CRF = D.MAC
+
+In response to the prompt from MACDLX you would then type:
+
+          @PAUL <carriage return>      or
+          PAUL@ <carriage return>
+
+MACDLX will respond with its identification then at the start of  pass
+2,  if  the /N switch was not given, the program title name (up to the
+first six alpha/numeric characters) from the .TITLE directive and  the
+last  source  file name processed (enclosed in brackets "[]") for each
+command line processed.  For example:
+
+   
+     MACDLX:  A   [A.MAC]        -if .TITLE A was in the source file
+     MACDLX:  B   [B.M11]        -if .TITLE B was in the source file
+     etc....
+
+The only restrction is that indirect command files may not be  nested.
+That  is, an indirect file command may not appear in an indirect file.
+The default file extensions for  the  command  file  are  ".CMD"  then
+".CCL".   All  text in the indirect file that follows a semi-colon ";"
+will be ignored by the command line processor.
+
+When all command lines in the command file have been processed, MACDLX
+will print the document pages generated if the /DOC was present in all
+command lines and exit to the monitor.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 21
+V31(1065)
+
+
+7.0  SWITCH.INI PROCESSING
+
+The user can create a file on his disk area into which  he  can  place
+switches for MACDLX.  The purpose of this file is to allow the user to
+automatically override the system default switches for individual pro-
+grams by allowing him to specify his own defaults.
+
+This file which must be called DSK:SWITCH.INI and must reside  in  the
+disk  area  under  the user's UFD.  The form of the file is a line for
+each program.  The form is:
+
+          MACDLX/SWITCH/SWITCH...
+
+where /SWITCH is any valid MACDLX switch.  Only one  line  for  MACDLX
+can  exist  in  the  file;  however, this line can be continued on the
+next line by placing a hyphen as the last non-blank non-comment  char-
+acter before the carriage return-line feed sequence.
+
+When MACDLX is called, it searches for a file called  SWITCH.INI.   If
+such  a  file is not found, no action is taken by MACDLX.  If the file
+is found but a line for MACDLX is not found, no action is again taken.
+When  a  line  exists  for MACDLX, the switches in that line are used.
+
+The user can override a particular switch in the  file  by  issuing  a
+command  string containing a complement of the switch in the file.  In
+other words, the switches in SWITCH.INI supply defaults  for  switches
+not specified by the user but are ignored if the user explicitly spec-
+ified a switch.
+
+
+
+8.0  BATCH CONSIDERATIONS
+
+The "ERRORS DETECTED" flag character is the question  mark  "?".   The
+"SOFT  ERROR"  flag character is the percent "%".  Further information
+on the use of these characters can be found in  the  DECsystem-10  MPB
+Users Guide under the .ERROR explanation.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 22
+V31(1065)
+
+
+9.0  HELPFUL OPERATING HINTS
+
+
+The use of the following  programming  techniques  will  increase  the
+speed and efficiency of the assembly:
+
+     1.  Do not disable the default register definitions.  The default
+         registers  are  located  in  a seperate symbol table which is
+         scanned before any other user symbols.  Default registers may
+         be  defined  but no action will be taken unless the new value
+         differs from the defaulted value.
+
+     2.  Selective use of the /CRF switch.  If you are only interested
+         in  cross-referencing  user  symbols and register names, then
+         use the appropriate attribute(s) for the switch.  See section
+         2.3 for further information.
+
+     3.  Use of the /CPU switch to selectively tailor  your  permanent
+         symbol  table.   This  will reduce the size of the table thus
+         decreasing the time spent searching thru unused symbols.  See
+         section 2.10 for further information.
+
+     4.  Organize your macro libraries in such a manner that all nest-
+         ed  .MCALLed  macro  names have their definitions already de-
+         fined or appear later in the macro library file.   This  will
+         reduce the time spent re-opening and re-scanning of the macro
+         library file.
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 23
+V31(1065)
+
+
+                              APPENDIX A
+
+                     
+     DIRECTIVE SUMMARY
+
+
+
+The following directives are currently implemented in  MACDLX.   Those
+marked  with  an  asterisk  are incompatible with Macro-11 and will be
+flagged if "Z" errors are enabled.
+
+         .ABS*                .IFNDF
+         .ASCII               .IFNE
+         .ASCIZ               .IFNZ
+         .ASCIC*              .IFT
+         .BLKB                .IFTF
+         .BLKW                .IFZ
+         .BYTE                .IIF
+	                      .IRP
+         .DEPHA*              .IRPC
+         .DSABL               .LEVEL*
+         .DUBL*               .LIST
+         .ENABL               .LIBRARY*
+         .END                 .MACR
+         .ENDC                .MACRO
+         .ENDM                .MCALL
+         .ENDR                .MEXIT
+         .EOT                 .NARG
+         .ERROR               .NCHR
+         .EQUIV*              .NLIST
+         .EVEN                .NTYPE
+         .FLT2                .ODD
+         .FLT4                .PAGE
+	 .FIELD*              .PDP10*
+         .INSERT*             .PHASE*
+	 .IF                  .PRINT
+         .IFDF                .REQ*
+         .IFEQ                .RADIX
+         .IFF                 .RAD50
+         .IFG                 .REM
+         .IFGE                .REPT
+         .IFGT                .ROUND*
+         .IFL                 .SBTTL
+         .IFLE                .TITLE
+         .IFLT                .TRUNC*
+         .OPDEF*              .VFD*
+                              .VFDB*
+                              .WORD
+
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 24
+V31(1065)
+
+
+                                  APPENDIX B
+
+                     
+       PERMANENT SYMBOL TABLE
+
+
+
+SYMBOL      CPU AVAILIBILITY          SYMBOL      CPU AVAILABILITY
+
+ ABSD           45,70                  BVC            ALL
+ ABSF           45,70                  BVS            ALL
+ ADC            ALL                    CALL           ALL
+ ADCB           ALL                    CCC            ALL
+ ADD            ALL                    CFCC           45,70
+ ADDD           45,70                  CLC            ALL
+ ADDF           45,70                  CLN            ALL
+ ASH            40,45,70               CLR            ALL
+ ASHC           40,45,70               CLRB           ALL
+ ASL            ALL                    CLRD           45,70
+ ASLB           ALL                    CLRF           45,70
+ ASR            ALL                    CLV            ALL
+ ASRB           ALL                    CLZ            ALL
+ BCC            ALL                    CMP            ALL
+ BCS            ALL                    CMPB           ALL
+ BEQ            ALL                    CMPD           45,70
+ BGE            ALL                    CMPF           45,70
+ BGT            ALL                    CNZ            ALL
+ BHI            ALL                    COM            ALL
+ BHIS           ALL                    COMB           ALL
+ BIC            ALL                    DEC            ALL
+ BICB           ALL                    DECB           ALL
+ BIS            ALL                    DIV            40,45,70
+ BISB           ALL                    DIVD           45,70
+ BIT            ALL                    DIVF           45,70
+ BITB           ALL                    EMT            ALL
+ BLE            ALL                    FADD           40
+ BLO            ALL                    FDIV           40
+ BLOS           ALL                    FMUL           40
+ BLT            ALL                    FSUB           40
+ BMI            ALL                    HALT           ALL
+ BNE            ALL                    INC            ALL
+ BPL            ALL                    INCB           ALL
+ BPT            ALL                    IOT            ALL
+ BR             ALL                    JMP            ALL
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 25
+V31(1065)
+
+
+ JSR            ALL                    ROR            ALL
+ LDCDF          45,70                  RORB           ALL
+ LDCFD          45,70                  RTI            ALL
+ LDCID          45,70                  RTS            ALL
+ LDCIF          45,70                  RTT            40,45,70
+ LDCLD          45,70                  SBC            ALL
+ LDCLF          45,70                  SBCB           ALL
+ LDD            45,70                  SCC            ALL
+ LDEXP          45,70                  SEC            ALL
+ LDF            45,70                  SEN            ALL
+ LDFPS          45,70                  SETD           45,70
+ LDSC           45,70                  SETF           45,70
+ LDUB           45,70                  SETI           45,70
+ MARK           40,45,70               SETL           45,70
+ MFPD           45,70                  SEV            ALL
+ MFPS           LSI,03                 SOB            40,45,70
+ MODD           45,70                  SPL            45,70
+ MODF           45,70                  STA0           45,70
+ MOV            ALL                    STB0           45,70
+ MOVB           ALL                    STCDF          45,70
+ MTPD           45,70                  STCDI          45,70
+ MTPI           40,45,70               STCDL          45,70
+ MTPS           LSI,03                 STCFD          45,70
+ MUL            40,45                  STCFI          45,70
+ MULD           45,70                  STCFL          45,70
+ MULF           45,70                  STD            45,70
+ NEG            ALL                    STEXP          45,70
+ NEGB           ALL                    STFPS          45,70
+ NEGD           45,70                  STQ0           45,70
+ NEGF           45,70                  STST           45,70
+ NOP            ALL                    SUB            ALL
+ RESET          ALL                    SUBD           45,70
+ RETURN         ALL                    SUBF           45,70
+ ROL            ALL                    SWAB           ALL
+ ROLB           ALL                    SXT            40,45,70
+				       TRAP           ALL
+				       TST            ALL
+				       TSTB           ALL
+				       TSTD           45,70
+				       TSTF           45,70
+				       WAIT           ALL
+				       XOR            40,45,70
+
+MACDLX ASSEMBLER REFERENCE MANUAL                              PAGE 26
+V31(1065)
+
+
+
+                              APPENDIX C
+
+                    COMMAND STRING SWITCH SUMMARY
+
+
+
+/LI       Simulate .LIST directive
+/NL       Simulate .NLIST directive
+/EN       Simulate .ENABL directive
+/DS       Simulate .DSABL directive
+/CRF      Append cross reference table to listing file
+/CR       Append cross reference table to listing file
+/N        Suppress error messages and expanded summary to the teletype
+/I        Output binary in image mode
+/P        Output binary in packed mode (default)
+/CDR      Simulate card reader input
+/SOL      Sequence output lines
+/GNS      Generate new source
+/NSQ      Suppress DECsystem-10 style sequence numbers
+/EQ       Equate symbols to zero
+/CPU      Tailor symbol table to CPU type
+/ML       Declare a source file to be a macro library
+/PAGNUM   Set the starting listing page number
+/DOC      Enable and/or set a listing document sequence number
+/E        Enable binary output to the listing file
+/EX       Print expanded statistics
+/PA       Process source file for specified pass
+/SP       No-op for MACRO-11 compatability
+/NOSP     No-op for MACRO-11 compatability
+/HELP     Print a help message
+/H        Print a help message
+
+
+
+
+[END OF MACDLX.MAN]                     [PJB]
+

@@ -1,0 +1,494 @@
+TITLE	LPTLAX - LA120/LA180 terminal driver for LPTSPL-10
+SUBTTL	D. Mastrovito/DPM	12-SEP-85
+
+;
+;
+;	COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1984,1985,1986.
+;			ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+;
+
+	SEARCH	GLXMAC			;SEARCH GALAXY PARAMETERS
+	SEARCH	QSRMAC			;SEARCH QUASAR PARAMETERS
+	SEARCH	ORNMAC			;SEARCH ORION/OPR PARAMETERS
+	SEARCH	LPTMAC			;SEARCH LPTSPL PARAMETERS
+	PROLOG	(LPTLAX)
+
+IF2,<PRINTX Assembling GALAXY-10 LPTLAX>
+
+
+	SALL				;FOR CLEAN LISTINGS
+	.DIRECT	FLBLST			;FOR CLEANER LISTINGS
+
+	ENTRY	LPTLAX			;LOAD IF LIBRARY SEARCH
+SUBTTL	LPTLAX - Dispatch table
+
+
+; This module will drive either an LA120 or LA180 hard copy
+; terminal as a printer.  It is by far, the most simple of
+; all the printer drivers for LPTSPL, and as such provides
+; the customer with a template for writing drivers for other
+; types of terminals (i.e. DIABLOs, etc.).
+
+LPTLAX::DEVDSP	(LAX,<LA120/LA180>)
+
+; Table of LA120/LA180 compatible terminal types
+LAXTYP:	SIXBIT	/LA120/
+	SIXBIT	/LA180/
+LAXLEN==.-LAXTYP			;LENGTH OF TABLE
+
+
+; Some drivers require storage on a per-stream basis.  There are several
+; words reserved for this purpose in the job data base.  The words may
+; be defined as follows:
+
+	 .ORG	J$DWDS			;DEFINE WORDS STARTING A J$DWDS
+LAXWD1:! BLOCK	1			;STORAGE LOCATION
+LAXWD2:! BLOCK	1			;DITTO
+LAXSIZ:!				;END OF DRIVER SPECIFIC STORAGE
+	 .ORG
+
+IF2,<
+	IFL <DRVWDS-<LAXSIZ-J$DWDS>>,<
+	PRINTX ? LA120/LA180 driver definitions overflow storage
+	>
+> ;END IF2
+
+
+; Some drivers must maintain special status  information bits.  These
+; may be stored in AC 'S'.  The mask STSDRV defines those bits which
+; are reserved to the driver.
+SUBTTL	LAXINX - LA120/LA180 Initialization
+
+
+; Device initialization.  This routine is called by the
+; SETUP message processor to initialize device dependent
+; data in the job data base.
+;
+; Call:	MOVE	J, job data base address
+;	MOVE	M, Page containing SETUP message or 0 if LPTSPL startup
+;	PUSHJ	P,LAXINX
+;
+; TRUE return:	Initialization complete
+; FALSE return:	S1 contains -1 if must try a different driver, or
+;		S1 contains a standard response-to-setup code
+
+LAXINX:	JUMPE	M,.RETT			;RETURN IF LPTSPL INITIALIZATION
+	MOVE	S1,STREAM##		;GET STREAM NUMBER
+	MOVE	S1,JOBOBA##(S1)		;AND THE OBJECT BLOCK
+	MOVE	S1,OBJ.ND(S1)		;GET STATION NUMBER
+	PUSHJ	P,LPTANF##		;MUST BE ANF-10
+	JUMPF	INIT.1			;ELSE RETURN
+	MOVE	S1,SUP.ST(M)		;GET DEVICE NAME
+	PUSHJ	P,LPTLIN##		;GENERATE DEVICE NAME
+	JUMPF	INIT.1			;DEVICE NOT OUR TYPE
+	MOVE	T1,J$LDEV(J)		;GET DEVICE NAME
+	DEVCHR	T1,UU.PHY		;GET DEVICE CHARACTERISTICS
+	TXNE	T1,DV.TTY		;DEFEND AGAINST NUL
+	TXNE	T1,DV.DSK		; OR NOT A TTY
+	JRST	INIT.3			;  OR CONTROLLING A JOB
+	MOVE	T1,[2,,T2]		;SET UP UUO AC
+	MOVEI	T2,.TOTRM		;WANT TO READ TERMINAL TYPE
+	MOVE	T3,J$LION(J)		;GET I/O INDEX
+	TRMOP.	T1,			;READ TERMINAL TYPE
+	  JRST	INIT.3			;PREHISTORIC MONITOR
+	MOVSI	T2,-LAXLEN		;AOBJN POINTER
+	CAME	T1,LAXTYP(T2)		;KNOWN TERMINAL TYPE?
+	AOBJN	T2,.-1			;CHECK ENTIRE TABLE
+	JUMPGE	T2,INIT.3		;RETURN IF UNKNOWN
+	MOVEM	T1,J$LTYP(J)		;SAVE AS UNIT TYPE FOR QUASAR
+	SETZM	J$LLCL(J)		;ASSUME UPPER CASE
+	CAMN	T1,['LA120 ']		;LA120?
+	SETOM	J$LLCL(J)		;SET LOWER CASE FLAG
+	HRLZI	T1,LPTLAX		;POINT TO DISPATCH TABLE
+	HRRI	T1,J$$DEV(J)		;MAKE A BLT POINTER
+	BLT	T1,J$$DND(J)		;COPY INTO JOB STORAGE AREA
+	SETOM	J$POSF(J)		;LA120/LA180 DOES POSITIONING
+	SETOM	J$FFDF(J)		;LA120/LA180 DOES FORM FEEDS
+	SETOM	J$MNTF(J)		;LA120/LA180 SUPPORTS MOUNTABLE FORMS
+	MOVEI	S1,%RSUOK		;LOAD THE CODE
+	$RETT				;RETURN
+
+INIT.1:	MOVNI	S1,1			;-1 MEANS DEVICE NOT FOR US
+	$RETF				;RETURN
+
+INIT.2:	SKIPA	S1,[%RSUNA]		;UNIT NOT AVAILABLE
+INIT.3:	MOVEI	S1,%RSUDE		;UNIT WILL NEVER BE AVAILABLE
+	$RETF				;RETURN
+SUBTTL	LAXIPC - Special IPCF message processing
+
+
+; This routine will process any special messages peculiar to
+; the device driver.
+;
+; Call:	MOVE	M, IPCF message address
+;	MOVE	S2, message type
+;	PUSHJ	P,LAXIPC
+;
+; TRUE return:	Message processed by this driver
+; FALSE return:	Message unknown to this driver
+;		S1 must contain -1, S2 must be preserved
+
+LAXIPC:	MOVNI	S1,1			;WE HAVE NO SPECIAL MESSAGE
+	$RETF				;RETURN
+SUBTTL	LAXSCD - Scheduler call
+
+
+; This routine is provided for drivers which must do special
+; things at LPTSPL job scheduler level.  For most drivers, it
+; is a no-op.
+;
+; Call:	MOVE	J,  job data base address
+;	MOVE	P1, stream number
+;	PUSHJ	P,LAXSCD
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+LAXSCD::$RETT				;RETURN
+SUBTTL	LAXWAK - WAKEUP TIME CHECK
+
+
+; This routine is provided for special devices that may have
+; critical time dependencies.  The driver is called buy the
+; CHKTIM routine to see if a premature wakeup is necessary.
+;
+; Call:	MOVE	J,  job data base address
+;	MOVE	S1, current UDT
+;	MOVE	S2, normal wakeup time
+;	PUSHJ	P,LAXWAK
+;
+; TRUE return:	OK to zero JOBWKT if needed
+; FALSE return:	Never zero JOBWKT under any circumstances
+;
+; On either return, S1 must be preserved and S2 may be altered to
+; contain the desired wakeup time.  Most drivers will always want
+; their JOBWKT entry zeroed unless their keeping track of several
+; wakeup times.
+
+LAXWAK:	$RETT				;RETURN
+SUBTTL	LAXOPX - OPEN device
+
+
+; This routine will setup device specific information for an OPEN.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXOPX
+;
+; TRUE return:	Appropriate response-to-setup code returned in S1
+; FALSE return:	ditto
+
+LAXOPX:	MOVEI	T1,.IOASC		;OPEN MODE
+	PUSHJ	P,LPTOPN##		;SETUP I/O, OPEN CHANNEL, ETC.
+	JUMPF	OPEN.1			;CAN'T HAVE IT RIGHT NOW
+	PUSHJ	P,INTCNL##		;CONNECT TO INTERRUPT SYSTEM
+	JUMPF	OPEN.2			;GIVE UP
+	TXO	S,INTRPT		;INDICATE WE'RE CONNECTED
+	MOVEI	S1,%RSUOK		;LOAD THE CODE
+	$RETT				;RETURN
+
+OPEN.1:	SKIPA	S1,[%RSUNA]		;UNIT NOT AVAILABLE
+OPEN.2:	MOVEI	S1,%RSUDE		;UNIT WILL NEVER BE AVAILABLE
+	$RETF				;RETURN
+SUBTTL	LAXCLS - CLOSE device
+
+
+; This routine is called to CLOSE the channel.  In simple
+; drivers which use standard TOPS-10 I/O facilities, this
+; is accomplished with a CLOSE or RESDV. UUO.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXCLS
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+LAXCLS:	PJRST	LPTCLS##		;CALL COMMON CLOSE ROUTINE
+SUBTTL	LAXFLS - Flush a job
+
+
+; This routine is called whenever a job is to be flushed.
+; Most drivers don't need to do anything special and a
+; common routine in LPTSPL can be called.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXFLS
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+LAXFLS:	PJRST	LPTFLS##		;CALL COMMON FLUSH ROUTINE
+SUBTTL	LAXFVU - Load VFU
+
+
+; This routine is called to load the VFU for a printer.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXVFU
+;
+; TRUE return:	VFU loaded or no VFU needed
+; FALSE return:	VFU load failed
+
+LAXVFU:	$RETT				;RETURN
+SUBTTL	LAXRAM - Load RAM
+
+
+; This routine is called to load the character translation
+; RAM for a printer.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXRAM
+;
+; TRUE return:	RAM loaded or no RAM needed
+; FALSE return:	RAM load failed
+
+LAXRAM:	$RETT				;RETURN
+SUBTTL	LAXLER - File LOOKUP error processing
+
+
+; This routine is provided for special devices which accumulate
+; LPTSPL run log data differently than most.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXLER
+;
+; TRUE return:	Never
+; FALSE return:	Always
+
+LAXLER:	PJRST	LPTLER##		;CALL COMMON ERROR ROUTINE
+SUBTTL	LAXIER - File input error processing
+
+
+; This routine is provided for special devices which accumulate
+; LPTSPL run log data differently than most.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXIER
+;
+; TRUE return:	Never
+; FALSE return:	Always
+
+LAXIER:	PJRST	LPTIER##		;CALL COMMON ERROR ROUTINE
+SUBTTL	LAXOUT - Output a buffer
+
+
+; This routine is provided for special devices that cannot
+; use the conventional output routine (LPTOUT) or must first
+; condition the data before doing the output.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXOUT
+;
+; TRUE return:
+; FALSE return:
+
+LAXOUT:	PJRST	LPTOUT##		;CALL COMMON OUTPUT ROUTINE
+SUBTTL	LAXOER - Output error processing
+
+
+; This routine provides for driver or device-specific I/O error
+; processing.  When called, both S1 and J$LIOS(J) will contain
+; the returned I/O error status bits (GETSTS information).  No
+; attempt will be made to determine the validity or severity of
+; any errors.  That is left for the driver.
+; Call:	MOVE	S1,J$LIOS(J)
+;	PUSHJ	P,LAXOER
+;
+; TRUE return:	No output error or error recovery sucessful
+; FALSE return:	Unrecoverable output error
+
+LAXOER:	PJRST	LPTOER##		;CALL COMMON ERROR ROUTINE
+SUBTTL	LAXEOX - Output EOF processing
+
+; This routine is called at the end of the job to do special
+; EOF processing for the device being used.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXEOX
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+LAXEOX:	$RETT				;NO SPECIAL PROCESSING
+SUBTTL	LAXBJB - Begining of job
+
+
+; This routine is called at the begining of job processing.
+; It is used to reset device dependent job parameters such
+; as switching back to a default font.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXBJB
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+LAXBJB:	$RETT				;RETURN
+SUBTTL	LAXEJB - End of job
+
+
+; This routine is called at the end of job processing.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXEJB
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+LAXEJB:	$RETT				;RETURN
+SUBTTL	LAXBFL - Begining of input file
+
+
+; This routine is called at the begining of input file
+; processing. It; is used to reset device dependent file
+; parameters such as non-sticky font specs and attributes.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXBFL
+;
+; TRUE return:	Print file
+; FALSE return:	Do not print file
+
+LAXBFL:	$RETT				;RETURN
+SUBTTL	LAXEFL - End of input file
+
+
+; This routine is called at the end of input file
+; processing.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXEFL
+;
+; TRUE return:	Continue file processing
+; FALSE return:	Do not print additional copies of file
+
+LAXEFL:	$RETT				;RETURN
+SUBTTL	LAXBAN - Banner initialization
+
+; This routine is called at the start of banner processing.
+; It is used to alter the appearance if a banner page.  For
+; example, a special font or page orientation could be selected
+; at this time and it would only affect the printing of the
+; banner page.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXBAN
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+LAXBAN:	$RETT				;RETURN
+SUBTTL	LAXHDR - Header initialization
+
+; This routine is called at the start of header processing.
+; It is used to alter the appearance if a header page.  For
+; example, a special font or page orientation could be selected
+; at this time and it would only affect the printing of the
+; header page.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXHDR
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+LAXHDR:	$RETT				;RETURN
+SUBTTL	LAXWID - Header width initialization
+
+; This routine is called to initialize the page width for
+; header processing.  It is needed because page orientation
+; (determined by LPTLAX) could affect the width of the page
+; hence, the number of characters that may be printed on a
+; single line.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXWID
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+LAXWID:	$RETT				;RETURN
+SUBTTL	LAXRUL - Ruler processing
+
+; This routine is called to output the ruler lines between jobs.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXRUL
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+LAXRUL:	PUSHJ	P,.SAVE3		;SAVE SOME ACS
+	MOVSI	P1,-3			;GET COUNTER
+
+RULE.1:	MOVE	P2,STARS##(P1)		;GET ADDRESS OF TEXT STRING
+	MOVE	P3,J$FWID(J)		;GET THE WIDTH
+	CAILE	P3,^D132		;IS IT REASONABLE?
+	MOVEI	P3,^D132		;NOW IT IS
+
+RULE.2:	ILDB	C,P2			;GET A CHARACTER
+	PUSHJ	P,DEVOUT		;PUT A CHARACTER
+	SOJG	P3,RULE.2		;LOOP
+	MOVEI	C,.CHCRT		;CARRIAGE
+	PUSHJ	P,DEVOUT##		; RETURN
+	MOVEI	C,.CHLFD		;LINE
+	PUSHJ	P,DEVOUT##		; FEED
+	AOBJN	P1,RULE.1		;LOOP FOR ALL RULER LINES
+	$RETT				;RETURN
+SUBTTL	LAXSHT - Stream shutdown
+
+
+; This routine is called when a stream is shutdown, just
+; prior to releasing the job data page.
+;
+; Call:	MOVE	J, job data base address
+;	PUSHJ	P,LAXSHT
+;
+; TRUE return:	Always
+; FALSE return:	Never
+
+LAXSHT:	$RETT				;RETURN
+SUBTTL	LAXSTS - Status message generation
+
+
+; This routine allows a driver to append device specific data to the
+; status update message text which is sent to QUASAR.  This text is
+; appears on queue listings and SHOW STATUS displays.  It appears as
+; the second line of request or unit status display.  LPTSPL will start
+; the text with "   Started at ...".  The driver may then append useful
+; information such as "printed 47 out of 56 pages".
+
+LAXSTS::PJRST	LPTSTS##		;CALL COMMON CODE
+SUBTTL	LAXCHR - Character translator
+
+
+; This routine will handle character translation.  It
+; simulates a hardware translation RAM.
+;
+; Call:	MOVE	J, job data base address
+;	MOVE	C, intercepted character
+;	PUSHJ	P,LAXCHR
+; TRUE return:	Character translated if necessary, but always output
+; FALSE return:	Error occured, GLXLIB error code in S1
+
+LAXCHR:	$RETT				;RETURN
+SUBTTL	Literal pool
+
+
+LAXLIT:	LIT
+
+LAXEND::!END

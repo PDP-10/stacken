@@ -1,0 +1,55 @@
+FOTAB - producerar fotbollstabell
+
+FOTAB {r ett program som tar som indata en lista |ver
+fotbollsmatcher i det format som framg}r av exemplet nedan:
+
+ Stockholmsderbyt 1989-08-23--25
+Hammarby - Djurg}rden   5-1
+Hammarby - AIK          4-4
+AIK - Djurg}rden        5-2
+
+Alla rader som b|rjar med bokstav i indata-filen m}ste inneh}lla
+en match. Rubriker och dylikt g}r bra att ha i indatafilen genom
+att b|rja dessa rader med t.ex. ett mellanslag.
+
+FOTAB producerar en serietabell p} formatet:
+
+Lagnamn            Spe Vun Oav F|r  M}l Sl{  Po{ng
+
+Hammarby             2   1   1   0    9-  5    3
+AIK                  2   1   1   0    9-  6    3
+Djurg}rden           2   0   0   2    3- 10    0
+
+Starta FOTAB med .RUN GAM:FOTAB.
+
+FOTAB har f|ljande meny:
+
+Vad vill du g|ra? L{sa tabell, Skriva resultat, Redigera tabell,
+Hj{lputskrift, Sluta.
+
+L{sa tabell      = L{sa in en matchfil.
+
+Skriva resultat  = Skriva ut en serietabell.
+
+Redigera tabell  = Anropa VIDED f|r att redigera en matchfil.
+                   (Annan redigerare kan ocks} anv{ndas, men kan
+                   inte anropas direkt fr}n programmet. Alla match-
+                   filer m}ste ha extension = .FOT).
+
+Viktiga kommandon i VIDED vid redigering av tabell:
+
+& = kommandostarttangent, vanligen tv} ESCAPE eller PF1-tangenten.
+
+RETURN-tangenten = till b|rjan p} n{sta rad
+TAB-tangenten = flytta en bit fram}t p} raden
+HOME-tangenten = till sk{rmens |vre h|rn
+DEL-tangenten = ta bort ett tecken bak}t
+
+&K = ta bort en rad
+&L = skjut in en rad
+&Z = rulla bilden upp}t
+&-Z = rulla bilden ner}t
+&X = till radens slut
+&E = sluta skriva in text
+
+	<Slut p} GAM:FOTAB.HLP -  1982-05-09--83-04-04/JP>

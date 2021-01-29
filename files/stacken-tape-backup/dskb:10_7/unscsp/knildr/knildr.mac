@@ -1,0 +1,993 @@
+	TITLE	KNILDR	KLNI Microcode Loader
+	SUBTTL	William C. Davenport/WXD	4-SEP-85
+
+
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1984,1985,1986. ALL RIGHTS RESERVED.
+;
+;
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+;ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+;INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+;COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+;OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+;TRANSFERRED.
+;
+;THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+;AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+;CORPORATION.
+;
+;DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+;SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+
+	SEARCH	MACTEN,UUOSYM,$SCNDC,SCNMAC
+	SALL
+	TWOSEG	400000
+
+;Program version information
+
+	KNLVER==1		;Major version
+	KNLMIN==0		;Minor version
+	KNLEDT==10		;Edit version
+	KNLWHO==0		;Who last editted
+
+	%%KNL==VRSN.(KNL)	;Full word version
+
+	LOC	137
+.JBVER::!EXP	%%KNL
+	RELOC
+
+	.TEXT	"REL:SCAN,REL:HELPER"
+
+
+;Symbols not yet in UUOSYM
+
+.KBRDC==7			;Read KLNI DRAM contents
+KS.ARD==040000,,000000		;KLNI auto-reload is disabled
+KS.RRQ==020000,,000000		;KLNI reload requested by system
+KS.DRQ==010000,,000000		;KLNI dump requested by system
+
+KBNRJ%==16			;Not the reloading job
+	SUBTTL	Table of Contents
+
+
+;               TABLE OF CONTENTS FOR KNILDR
+;
+;
+;                        SECTION                                   PAGE
+;    1. Table of Contents.........................................   2
+;    2. Edit History..............................................   3
+;    3. Assembly Constants........................................   4
+;    4. Error Macro Definitions...................................   5
+;    5. Data Storage..............................................   7
+;    6. Main Program..............................................   8
+;    7. AUTOMATIC Command Processor...............................   9
+;    8. KLNI Microcode Read Routine...............................  10
+;    9. KLNI Microcode Reload Routine.............................  11
+;   10. KNIBT. Interface
+;        10.1   Get KLNI Status...................................  12
+;        10.2   Set KLNI Reload Job...............................  13
+;        10.3   Stop KLNI.........................................  14
+;        10.4   Start KLNI Microprocessor.........................  15
+;        10.5   Write KLNI Microword..............................  16
+;   11. Error Handling............................................  17
+;   12. Error, Warning, and Informational Message Handler.........  19
+;   13. Typeout Routine...........................................  21
+;   14. Core Allocation Routines..................................  22
+;   15. The End...................................................  23
+	SUBTTL	Edit History
+
+
+COMMENT	&
+
+Edit	Description
+
+1	5-Dec-84 by Bill Davenport
+
+	Created.
+
+2	21-Dec-84 by Bill Davenport
+
+	Type out KLNI microcode version using new format for microcode
+	edits 151 and greater.  When not run on FRCLIN, do SETNAM UUO
+	to clear JACCT.  If sending the reload message to ORION fails,
+	then try sending the message to OPR: before giving up.
+
+3	23-Jan-85 by Bill Davenport
+
+	Always send the reload messages to both ORION and OPR:.
+
+4	1-Apr-85 by Bill Davenport
+
+	Change messages about KLNIs to use the CONFIG hardware name
+	for the device (NI-n for KLNI on CPUn).
+
+5	16-May-85 by Bill Davenport
+
+	When run by system, don't auto-reload a KLNI unless the reload
+	requested by system bit is set.
+
+6	13-Jun-85 by Bill Davenport
+
+	Implement support for KLNI dump.
+
+7	18-Jun-85 by Bill Davenport
+
+	Fix DATE-75 bug in KLNI dump code.
+
+10	4-SEP-85 by LEO
+	Do Copyrights.
+
+&; End Edit History
+	SUBTTL	Assembly Constants
+
+
+;I/O channels
+
+UCD==1				;Microcode file
+DMP==2				;Dump file
+
+
+;Additional ACs
+
+FL==0				;Flags
+	FL.RBS==1B0			;Run by system on FRCLIN
+KW==11				;KLNI id word
+KS==12				;KLNI status word
+
+
+;Constants
+
+KNIRH2==5			;KLNI RH20 channel number
+KNI==564			;KLNI device code
+
+CRMSIZ==10000			;Size of KLNI CRAM
+DRMSIZ==2000			;Size of KLNI DRAM
+
+PDLLEN==100			;Stack length
+BUFLEN==40			;Length of terminal output buffer in words
+
+UCDDEV==<SIXBIT/SYS/>		;Microcode file device name
+UCDFIL==<SIXBIT/KNICOD/>	;Microcode file filename
+UCDEXT==<SIXBIT/BIN/>		;Microcode file extension
+
+DMPDEV==<SIXBIT/XPN/>		;Dump file device name
+DMPFIL==<SIXBIT/KNI#/>		;Dump file filename
+DMPEXT==<SIXBIT/D##/>		;Dump file extension
+	SUBTTL	Error Macro Definitions
+
+;These macros may be skipped over without any harm.
+
+
+;Macro to issue error message and optionally continue elsewhere.
+;Arguments are: CODE$ = 3-character code
+;		TEXT$ = ASCII text of message
+;		CONT$ = the continuation address
+
+DEFINE	ERROR$(CODE$,TEXT$,CONT$<0>,%DUMMY),<
+E$$'CODE$:	PUSHJ	P,.ERMSE
+	XLIST			;;DON'T LIST EXPANSION
+	.XCREF	%DUMMY		;;DON'T WASTE CREF SPACE
+	.NODDT	%DUMMY		;;DON'T WASTE SYMBOL TABLE SPACE
+	JRST	%DUMMY		;;SKIP THIS
+	XWD ''CODE$'', [ASCIZ \TEXT$\]
+	XWD 0, CONT$		;;CONTINUATION ADDRESS AND FLAGS
+%DUMMY:	LIST			;;SKIP AROUND TO HERE
+>; END DEFINE ERROR$
+
+
+;Macro to issue warning message and optionally continue elsewhere.
+;Arguments are: CODE$ = 3-character code
+;		TEXT$ = ASCII text of message
+;		CONT$ = the continuation address
+
+DEFINE	WARN$(CODE$,TEXT$,CONT$<0>,%DUMMY),<
+W$$'CODE$:	PUSHJ	P,.ERMSW
+	XLIST			;;DON'T LIST EXPANSION
+	.XCREF	%DUMMY		;;DON'T WASTE CREF SPACE
+	.NODDT	%DUMMY		;;DON'T WASTE SYMBOL TABLE SPACE
+	JRST	%DUMMY		;;SKIP THIS
+	XWD ''CODE$'', [ASCIZ \TEXT$\]
+	XWD 0, CONT$		;;CONTINUATION ADDRESS AND FLAGS
+%DUMMY:	LIST			;;SKIP AROUND TO HERE
+>; END DEFINE WARN$
+;Macro to issue informational message and optionally continue elsewhere.
+;Arguments are: CODE$ = 3-character code
+;		TEXT$ = ASCII text of message
+;		CONT$ = the continuation address
+
+DEFINE	INFO$(CODE$,TEXT$,CONT$<0>,%DUMMY),<
+I$$'CODE$:	PUSHJ	P,.ERMSI
+	XLIST			;;DON'T LIST EXPANSION
+	.XCREF	%DUMMY		;;DON'T WASTE CREF SPACE
+	.NODDT	%DUMMY		;;DON'T WASTE SYMBOL TABLE SPACE
+	JRST	%DUMMY		;;SKIP THIS
+	XWD ''CODE$'', [ASCIZ \TEXT$\]
+	XWD 0, CONT$		;;CONTINUATION ADDRESS AND FLAGS
+%DUMMY:	LIST			;;SKIP AROUND TO HERE
+>; END DEFINE INFO$
+	SUBTTL	Data Storage
+
+
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION  1985,1986. ALL RIGHTS RESERVED.
+\;END COPYRIGHT MACRO
+
+	RELOC			;Down to low segment
+
+OFFSET:	BLOCK	1		;Starting offset
+
+LOWBEG:!			;Start of area to zero at start
+PDLSTK:	BLOCK	PDLLEN		;Stack
+ERRFLG:	BLOCK	1		;Flag set when in error message
+
+NUMCPU:	BLOCK	1		;Number of CPUs in system
+TRMUDX:	BLOCK	1		;Principal terminal's UDX (0 if detached)
+
+UCDLEN:	BLOCK	1		;Length of KLNI microcode
+UCDADR:	BLOCK	1		;Address of KLNI microcode
+
+DRMBLK:	BLOCK	DRMSIZ		;Dump of KLNI DRAM
+
+OPNBLK:	BLOCK	10		;OPEN UUO argument block
+LKPBLK:	BLOCK	.RBSIZ+1	;LOOKUP UUO argument block
+ENTBLK:	BLOCK	.RBSIZ+1	;ENTER UUO argument block
+FLPBLK:	BLOCK	.FOFNC+1+1	;FILOP. UUO argument block
+FSPBLK:	BLOCK	.FOFMX+1	;FILOP. UUO .FOFIL argument block
+KBTBLK:	BLOCK	5		;KNIBT. UUO argument block
+QUEBLK:	BLOCK	7		;QUEUE. UUO argument block
+TRMBLK:	BLOCK	3		;TRMOP. UUO argument block
+
+BUFCNT:	BLOCK	1		;Count of characters left in BUFBLK
+BUFPTR:	BLOCK	1		;Byte pointer into BUFBLK
+BUFBLK:	BLOCK	BUFLEN		;Length of terminal output buffer
+
+LOWEND==.-1			;End of area to zero
+	SUBTTL	Main Program
+
+
+KNILDR::PORTAL	.+2		;Non-CCL entry
+	PORTAL	.+2		;CCL Entry
+	TDZA	T1,T1		;Non-CCL entry
+	MOVEI	T1,1		;CCL Entry
+	MOVEM	T1,OFFSET	;Save starting offset
+
+	RESET			;Reset the world
+	SETZ	FL,		;Clear flags register
+	MOVE	P,[IOWD PDLLEN,PDLSTK]	; Set up stack pointer
+
+	MOVX	T1,%CNCPU	;Get number of CPUs in system
+	GETTAB	T1,		;...
+	  MOVEI	T1,1		;Shouldn't fail
+	MOVEM	T1,NUMCPU	;Save for later use
+
+	SETO	T1,		;Get our line number
+	TRMNO.	T1,		;...
+	  SETZ	T1,		;Must be detached
+	MOVEM	T1,TRMUDX	;Save for later use
+
+	MOVX	T1,%CNFLN	;Get line number of FRCLIN
+	GETTAB	T1,		;...
+	  SETZ	T1,		;Shouldn't fail
+
+	TXO	T1,.UXTRM	;Set terminal UDX flag
+	CAME	T1,TRMUDX	;KNILDR running on FRCLIN?
+	JRST	KNILD1		;No, continue
+
+	MOVSI	T1,-1		;Detach from FRCLIN
+	ATTACH	T1,		;...
+	  JFCL			;Oh well
+	TXO	FL,FL.RBS	;Set run by system flag
+	SETZM	TRMUDX		;Clear saved terminal UDX
+
+				;Continued on next page
+				;Continued from previous page
+
+KNILD1:	MOVE	T1,[SIXBIT /KNILDR/] ;Get our program name
+	TXNN	FL,FL.RBS	;Run by system on FRCLIN?
+	SETNAM	T1,		;No, clear JACCT
+
+	MOVEI	T1,TYPOUT	;Set up typeout routine
+	PUSHJ	P,.TYOCH##	;...
+	PUSHJ	P,SETOUT	;Set up output buffer
+
+	PUSHJ	P,GETUCD	;Read in KLNI microcode
+	  JRST	KNILD2		;Error, message already typed
+	PUSHJ	P,AUTCMD	;Call AUTO command processor
+	  JRST	KNILD2		;Error, message already typed
+
+KNILD2:	PUSHJ	P,.ISLGI##	;Are we logged in?
+	  LOGOUT		;No, logout quietly
+	RESET			;Yes, reset the world
+	MONRT.			;Exit quietly
+	JRST	.-1		;In case we get continued
+	SUBTTL	AUTOMATIC Command Processor
+
+
+;Here to process an AUTOMATIC command
+
+AUTCMD:	PUSHJ	P,.SAVE1##	;Save P1
+	SETZ	P1,		;Start with CPU0
+
+AUTCM1:	SETZ	KW,		;Construct KLNI id word
+	DPB	P1,[POINTR (KW,KB.CPU)] ;Store CPU number
+	MOVEI	T1,KNIRH2	;And store KLNI RH20 number
+	DPB	T1,[POINTR (KW,KB.RH2)] ;...
+
+	PUSHJ	P,KNISTS	;Get current KLNI status
+	  JRST	AUTCM3		;Skip this RH20 if an error
+	TXNE	KS,KS.RLD	;This KLNI need to be reloaded?
+	TXNE	KS,KS.MAI	;Yes, is it in maintenance mode?
+	JRST	AUTCM3		;Yes, skip over it
+	TXNE	FL,FL.RBS	;KNILDR run by system on FRCLIN?
+	TXNE	KS,KS.DRQ!KS.RRQ ;Yes, was dump or reload requested by system?
+	SKIPA			;Yes, reload this KLNI
+	JRST	AUTCM3		;No, skip this KLNI
+
+AUTCM2:	PUSHJ	P,KNISRJ	;Set us up as reload job
+	  JRST	AUTCM3		;Error, message already typed
+
+	TXNE	KS,KS.DRQ	;Dump requested by system?
+	PUSHJ	P,DMPKNI	;Yes, dump this KLNI
+	  JFCL			;Ignore any errors
+
+	PUSHJ	P,RLDKNI	;Reload this KLNI
+	  JFCL			;Ignore any errors
+
+AUTCM3:	AOJ	P1,		;Offset to next CPU
+	CAME	P1,NUMCPU	;Finished all CPUs?
+	JRST	AUTCM1		;No, loop back to process KLNI on this CPU
+	PJRST	.POPJ1##	;Return
+	SUBTTL	KLNI Local Store Dump Routine
+
+
+;Routine called to dump a KLNI's local store
+;Linkage:
+;	KW/ KLNI id word
+;	PUSHJ	P,DMPKNI
+;Returns:
+;	.POPJ on error with error message typed
+;	.POPJ1 on success
+
+DMPKNI:	PUSHJ	P,.SAVE3##	;Save P1-P3
+
+	PUSHJ	P,OPNDMP	;Open dump file
+	  POPJ	P,		;Error, message already typed
+
+	INFO$	(DMP,Dumping NI-)
+	  CAI			;We will finish message
+	LDB	T1,[POINTR (KW,KB.CPU)] ;Get CPU number
+	PUSHJ	P,.TDECW##	;Type in decimal
+	MOVEI	T1,[ASCIZ | to file |]
+	PUSHJ	P,.TSTRG##	;Type remainder of information
+	MOVEI	T1,OPNBLK	;Get address of OPEN block
+	MOVEI	T2,ENTBLK	;And address of ENTER block
+	PUSHJ	P,.TOLEB##	;Type out filespec of dump file
+	PUSHJ	P,.ERFIN	;Finish the informational message
+
+	PUSHJ	P,KNISTP	;First stop the KLNI
+	  POPJ	P,		;Error, message already typed
+
+REPEAT 1,<			;$ Temporary
+	MOVX	T1,SP.CR0	;$ Get bit for CPU 0
+	HLRZ	T2,KW		;$ Get CPU number of KLNI
+	LSH	T1,(T2)		;$ Get appropriate CPU bit
+	HRLI	T1,.STCPU	;$ Get SETUUO SET CPU function code
+	SETUUO	T1,		;$ Make runnable only on correct CPU
+	  PJRST	SETERR		;$ Error, process
+	MOVE	T1,[1,,T2]	;$ Get USRIOT
+	MOVEI	T2,14		;$ ...
+	DIAG.	T1,		;$ ...
+	  PJRST	TRPERR		;$ Error, process
+>;$ End REPEAT 1
+
+				;Continued on next page
+				;Continued from previous page
+
+	SETZ	P1,		;DRAM address
+	MOVE	P2,[POINT 36,DRMBLK] ;Get byte pointer to DRAM area
+DMPKN1:	MOVE	T1,P1		;Get DRAM address
+	PUSHJ	P,KNIRDC	;Read DRAM contents
+	  POPJ	P,		;Error, message already typed
+	IDPB	T1,P2		;Save in DRAM dump area
+	CAIE	P1,DRMSIZ-1	;At end of KLNI DRAM?
+	AOJA	P1,DMPKN1	;No, loop back for entire DRAM
+
+REPEAT 1,<			;$ Temporary
+	HRLOI	T1,.STCPU	;$ Make runnable on all CPUs
+	SETUUO	T1,		;$ ...
+	  PJRST	SETERR		;$ Error, process
+	JRSTF	@[.+1]		;$ Drop USRIOT
+>;$ End REPEAT 1
+
+	OUT	DMP,[IOWD DRMSIZ,DRMBLK ;Output DRAM dump
+		     0]
+	  SKIPA			;Success
+	PJRST	OUTERR		;Error, type message and return
+	RELEAS	DMP,		;Release dump file
+
+	PJRST	.POPJ1##	;Return
+	SUBTTL	KLNI Dump File Routines
+
+
+;Routine called to create a KLNI dump file
+;Linkage:
+;	KW/ KLNI id word
+;	PUSHJ	P,OPNDMP
+;Returns:
+;	.POPJ on error with error message already typed
+;	.POPJ1 on success
+
+OPNDMP:	PUSHJ	P,.SAVE1##	;Save P1
+	SETZ	P1,		;Preset initial dump file number
+	MOVX	T1,.IODMP	;Write file in dump mode
+	MOVEM	T1,OPNBLK+.OPMOD ;...
+	MOVX	T1,DMPDEV	;Get device name for dump file
+	MOVEM	T1,OPNBLK+.OPDEV ;Store in argument block
+	SETZM	OPNBLK+.OPBUF	;Clear any buffer pointers
+	OPEN	DMP,OPNBLK	;Open device for I/O
+	  PJRST	OPNERR		;Error, type message and return
+	MOVEI	T1,.RBSIZ+RB.NSE ;Get count and flags
+	MOVEM	T1,ENTBLK+.RBCNT; Store in argument block
+	MOVX	T1,DMPFIL	;Get filename of dump file
+	HLRZ	T2,KW		;Get KLNI CPU number
+	ADDI	T2,'0'		;In SIXBIT
+	LSH	T2,^D12		;Position for filename
+	HRR	T1,T2		;Create actual dump filename
+	MOVEM	T1,ENTBLK+.RBNAM ;Store in argument block
+OPNDM1:	MOVE	T1,P1		;Get dump file count
+	PUSHJ	P,.MKPJN##	;Make into SIXBIT
+	TRZ	T1,770000	;Keep two low order digits
+	HRLZS	T1		;Put into left half
+	TLO	T1,<(DMPEXT)>&770000 ;Create actual dump file extension
+	MOVEM	T1,ENTBLK+.RBEXT ;Store in argument block
+	SETZM	ENTBLK+.RBPRV	;Zero any left over bits
+	ENTER	DMP,ENTBLK	;Create the dump file
+	  SKIPA			;Error, check error code
+	JRST	OPNDM2		;Success, go get actual filespec and return
+	HRRZ	T1,ENTBLK+.RBEXT ;Get error code
+	CAXE	T1,ERAEF%	;File already exists?
+	  PJRST	ENTERR		;No, type error message and return
+	HLRZ	T1,ENTBLK+.RBEXT ;Get current extension
+	CAIN	T1,'D99'	;Done trying all possibilities?
+	PJRST	ENTERR		;Yes, type error message and return
+	AOJA	P1,OPNDM1	;Increment dump file count and loop
+
+				;Continued on next page
+				;Continued from previous page
+
+OPNDM2:	MOVE	T1,[DMP,,.FOFIL] ;Get I/O channel number and function code
+	MOVEM	T1,FLPBLK+.FOFNC ;Store in FILOP. block
+	MOVE	T1,[.FOFMX+1,,FSPBLK] ;Get length and address of filespec block
+	MOVEM	T1,FLPBLK+.FOFNC+1 ;Store in FILOP. block
+	MOVE	T1,[2,,FLPBLK]	;Get pointer to FILOP. block
+	FILOP.	T1,		;Get full filespec of dump file
+	  PJRST	.POPJ1##	;Can't, just leave original stuff alone
+	MOVE	T1,FSPBLK+.FOFDV ;Get actual device name
+	MOVEM	T1,OPNBLK+.OPDEV ;Store in OPEN block
+	MOVE	T1,FSPBLK+.FOFFN ;Get actual filename
+	MOVEM	T1,ENTBLK+.RBNAM ;Store in ENTER block
+	MOVE	T1,FSPBLK+.FOFEX ;Get actual file extension
+	HLLM	T1,ENTBLK+.RBEXT ;Store in ENTER block
+	MOVEI	T1,FSPBLK+.FOFPP-.PTPPN ;Create pointer to PATH block
+	MOVEM	T1,ENTBLK+.RBPPN ;Store in ENTER block
+	PJRST	.POPJ1##	;Return
+	SUBTTL	KLNI Microcode Reload Routine
+
+
+;Routine called to reload a KLNI's microcode
+;Linkage:
+;	KW/ KLNI id word
+;	PUSHJ	P,RLDKNI
+;Returns:
+;	.POPJ on error with error message typed
+;	.POPJ1 on success
+
+RLDKNI:	PUSHJ	P,.SAVE3##	;Save P1-P3
+
+	INFO$	(RLD,Reloading NI-)
+	  CAI			;We will finish message
+	LDB	T1,[POINTR (KW,KB.CPU)] ;Get CPU number
+	PUSHJ	P,.TDECW##	;Type in decimal
+	MOVEI	T1,[ASCIZ | with microcode version |]
+	PUSHJ	P,.TSTRG##	;Type remainder of information
+	MOVE	T1,UCDADR	;Get address of microcode area
+	MOVE	T1,(T1)		;First word is microcode version
+	PUSHJ	P,.TVERW##	;Type it
+	PUSHJ	P,.ERFIN	;Finish the informational message
+
+	PUSHJ	P,KNISTP	;First stop the KLNI
+	  POPJ	P,		;Error, message already typed
+
+	SETZ	P1,		;CRAM address
+	MOVSI	P2,(POINT 12)	;Build byte pointer to microcode area
+	HRR	P2,UCDADR	;...
+	AOJ	P2,		;Skip first word (version number)
+
+RLDKN1:	MOVEI	T1,5		;5 bytes per CRAM microword
+	SETZB	T2,T3		;Start with empty words
+RLDKN2:	ILDB	T4,P2		;Get a byte
+	LSHC	T2,^D12		;Append it to the word
+	ADD	T3,T4		;...
+	SOJN	T1,RLDKN2	;Loop back for all 5 bytes
+	MOVE	T1,P1		;Get CRAM address
+	LSHC	T2,6		;Seperate CRAM halfwords
+	LSH	T3,-6		;...
+	PUSHJ	P,KNIWRT	;Write this word into KLNI CRAM
+	  POPJ	P,		;Error, message already typed
+	CAIE	P1,CRMSIZ-1	;At end of KLNI CRAM?
+	AOJA	P1,RLDKN1	;No, loop back for entire CRAM
+
+	SETZ	T1,		;Get starting address of microcode
+	PJRST	KNISTA		;Start KLNI microcode and return
+	SUBTTL	KLNI Microcode Read Routine
+
+
+;Routine called to read in the KLNI microcode
+;Linkage:
+;	PUSHJ	P,GETUCD
+;Returns:
+;	.POPJ on error with error message typed
+;	.POPJ1 on success with:
+;	UCDLEN/ Length of microcode area
+;	UCDADR/ Address of microcode area
+;	UCDVER/ Microcode version
+;	UCDSAD/ Microcode starting address
+
+GETUCD:	MOVX	T1,.IODMP	;Read file in dump mode
+	MOVEM	T1,OPNBLK+.OPMOD ;...
+	MOVX	T1,UCDDEV	;Get device name for microcode file
+	MOVEM	T1,OPNBLK+.OPDEV ;Store in argument block
+	SETZM	OPNBLK+.OPBUF	;Clear any buffer pointers
+	OPEN	UCD,OPNBLK	;Open device for I/O
+	  PJRST	OPNERR		;Error, type message and return
+	MOVEI	T1,.RBSIZ	;Get count of arguments in LOOKUP block
+	MOVEM	T1,LKPBLK+.RBCNT; Store in argument block
+	MOVX	T1,UCDFIL	;Get filename of microcode file
+	MOVEM	T1,LKPBLK+.RBNAM ;Store in argument block
+	MOVX	T1,UCDEXT	;get extension of microcode file
+	MOVEM	T1,LKPBLK+.RBEXT ;Store in argument block
+	LOOKUP	UCD,LKPBLK	;Lookup the microcode file
+	  PJRST	LKPERR		;Error, type error message and return
+	MOVE	T1,LKPBLK+.RBSIZ ;Get size of microcode
+	MOVEM	T1,UCDLEN	;Save for later use
+	PUSHJ	P,GETCOR	;Get core for storing microcode
+	  POPJ	P,		;Error, message already typed
+	MOVEM	T1,UCDADR	;Save address of microcode
+	MOVN	T1,UCDLEN	;Construct IOWD pointer to buffer
+	HRLZS	T1		;...
+	HRR	T1,UCDADR	;...
+	SUBI	T1,1		;...
+	SETZ	T2,		;Terminate IOWD list
+	IN	UCD,T1		;Read the microcode file into core
+	  SKIPA			;Success
+	PJRST	INPERR		;Error, type message and return
+	RELEAS	UCD,		;Release microcode file
+	PJRST	.POPJ1##	;And return
+	SUBTTL	KNIBT. Interface  --  Get KLNI Status
+
+
+;Routine called to obtain current KLNI status word
+;Linkage:
+;	KW/ KLNI id word
+;	PUSHJ	P,KNISTS
+;Returns:
+;	.POPJ on error
+;	.POPJ1 on success with:
+;	KS/ Current KLNI status word
+
+KNISTS:	MOVE	T1,[.KBSTS,,2]	;Function code and argument block length
+	MOVEM	T1,KBTBLK+.KBFCN ;Store into argument block
+	MOVEM	KW,KBTBLK+.KBKID ;Store KLNI id word into argument block
+	MOVEI	T1,KBTBLK	;Get address of KNIBT. argument block
+	KNIBT.	T1,		;Get current KLNI status
+	  POPJ	P,		;Error, return
+	MOVE	KS,T1		;Get KLNI status word
+	PJRST	.POPJ1##	;Return
+	SUBTTL	KNIBT. Interface  --  Set KLNI Reload Job
+
+
+;Routine called to set KLNI reload job to KNILDR's job
+;Linkage:
+;	KW/ KLNI id word
+;	PUSHJ	P,KNISRJ
+;Returns:
+;	.POPJ on error with error message typed
+;	.POPJ1 on success
+
+KNISRJ:	MOVE	T1,[.KBSRJ,,2]	;Function code and argument block length
+	MOVEM	T1,KBTBLK+.KBFCN ;Store into argument block
+	MOVEM	KW,KBTBLK+.KBKID ;Store KLNI id word into argument block
+	MOVEI	T1,KBTBLK	;Get address of KNIBT. argument block
+	KNIBT.	T1,		;Set KLNI reload job
+	  SKIPA			;Error, check error code
+	PJRST	.POPJ1##	;Success, return
+	CAXN	T1,KBNRJ%	;Is reload job already set?
+	POPJ	P,		;Yes, return silently
+	PJRST	KBTERR		;No, process KNIBT. error code
+	SUBTTL	KNIBT. Interface  --  Stop KLNI
+
+
+;Routine called to stop KLNI microprocessor
+;Linkage:
+;	KW/ KLNI id word
+;	PUSHJ	P,KNISTP
+;Returns:
+;	.POPJ on error with error message typed
+;	.POPJ1 on success
+
+KNISTP:	MOVE	T1,[.KBSTP,,2]	;Function code and argument block length
+	MOVEM	T1,KBTBLK+.KBFCN ;Store into argument block
+	MOVEM	KW,KBTBLK+.KBKID ;Store KLNI id word into argument block
+	MOVEI	T1,KBTBLK	;Get address of KNIBT. argument block
+	KNIBT.	T1,		;Stop KLNI
+	  PJRST	KBTERR		;Error, process error code
+	PJRST	.POPJ1##	;Success, return
+	SUBTTL	KNIBT. Interface  --  Start KLNI Microprocessor
+
+
+;Routine called to start KLNI microprocessor
+;Linkage:
+;	T1/ KLNI microcode start address
+;	KW/ KLNI id word
+;	PUSHJ	P,KNISTA
+;Returns:
+;	.POPJ on error with error message typed
+;	.POPJ1 on success
+
+KNISTA:	MOVEM	T1,KBTBLK+.KBCRA ;Store starting address in argument block
+	MOVE	T1,[.KBSTA,,3]	;Function code and argument block length
+	MOVEM	T1,KBTBLK+.KBFCN ;Store into argument block
+	MOVEM	KW,KBTBLK+.KBKID ;Store KLNI id word into argument block
+	MOVEI	T1,KBTBLK	;Get address of KNIBT. argument block
+	KNIBT.	T1,		;Start KLNI microprocessor
+	  PJRST	KBTERR		;Error, process error code
+	PJRST	.POPJ1##	;Success, return
+	SUBTTL	KNIBT. Interface  --  Write KLNI Microword
+
+
+;Routine called to write a KLNI microword
+;Linkage:
+;	T1/ KLNI microword CRAM address
+;	T2/ KLNI microword contents (high order 30 bits)
+;	T3/ KLNI microword contents (low order 30 bits)
+;	KW/ KLNI id word
+;	PUSHJ	P,KNIWRT
+;Returns:
+;	.POPJ on error with error message typed
+;	.POPJ1 on success
+
+KNIWRT:	MOVEM	T1,KBTBLK+.KBCRA ;Store CRAM address in argument block
+	MOVEM	T2,KBTBLK+.KBCCH ;And high order CRAM microword
+	MOVEM	T3,KBTBLK+.KBCCL ;And low order CRAM microword
+	MOVE	T1,[.KBWRT,,5]	;Function code and argument block length
+	MOVEM	T1,KBTBLK+.KBFCN ;Store into argument block
+	MOVEM	KW,KBTBLK+.KBKID ;Store KLNI id word into argument block
+	MOVEI	T1,KBTBLK	;Get address of KNIBT. argument block
+	KNIBT.	T1,		;Write the KLNI microword
+	  PJRST	KBTERR		;Error, process error code
+	PJRST	.POPJ1##	;Success, return
+	SUBTTL	KNIBT. Interface  --  Read KLNI DRAM
+
+
+;Routine called to read a KLNI DRAM location
+;Linkage:
+;	T1/ KLNI DRAM address
+;	KW/ KLNI id word
+;	PUSHJ	P,KNIRDC
+;Returns:
+;	.POPJ on error with error message typed
+;	.POPJ1 on success with:
+;	T1/ KLNI DRAM contents
+
+KNIRDC:
+REPEAT 0,<			;$ Temporary
+	MOVEM	T1,KBTBLK+.KBDRA ;Store DRAM address in argument block
+	MOVE	T1,[.KBRDC,,3]	;Function code and argument block length
+	MOVEM	T1,KBTBLK+.KBFCN ;Store into argument block
+	MOVEM	KW,KBTBLK+.KBKID ;Store KLNI id word into argument block
+	MOVEI	T1,KBTBLK	;Get address of KNIBT. argument block
+	KNIBT.	T1,		;Read the DRAM location
+	  PJRST	KBTERR		;Error, process error code
+	PJRST	.POPJ1##	;Success, return
+>;$ End REPEAT 0
+REPEAT 1,<			;$ Temporary
+	LSH	T1,6		;$ Shift DRAM address into position
+	IOR	T1,[000001,,400073] ;$ Create micro instruction to read DRAM
+	MOVE	T2,[002000,,220040] ;$ ...
+	PUSHJ	P,PARITY	;$ Compute parity bit
+	CONO	KNI,400000	;$ Reset the KLNI
+	DATAO	KNI,[400020,,000000] ;$ Set to write high order microword
+	DATAO	KNI,T1		;$ Write high order microword
+	DATAO	KNI,[400000,,000000] ;$ Set to write low order microword
+	DATAO	KNI,T2		;$ Write low order microword
+	MOVE	T1,[000001,,600443] ;$ Get second micro instruction
+	MOVE	T2,[001000,,005040] ;$ ...
+	PUSHJ	P,PARITY	;$ Compute parity bit
+	DATAO	KNI,[400060,,000000] ;$ Set to write high order microword
+	DATAO	KNI,T1		;$ Write high order microword
+	DATAO	KNI,[400040,,000000] ;$ Set to write low order microword
+	DATAO	KNI,T2		;$ Write low order microword
+	DATAO	KNI,[400000,,000000] ;$ Set microcode start address of 0
+	CONO	KNI,000010	;$ Start microcode
+	CONO	KNI,0		;$ Stop microcode
+	CONO	KNI,200000	;$ Set DIAG_TEST_EBUF
+	DATAI	KNI,T1		;$ Read resulting value (DRAM contents)
+	PJRST	.POPJ1##	;$ Return
+>;$ END REPEAT 1
+	SUBTTL	Error Handling
+
+
+OPNERR:	ERROR$	(OPF,OPEN failed for file )
+	  CAI			;We will finish the message
+	MOVEI	T1,OPNBLK	;Get address of OPEN block
+	MOVEI	T2,LKPBLK	;And address of LOOKUP block
+	PUSHJ	P,.TOLEB##	;Type file specification
+	PJRST	.ERFIN		;Finish error message and return
+
+LKPERR:	ERROR$	(LKF,LOOKUP failed for file )
+	  CAI			;We will finish the message
+	MOVEI	T1,OPNBLK	;Get address of OPEN block
+	MOVEI	T2,LKPBLK	;And address of LOOKUP block
+	PUSHJ	P,.TOLEB##	;Type file specification
+	PJRST	.ERFIN		;Finish error message and return
+
+ENTERR:	ERROR$	(ENF,ENTER failed for file )
+	  CAI			;We will finish the message
+	MOVEI	T1,OPNBLK	;Get address of OPEN block
+	MOVEI	T2,ENTBLK	;And address of ENTER block
+	PUSHJ	P,.TOLEB##	;Type file specification
+	PJRST	.ERFIN		;Finish error message and return
+
+INPERR:	ERROR$	(IOE,I/O error reading file )
+	  CAI			;We will finish the message
+	MOVEI	T1,OPNBLK	;Get address of OPEN block
+	MOVEI	T2,LKPBLK	;And address of LOOKUP block
+	PUSHJ	P,.TOLEB##	;Type file specification
+	PJRST	.ERFIN		;Finish error message and return
+
+OUTERR:	ERROR$	(IOW,I/O error writing file )
+	  CAI			;We will finish the message
+	MOVEI	T1,OPNBLK	;Get address of OPEN block
+	MOVEI	T2,ENTBLK	;And address of ENTER block
+	PUSHJ	P,.TOLEB##	;Type file specification
+	PJRST	.ERFIN		;Finish error message and return
+
+REPEAT 1,<			;$ Temporary
+SETERR:	ERROR$	(SUF,SETUUO UUO failed - error code )
+	  CAI			;$ We will finish the message
+	PUSHJ	P,.TOCTW##	;$ Type error code
+	PJRST	.ERFIN		;$ Finish error message and return
+
+TRPERR:	ERROR$	(TUF,TRPSET UUO failed,.POPJ##)
+>;$ End REPEAT 1
+KBTERR:	ERROR$	(KBE,KNIBT. UUO error - )
+	  CAI			;We will finish the message
+	CAIN	T1,KBTBLK	;UUO not implemented?
+	SETZ	T1,		;Yes, convert into zero index
+	CAILE	T1,KBEMAX	;Within known table
+	JRST	KBTER1		;No, type in octal
+	MOVE	T1,KBETAB(T1)	;Yes, get address of text message
+	PUSHJ	P,.TSTRG##	;Type informative message
+	PJRST	.ERFIN		;Finish error message and return
+KBTER1:	PUSH	P,T1		;Save error code
+	MOVEI	T1,[ASCIZ |error code |] ;Type explainatory text
+	PUSHJ	P,.TSTRG##	;...
+	POP	P,T1		;Get back error code
+	PUSHJ	P,.TOCTW##	;Type in octal
+	PJRST	.ERFIN		;Finish error message and return
+
+
+;Table of KNIBT. UUO error messages indexed by error code
+
+KBETAB:	[ASCIZ	|UUO not implemented|]		;(00)
+	[ASCIZ	|Insufficient privileges|]	;(01)
+	[ASCIZ	|Address check|]		;(02)
+	[ASCIZ	|Invalid argument list|]	;(03)
+	[ASCIZ	|Illegal function code|]	;(04)
+	[ASCIZ	|Illegal CPU specified|]	;(05)
+	[ASCIZ	|Specified CPU not available|]	;(06)
+	[ASCIZ	|KLNI doesn't exist|]		;(07)
+	[ASCIZ	|KLNI is in maintenance mode|]	;(10)
+	[ASCIZ	|KLNI microprocessor didn't start|] ;(11)
+	[ASCIZ	|KLNI didn't initialize|]	;(12)
+	[ASCIZ	|Invalid CRAM address|]		;(13)
+	[ASCIZ	|CRAM read error|]		;(14)
+	[ASCIZ	|CRAM write error|]		;(15)
+	[ASCIZ	|Not the reloading job|]	;(16)
+KBEMAX==.-KBETAB-1
+	SUBTTL	Error, Warning, and Informational Message Handler
+
+;Routine called only via expansion of ERROR$, WARN$, or INFO$ macros.
+;Arguments to this routine follow the call; we skip over them on return
+;or else dispatch elsewhere after the error.
+
+.ERMSE:	PUSHJ	P,.PSH4T##	;SAVE T1-T4
+	MOVSI	T2,"?"		;LOAD LEAD CHARACTER
+	JRST	ERMSGC		;JOIN COMMON CODE
+
+.ERMSW:	PUSHJ	P,.PSH4T##	;SAVE T1-T4
+	MOVSI	T2,"%"		;LOAD LEAD CHARACTER
+	JRST	ERMSGC		;JOIN COMMON CODE
+
+.ERMSI:	PUSHJ	P,.PSH4T##	;SAVE T1-T4
+	MOVSI	T2,"["		;LOAD LEAD CHARACTER
+ERMSGC:	SETOM	ERRFLG		;FLAG WE ARE PROCESSING AN ERROR MESSAGE
+	HRRZ	T4,-4(P)	;GET RETURN PC
+	MOVSI	T1,'KNL'	;GET PREFIX FOR ERROR MESSAGES
+	HLR	T1,1(T4)	;LOAD CODE
+	TRNN	T1,-1		;WAS THERE ONE?
+	  SETZ	T1,		;NO, FLAG FOR .ERMSA
+	HRR	T2,1(T4)	;GET TEXT ADDRESS
+	MOVEI	T3,-1(T4)	;GET PC OF CALL (x$$ LOCATION)
+	PUSH	P,T4		;SAVE T4 AROUND CALL
+	PUSHJ	P,.ERMSA##	;START THE ERROR MESSAGE
+	POP	P,T4		;RESTORE PC OF CALL
+	HLRZS	T1		;GET LEAD CHARACTER
+	CAIN	T1,"["		;INFORMATIONAL MESSAGE?
+	HRRZS	ERRFLG		;YES, CLEAR LH OF FLAG WORD
+	HRRZ	T2,2(T4)	;GET CALLER-SPECIFIED RETURN PC
+	SKIPN	T2		;IF NONE,
+	HRRZ	T2,@-4(P)	; PICK UP RH OF "JRST %DUMMY"
+	HRRM	T2,-4(P)	;SAVE RETURN PC
+	HRRZ	T2,1(T3)	;GET RH OF JRST %DUMMY
+	HLRZ	T2,(T2)		;GET INSTRUCTION FOLLOWING CALL
+	CAIN	T2,<CAI>_-^D18	;SUPPRESS THE FINAL CR-LF?
+	  JRST	ERMSGR		;YES, RESTORE AC'S AND RETURN
+	SKIPL	ERRFLG		;INFORMATION MESSAGE?
+	PUSHJ	P,.TRBRK##	;YES, ADD A BRACKET
+	PUSHJ	P,.TCRLF##	;NEW LINE
+	SETZM	ERRFLG		;NOT IN ERROR HANDLER ANY MORE
+ERMSGR:	PUSHJ	P,.POP4T##	;RESTORE T1-T4
+	POPJ	P,		;RETURN
+;Call .ERFIN after outputting a partial message to add the final
+;right bracket if required and then space to a new line.
+
+.ERFIN:	SKIPL	ERRFLG		;ARE WE IN AN INFORMATIONAL MESSAGE?
+	PUSHJ	P,.TRBRK##	;YES, ADD RIGHT BRACKET
+	PUSHJ	P,.TCRLF##	;NEW LINE
+	SETZM	ERRFLG		;NOT IN ERROR HANDLER ANY MORE
+	POPJ	P,		;RETURN
+	SUBTTL	Typeout Routine
+
+
+;Routine called by SCAN to type characters out
+;Linkage:
+;	T1/ Character
+;	PUSHJ	P,TYPOUT
+;Returns:
+;	.POPJ always
+
+TYPOUT:	CAXN	T1,.CHCRT	;Carriage return?
+	POPJ	P,		;Yes, discard
+	CAXN	T1,.CHLFD	;End of line?
+	JRST	FRCOUT		;Yes, force output
+TYPOU1:	SOSL	BUFCNT		;Decrement and test buffer count
+	JRST	TYPOU2		;All ok, continue
+	PUSH	P,T1		;Save output character
+	PUSHJ	P,FRCOUT	;Force output
+	POP	P,T1		;Restore output character
+	JRST	TYPOU1		;And loop back
+TYPOU2:	IDPB	T1,BUFPTR	;Store next output character in buffer
+	POPJ	P,		;And return
+
+FRCOUT:	SETZ	T1,		;Terminate ASCIZ string
+	IDPB	T1,BUFPTR	;...
+	MOVEI	T1,BUFLEN*5-3	;Get original buffer count
+	CAMN	T1,BUFCNT	;Any real output?
+	PJRST	SETOUT		;No, just reset pointers and return
+	PUSHJ	P,SNDOPR	;Send message to operator
+	SKIPN	TRMUDX		;Running detached?
+	  PJRST	SETOUT		;Yes, reset pointers and return
+	OUTSTR	BUFBLK		;No, output string to terminal
+
+SETOUT:	MOVEI	T1,BUFLEN*5-3	;Reset buffer count
+	MOVEM	T1,BUFCNT	;...
+	MOVE	T1,[POINT 7,BUFBLK] ;And buffer pointer
+	MOVEM	T1,BUFPTR	;...
+	POPJ	P,		;Return
+;Routine called by FRCOUT to send message to operator
+;Linkage:
+;	PUSHJ	P,SNDOPR
+;Returns:
+;	.POPJ always
+
+SNDOPR:	MOVX	T1,QF.PIP!QF.NBR!.QUWTO	;Get WTO function
+	MOVEM	T1,QUEBLK+.QUFNC ;Save in QUEUE. arg block
+	SETZM	QUEBLK+.QUNOD	;Set for central node
+	SETZM	QUEBLK+.QURSP	;No response desired
+	MOVE	T1,[BUFLEN,,.QBMSG] ;Argument block is WTO message
+	MOVEM	T1,QUEBLK+.QUARG ;...
+	MOVEI	T1,BUFBLK	;Argument is buffer address
+	MOVEM	T1,QUEBLK+.QUARV ;...
+	MOVE	T1,[^D80/5+1,,.QBTYP] ;Argument block is WTO message type
+	MOVEM	T1,QUEBLK+.QUARG+2 ;...
+	MOVEI	T1,[ASCIZ |Message from KNILDR|]
+	MOVEM	T1,QUEBLK+.QUARV+2 ;...
+	MOVE	T1,[7,,QUEBLK]	;Get QUEUE. argument pointer
+	QUEUE.	T1,		;Send message to OPR
+	  JFCL			;Failed, try sending message to device OPR:
+	JFCL			;Success, send message to OPR: also
+	SETO	T1,		;Back up to null character
+	ADJBP	T1,BUFPTR	;...
+	MOVEM	T1,BUFPTR	;...
+	MOVEI	T1,.CHCRT	;Add carriage return
+	IDPB	T1,BUFPTR	;...
+	MOVEI	T1,.CHLFD	;And linefeed
+	IDPB	T1,BUFPTR	;...
+	SETZ	T1,		;Terminate with a null
+	IDPB	T1,BUFPTR	;...
+	MOVX	T1,.TOOUS	;Get TRMOP. output string function
+	MOVEM	T1,TRMBLK+.TOFNC ;Store in argument block
+	MOVSI	T1,'OPR'	;Get UDX of OPR: terminal
+	IONDX.	T1,		;...
+	  POPJ	P,		;Error, give up
+	MOVEM	T1,TRMBLK+.TOUDX ;Store in argument block
+	MOVEI	T1,BUFBLK	;Get address of text string
+	MOVEM	T1,TRMBLK+.TOAR2 ;Store in argument block
+	MOVE	T1,[3,,TRMBLK]	;Get pointer to TRMOP. block
+	TRMOP.	T1,		;Send message to OPR: terminal
+	  JFCL			;Failed, give up
+	POPJ	P,		;Return
+	SUBTTL	Core Allocation Routines
+
+;Routine to allocate core
+;Linkage:
+;	T1/ Number of words
+;	PUSHJ	P,GETCOR
+;Returns:
+;	.POPJ on error with message typed
+;	.POPJ1 on success with:
+;	T1/ Address of memory
+
+GETCOR:	MOVEI	T2,777(T1)	;COPY # OF WORDS-1 TO T2 (PLUS ONE PAGE)
+	ADD	T2,.JBFF##	;DETERMINE END ADDRESS OF NEW AREA
+	CAMG	T2,.JBREL##	;NEED TO EXPAND?
+	  JRST	.+3		;NO, DON'T WASTE THE UUO
+	CORE	T2,		;YES, ASK FOR IT
+	  ERROR$ (CEX,Core expansion failed,.POPJ##)
+	MOVEI	T2,(T1)		;COPY COUNT TO T2
+	EXCH	T1,.JBFF##	;SWAP COUNT WITH FIRST FREE
+	ADDM	T1,.JBFF##	;ADJUST FIRST FREE
+				; (T1 NOW HAS BASE OF NEW AREA)
+	PJUMPE	T2,.POPJ1##	;IF JUST ASKING WHERE IT STARTS, RETURN
+	SETZM	(T1)		;CLEAR FIRST WORD
+	SOJLE	T2,.POPJ1##	;IF JUST ONE WORD, RETURN NOW
+	ADD	T2,T1		;DETERMINE END ADDRESS OF BLT
+	MOVSI	T3,(T1)		;SET UP SOURCE FOR BLT
+	HRRI	T3,1(T1)	; AND END ADDRESS
+	BLT	T3,(T2)		;ZERO THE CORE
+	PJRST	.POPJ1##	;RETURN
+	SUBTTL	KLNI Microinstruction Parity
+
+
+;Routine to set correct parity for KLNI microcode word
+;Linkage:
+;	T1/ KLNI microword contents (high order 30 bits)
+;	T2/ KLNI microword contents (low order 30 bits)
+;	PUSHJ	P,PARITY
+;Returns:
+;	T1-T2/ KLNI microword contents
+
+PARITY:	PUSHJ	P,.SAVE2##	;Save P1-P2
+	DMOVE	P1,T1		;Save original microword contents
+	TDZ	P1,[000000,,400000] ;Clear parity bit
+	SETZ	T3,		;Initialize bit count
+	MOVE	T1,P1		;Get first microword
+	MOVN	T2,T1		;Negate
+	TDZE	T1,T2		;Any one bits left?
+	AOJA	T3,.-2		;Yes, loop back to count them up
+	MOVE	T1,P2		;Get second microword
+	MOVN	T2,T1		;Negate
+	TDZE	T1,T2		;Any one bits left?
+	AOJA	T3,.-2		;Yes, loop back to count them up
+	TRNN	T3,1		;Is microword even parity?
+	TDO	P1,[000000,,400000] ;Yes, set parity bit
+	DMOVE	T1,P1		;Get KLNI microword
+	POPJ	P,		;And return
+	SUBTTL	The End
+
+
+KNLLIT:!XLIST
+	LIT
+	LIST
+
+KNLEND:!END	KNILDR

@@ -1,0 +1,2188 @@
+!DSKT:NCPLIB.REQ[10,6026,NMLBLI] 14-Feb-84 10:25:03, Edit by DAVENPORT
+!
+! Ident = 9.
+! Fix the definition of the DEBRK. UUO after the require of UUOSYM.
+! Undeclare the definitions of the CMAND. UUO symbols after the
+! require of UUOSYM to avoid conflicts with GLXMAC symbols for the
+! COMND% JSYS parse functions.
+!
+!DSKT:[10,6026,NML702]NMUT10.R36  7-Feb-84 10:44:09, Edit by DAVENPORT
+!
+! Fix the CLOSE_LINK routine to wait for the synchronous disconnect to
+! finish before releasing the link.
+!
+!NET:<GROSSMAN.NML-SOURCES>NMUT10.R36.2  8-Mar-82 14:37:51, Edit by GROSSMAN
+!
+! Double the interrupt stack size to make room for tracing at interrupt level.
+! Also, generate only 10 CSRVn routines, and comment out all level 2 stuff in
+! order to save space.
+!
+!NET:<GROSSMAN.NML-SOURCES>NMUT10.R36.1 24-Feb-82 10:32:43, Edit by GROSSMAN
+!
+! Fix bug in LOCAL_NODE_NAME. It was returning the name one byte to the right
+! of where it should have been. Also, fix bug in CLOSE_LINK so that the
+! channel number is released when the link gets closed via a Synchronus
+! Disconnect.
+!
+! NET:<GROSSMAN>NMUT10.R36.3 14-Feb-82 22:57:32, Edit by GROSSMAN
+!
+! Fix a bug in the macro TIME_DIFFERENCE_SECONDS. Forgot a + sign.
+!
+! NET:<GROSSMAN>NMUT20.R36.2 27-Jan-82 08:56:17, Edit by GROSSMAN
+!
+! Fix macro TIME_PLUS so that it is more accurate for long periods of time
+! (on the order of 10000 seconds and up).
+!
+! NET:<GROSSMAN>NMUT20.R36.2 22-Jan-82 15:46:33, Edit by GROSSMAN
+!
+! Fix macro TIME_DIFFERENCE_SECONDS. It uses an ASH to divide by 1^18. The
+! quotient should have been rounded off in order to get more accurate times
+! from the expression.
+!
+! NET:<DECNET20-V3P1.NMLLIB>NMUT20.R36 02-Dec-81 09:49:20, Edit by THIGPEN
+!
+! Add WAIT_BLOCK for use in timing out NMU$SCHED_WAIT calls.
+! Change call to NMU$SCHED_WAIT in macro READ_MESSAGE to include timeout value
+!
+!KL1026::DSKC:NMUT10.R36[10,5665,SOURCE,TOPS10] 1-Jun-81, Edit by Grossman
+!
+! Creation for Tops-10
+!
+! NMUT10 - Network Management Utilities TOPS10 definitions
+!
+! COPYRIGHT (C) 1980, 1981, 1982
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASSACHUSETTS  01754
+!
+! THIS SOFTWARE IS FURNISHED  UNDER A LICENSE FOR USE ONLY ON A SINGLE
+! COMPUTER  SYSTEM AND  MAY BE  COPIED ONLY WITH  THE INCLUSION OF THE
+! ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE, OR ANY OTHER COPIES  THEREOF
+! MAY NOT BE PROVIDED OR  OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON
+! EXCEPT FOR USE ON SUCH SYSTEM AND TO ONE WHO AGREES TO THESE LICENSE
+! TERMS.  TITLE TO AND  OWNERSHIP OF THE  SOFTWARE  SHALL AT ALL TIMES
+! REMAIN IN DEC.
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT NOTICE
+! AND SHOULD  NOT BE CONSTRUED  AS A COMMITMENT  BY DIGITAL  EQUIPMENT
+! CORPORATION.
+!
+! DEC ASSUMES  NO  RESPONSIBILITY  FOR  THE USE OR  RELIABILITY OF ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DEC.
+!
+
+!++
+! Facility: LSG DECnet Network Management
+!
+! Abstract: This file contains definitions that are specific to
+!	    TOPS10.
+!
+! Environment: TOPS10
+!
+! Author: Stu Grossman, Creation date: June 1981
+!
+!--
+
+!<BLF/PAGE>
+!
+! Other requirements for TOPS10
+!
+
+switches list (norequire);			! Suppress monitor symbol listing
+
+require 'BLI:TENDEF';				! Generic definitions
+
+require 'BLI:UUOSYM';				! Monitor symbols
+
+undeclare %quote
+    DEBRK$;					! Fix definition of DEBRK. UUO
+
+macro
+    DEBRK$ =
+ %O'047', 0, %O'000137' %;			! ...
+
+!
+! Un-Definitions for Tops-10 to prevent symbol conflicts
+!
+
+undeclare %quote
+    LOCK,
+    %quote INPUT,
+    %quote OUTPUT;
+
+!
+! Definitions for -36 instructions
+!
+
+literal
+    HRRI = %O'541',				! Half right to right immediate
+    HRLI = %O'505',				! Half right to left immediate
+    EXCH = %O'250',				! Exch register and memory
+    SETOM = %O'476',				! Set memory to all ones
+    SETZM = %O'402',				! Set memory to all zeros
+    AOSE = %O'352',				! Add one to memory, skip if eql 0
+    AOSN = %O'356',				! Add one and skip if non-zero
+    SOSGE = %O'375',				! Subtract one and skip if leq 0
+    PUSH = %O'261',				! Push value onto stack
+    POP = %O'262',				! Pop value from stack
+    PUSHJ = %O'260',				! Call routine, save return on stack
+    JSR = %O'264',				! Jump to subroutine.  Uses no ACs
+    JRST = %O'254',				! Jump to addr
+    ADJSP = %O'105',				! Adjust stack pointer
+    MOVE = %O'200',				! Load value into AC
+    MOVEM = %O'202',				! Store value into memory
+    MOVEI = %O'201',				! Load effective address into register
+    BLT = %O'251';				! Transfer memory block
+
+!
+
+literal
+    MEMSIZE = %O'121',				! Location containing first free word
+    						!  in memory.
+    CONTEXT_SIZE = %O'20';			! Number of fullwords in a task's
+
+						!  context (all the registers).
+!
+
+field
+    STACK_POINTER_FIELDS =
+	set
+	STACK_SIZE = [0, 18, 18, 1],		! Number of words left in stack
+	STACK_ADDRESS = [0, 0, 18, 0]		! Address of current word in stack
+	tes;
+
+!<BLF/PAGE>
+!
+! Semaphore LOCK/UNLOCK macros
+!
+! macro: LOCK
+!		This macro attempts a semaphore lock.  If the lock
+!		attempt is successful, a "true" value is returned.
+!
+!	LOCK (SEMAPHORE)
+!
+!	where SEMAPHORE is the address of a SEMAPHORE_BLOCK.
+
+undeclare %quote
+    LOCK;					! Force override of definition of LOCK uuo
+
+macro
+    LOCK (SEMA_ADDR) =
+	begin
+	    builtin MACHSKIP;
+	    bind SEMBLK = SEMA_ADDR : SEMAPHORE_BLOCK;
+
+	    MACHSKIP (AOSE, 0, SEMBLK [SEMAPHORE])
+	    end %;
+
+!
+! macro: UNLOCK
+!
+!		This macro unlocks a semaphore that has been locked
+!		with a LOCK macro call.
+!
+!	UNLOCK (SEMAPHORE)
+!
+!	where SEMAPHORE is the address of a SEMAPHORE_BLOCK.
+
+macro
+    UNLOCK (SEMA_ADDR) =
+	begin
+	    builtin MACHOP;
+	    bind SEMBLK = SEMA_ADDR : SEMAPHORE_BLOCK;
+	    MACHOP (SETOM, 0, SEMBLK [SEMAPHORE]);
+	end %;
+
+!<BLF/PAGE>
+!
+! Task scheduling macros
+!
+! macro: CONTEXT_SWITCH
+!
+!		This macro swaps the current task with the
+!		specified future task.
+!
+!	CONTEXT_SWITCH (NEW_TASK)
+!
+!	where NEW_TASK is the address of the new task's task block.
+
+macro
+    CONTEXT_SWITCH (NEW_TASK) =
+	begin
+	    external routine SS_SWITCH;	! System specific routine
+	    SS_SWITCH (NEW_TASK);
+	end %;
+
+!
+! macro: CURRENT_TASK
+!
+!		This macro returns the address of the
+!		current task's task block.
+
+macro
+    CURRENT_TASK =
+	begin
+	    external CURTSK;		! Cell containing current task
+	    .CURTSK
+	end %;
+
+!
+! macro: TASK_INITIALIZE
+!
+!		This macro initializes a task's task block.
+!		Specifically it sets up the stack and the
+!		starting address so that the task will swap
+!		context properly the first time that it
+!		is scheduled.
+!
+!	TASK_INITIALIZE (TASK_BLOCK, STACK_SIZE)
+!
+!	where TK_BLOCK is the task's task block address
+!	      STACK_SIZE is the number of fullwords its stack.
+
+macro
+    TASK_INITIALIZE (TK_BLOCK, STACK_SIZE) =
+	begin
+	    external routine SS_TINIT;	! System specific routine
+	    SS_TINIT (TK_BLOCK, STACK_SIZE);
+	end %;
+
+!
+! macro: STOP_PROGRAM
+!
+!		Make NML die gracefully by calling code at RENTER in
+!		NMUT10.MAC.
+!
+
+macro
+    STOP_PROGRAM =
+	begin
+	external routine
+	    NMLDIE;
+
+	NMLDIE ();
+	end %;
+
+!<BLF/PAGE>
+!
+! macro: INTERRUPT_DATA_BASE
+!
+!		This macro defines the interrupt vector tables
+!		and any other miscellaneous variables that are
+!		required by the interrupt system.
+
+macro
+    INTERRUPT_DATA_BASE =
+
+compiletime
+    EXTRA=0;
+
+%debug (ALWAYS, %assign(EXTRA,100));	! Extra stack needed for debuggery
+
+macro
+    INTERRUPT_LEVEL_FLAG = ATINTL %quote %;!Define pseudoname for global symbol
+
+literal
+    INTERRUPT_STACK_SIZE = 100 + EXTRA;	! Number of words in a interrupt stack
+
+global
+     VECTAB : vector [10],		! Routine to call for each channel
+     DATTAB : vector [10],		! Data to pass to interrupt routine
+     APRTAB : vector [2],		! Routine to call for APR traps
+     INTERRUPT_LEVEL_FLAG : initial (0);! Says we are at interrupt level
+
+!+
+! The following table is used by the interrupt routine for network I/O.
+! It associates the channel number (as supplied by the interrupt vector block)
+! with the appropriate LINK_INFO block. In this way, the correct routine gets
+! waken up by the interrupt level.
+!-
+
+global
+    NETLNK : vector [10] initial (rep 10 of (0));	!Support up to 10 links
+
+!
+! Stack and pointer for interrupt level 1
+!
+own
+    STACK1 : vector [INTERRUPT_STACK_SIZE],
+    LEV1STK : block [1] field (STACK_POINTER_FIELDS)
+		preset ([STACK_SIZE] = -INTERRUPT_STACK_SIZE,
+			[STACK_ADDRESS] = STACK1-1);
+
+!
+! Stack and pointer for interrupt level 2
+!
+own
+    STACK2 : vector [INTERRUPT_STACK_SIZE],
+    LEV2STK : block [1] field (STACK_POINTER_FIELDS)
+		preset ([STACK_SIZE] = -INTERRUPT_STACK_SIZE,
+			[STACK_ADDRESS] = STACK2);
+!
+!
+! Stack and pointer for interrupt level 3
+!
+!own
+!    STACK3 : vector [INTERRUPT_STACK_SIZE],
+!    LEV3STK : block [1] field (STACK_POINTER_FIELDS)
+!		preset ([STACK_SIZE] = -INTERRUPT_STACK_SIZE,
+!			[STACK_ADDRESS] = STACK3);
+!
+!
+! Define channels on each interrupt level.
+!
+
+macro
+    LEVEL1_INTERRUPT_SET =
+	0, 1, 2, 3, 4, 5, 6, 7, 8, 9 %quote %;
+
+macro
+    LEVEL2_INTERRUPT_SET =
+	0, 1 %quote %;
+
+!
+! Vector routines for each interrupt channel.
+!
+
+macro
+    $$INT_FORWARDS [CHNNO] =
+	%name ('CSRV', CHNNO) : novalue %quote %;
+
+macro
+    $$INT_APR_FORWARDS [CHNNO] =
+	%name ('APRTP', CHNNO) : novalue %quote %;
+
+macro
+    LEVEL1_VECTOR_ROUTINES [] =
+	forward routine
+	  $$INT_FORWARDS (%remaining);
+	$$LEV1_ROUTINE (%remaining);
+	    %quote %;
+
+macro
+    $$LEV1_ROUTINE [CHNNO] =
+	  routine %name ('CSRV', CHNNO) : novalue =
+		begin
+		    literal P = %O'17';
+		    external PIVEC : blockvector [8,4] field (PI_VECTOR_FIELDS);
+		    builtin MACHOP, UUO;
+%debug(ALWAYS,	   (MACHOP (SETOM, 0, INTERRUPT_LEVEL_FLAG);))
+		    MACHOP (EXCH, P, LEV1STK);
+		    MACHOP (PUSH, P, 1);
+		    MACHOP (MOVEI, 1, PIVEC [CHNNO, PI_VEC_OLDPC]);
+		    MACHOP (PUSH, P, 1);
+		    MACHOP (PUSH, P, DATTAB + CHNNO);
+		    MACHOP (PUSHJ, P, .(VECTAB + CHNNO), 0, 0);
+		    MACHOP (ADJSP, P, -2);
+		    MACHOP (POP, P, 1);
+		    MACHOP (EXCH, P, LEV1STK);
+%debug(ALWAYS,	   (MACHOP (SETZM, 0, INTERRUPT_LEVEL_FLAG);))
+		    UUO (1, DEBRK$);
+! This should never return, but if you screwed up it would
+		end %quote %;
+
+macro
+    LEV1INT [CHNNO] =
+	[CHNNO, PI_VEC_NEWPC] = %name ('CSRV', CHNNO),
+	[CHNNO, PI_VEC_FLAGS] = PS$VTO %quote %;
+
+
+macro
+    LEVEL2_VECTOR_ROUTINES [] =
+	forward routine
+	  $$INT_APR_FORWARDS (%remaining);
+	$$LEV2_ROUTINE (%remaining);
+	    %quote %;
+
+macro
+    $$LEV2_ROUTINE [CHNNO] =
+	  routine %name ('APRTP', CHNNO) : novalue =
+		begin
+		    literal P = %O'17';
+		    external APRVEC : blockvector [2,2] field (APR_VECTOR_FIELDS);
+		    builtin MACHOP, UUO;
+		    MACHOP (EXCH, P, LEV2STK);
+		    MACHOP (PUSH, P, 1);
+		    MACHOP (MOVEI, 1, APRVEC [CHNNO, APR_VEC_OLDPC]);
+		    MACHOP (PUSH, P, 1);
+		    MACHOP (PUSH, P, DATTAB + CHNNO);
+		    MACHOP (PUSHJ, P, .(APRTAB + CHNNO), 0, 0);
+		    MACHOP (ADJSP, P, -2);
+		    MACHOP (POP, P, 1);
+		    MACHOP (EXCH, P, LEV2STK);
+		    MACHOP (JRST, 2, APRVEC [CHNNO, APR_VEC_OLDPC], 0, 1);
+		end %quote %;
+
+macro
+    LEV2INT [CHNNO] =
+	[CHNNO, APR_VEC_NEWPC] = JRST ^ 27 + %name ('APRTP', CHNNO) %quote %;
+
+field
+	PI_VECTOR_FIELDS =
+	set
+	PI_VEC_NEWPC = [$PSVNP, 0, 36, 0],	! Interrupt vector
+	PI_VEC_OLDPC = [$PSVOP, 0, 36, 0],	! Address for DEBRK
+	PI_VEC_FLAGS = [$PSVFL, 0, 36, 0],	! Flags
+	PI_VEC_STATUS = [$PSVIS, 0, 36, 0]	! Status of this interrupt
+	tes;
+
+field
+	APR_VECTOR_FIELDS =
+	set
+	APR_VEC_OLDPC = [0, 0, 36, 0],		! (E) of a JSR
+	APR_VEC_NEWPC = [1, 0, 36, 0]		! JRST to hi-seg routine
+	tes;
+
+LEVEL1_VECTOR_ROUTINES (LEVEL1_INTERRUPT_SET);
+LEVEL2_VECTOR_ROUTINES (LEVEL2_INTERRUPT_SET);
+
+!
+! Interrupt channel table
+!
+global
+    PIVEC : blockvector [10, 4] field (PI_VECTOR_FIELDS)
+	preset (LEV1INT (LEVEL1_INTERRUPT_SET)),
+    APRVEC : blockvector [2, 2] field (APR_VECTOR_FIELDS)
+	preset (LEV2INT (LEVEL2_INTERRUPT_SET));
+
+  %;
+
+!<BLF/PAGE>
+!
+! Interrupt system operation macros
+!
+! macro: CLEAR_INTERRUPT_SYSTEM
+!
+!		This macro clears the interrupt system.  All interrupts
+!		disabled.
+!
+
+macro
+    CLEAR_INTERRUPT_SYSTEM =
+	begin
+	register T1;
+	builtin UUO;
+
+	T1 = PS$FOF + PS$FCP;
+	UUO (1, PISYS$(T1));
+	end %;
+
+!
+! macro: INITIALIZE_INTERRUPT_SYSTEM
+!
+!		This macro setups any initial values needed in
+!		the interrupt data base and informs the operating
+!		system about the interrupt vector tables.
+!
+
+macro
+    INITIALIZE_INTERRUPT_SYSTEM =
+	begin
+	builtin UUO;
+	register T1;
+	external PIVEC : blockvector [6,4];
+	external INTNST;
+
+	T1 = PIVEC;
+	UUO (1, PIINI$(T1));
+	INTNST = -1;
+	end %;
+
+!
+! New form INTERRUPT handling
+!
+
+macro
+    TIMER_INTERRUPT_ROUTINE =
+	: TIMER_INTERRUPT_LINKAGE %,
+    NETWORK_INTERRUPT_ROUTINE =
+        (CHANNEL_STATUS) : NETWORK_INTERRUPT_LINKAGE %,
+    NI_RECEIVER_INTERRUPT_ROUTINE =
+	: NI_RECEIVER_INTERRUPT_LINKAGE %,
+    IPCF_INTERRUPT_ROUTINE =
+	: IPCF_INTERRUPT_LINKAGE %;
+
+macro
+    INTERRUPT_LINKAGE =
+	pushj :
+	    linkage_regs (15,13,1)
+	    preserve (0,2,3,4,5,6,7,8,9,10,11,12,14)
+	%;
+
+linkage
+    VANILLA_INTERRUPT_LINKAGE = INTERRUPT_LINKAGE,
+    TIMER_INTERRUPT_LINKAGE = INTERRUPT_LINKAGE,
+    NETWORK_INTERRUPT_LINKAGE = INTERRUPT_LINKAGE,
+    NI_RECEIVER_INTERRUPT_LINKAGE = INTERRUPT_LINKAGE,
+    IPCF_INTERRUPT_LINKAGE = INTERRUPT_LINKAGE;
+
+macro
+    INTERRUPT_ROUTINE [] =
+	(
+	 %remaining
+		) : VANILLA_INTERRUPT_LINKAGE
+	%warn('Best to Use ???_INTERRUPT_ROUTINE') %;
+
+!
+! Macro - ALLOCATE_NETLNK
+!
+! Function - This macro searches NETLNK for a 0 entry and installs the
+!	     channel number and the LINK_INFO block address into that slot.
+!
+! Parameters -
+!
+!    CHAN	The NSP. channel to be used
+!    INFBLK	The address of the LINK_INFO block
+!
+!-
+
+macro
+    ALLOCATE_NETLNK (CHAN, INFBLK) =
+    begin
+	external NETLNK : vector [10];
+
+	%debug (always,
+	begin
+	    if (CHAN) gtr 9 or .NETLNK [CHAN] neq 0 then
+	       TASK_ERROR ('Bad channel number in ALLOCATE_NETLNK');
+	end;)
+
+	NETLNK [CHAN] = INFBLK;
+    end
+    %;
+
+macro
+    SEARCH_NETLNK (CHAN) =
+    begin
+	external NETLNK : vector [10];
+
+	%debug (always,
+	begin
+	    if (CHAN) gtr 9 then
+	     TASK_ERROR ('Channel out of range in DEALLOCATE_NETLNK');
+	end;)
+
+	.NETLNK [CHAN]
+    end
+%;
+
+macro
+    DEALLOCATE_NETLNK (CHAN) =
+    begin
+	external NETLNK : vector [10];
+
+	%debug (always,
+	begin
+	    if (CHAN) gtr 9 or CHAN leq 0 then
+	    TASK_ERROR ('Bad channel numbet given to DEALLOCATE_NETLNK');
+	end;)
+
+	NETLNK [CHAN] = 0;
+    end
+    %;
+
+!
+! Macro - ALLOCATE_INTERRUPT_CHANNEL
+!
+! Function - This macro searchs the interrupt channel table
+!            for a free channel.
+!
+! Paramaters -
+!
+!    I_ROUTINE    Routine to call when interrupt occurs on channel
+!    I_DATA       Data to pass to interrupt routine when called
+!
+! Return value -
+!
+!        -1    No channel available
+!        >0    Channel number
+!
+
+macro
+    ALLOCATE_INTERRUPT_CHANNEL (I_ROUTINE, I_DATA) =
+	begin
+	local RESULT;
+	external
+                VECTAB : vector [10],
+                DATTAB : vector [10];
+
+	RESULT = -1;
+
+	incr INDEX from 0 to 9 do
+
+	    if .VECTAB [.INDEX] eql 0
+	    then
+		begin
+		RESULT = .INDEX;
+		exitloop;
+		end;
+
+        %if not %null (I_ROUTINE)
+        %then
+             if .RESULT neq -1
+             then VECTAB [.RESULT] = I_ROUTINE;
+        %fi
+
+        %if not %null (I_DATA)
+        %then
+             if .RESULT neq -1
+             then DATTAB [.RESULT] = I_DATA;
+        %fi
+
+	.RESULT
+	end %;
+
+!
+! Macro - RELEASE_INTERRUPT_CHANNEL
+!
+! Function - This macro flags that an interrupt channel is
+!            now available for use
+!
+! Parameters -
+!
+!    CHANNEL    Channel number to release
+!
+
+macro
+    RELEASE_INTERRUPT_CHANNEL (CHANNEL) =
+	begin
+	external VECTAB : vector [10];
+	VECTAB [CHANNEL] = 0;
+	end %;
+
+! System specific time interface
+!
+! This set of macros allows transparent manipulation of "time"
+! in a particular system.  The macros are defined to read time
+! from the operating system, read time with a offset, compare time,
+! set and clear interrupts on time.
+!
+!
+! Time block structure
+!
+!	This structure defines the format needed for a specific
+!	system to store a internal time/date value.
+
+literal
+    TIME_BLOCK_SIZE = 1,
+    TIME_BLOCK_ALLOCATION = 1;
+
+macro
+    TIME_BLOCK =
+ vector [1] %;
+
+!
+! macro: TIME_PLUS
+!
+!		This macro adds the second argument (which is in units of
+!		seconds) to the first argument which is a time block.
+!
+
+macro
+    TIME_PLUS (TIME, SECONDS) =
+    begin
+	bind TBLK = TIME : TIME_BLOCK;
+
+	TBLK [0] = .TBLK[0] + SECONDS  ^ 18 / (24 * 60 * 60)
+    end %;
+
+!
+! macro: TIME_DIFFERENCE_SECONDS
+!
+!		This macro computes the difference of two internal format
+!		times. Its two arguments are the addresses of the TIME_BLOCKs.
+!		Its value is the difference between the two times in seconds
+
+macro
+    TIME_DIFFERENCE_SECONDS (TIME1, TIME2) =
+    begin
+	bind TBLK1 = TIME1 : TIME_BLOCK,
+	     TBLK2 = TIME2 : TIME_BLOCK;
+	builtin
+	    ash;
+
+	ash (((.TBLK1[0] - .TBLK2[0]) * 24 * 60 * 60 + 1 ^ 17), -18)
+    end
+%;
+
+!
+! macro: TIME_CURRENT
+!
+!		This macro returns the current time in
+!		the host operating systems time format.
+!		This is the format needed to set timer
+!		interrupts.
+!
+!	TIME_CURRENT (OFFSET, TIM_BLK)
+!
+!	where	OFFSET	is the number of seconds to add to the
+!			actual current time.
+!		TIM_BLK	is the address of the time block in which
+!			to store the resulting time.
+
+macro
+    TIME_CURRENT (OFFSET, TIM_BLK) =
+	begin
+	    bind TBLK = TIM_BLK : TIME_BLOCK;
+	    builtin UUO;
+	    register T1;
+
+	    T1 = _CNDTM;
+	    UUO (1, GETTAB(T1));
+	    TBLK [0] = .T1 + OFFSET * 3;
+	end %;
+
+!
+! macro: TIME_INTERRUPT_CLEAR
+!
+!		This macro clears all outstanding timer interrupts.
+!
+
+macro
+    TIME_INTERRUPT_CLEAR =
+	begin
+	    builtin UUO;
+	    register T1;
+
+	    T1 = %o '777777';	! Make time for next interrupt be infinity
+	    UUO (1, PITMR$(T1));
+	end %;
+
+!
+! macro: TIME_INTERRUPT_SET
+!
+!		This macro sets a time interrupt.  It also
+!		defines the routine to be called when the
+!		interrupt occurs.
+!
+!		Note that since the interrupt channel is
+!		hard coded the time interrupt must be unique.
+!
+!	TIME_INTERRUPT_SET (TIME_BLK, TROUTINE)
+!
+!	where	TIM_BLK	is the time in the future for a interrupt
+!		ROUTINE	is the address of the interrupt service routine
+
+macro
+    TIME_INTERRUPT_SET (TIM_BLK, TROUTINE) =
+	begin
+	    bind TBLK = TIM_BLK : block [1];
+	    builtin UUO;
+	    register T1, T2, T3;
+	    external VECTAB : vector [10];
+	    local ARGLST : vector [3];
+	    own TIMER_CHANNEL : initial (-1);
+
+! Compute the daytime in seconds
+	    T2 = _CNDTM;
+	    UUO (1, GETTAB(T2));
+
+! Compute the amount of time (in seconds) to be hibered
+!  .T2 = the current time, TBLK contains the wakeup time
+	    T2 = TIME_DIFFERENCE_SECONDS (TBLK, T2);
+
+! If .T2 (the amount of time to be hibered) leq 0 then the wakeup
+!  time has passed, in which case we call TROUTINE immediately.
+
+	    if .T2 leq 0 then
+	    TROUTINE()
+	    else
+	    begin
+
+
+! Now set up the PISYS to trap on the timer interrupt
+
+		if (.TIMER_CHANNEL eql -1) then
+		begin
+		    TIMER_CHANNEL = ALLOCATE_INTERRUPT_CHANNEL (TROUTINE);
+
+		    ARGLST [0] = $PCTMR;
+		    ARGLST [1] = (.TIMER_CHANNEL * 4) ^ 18;
+		    ARGLST [2] = 0;
+		    T1 = PS$FAC + ARGLST;
+		    UUO (1, PISYS$(T1));
+		end;
+
+! Tell the monitor when to wake us up
+
+		UUO (1, PITMR$(T2));
+	    end
+	end %;
+
+!
+! macro: TIME_SET_NULL
+!
+!		This macro sets a time block to a null value.
+!		This value is used as a sentinel to check for
+!		a valid time value (null/not null).
+!
+!	TIME_SET_NULL (TIM_BLK)
+!
+!	where	TIM_BLK	is the address of the time block.
+
+macro
+    TIME_SET_NULL (TIM_BLK) =
+	begin
+	    bind TBLK = TIM_BLK : TIME_BLOCK;
+	    TBLK [0] = -1;
+	end %;
+
+!
+! macro: TIME_NOT_NULL
+!
+!		This macro checks to the value in a time block
+!		to see if it is not null (see TIME_SET_NULL).
+!
+!	TIME_NOT_NULL (TIM_BLK)
+!
+!	where	TIM_BLK	is the address of the time block to test.
+
+macro
+    TIME_NOT_NULL (TIM_BLK) =
+	begin
+	    bind TBLK = TIM_BLK : TIME_BLOCK;
+	    .TBLK [0] neq -1
+	end %;
+
+!
+! macro: TIME_NULL
+!
+!		This macro checks to the value in a time block
+!		to see if it is null (see TIME_SET_NULL).
+!
+!	TIME_NULL (TIM_BLK)
+!
+!	where	TIM_BLK	is the address of the time block to test.
+
+macro
+    TIME_NULL (TIM_BLK) =
+	begin
+	    bind TBLK = TIM_BLK : TIME_BLOCK;
+	    .TBLK [0] eql -1
+	end %;
+
+!
+! macro: TIME_COPY
+!
+!		This macro copies the time from one time block
+!		to another time block.
+!
+!	TIME_COPY (TO_BLK, FRM_BLK)
+!
+!	where	TO_BLK	is the time block to copy the time to.
+!		FRM_BLK	is the time block to copy the time from.
+
+macro
+    TIME_COPY (TO_BLK, FRM_BLK) =
+	begin
+	    bind TOBLK = TO_BLK : TIME_BLOCK,
+		 FRMBLK = FRM_BLK : TIME_BLOCK;
+
+	    TOBLK [0] = .FRMBLK [0];
+	end %;
+
+!
+! macro: TIME_TEST
+!
+!		This macro tests the chronological relation of
+!		the values in two time blocks.  The test operator
+!		is specified as an argument to the macro.  The
+!		value returned by this macro is a boolean (true/false)
+!		from the test "TB1 TST_FNC TB2" (i.e. TB1 lss TB2).
+!
+!	TIME_TEST (TBLK1, TST_FNC, TBLK2)
+!
+!	where	TBLK1	is the first time block.
+!		TST_FNC	is the test operator (LSS, GTR, EQL,..etc)
+!		TBLK2	is the second time time.
+
+macro
+    TIME_TEST (TBLK1, TST_FNC, TBLK2) =
+	begin
+	    bind TIMBLK1 = TBLK1 : TIME_BLOCK,
+		 TIMBLK2 = TBLK2 : TIME_BLOCK;
+
+	    .TIMBLK1 [0] TST_FNC .TIMBLK2 [0]
+	end %;
+
+!
+!<BLF/PAGE>
+!
+! macro: ARITHMETIC_OVERFLOW
+!
+!		This macro enables interrupts on arithmetic errors.
+!		The routine specified will be called when an error
+!		occurs.
+
+macro
+    ARITHMETIC_OVERFLOW (E_ROUTINE) =
+	begin
+	builtin UUO;
+	external VECTAB : vector [10];
+	local ARGLST : vector [3];
+	register T1;
+
+	APRTAB [0] = E_ROUTINE;
+
+	ARGLST [0] = 1;
+	ARGLST [1] = $UTAOF;
+	ARGLST [2] = JSR^27 + APRVEC [0, APR_VEC_OLDPC];
+
+	T1 = $UTSET ^ 18 + ARGLST;
+	UUO (1 ,UTRP$(T1));
+	end %;
+
+! macro: STACK_OVERFLOW
+!
+!		This macro enables interrupts on push down list
+!		overflows. The routine specified will be called
+!		when an error occurs.
+
+macro
+    STACK_OVERFLOW (E_ROUTINE) =
+	begin
+	builtin UUO;
+	external VECTAB : vector [10];
+	local ARGLST : vector [3];
+	register T1;
+
+	APRTAB [1] = E_ROUTINE;
+
+	ARGLST [0] = 1;
+	ARGLST [1] = $UTPOV;
+	ARGLST [2] = JSR^27 + APRVEC [1, APR_VEC_OLDPC];
+
+	T1 = $UTSET ^ 18 + ARGLST;
+	UUO (1 ,UTRP$(T1));
+	end %;
+
+! macro: ILLEGAL_INSTRUCTION
+!
+!		This macro enables interrupts on illegal instruction
+!		traps. The routine specified will be called when an
+!		error occurs.
+
+macro
+    ILLEGAL_INSTRUCTION (E_ROUTINE) =
+	begin
+	builtin UUO;
+	external VECTAB : vector [10];
+	local ARGLST : vector [3];
+	register T1;
+
+	T1 = ALLOCATE_INTERRUPT_CHANNEL (E_ROUTINE);
+
+	ARGLST [0] = $PCIUU;
+	ARGLST [1] = (.T1 * 4) ^ 18;
+	ARGLST [2] = 0;
+
+	T1 = PS$FAC + ARGLST;
+	UUO (1, PISYS$(T1));
+	end %;
+
+! macro: ILLEGAL_MEMORY_REFERENCE
+!
+!		This macro enables interrupts on illegal memory reads
+!		and writes.  The routine specified will be called when
+!		an error occurs.
+
+macro
+    ILLEGAL_MEMORY_REFERENCE (E_ROUTINE) =
+	begin
+	builtin UUO;
+	external VECTAB : vector [10];
+	local ARGLST : vector [3];
+	register T1;
+
+	T1 = ALLOCATE_INTERRUPT_CHANNEL (E_ROUTINE);
+
+	ARGLST [0] = $PCIMR;
+	ARGLST [1] = (.T1 * 4) ^ 18;
+	ARGLST [2] = 0;
+
+	T1 = PS$FAC + ARGLST;
+	UUO (1, PISYS$(T1));
+	end %;
+
+! macro: SYSTEM_RESOURCE_FAILURE
+!
+!		This macro enables interrupts on system resource
+!		allocation failures.  The routine specified will
+!		be called when an error occurs.
+
+macro
+    SYSTEM_RESOURCE_FAILURE (E_ROUTINE) =
+	begin
+	builtin UUO;
+	external VECTAB : vector [10];
+	local ARGLST : vector [3];
+	register T1;
+
+	T1 = ALLOCATE_INTERRUPT_CHANNEL (E_ROUTINE);
+
+	ARGLST [0] = $PCXEJ;
+	ARGLST [1] = (.T1 * 4) ^ 18;
+	ARGLST [2] = 0;
+
+	T1 = PS$FAC + ARGLST;
+	UUO (1, PISYS$(T1));
+	end %;
+
+!<BLF/PAGE>
+!
+! macro: ACTIVATE_INTERRUPT
+!
+!		This macro enables a specific interrupt.  The
+!		variable HANDLE points to the relevant interrupt
+!		data base.
+
+macro
+    ACTIVATE_INTERRUPT (CHANNEL) =
+ %;
+
+!	begin
+!	builtin UUO;
+!	register T1;
+!	local PISARG : vector [3];
+!
+!	PISARG [0] = .HANDLE_TAB [.HANDLE, HT_REASON];
+!	PISARG [1] = (4 * .HANDLE_TAB [.HANDLE, HT_CHANNEL]) ^ 18;
+!	PISARG [2] = 0;
+!
+!	T1 = PS$FAC + PISARG;
+!	UUO (1, PISYS$(T1));
+!	end %;
+!
+! macro: DEACTIVATE_INTERRUPT
+!
+!		This macro disables a specific interrupt.  The
+!		variable HANDLE is the index into the HANDLE_TAB
+!		interrup data base.
+
+macro
+    DEACTIVATE_INTERRUPT (CHANNEL) =
+ %;
+
+!	begin
+!	builtin UUO;
+!	register T1;
+!	local PISARG : vector [3];
+!
+!	PISARG [0] = .HANDLE_TAB [.HANDLE, HT_REASON];
+!	PISARG [1] = (4 * .HANDLE_TAB [.HANDLE, HT_CHANNEL]) ^ 18;
+!	PISARG [2] = 0;
+!
+!	T1 = PS$FRC + PISARG;
+!	UUO (1, PISYS$(T1));
+!	end %;
+!<BLF/PAGE>
+!
+! macro: INTERRUPT_ON
+!
+!		This macro enables the interrupt system.  If nested
+!		INTERRUPT_OFF calls have been made, this call only
+!		decrements the nesting count.
+
+macro
+    INTERRUPT_ON =
+	begin
+	    builtin UUO, MACHSKIP;
+	    register T1;
+	    external INTNST;		! Interrupt nesting count
+
+	    T1 = PS$FON;
+	    if not MACHSKIP (SOSGE, 0, INTNST) then UUO (1, PISYS$(T1));
+	end %;
+
+!
+! macro: INTERRUPT_OFF
+!
+!		This macro turns the interrupt system off.  It
+!		also increments the nesting count of times that
+!		it has been turned off.
+
+macro
+    INTERRUPT_OFF =
+	begin
+	    register T1;
+	    builtin UUO, MACHSKIP;
+	    external INTNST;
+	    T1 = PS$FOF;
+	    if not MACHSKIP (AOSN, 0, INTNST) then
+	       UUO (1, PISYS$(T1));	! Turn interrupt system off
+	end %;
+
+!<BLF/PAGE>
+!
+! System specific interrupt system internal macros
+!
+! macro: SET_*_INTERRUPT
+!
+!		These macro sets up a interrupt specified
+!		by HANDLE_TAB [.HANDLE, *] (the interrupt
+!		data base indexed by the handle).
+
+macro
+    SET_FILE_INTERRUPT =
+	TASK_ERROR ('File interrupts not ready yet.') %;
+
+macro
+    SET_TIMER_INTERRUPT =
+	TASK_ERROR ('Timer interrupts not ready yet.') %;
+
+macro
+    SET_NETWORK_INTERRUPT =
+	TASK_ERROR ('Network interrupts not ready yet.') %;
+
+!<BLF/PAGE>
+!
+! Wait Block Structure
+!
+!	This defines the WAIT_BLOCK used in timing out waiting for events,
+!	specifically those waits implemented by calling NMU$SCHED_WAIT.
+!
+$field WAIT_BLOCK_FIELDS =
+set
+WAITING_TASK = [$address], 			!task block addr, to ref semaphore
+$ALIGN (FULLWORD)WAIT_EVENT = [$address], 	!addr of event block to wait on
+$ALIGN (FULLWORD)WAIT_TIME = [$sub_block (TIME_BLOCK_SIZE)]	!time at which to 'wake'
+tes
+;
+!
+
+literal
+    WAIT_BLOCK_SIZE = $field_set_size;
+
+!
+
+macro
+    WAIT_BLOCK =
+ block [WAIT_BLOCK_SIZE] field (WAIT_BLOCK_FIELDS)%;
+
+!
+!
+! Memory allocation
+!
+! macro: CORE_GET
+!
+!		This macro gets a block of memory from the
+!		operating system of the specified size.  The
+!		address of the block is returned as the value
+!		of the macro.
+!
+!	CORE_GET (BLOCK_SIZE)
+!
+!	where BLOCK_SIZE is the number of fullwords to be allocated.
+
+macro
+    CORE_GET (BLKSIZE) =
+	begin
+	    literal $JBFF = %o '121',
+		    $JBREL = %o '44';
+	    local BLKADDR;
+	    register T1;
+	    builtin UUO;
+
+	    BLKADDR = .$JBFF;		! Get current .JBFF value
+	    if .$JBFF + (BLKSIZE) - 1 GTR .$JBREL then
+	    begin
+		T1 = .$JBFF + (BLKSIZE) - 1;
+		if UUO (1,CORE(T1)) then
+		begin
+		    $JBFF = .$JBFF + (BLKSIZE);
+		    .BLKADDR
+		end
+		else 0
+	    end
+	    else
+	    begin
+		$JBFF = .$JBFF + (BLKSIZE);
+		.BLKADDR
+	    end
+
+	end %;
+
+!<BLF/PAGE>
+!
+! Process sleep and wakeup
+!
+! macro: PROCESS_SLEEP
+!
+!		This macro puts the current process to
+!		sleep for the specified amount of time.
+!		The process is not guaranteed to sleep
+!		the specified amount.
+!
+!	PROCESS_SLEEP (TIME)
+!
+!	where TIME is the number of seconds to sleep.
+
+macro
+    PROCESS_SLEEP (TIME) =
+	begin
+	    builtin UUO;
+	    register T1;
+	    T1 = TIME * 1000 + HB$RWP + HB$RWT;
+	    UUO (1, HIBER(T1));
+	end %;
+
+!
+! macro: PROCESS_WAKE
+!
+!		This macro wakes up the current process.
+!		It may be called at interrupt level to
+!		complement the PROCESS_SLEEP function.
+!
+
+macro
+    PROCESS_WAKE =
+    begin
+	builtin
+	    UUO;
+	register
+	    T1;
+
+	T1 = 0; ! Wake up this job
+	UUO (1,WAKE(T1));
+    end %;
+
+!
+!<BLF/PAGE>
+!
+! IPCF functions
+!macro
+!    $MUTIL (LEN, ARGBLK, FUNC, ERROR) =
+!
+!         begin
+!           builtin JSYS;
+!           local RESULT;
+!           register T1=1, T2=2;
+!           T1 = LEN;
+!           T2 = ARGBLK;
+!           ARGBLK [0] = FUNC;
+!           RESULT = JSYS (-1, MUTIL_, T1, T2);
+!           ERROR = .T1;
+!           .RESULT
+!         end %;
+
+macro
+    $MSEND (LEN, PDB, ERROR) =
+         begin
+	   local RESULT;
+           builtin UUO;
+           register T1;
+           T1 = LEN ^ 18 + PDB;
+           RESULT = UUO (1, IPCFS$(T1));
+           ERROR = .T1;
+	   .RESULT
+         end %;
+
+macro
+    $MRECV (LEN, PDB, ERROR) =
+         begin
+	   local RESULT;
+           builtin UUO;
+           register T1;
+           T1 = LEN ^ 18 + PDB;
+           RESULT = UUO (1, IPCFR$(T1));
+           ERROR = .T1;
+	   .RESULT
+          end %;
+
+!<BLF/PAGE>
+!
+! Network interface macros
+!
+! System specific fields for the LINK_INFO_BLOCK
+!
+
+macro
+    $strblk (n) =
+	$sub_block(1+(n+3)/4) %;
+
+macro
+    LINK_SYSTEM_SPECIFIC_FIELDS =
+	LINK_NSP_CHN = [$integer],		! NSP link channel
+	LINK_NSP_STATUS = [$integer],		! NSP status word
+	LINK_READ_CONNECT_DATA = [$integer],	! Flag we read in connect data
+
+!
+! The following set of field definitions contains the complete set
+! of arguments and data for an NSP. connect block.
+!
+	LINK_NSP_CBLK = [$sub_block (8)],	! NSP Connect block
+! Individual fields are accessed by $NDxxx symbols
+
+! Define storage for all the fields pointed to by the connect block
+	 LINK_NSP_HOST = [$strblk (6)],		! Node name
+	 LINK_NSP_SOURCE_PDB = [$sub_block (5)],! NSP source PDB
+	  LINK_NSP_SRC_PN = [$strblk (16)],	! Process name string
+	 LINK_NSP_DEST_PDB = [$sub_block (5)],	! NSP destination PDB
+	  LINK_NSP_DST_PN = [$strblk (16)],	! Process name string
+	 LINK_NSP_USERID = [$strblk (39)],	! User ID
+	 LINK_NSP_PASSWD = [$strblk (39)],	! Password
+	 LINK_NSP_ACCOUN = [$strblk (39)],	! Account string
+	 LINK_NSP_DATA = [$strblk (16)]		! User data
+	%,
+    STRING_BLOCK (n) =
+ block [1+(n*3)/4] field (STRING_BLOCK_FIELDS) %,
+    INIT_STRING (ADDR, LENGTH) =
+	STRBLK [ADDR, STRING_HEADER] = 1 + ( LENGTH + 3 ) / 4 %;
+
+structure
+    STRBLK [OFFSET, POS, SIZE; NUMCHARS] =
+	[1 + (NUMCHARS + 3)/4]
+	(STRBLK + OFFSET)<POS, SIZE>;
+
+field
+    STRING_BLOCK_FIELDS =
+	set
+	STRING_HEADER = [0, 0, 36],		! ** Contains next 2 fields
+	LENGTH_CHARS = [0, 18, 18],		! Length in characters
+	LENGTH_WORDS = [0, 0, 18],		! Length in words
+	STRING = [1, 0, 36]			! Start of string
+	tes;
+
+!
+! Macro: LOCAL_NODE_NUMBER
+!
+!		This macro returns the local node number.  It
+!		puts it into a byte string pointed to by the
+!		supplied byte pointer.
+!
+!	LOCAL_NODE_NUMBER (NODE_PTR)
+!
+!	where	NODE_PTR    is the address of a byte pointer that
+!			    is updated when done.
+!
+
+macro
+    LOCAL_NODE_NUMBER (NODE_PTR) =
+	begin
+	    builtin UUO;
+	    local NTMAN_BLOCK : vector [$NTMAX];
+	    register T1;
+
+	    NTMAN_BLOCK [$NTCNT] = $NTMAX;
+	    NTMAN_BLOCK [$NTENT] = $NTNOD;
+	    NTMAN_BLOCK [$NTFNC] = $NTREX;	! Return local node number
+	    NTMAN_BLOCK [$NTBPT] = .NODE_PTR;
+	    NTMAN_BLOCK [$NTBYT] = 3;
+
+	    T1 = NTMAN_BLOCK;
+	    UUO (1, NTMAN$ (T1));
+
+	    NODE_PTR = ch$plus (.NODE_PTR, 2);	! Don't forget to update this
+	end %;
+
+!
+! macro: LOCAL_NODE_NAME
+!
+!		This macro returns the local node name in a
+!		counted ASCII string.  The node name is written
+!		into the string pointed to by the supplied byte
+!		pointer and the first byte is the number of characters
+!		in the node name.
+!
+!	LOCAL_NODE_NAME (NODE_PTR)
+!
+!	where	NODE_PTR    is the address of a byte pointer
+
+macro
+    LOCAL_NODE_NAME (NODE_PTR) =
+	begin
+	    builtin UUO;
+	    register T1;
+	    local
+		NAME_BUFFER : vector [ch$allocation (8, 2 + 7)],
+		NTMAN_BLOCK : vector [$NTMAX];
+
+	    NTMAN_BLOCK [$NTCNT] = $NTMAX;
+	    NTMAN_BLOCK [$NTENT] = $NTNOD;
+	    NTMAN_BLOCK [$NTFNC] = $NTREX;	! Return local node number
+	    NTMAN_BLOCK [$NTBPT] = ch$ptr (NAME_BUFFER,,8);
+	    NTMAN_BLOCK [$NTBYT] = 3;
+
+	    T1 = NTMAN_BLOCK;
+	    UUO (1, NTMAN$ (T1));
+
+	    NTMAN_BLOCK [$NTCNT] = $NTMAX;
+	    NTMAN_BLOCK [$NTFNC] = $NTMAP;	! Map number to node id
+	    NTMAN_BLOCK [$NTBPT] = ch$ptr (NAME_BUFFER,,8);
+	    NTMAN_BLOCK [$NTBYT] = 9;
+
+	    T1 = NTMAN_BLOCK;
+	    UUO (1, NTMAN$ (T1));
+
+	    ch$move (7, ch$ptr (NAME_BUFFER, 2, 8), .NODE_PTR);
+	end %;
+
+!
+!	Set up arguments for NSP. by turning CONNECT_BLOCKs
+!	into LINK_INFO blocks
+!
+
+macro
+    BUILD_LINK_INFO_BLOCK (CONN_BLK, LINK_INFO) =
+    begin
+        bind LI = LINK_INFO : LINK_INFO_BLOCK,
+	     LI_NSP = LI [LINK_NSP_CBLK] : vector [8],
+	     LI_NSP_DST = LI [LINK_NSP_DEST_PDB] : vector [5],
+	     LI_NSP_SRC = LI [LINK_NSP_SOURCE_PDB] : vector [5],
+	     CB = CONN_BLK : CONNECT_BLOCK;
+
+	external routine USER_NAME;
+
+	LI [LINK_NSP_CHN] = 0;
+	LI [LINK_READ_CONNECT_DATA] = 0; ! Say we haven't read connect data yet
+
+! Set up all pointers in the Connect block
+	LI_NSP [$NSCNL] = 8;
+	LI_NSP [$NSCND] = LI [LINK_NSP_HOST];
+	LI_NSP [$NSCSD] = LI [LINK_NSP_SOURCE_PDB];
+	LI_NSP [$NSCDD] = LI [LINK_NSP_DEST_PDB];
+	LI_NSP [$NSCUS] = LI [LINK_NSP_USERID];
+	LI_NSP [$NSCPW] = LI [LINK_NSP_PASSWD];
+	LI_NSP [$NSCAC] = LI [LINK_NSP_ACCOUN];
+	LI_NSP [$NSCUD] = LI [LINK_NSP_DATA];
+
+! Initialize the source Process Desrciptor Block
+	LI_NSP_SRC [$NSDFL] = 3;
+	LI_NSP_SRC [$NSDFM] = 0;
+	LI_NSP_SRC [$NSDOB] = 0;
+	LI_NSP_SRC [$NSDPP] = 0;
+	LI_NSP_SRC [$NSDPN] = LI [LINK_NSP_SRC_PN];
+
+! Initialize the destination Process Descriptor Block
+	LI_NSP_DST [$NSDFL] = 3;
+	LI_NSP_DST [$NSDFM] = 0;
+	LI_NSP_DST [$NSDOB] = 0;
+	LI_NSP_DST [$NSDPP] = 0;
+	LI_NSP_DST [$NSDPN] = LI [LINK_NSP_DST_PN];
+
+! Initialize all string blocks
+	INIT_STRING (LI [LINK_NSP_HOST], 6);
+	INIT_STRING (LI [LINK_NSP_SRC_PN], 16);
+	INIT_STRING (LI [LINK_NSP_DST_PN], 16);
+	INIT_STRING (LI [LINK_NSP_USERID], 39);
+	INIT_STRING (LI [LINK_NSP_PASSWD], 39);
+	INIT_STRING (LI [LINK_NSP_ACCOUN], 39);
+	INIT_STRING (LI [LINK_NSP_DATA], 16);
+
+! Set up strings in the Connect block
+	begin
+
+!
+! Set up Node (or Host if you prefer) name
+!
+	    if .CB [CB_HOST_LENGTH] neq 0 then
+	    begin
+
+	    STRBLK [ LI [LINK_NSP_HOST], LENGTH_CHARS] = .CB [CB_HOST_LENGTH];
+	    ch$move(.CB [CB_HOST_LENGTH],
+			ch$plus(.CB [CB_HOST],3),
+			ch$ptr(STRBLK [ LI [LINK_NSP_HOST], STRING],,8));
+
+	    end;
+
+!
+!	Set up source PDB
+!
+	    if .CB [CB_TASK_LENGTH] neq 0 then
+	    begin
+
+		LI_NSP_SRC [$NSDFL] = 5;
+		LI_NSP_SRC [$NSDFM] = 1;
+
+		STRBLK [ LI [LINK_NSP_SRC_PN], LENGTH_CHARS] =
+		 .CB [CB_TASK_LENGTH];
+		ch$move(.CB [CB_TASK_LENGTH],
+			.CB [CB_TASK],
+			ch$ptr(STRBLK [ LI [LINK_NSP_SRC_PN], STRING],,8));
+
+	    end
+	    else
+	    begin
+		LI_NSP_SRC [$NSDFL] = 3;
+		LI_NSP_SRC [$NSDFM] = 0;
+		LI_NSP_SRC [$NSDOB] = 27;
+	    end;
+
+!
+!	Set up destination PDB
+!
+
+	    if .CB [CB_OBJECT] eql 0 then
+	    begin
+		LI_NSP_DST [$NSDFL] = 5;
+		LI_NSP_DST [$NSDFM] = 1;
+		if .CB [CB_DESCRIPTOR_LENGTH] neq 0 then
+		begin
+
+		    STRBLK [ LI [LINK_NSP_DST_PN], LENGTH_CHARS] =
+		     .CB [CB_DESCRIPTOR_LENGTH];
+		    ch$move(.CB [CB_DESCRIPTOR_LENGTH],
+			    .CB [CB_DESCRIPTOR],
+			    ch$ptr(STRBLK [ LI [LINK_NSP_DST_PN], STRING],,8));
+
+		end;
+	    end
+	    else LI_NSP_DST [$NSDOB] = .CB [CB_OBJECT];
+
+!
+!	Add optional userid attribute
+!
+	    if .CB [CB_USERID_LENGTH] neq 0 then
+	    begin
+
+		STRBLK [ LI [LINK_NSP_USERID], LENGTH_CHARS] =
+		 .CB [CB_USERID_LENGTH];
+		ch$move(.CB [CB_USERID_LENGTH],
+			.CB [CB_USERID],
+			ch$ptr(STRBLK [ LI [LINK_NSP_USERID], STRING],,8));
+
+	    end;
+
+!
+!	Add optional password attribute
+!
+	    if .CB [CB_PASSWORD_LENGTH] neq 0 then
+	    begin
+
+		STRBLK [ LI [LINK_NSP_PASSWD], LENGTH_CHARS] =
+		 .CB [CB_PASSWORD_LENGTH];
+		ch$move(.CB [CB_PASSWORD_LENGTH],
+			.CB [CB_PASSWORD],
+			ch$ptr(STRBLK [ LI [LINK_NSP_PASSWD], STRING],,8));
+
+	    end;
+
+!
+!	Add optional account attribute
+!
+	    if .CB [CB_ACCOUNT_LENGTH] neq 0 then
+	    begin
+
+		STRBLK [ LI [LINK_NSP_ACCOUN], LENGTH_CHARS] =
+		 .CB [CB_ACCOUNT_LENGTH];
+		ch$move(.CB [CB_ACCOUNT_LENGTH],
+			.CB [CB_ACCOUNT],
+			ch$ptr(STRBLK [ LI [LINK_NSP_ACCOUN], STRING],,8));
+
+
+	    end;
+
+!
+!	Add optional data attribute
+!
+	    if .CB [CB_DATA_LENGTH] neq 0 then
+	    begin
+
+		STRBLK [ LI [LINK_NSP_DATA], LENGTH_CHARS] =
+		 .CB [CB_DATA_LENGTH];
+		ch$move(.CB [CB_DATA_LENGTH],
+			.CB [CB_DATA],
+			ch$ptr(STRBLK [ LI [LINK_NSP_DATA], STRING],,8));
+
+	    end;
+
+	end
+    end	%;
+
+!
+! Macro - OPEN_FOR_CONNECTION
+!
+! Function - This macro opens a logical link.  If it is a source
+!            link, the connect is sent.  If it is a target link
+!            it opens for possible connection.
+!
+! Parameters -
+!
+!    LINK_INFO    Address of link info block
+!
+! Return value -
+!
+!    $true    Link is setup for connection properly
+!    $false   Link setup failed
+
+macro
+    OPEN_FOR_CONNECTION (LINK_INFO) =
+    begin
+        builtin UUO;
+        register T1;
+	external
+	    DATTAB : vector [10],
+	    VECTAB : vector [10],
+	    NETLNK : vector [10],
+	    PIVEC : blockvector [6, 4];
+        bind LI = LINK_INFO : LINK_INFO_BLOCK;
+	local NSPARG : vector [5], PISARG : vector [3];
+	own LINK_INTERRUPT_CHANNEL : initial (-1);
+
+!
+!   Get channel for link
+!
+	NSPARG [$NSAA1] = LI [LINK_NSP_CBLK];
+	NSPARG [$NSAA2] = 0;
+	NSPARG [$NSAA3] = 0;
+
+	if .LI [LINK_TYPE] eql SOURCE_LINK
+	then NSPARG [$NSAFN] = $NSFEA ^ 18 + 5
+	else NSPARG [$NSAFN] = $NSFEP ^ 18 + 5;
+
+        T1 = NSPARG;
+        if UUO (1, NSP$(T1))
+	then
+	begin
+	    LI [LINK_NSP_CHN] = .NSPARG [$NSACH] and %o'777777';
+	    ALLOCATE_NETLNK (.NSPARG [$NSACH] and %o '777777', LI);
+!
+!	Set up the PI system
+!
+
+	    if .LINK_INTERRUPT_CHANNEL eql -1
+	    then
+	    begin
+		LINK_INTERRUPT_CHANNEL =
+		ALLOCATE_INTERRUPT_CHANNEL (NETWORK_EVENT,
+					    0);
+
+		DATTAB [.LINK_INTERRUPT_CHANNEL] = PIVEC + $PSVIS + 4 *
+						   .LINK_INTERRUPT_CHANNEL;
+
+		PISARG [0] = $PCNSP;
+		PISARG [1] = (.LINK_INTERRUPT_CHANNEL * 4) ^ 18;
+		PISARG [2] = 0;
+
+		T1 = PS$FAC + PISARG;
+		UUO (1, PISYS$(T1))
+	    end; ! End of  if .LINK_INTERRUPT_CHANNEL eql -1
+
+	    NSPARG [$NSAFN] = $NSFPI ^ 18 + 3;
+	    NSPARG [$NSAA1] = %o'777777';
+
+	    T1 = NSPARG;
+	    if UUO (1, NSP$(T1)) then $true else $false
+	end
+	else
+	begin
+	    %debug (NETWORK_TRANSITIONS,
+		    (TRACE_INFO ('NSP UUO did not skip. Reason: %O',.T1)));
+	    $false
+	end
+    end
+            %;
+
+macro
+    ACCEPT_NETWORK_CONNECT (LINK_INFO, DATA_LEN, DATA_PTR) =
+	begin
+	    bind LI = LINK_INFO : LINK_INFO_BLOCK;
+
+	    begin
+	    builtin UUO;
+	    local NSPARG : vector [3],
+		  USER_DATA : STRING_BLOCK (16);
+	    register T1;
+
+	    INIT_STRING (USER_DATA, 16);
+	    STRBLK [USER_DATA, LENGTH_CHARS] = DATA_LEN;
+	    ch$move (DATA_LEN,
+		     DATA_PTR,
+		     ch$ptr(STRBLK [USER_DATA, STRING],, 8));
+
+	    NSPARG [$NSAFN] = $NSFAC ^ 18 + 3;
+	    NSPARG [$NSACH] = .LI [LINK_NSP_CHN];
+	    NSPARG [$NSAA1] = USER_DATA;
+	    T1 = NSPARG;
+	    UUO (1, NSP$(T1));
+	    end;
+	    begin
+	    local
+		 WAITING ;
+
+            WAITING = $TRUE ;
+            while .WAITING
+            do begin
+               READ_LINK_STATUS (LINK_INFO) ;
+               if (WAITING = not ((LINK_CONNECTED (LINK_INFO)) or
+                                  (LINK_DISCONNECTED (LINK_INFO))))
+               then NMU$SCHED_SLEEP (1) ;
+               end;
+            end;
+	end %;
+
+macro
+    REJECT_NETWORK_CONNECT (LINK_INFO, REASON, DATA_LEN, DATA_PTR) =
+	begin
+	    bind LI = LINK_INFO : LINK_INFO_BLOCK;
+
+	    builtin UUO;
+	    local NSPARG : vector [3],
+		  USER_DATA : STRING_BLOCK (16);
+	    register T1;
+
+	    INIT_STRING (USER_DATA, 16);
+	    ch$move (DATA_LEN,
+		     DATA_PTR,
+		     ch$ptr(STRBLK [USER_DATA, STRING],, 8));
+
+	    STRBLK [USER_DATA, LENGTH_CHARS] = DATA_LEN;
+
+	    NSPARG [$NSAFN] = $NSFRJ ^ 18 + 3;
+	    NSPARG [$NSACH] = .LI [LINK_NSP_CHN];
+	    NSPARG [$NSAA1] = USER_DATA;
+	    T1 = NSPARG;
+	    UUO (1, NSP$(T1));
+	end %;
+
+macro
+    LINK_OPEN (LINK_INFO) =
+	begin
+	    bind LI = LINK_INFO : LINK_INFO_BLOCK,
+		 LS = LI [LINK_NSP_STATUS];
+
+	    (if .LI [LINK_TYPE] eql SOURCE_LINK
+	     then (POINTR(.LS, NS$STA) eql $NSSRN)
+	     else (POINTR(.LS, NS$STA) eql $NSSCR))
+	end %;
+
+macro
+    LINK_CONNECTED (LINK_INFO) =
+	begin
+	    bind LI = LINK_INFO : LINK_INFO_BLOCK,
+		 LS = LI [LINK_NSP_STATUS];
+
+	    (POINTR (.LS, NS$STA) eql $NSSRN)
+	end %;
+
+macro
+    LINK_DISCONNECTED (LINK_INFO) =
+        begin
+            bind LI = LINK_INFO : LINK_INFO_BLOCK,
+		 LS = LI [LINK_NSP_STATUS];
+
+            (
+! **** Do Soon ****
+! Figure out how RJ and DR states relate to this mess!
+!	     ((.LS and NS$LWU) neq 0)
+!           or
+            (POINTR (.LS, NS$STA) eql $NSSDR)
+            or
+            (POINTR (.LS, NS$STA) eql $NSSLK))
+        end %;
+
+macro
+    CONNECT_WAIT (LINK_INFO) =
+	begin
+	    bind LI = LINK_INFO : LINK_INFO_BLOCK,
+		 LS = LI [LINK_NSP_STATUS];
+
+	    (if .LI [LINK_TYPE] eql SOURCE_LINK
+	     then (POINTR(.LS, NS$STA) eql $NSSCS)
+	     else (POINTR(.LS, NS$STA) eql $NSSCW))
+	end %;
+
+macro
+    READ_MESSAGE (LINK_INFO, BUFFER_LEN, BUFFER_PTR) =
+    begin
+	builtin UUO;
+	bind LI = LINK_INFO : LINK_INFO_BLOCK,
+	     LS = LI [LINK_NSP_STATUS];
+	local CHAR_READ;
+!	local CHAR_READ, READ_WAIT;
+
+	CHAR_READ = 0;
+
+	while $TRUE do
+	begin
+	    local NSPARG : vector [4];
+	    register T1;
+	    NSPARG [$NSAFN] = $NSFDR ^ 18 + 5;
+	    NSPARG [$NSACH] = .LI [LINK_NSP_CHN];
+	    NSPARG [$NSAA1] = BUFFER_LEN;
+	    NSPARG [$NSAA2] = BUFFER_PTR;
+	    T1 = NSPARG;
+	    if not UUO (1, NSP$(T1)) then return -2;	!Error occured
+	    CHAR_READ = BUFFER_LEN - .NSPARG [$NSAA1];
+
+	    if (.CHAR_READ neq 0) or ((.NSPARG [$NSAFN] and NS$EOM) neq 0)
+            then exitloop;
+
+	    if not NMU$SCHED_WAIT (LI [LINK_EVENT], 2*.ntimo) then return -1;
+	end;
+
+	.CHAR_READ
+    end
+%;
+
+macro
+    WRITE_MESSAGE (LINK_INFO, BUFFER_LEN, BUFFER_PTR) =
+    begin
+	bind LI = LINK_INFO : LINK_INFO_BLOCK,
+	     LS = LI [LINK_NSP_STATUS];
+	builtin
+	    UUO;
+	local
+	    RESULT,
+	    NSPARG : vector [4];
+	register
+	    T1;
+
+	NSPARG [$NSAFN] = NS$EOM + $NSFDS ^ 18 + 4;
+	NSPARG [$NSACH] = .LI [LINK_NSP_CHN];
+	NSPARG [$NSAA1] = BUFFER_LEN;
+	NSPARG [$NSAA2] = BUFFER_PTR;
+	T1 = NSPARG;
+
+	while ((RESULT = UUO (1, NSP$(T1))) and .NSPARG [$NSAA1] neq 0) do
+	begin
+	    NMU$SCHED_SLEEP (2);
+	    T1 = NSPARG;
+	end;
+
+	.RESULT
+    end %;
+
+macro
+    WRITE_STRING (LINK_INFO, BUFFER_LEN, BUFFER_PTR) =
+	begin
+	    bind LI = LINK_INFO : LINK_INFO_BLOCK;
+	    builtin UUO;
+	    local WRITE_WAIT, RESULT;
+
+	    WRITE_WAIT = $true;
+
+	    while .WRITE_WAIT do
+	    begin
+		READ_LINK_STATUS (LINK_INFO);
+		if LINK_CONNECTED (LINK_INFO)
+		then
+		    if not
+			begin
+			local NSPARG : vector [5];
+			register T1;
+			NSPARG [$NSAFN] = $NSFRS ^ 18 + 5;
+			NSPARG [$NSACH] = .LI [LINK_NSP_CHN];
+			T1 = NSPARG;
+			UUO (1, NSP$(T1));
+			if (NS$NDR and .NSPARG [$NSACH]) eql 0
+			then $true
+			else $false
+			end
+		    then NMU$SCHED_SLEEP (2)
+		    else
+			begin
+			local NSPARG : vector [5];
+			register T1;
+			NSPARG [$NSAFN] = $NSFDS ^ 18 + 5;
+			NSPARG [$NSACH] = .LI [LINK_NSP_CHN];
+			NSPARG [$NSAA1] = BUFFER_LEN;
+			NSPARG [$NSAA2] = BUFFER_PTR;
+			T1 = NSPARG;
+			RESULT  = UUO (1, NSP$(T1));
+			WRITE_WAIT = $false;
+			end
+		else WRITE_WAIT = $false;
+	    end;
+	.RESULT
+	end %;
+
+macro
+    ABORT_LINK (LINK_INFO, REASON, DATA_LEN, DATA_PTR) =
+	begin
+	    bind LI = LINK_INFO : LINK_INFO_BLOCK;
+
+	    builtin UUO;
+	    local NSPARG : vector [5],
+		  DATA : STRING_BLOCK (16);
+	    register T1;
+
+	    INIT_STRING (DATA, 16);
+
+	    STRBLK [DATA, LENGTH_CHARS] = DATA_LEN;
+	    ch$move (DATA_LEN,
+		     DATA_PTR,
+		     ch$ptr(STRBLK [DATA, STRING],, 8));
+
+	    NSPARG [$NSAFN] = $NSFPI ^ 18 + 3;
+	    NSPARG [$NSACH] = .LI [LINK_NSP_CHN];
+	    NSPARG [$NSAA1] = 0;
+	    T1 = NSPARG;
+	    UUO (1, NSP$(T1));
+
+	    NSPARG [$NSAFN] = $NSFAB ^ 18 + 5;
+	    NSPARG [$NSAA1] = DATA;
+	    T1 = NSPARG;
+	    if not UUO (1, NSP$(T1))
+	    then
+		begin
+		    NSPARG [$NSAFN] = $NSFRL ^ 18 + 5;
+		    T1 = NSPARG;
+		    UUO (1, NSP$(T1));
+		end;
+
+	    DEALLOCATE_NETLNK (.LI[LINK_NSP_CHN] and %o '777777');
+	end %;
+
+macro
+    CLOSE_LINK (A, DATA_LEN, DATA_PTR) =
+	begin
+	    builtin UUO;
+	    local NSPARG : vector [3],
+		  DATA : STRING_BLOCK (16);
+	    register T1;
+
+	    INIT_STRING (DATA, 16);
+
+	    NSPARG [$NSAFN] = $NSFPI ^ 18 + 3;
+	    NSPARG [$NSACH] = .LINK_INFO [LINK_NSP_CHN];
+	    NSPARG [$NSAA1] = 0;
+	    T1 = NSPARG;
+	    UUO (1, NSP$(T1));
+	    DEALLOCATE_NETLNK (.LINK_INFO [LINK_NSP_CHN] and %o '777777');
+
+	    STRBLK [DATA, LENGTH_CHARS] = DATA_LEN;
+	    ch$move (DATA_LEN, DATA_PTR, ch$ptr(STRBLK[DATA, STRING],, 8));
+
+	    NSPARG [$NSAFN] = $NSFSD ^ 18 + 3;	! Synchronus disconnect
+	    NSPARG [$NSACH] = .LINK_INFO [LINK_NSP_CHN];
+	    NSPARG [$NSAA1] = DATA;
+	    T1 = NSPARG;
+	    UUO (1, NSP$(T1));
+
+	    while $TRUE do	! Loop till we get a DC or UUO fails
+	    begin
+		NSPARG [$NSAFN] = $NSFRS ^ 18 + 2;
+		T1 = NSPARG;
+		if not UUO (1, NSP$(T1)) then exitloop;
+		if (.NSPARG [$NSACH] and NS$STA) eql $NSSDS ^ 18 then
+		 NMU$SCHED_SLEEP (5) else exitloop;
+	    end;
+
+		NSPARG [$NSAFN] = $NSFRL ^ 18 + 2;
+		T1 = NSPARG;
+		UUO (1, NSP$(T1));
+	end %;
+
+macro
+    READ_LINK_STATUS (LINK_INFO) =
+	begin
+	    bind LI = LINK_INFO : LINK_INFO_BLOCK;
+	    builtin UUO;
+	    local NSPARG : vector [5];
+	    register T1;
+
+	    NSPARG [$NSAFN] = $NSFRS ^ 18 + 5;
+	    NSPARG [$NSACH] = .LI [LINK_NSP_CHN];
+	    T1 = NSPARG;
+	    if not UUO (1, NSP$(T1)) then NSPARG [$NSACH] = 0;
+
+	    LI [LINK_NSP_STATUS] = .NSPARG[$NSACH];
+	end %;
+
+macro
+    READ_CONNECT_DATA (INFO_BLOCK) =
+	begin
+	    bind LI = INFO_BLOCK : LINK_INFO_BLOCK,
+		 LI_DST_PDB = LI [LINK_NSP_DEST_PDB] : vector [5],
+		 LI_SRC_PDB = LI [LINK_NSP_SOURCE_PDB] : vector [5];
+	    if .LI [LINK_READ_CONNECT_DATA] eql 0 then
+	    begin
+		builtin UUO;
+		local NSPARG : vector [5];
+		register T1;
+
+		LI [LINK_READ_CONNECT_DATA] = 1;
+
+		LI_DST_PDB [$NSDFL] = LI_SRC_PDB [$NSDFL] = 5;
+		NSPARG [$NSAFN] = $NSFRI ^ 18 + 5;
+		NSPARG [$NSACH] = .LI [LINK_NSP_CHN];
+		NSPARG [$NSAA1] = LI [LINK_NSP_CBLK];
+		NSPARG [$NSAA2] = 0;
+		NSPARG [$NSAA3] = 0;
+		T1 = NSPARG;
+		UUO (1, NSP$(T1));
+		if .STRBLK [ LI [LINK_NSP_HOST], LENGTH_CHARS] eql 0 then
+		begin
+		  external routine NMU$TEXT;
+		  UUO(0, PJOB(T1));
+		  NSPARG [0] = $DNSLS ^ 18 + $DNNOD + 1;
+		  NSPARG [$DNJCN] = .T1 ^ 18 + .LI[LINK_NSP_CHN];
+		  T1 = NSPARG;
+		  UUO (1, DNET$(T1));
+		  NSPARG[$DNNOD+1] = .NSPARG[$DNNOD]<0,10,0>;
+		  NSPARG[$DNNOD] = .NSPARG[$DNNOD]<10,6,0>;
+		  STRBLK [ LI [LINK_NSP_HOST], LENGTH_CHARS] = NMU$TEXT(
+			 %ref(ch$ptr(STRBLK [ LI [LINK_NSP_HOST], STRING],,8)),
+			6,ch$ptr(uplit(%asciz '%D.%D')),2,NSPARG[$DNNOD]);
+		end;
+	    end ;
+	end
+    %;
+
+macro
+    READ_USER_NAME (CONN_BLOCK, INFO_BLOCK) =
+	begin
+	    bind CB = CONN_BLOCK : CONNECT_BLOCK,
+		 LI = INFO_BLOCK : LINK_INFO_BLOCK;
+
+	    READ_CONNECT_DATA (INFO_BLOCK);
+
+	    CB [CB_USERID] = ch$ptr (CB [CB_USERID_BUFFER] ,, 8);
+	    ch$move (.STRBLK [ LI [LINK_NSP_USERID], LENGTH_CHARS],
+		     ch$ptr (STRBLK [ LI [LINK_NSP_USERID], STRING],,8),
+		     .CB [CB_USERID]);
+
+	    CB [CB_USERID_LENGTH] =
+	     .STRBLK [ LI [LINK_NSP_USERID], LENGTH_CHARS];
+	end %;
+
+macro
+    READ_ACCOUNT_STRING (CONN_BLOCK, INFO_BLOCK) =
+	begin
+	    bind CB = CONN_BLOCK : CONNECT_BLOCK,
+		 LI = INFO_BLOCK : LINK_INFO_BLOCK;
+
+	    READ_CONNECT_DATA (INFO_BLOCK);
+
+	    CB [CB_ACCOUNT] = ch$ptr (CB [CB_ACCOUNT_BUFFER],, 8);
+	    ch$move (.STRBLK [ LI [LINK_NSP_ACCOUN], LENGTH_CHARS],
+		     ch$ptr (STRBLK [ LI [LINK_NSP_ACCOUN], STRING],,8),
+		    .CB [CB_ACCOUNT]);
+	    CB [CB_ACCOUNT_LENGTH] =
+	     .STRBLK [ LI [LINK_NSP_ACCOUN], LENGTH_CHARS];
+	end %;
+
+macro
+    READ_PASSWORD_STRING (CONN_BLOCK, INFO_BLOCK) =
+	begin
+	    bind CB = CONN_BLOCK : CONNECT_BLOCK,
+		 LI = INFO_BLOCK : LINK_INFO_BLOCK;
+
+	    READ_CONNECT_DATA (INFO_BLOCK);
+
+	    CB [CB_PASSWORD] = ch$ptr (CB [CB_PASSWORD_BUFFER],, 8);
+	    ch$move (.STRBLK [ LI [LINK_NSP_PASSWD], LENGTH_CHARS],
+		     ch$ptr (STRBLK [ LI [LINK_NSP_PASSWD], STRING],,8),
+		    .CB [CB_PASSWORD]);
+	    CB [CB_PASSWORD_LENGTH] =
+	     .STRBLK [ LI [LINK_NSP_PASSWD], LENGTH_CHARS];
+	end %;
+
+macro
+    READ_OPTIONAL_DATA (CONN_BLOCK, INFO_BLOCK) =
+	begin
+	    bind CB = CONN_BLOCK : CONNECT_BLOCK,
+		 LI = INFO_BLOCK : LINK_INFO_BLOCK;
+
+	    READ_CONNECT_DATA (INFO_BLOCK);
+
+	    CB [CB_DATA] = ch$ptr (CB [CB_DATA_BUFFER],, 8);
+	    ch$move (.STRBLK [ LI [LINK_NSP_DATA], LENGTH_CHARS],
+		     ch$ptr (STRBLK [ LI [LINK_NSP_DATA], STRING],,8),
+		    .CB [CB_DATA]);
+	    CB [CB_DATA_LENGTH] = .STRBLK [ LI [LINK_NSP_DATA], LENGTH_CHARS];
+	end %;
+
+macro
+    READ_OBJECT_TYPE (CONN_BLOCK, INFO_BLOCK) =
+	begin
+	    bind CB = CONN_BLOCK : CONNECT_BLOCK,
+		 LI = INFO_BLOCK : LINK_INFO_BLOCK,
+		 LI_NSP_DST = LI [LINK_NSP_DEST_PDB] : vector [5];
+
+	    READ_CONNECT_DATA (INFO_BLOCK);
+
+	    CB [CB_OBJECT] = .LI_NSP_DST [$NSDOB];
+	end %;
+
+macro
+    READ_HOST_ID (CONN_BLOCK, INFO_BLOCK) =
+	begin
+	    bind CB = CONN_BLOCK : CONNECT_BLOCK,
+		 LI = INFO_BLOCK : LINK_INFO_BLOCK;
+
+	    READ_CONNECT_DATA (INFO_BLOCK);
+
+	    CB [CB_HOST] = ch$ptr (CB [CB_HOST_BUFFER],, 8);
+	    CB [CB_HOST_LENGTH] = 3 + .STRBLK[ LI[LINK_NSP_HOST],LENGTH_CHARS];
+
+	    PUTB ( 0, CB [CB_HOST]);
+	    PUTB ( 0, CB [CB_HOST]);
+
+	    PUTB ( .CB [CB_HOST_LENGTH] - 3, CB [CB_HOST]);
+
+	    ch$move (.CB [CB_HOST_LENGTH],
+		     ch$ptr (STRBLK [ LI [LINK_NSP_HOST], STRING],,8),
+		    .CB [CB_HOST]);
+
+	    CB [CB_HOST] = ch$ptr (CB [CB_HOST_BUFFER],, 8);
+	end %;
+
+macro
+    READ_DESCRIPTOR (CONN_BLOCK, INFO_BLOCK) =
+	begin
+	    bind CB = CONN_BLOCK : CONNECT_BLOCK,
+		 LI = INFO_BLOCK : LINK_INFO_BLOCK;
+
+	    READ_CONNECT_DATA (INFO_BLOCK);
+
+	    CB [CB_DESCRIPTOR] = ch$ptr (CB [CB_DESCRIPTOR_BUFFER],, 8);
+	    ch$move (.STRBLK [ LI [LINK_NSP_DST_PN], LENGTH_CHARS],
+		     ch$ptr (STRBLK [ LI [LINK_NSP_DST_PN], STRING],,8),
+		    .CB [CB_DESCRIPTOR]);
+	    CB [CB_DESCRIPTOR_LENGTH] =
+	     .STRBLK [ LI [LINK_NSP_DST_PN], LENGTH_CHARS];
+	end %;
+
+macro
+    READ_REJECT_CODE (CONN_BLOCK, INFO_BLOCK) =
+	begin
+	    bind CB = CONN_BLOCK : CONNECT_BLOCK,
+		 LI = INFO_BLOCK : LINK_INFO_BLOCK,
+		 LS = LI [LINK_NSP_STATUS];
+	    local NSPARG : vector [4];
+	    register T1;
+	    builtin UUO;
+
+	    NSPARG [$NSAFN] = $NSFRD ^ 18 + 4;
+	    NSPARG [$NSACH] = .LI [LINK_NSP_CHN];
+	    NSPARG [$NSAA2] = 0;
+
+	    T1 = NSPARG;
+	    if not UUO (1, NSP$(T1)) then
+	    begin
+		bind
+		    STATE_TO_REJECT_MAP = uplit (
+			0,	! 0
+			0,	! .NSSCW==1 ;Connect Wait
+			0,	! .NSSCR==2 ;Connect Received
+			0,	! .NSSCS==3 ;Connect Sent
+			7,	! .NSSRJ==4 ;Remote node rejected Connect Init
+			0,	! .NSSRN==5 ;Link is Up and Running
+			9,	! .NSSDR==6 ;Disconnect Received
+			0,	! .NSSDS==7 ;Disconnect Sent
+			0,	! .NSSDC==10 ;Disconnect Confirmed
+			38,	! .NSSCF==11 ;No Confidence
+			38,	! .NSSLK==12 ;No Link
+			39,	! .NSSCM==13 ;No Communication
+			32	! .NSSNR==14 ;No Resources
+				) : vector [%o '15'];
+
+		NSPARG [$NSAA2] = .STATE_TO_REJECT_MAP [POINTR (.LS, NS$STA)];
+	    end;
+
+	    CB [CB_REJECT_CODE] = .NSPARG [$NSAA2];
+	end %;
+
+macro
+    NETWORK_INTERRUPT_CLEAR (LINK_INFO) =
+	%;
+
+!<BLF/PAGE>
+!
+! Local Modes:
+! Mode:Fundamental
+! Comment Start:!
+! Comment Column:40
+! Comment Rounding:+1
+! Auto Save Mode:2
+! End:

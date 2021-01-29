@@ -1,0 +1,1454 @@
+.pubmac;	<<use pubmac.dfs>>;
+.if fdate = null then fdate_date;
+.begin "cover page";
+.<<The *'s are in columns 1 and 60>>;
+.nofill;
+.rmarg_60;
+************************************************************
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                           FUR                            *
+*                   File Utility Routine                   *
+*                  Program Documentation                   *
+*                      for Version 2L                      *
+*                                                          *
+*                                                          *
+*                  Computer Center Branch                  *
+*       Division of Computer Research and Technology       *
+*              National Institutes of Health               *
+*                Bethesda, Maryland  20014                 *
+*                                                          *
+*                                                          *
+*                       Glenn Ricart                       *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+*                                                          *
+.turn on "{";
+*{fdate}   *
+************************************************************
+.end "cover page";
+.skip to column 1;
+.Standard Front(1,A,1,Section,Yes,1);
+.Doindex(,`);
+.turn on "{";
+.every heading (,,Page {Page!});
+.s Description;
+`Description`
+`FUR`
+
+FUR is a File Utility Routine for disk manipulation.  It allows you
+to copy, rename, change protection, and delete files based on file
+names and file characteristics.  Some of the salient features are:
+
+.begin; narrow 3,3; indent 0,3; skip 1; turn on "#";
+
+o##File copying is ten times faster than the normal system copying utility.
+
+o##Files can be scrambled or unscrambled as they are copied.
+
+o##You can have FUR ask you whether or not to perform the operation
+on each file that FUR finds.
+
+o##Full wildcard operations are possible.
+
+o##Indirect command files and SWITCH.INI options can be set.
+
+o##A mode allows copying files only if they do not overwrite
+existing files.
+
+o##File attribute information such as version number can be set or changed.
+.end;
+.s How to Use FUR;
+
+The FUR program is invoked with the command "R FUR".  The prompt
+from FUR is a slash.
+
+.ss Commands;
+
+Commands are used to direct FUR's action.
+Switches (described later in {refersp(FURSWITCHES)}) are used to modify
+the actions of the commands.
+
+.sss COPY;
+`COPY`
+
+.label(FURCOPYCMD);
+The COPY verb is used to start a file copying operation.
+The format of the COPY command is
+
+.once nofill; indent 5,5; skip 1;
+/COPY <output-file>=<input file list>
+
+The output file is given using normal DECsystem-10 file specifications.
+Wild cards are legal, and will be filled in using the corresponding
+information from the input file being copied.  The input file list is a
+series of specifications separated by commas, plus signs, or the connectives 'AND', 'OR', or 'NOT'.
+If commas are used, the files are copied in the given order.
+If plus signs are used, FUR (and WILD) is allowed to re-arrange
+the order in which files are copied to optimize disk search time but they must all be in the same directory.
+`Plus sign`
+`Comma`
+`AND`
+`OR`
+`NOT`
+
+If two file specifications are separated by 'OR' or a plus sign,
+FUR copies files which match the file specification on the left
+OR the file specification on the right.  If two file specifications
+are separated by 'AND', FUR copies files which match BOTH file
+specifications.  If two file specifications are separated by
+'NOT', FUR copies files which match the first specification but
+NOT the second.  Parentheses and nesting of operations are not
+allowed.  The 'NOT' operation cannot be used as a unary not.
+(See {referp(FURCONNECTIVES)} for more information.)
+
+If the DECIDE switch (see {referp(FURDECIDE)}) is in effect, FUR proposes each file 
+transfer and asks the user for confirmation before proceeding.
+If ENCRYPTION is in use (see {referp(FURENCRYPTION)}), the file is encrypted or decrypted
+as it is copied.  If /ERSUPERSEDE is in effect (see {referp(FURERSUPERSEDE)}), the COPY command
+will not overwrite existing files.  All of these options
+are discussed later in more detail.
+
+Each input file creates one output file unless the CONCATENATE (see {referp(FURCONCATENATE)})
+switch has been set.  The copying proceeds without intervention
+unless the DECIDE switch has been set.  A record of the copy is
+printed unless BEQUIET (see {referp(FURBEQUIET)}) has been set.  This record will show the
+output file, the input file, and the length of the input file being copied.
+
+FUR normally copies the file attributes of the input file
+to the output file.  The output file therefore normally has
+the same dates, protection codes, version number, etc. as
+the input file.  The NEWFILE switch (see {referp(FURNEWFILE)}) can
+be used to prevent the file attributes from being copied.
+
+FUR takes special action when copying directory files in order
+to create the UFD or SFD without placing file names or directory
+pointers within it.  Therefore, FUR can be used for total disk-to-disk
+copies because it will create the directories it needs before it
+needs them.  All RIB parameters are preserved including disk quotas.
+`Disk-to-disk`
+
+.group;
+Examples:
+.begin "examples";
+.narrow 5,5;
+.nofill;
+Copy the file TSTPRG.FOR to NEWPRG.FOR
+	/COPY NEWPRG.FOR=TSTPRG.FOR
+Copy the file MEETNG.LST from [541,40,MEETNG]
+	/COPY =MEETNG.LST[541,40,MEETNG]
+Copy the file FUR.MAC to FUR.WRK
+	/COPY .WRK=FUR.MAC
+Make a copy of help files beginning with W
+	/COPY =HLP:W*
+Copy all of file structure DSKG: to PAKW:
+	/BEQUIET ! to cut down on printing
+	/COPY PAKW:[*,*,*,*,*,*,*]=DSKG:[*,*,*,*,*,*,*]
+Combine all system FACT files together into one file
+	/CONCATENATE ! put following files together
+	/COPY MYFACT.SYS=SYS:FACT.*
+Copy the file A.B to a file named just A
+	/COPY A.=A.B
+	/!The dot after the A is necessary to prevent
+	/!the extension B from being copied too
+Copy all files beginning with BLI but not REL files
+	/COPY =PAKD:[10,6]BLI*.* 'NOT' *.REL
+Copy files created since February 1st with less 
+than 100 blocks
+	/COPY =PAKD:[10,6]/SINCE:1-FEB/LENGTH::100
+Copy all files *.APL without overwriting 
+any existing files
+	/ERSUPERSEDE
+	/COPY =*.APL[13,300]
+Copy file A.B[44,55] to your disk area with protection
+code 157 and changing the version number to 1(1)
+	/COPY /PROT:157/VERSION:1(1)=A.B[44,55]
+.end "examples";
+.apart;
+
+During execution of the COPY command, statistics are kept on how
+quickly the transfer is taking place.  If the transfer lasts long
+enough to get good statistics, the average transfer rate in kilobaud
+is printed.  One kilobaud is one thousand bits in one second.
+Therefore a 10 second transfer at 100 Kbaud will move 1 million bits.
+
+During the COPY command, FUR will normally increase its core size
+so that it can move large amounts of information in a single I/O
+operation.  This technique makes FUR much more efficient than
+other file copying programs (such as PIP), sometimes as much as 10:1.
+`PIP`
+The large amount of core is given back at the end of the copying
+operation.  (If you wish to restrict the amount of core
+which FUR uses when copying, use the monitor SET PHYSICAL LIMIT
+command prior to running FUR.)
+.sss DELETE;
+`DELETE`
+
+The DELETE command is used to delete files.  FUR takes an input
+file list just like the COPY command.  The DECIDE switch is
+particularly useful in order to decide which files are to be deleted.
+
+After the file name, FUR prints the number of disk blocks freed.
+This can be larger than the length of the data in the file because
+it includes the overhead information the file system keeps.
+For example, "DSKC:ABC.REL 5" means that the
+file DSKC:ABC.REL has been deleted and 5 disk blocks
+have been freed.  At the end of all deletions, FUR prints the total
+number of disk blocks freed.
+
+.begin "examples"; skip 1; group;
+.narrow 5,5; nofill;
+Delete all files named TSTPRG with any extension
+	/DELETE TSTPRG.*
+Delete TSTPRG.FOR and TSTPRG.REL
+	/DELETE TSTPRG.FOR,TSTPRG.REL
+Decide about deleting files with the extension REL
+	/DELETE *.REL/DECIDE
+Delete all .TMP files not accessed in last 30 days
+	/DELETE ALL:.TMP[*,*,*,*,*]/ABEFORE:-30D
+Delete all files in SFD [,,PLOTX,OLD]
+	/DELETE [,,PLOTX,OLD]
+Delete *.TMP except NEWS.TMP
+	/DELETE *.TMP 'NOT' NEWS.TMP
+.end "examples"; apart;
+
+If the file you have asked FUR to delete cannot be deleted
+(even though you own the file) because you have protected it
+against accidental deletion (say <777>), FUR will ask if you
+would like to delete it anyway.  If you answer "Y", FUR will
+first change the protection code and then delete the file.
+Different things happen by default when the /OVERRIDE switch
+is used.
+See {referp(FUROVERRIDE)} for more information on /OVERRIDE.
+.sss ERASE;
+`ERASE`
+
+The ERASE command is used to erase a disk file or a magnetic
+tape.
+
+A disk file is erased by writing blocks of zeroes over the data.
+The file itself is then deleted since a file of all zero bytes
+is pretty useless.
+
+Simply deleting a file is normally an adequate way to keep the
+data private.
+The monitor protects the privacy of files which have been deleted by
+not allowing the deleted blocks to be read until they have
+been re-written by their new owner.
+File erasure is an extraordinary measure which makes
+the data inaccessible even to privileged jobs which can 
+bypass the file system and read
+disk packs without regard to the file structure.
+
+If the ERASE command names a device which is a magnetic tape,
+FUR issues an TU-70 Data Security Erase function which will
+cause a TU-70 to wipe the entire tape clean.  A write ring
+is necessary.
+
+.begin "example"; narrow 5,5; nofill; skip 1; group;
+Erase magnetic tape MTA3:
+	/ERASE MTA3:
+.end "example"; apart;
+.sss RENAME;
+`RENAME`
+
+The RENAME command is used to change the names of files or
+move them to different PPNs or SFDs on the same disk structure.
+This command is also used to change file protection codes
+and to add or change version numbers on disk files.
+The command takes the same format as COPY (see {referp(FURCOPYCMD)}).
+Instead of copying the data, the file is removed from the
+present name/directory and placed in the new name/directory.
+
+Files may not be RENAMEd across file structures.  The message
+INCORRECT PPN is an indication that this is being attempted.
+The output device specification is not used in the RENAME command,
+and it is ignored.
+
+The protection of a file can be changed by using the /PROTECTION
+switch.  This is the proper way to change the protection of a file.
+Similarly, the version number of a file can be changed by using
+the /VERSION switch.
+
+.begin "examples"; skip 1; group;
+.nofill; narrow 5,5;
+Change the name of TSTPRG.FOR to TSTPRG.F10
+	/RENAME .F10=TSTPRG.FOR
+Protect file A.DAT against other people's reading it
+	/RENAME /PROT:077=A.DAT
+Move file A.B from [13,20] to [13,11]
+	/RENAME [13,11]=A.B[13,20]
+Move PLOTS.* to [,,PLOTX,OLD] FROM [,,PLOTX,NEW]
+	/RENAME [,,PLOTX,OLD]=PLOTS[,,PLOTX,NEW]
+Protect all files on PAK3:[10,*] with code 055
+	/RENAME /PR:055=PAK3:[10,*]
+Put version number "23B(14)" on file ABC.SAI
+	/RENAME /VERSION:23B(14)=ABC.SAI
+.end "examples"; apart;
+.sss PAD;
+`PAD`
+.label (FURPAD);
+
+The PAD verb is used to pad files with null blocks.  This
+is useful in protecting ISAM$$ISAM is COBOL's
+Indexed Sequential Access Method.  It allows
+files to be stored in a sequential order but
+retrieved based on key values.* `ISAM` files from system crashes.
+The format of the PAD verb is:
+
+.once nofill;	indent 5,5; skip 1;
+/PAD value <file list>
+
+The file list is a series of specifications in standard
+DECsystem-10 format separated by commas.  There can only
+be one value per command line and it applies to each 
+specification on the same line.  The value must be a positive
+non-zero integer and may be followed with a suffix indicating
+either Words (W), Blocks (B), Pages (P), or thousands of words (K).  If no
+suffix is seen blocks are the default.  The value may also
+be specified in one of three ways.  You can specify an absolute
+length for the file and pads will be added to arrive at that length.
+`Comma`
+.once nofill;	indent 5,5; skip 1;
+e.g. /PAD 10 TEST.FIL
+.continue;
+
+will pad the file
+TEST.FIL with enough blocks to make its size equal to 10 blocks.
+Or you can specify a certain number of null blocks (words, etc..)
+to add to the file.
+.once nofill;	indent 5,5; skip 1;
+e.g. /PAD +10 TEST.FIL
+
+.continue;
+will add 10 null blocks
+to the file TEST.FIL.  Or you can specify a multiplication factor
+by which to arrive at the final file size.
+.once nofill;	indent 5,5; skip 1;
+e.g. /PAD *2 TEST.FIL
+
+.continue;
+will pad the file TEST.FIL until it has grown to twice its original
+size. NOTE: When you specify a multiplication factor you 
+cannot use the suffixes mentioned above.
+
+Examples:
+.begin "examples";
+.narrow 5,5;
+.nofill;
+To add 10 null blocks to the file TEST.IDA
+	/PAD +10B TEST.IDA
+To pad file MYPROG.IDX out to 100 pages
+	/PAD 100P MYPROG.IDX
+To pad files ACCNT.DAT & AACNT.DAT to twice their size
+	/PAD *2 ACCNT.DAT,AACNT.DAT
+.end "examples";
+
+The PAD verb will not let you specify a pad size that
+would result in a decrease of the file's original size.
+
+General Guidelines:
+
+ISAM data files should be padded with enough free null blocks 
+to contain the expected number of additions to the data file before
+it is maintained by the ISAM processor.  The user is expected to be able to approximate the
+volume of additions 
+and thus be able to calculate the amount of free space needed.
+
+ISAM index files are handled similarly to data files and the volume
+and placement of additions to the file have a direct bearing on the stability
+of the file.  On extremely  active index files it is a good idea to pad
+the index with enough free blocks to double its size.  If the index
+file is built with a large percentage of empty space initially then decrease
+the pad amount accordingly.
+
+For additional information on ISAM files please refer to the DECsystem-10
+.turn off "#";
+Cobol Users Guide (Order # DEC-10-LCUGA-B-D).
+.turn on;
+.sss FIND;
+`FIND`
+
+The FIND command attempts to find the list of input files.  Its
+function is similar to that of the DIRECTORY command, but its
+repertoire is much more limited.  The prime function of the FIND
+command is to locate files for FUR operations without having to
+leave FUR.  Besides showing the file name, size (in blocks),
+protection code (if not <055> or <155>), creation date, and
+version number, FUR will print "NO BACKUP" if the NOBACKUP bit (RF.NFS)
+`RF.NFS`
+`BACKUP`
+`NOBACKUP`
+is set (see {referp(FURBACKUPBIT)}), and will print the author of the file (his/her PPN) if different
+from the directory in which the file is found.
+
+.begin "examples"; nofill; narrow 5,5; skip 1; group;
+Look to see how many *.Q?? SOS backup files exist
+	/FIND *.Q??
+.end "examples"; apart;
+.sss BACKUP and NOBACKUP;
+`BACKUP`
+`NOBACKUP`
+.label(FURBACKUPBIT);
+
+If you are privileged, you can set the RP.NFS bit in a file so
+that the file will not be saved by BACKUP or FAILSAFE.  The FUR command
+NOBACKUP sets this bit.  The complementary command BACKUP restores
+the file to normal status so that it will be backed up.
+
+.begin "examples"; nofill; narrow 5,5; skip 1; group;
+Set the no backup bit on files manually selected 
+from those that have extension DAT
+	/NOBACKUP *.DAT/DECIDE
+.end "examples"; apart;
+.sss QUIT;
+`QUIT`
+
+The QUIT command returns to monitor level from FUR.
+
+.begin "examples"; nofill; narrow 5,5; skip 1; group;
+Exit from FUR
+	/Q
+.end "examples"; apart;
+
+The command EXIT may also be used.
+`EXIT`
+.sss ISAMDUMP;
+`ISAMDUMP`
+`ISAM dump`
+
+
+The ISAMDUMP command takes a list of file names as arguments and
+prints out details of the *.IDX block that controls the COBOL ISAM
+file. `COBOL`
+
+.begin "examples"; nofill; narrow 5,5; skip 1; group;
+Dump information about SERVSZ.IDX
+	/ISAMDUMP SERVSZ
+.end "examples"; apart;
+.ss File Selection;
+`Selection`
+
+.sss Wildcards
+
+FUR allows the character "*" to stand for any file name or
+extension and "?" to stand for any one character.  To specify
+all files, use "*.*".  (To help prevent errors, FUR will not
+accept just "*" on a DELETE or ERASE command.)  Examples of
+wildcard use can be found throughout this manual.
+
+.sss Date/time and Length Criteria
+`Date/time Criteria`
+`Length Criteria`
+
+FUR allows file selection
+by means of the SCAN switches.  Some of the more useful
+SCAN switches are:
+
+.begin "examples"; skip 1; group;
+.nofill; narrow 5,5;
+/BEFORE:date/time	Files created before date/time
+/SINCE:date/time	Files created since date/time
+/ABEFORE:date/time	Files accessed before date/time
+/ASINCE:date/time	Files accessed since date/time
+/LENGTH:n		Files > n blocks in length
+/LENGTH::n		Files < n blocks in length
+/LENGTH:m:n		Files between m and n blocks
+.end "examples"; apart;
+
+Date/time can be specified in forms such as:
+.begin narrow 5,5; nofill; skip 1; group;
+23-Mar-76
+23-Mar-76:12:13:02
+Today:8:0:0
+Yesterday
+Monday:18:15:00
+.end; apart;
+`BEFORE`
+`ABEFORE`
+`SINCE`
+`ASINCE`
+`LENGTH`
+`Date/time`
+`Time`
+`Yesterday`
+`Wildcards`
+
+In addition, the /DECIDE switch (see {referp(FURDECIDE)}) can be used to indicate that you
+wish to further hand-pick certain files which otherwise meet the
+given criteria.
+
+.group;
+Here are some more complete examples:
+
+.begin "examples"; nofill; narrow 5,5;
+All TMP files created today
+	*.TMP/SINCE:TODAY
+All *.REL files over 100 blocks in length
+	*.REL/LENGTH:100
+Hand-picked *.REL files over 100 blocks in length
+	*.REL/LENGTH:100/DECIDE
+Files between 20 and 40 blocks in length that have not
+been used (accessed) in the last 30 days
+	*.*/LENGTH:20:40/ABEFORE:-30D
+All TMP files not used today
+	*.TMP/ABEFORE:TODAY
+.end "examples"; apart;
+.sss Additional Switch Selectives
+
+Files may be additionally selected based on the spooled file name
+(/SPLNAM), the author or PPN (/AUTHOR), or file status (/STATUS).
+
+The selector /SPLNAM:name will screen files for the attribute
+SPLNAM equal to the specified "name".
+
+The selector /AUTHOR:[p,pn] will screen for files which were marked
+as written by the given [p,pn].  Wildcards can be used in [p,pn].
+The designator [-] refers to the current default path; [,] is the
+PPN of the job running FUR.
+
+The selector /STATUS:nnn will screen for files which have the
+octal value "nnn" as the value of the status word.  Two other
+variations are accepted: /STATUS:+nnn will screen for files with
+any of the bits "nnn" turned on; /STATUS:-nnn will screen for files with all bits
+"nnn" turned off.
+
+These switches can also be used to change the spooled file name
+(see {referp(FURSPLNAM)}), author word (see {referp(FURAUTHOR)}),
+and status bits (see {referp(FURSTATUSBITS)}).
+
+Examples:
+.begin "examples"; skip 1; group; nofill; narrow 5,5;
+Find all system files which were written by me
+	/FIND SYS:*.*/AUTHOR:[,]
+Delete all files with SPLNAM of "OLDVER"
+	/DELETE *.*/SPLNAM:OLDVER
+.end "examples";
+.sss Connectives;
+.turn on "";
+`Connectives`
+`AND`
+`OR`
+`NOT`
+.label(FURCONNECTIVES);
+
+When a list of filenames are allowed in a command, they may be
+separated by commas, plus signs, or the special symbols 'AND',
+'OR', and 'NOT'.  The apostrophe characters form an integral part
+of the name.
+
+When the comma is used, the command is repeated several times
+for each of the file specifications listed.
+
+When a plus sign or 'OR' is used, any file which meets either
+the file specifications to the left or to the right of the
+plus sign or 'OR' is used.  Although the effect is the same
+as comma, FUR has the freedom to re-arrange the order of files
+when a plus sign or 'OR' is used.
+
+If file specifications are separated by 'AND', a file must match
+both the left-hand side specification and the right-hand
+side specification to be eligible for the command.
+
+If two file specifications are separated by 'NOT', a file must
+match the left-hand side specification but not the right-hand
+specification.
+The 'NOT' operation cannot be the first thing in a file specification;
+it must come after a file specification.  For example, /FIND 'NOT' *.REL
+is illegal, but /FIND *.* 'NOT' *.REL is OK.
+
+The 'NOT' operation cannot be used with certain switches.  These
+include: SPLNAM, AUTHOR, and STATUS.
+
+.begin "examples"; skip 1; group; nofill;
+Delete *.REL and *.CRF files in that order
+	/DELETE *.REL,*.CRF
+Delete *.REL and *.CRF files in any order
+	/DELETE *.REL+*.CRF
+Delete *.TMP files but not XYZ.TMP
+	/DELETE *.TMP 'NOT' XYZ.TMP
+.end "examples";apart;
+.sss File Defaults;
+`Defaults`
+
+When constructing a complete file specification based upon defaults
+and upon incomplete constructions, FUR follows certain rules.
+
+For the FIND command
+the defaults are to add an extension of .* if none is given,
+and to search both SYS: and NEW: if the current search list
+contains the NEW switch.
+
+For the COPY, RENAME, and DELETE commands the default is to
+assume no extension.  If SYS: is given as the device, STD: is
+substituted for it (if available) in order to avoid the search
+of NEW: that would otherwise take place if NEW is in the search list.
+
+Therefore, a FIND SYS:FUR might find NEW:FUR.EXE[1,5] and also
+SYS:FUR.EXE[1,4].
+A DELETE SYS:FUR.EXE will fail if there is not a file STD:FUR.EXE[1,4].
+
+.begin "examples"; nofill; narrow 5,5; skip 1; group;
+Find all files beginning with letters FUR
+	/FIND FUR*
+Delete all files beginning with letters FUR
+	/DELETE FUR*.*
+.end "examples"; apart;
+.ss Setting Switches
+
+.label(FURSWITCHES);
+Switches are used to control file operations.
+Switches are initialized from the
+user file DSK:SWITCH.INI[,].  Switches not set in SWITCH.INI can
+be entered at the slash prompt, and those in SWITCH.INI can be overriden.
+`SWITCH.INI`
+See {refersp(FURSWITCHINI)} for more information on SWITCH.INI.
+.sss DECIDE;
+`DECIDE`
+
+.label(FURDECIDE);
+The DECIDE switch will turn on a prompting mode so that the user
+can decide whether to apply the operation on a file-by-file basis.
+The opposite of this switch is NODECIDE (default).
+When the DECIDE option is in force, FUR will print out the
+proposed operation and follow it by a question mark.  The
+proper responses are: H (Help), Y (Yes), N (No), Q (Quit--abort
+operation entirely; forget the rest of the files), and G (Go--do
+the rest of the files without asking me.  The G response
+also turns off the DECIDE mode for that set of files.
+No carriage return is necessary after the DECIDE response.
+
+.begin "examples"; nofill; narrow 5,5; skip 1; group;
+Selectively delete *.EXE files
+	/DELETE *.EXE/DECIDE
+	DSKC:ABC.EXE[,] 5 ? Y
+	DSKD:XYZ.EXE[,] 10 ? N
+	[5 Blocks Deleted]
+	/
+.end "examples"; apart;
+
+In the above example, the user chose to delete ABC.EXE but not
+XYZ.EXE.  When ABC.EXE was deleted, FUR noted that 5 disk blocks
+had been deleted; this was the same as the total number of disk
+blocks deleted which FUR printed at the end.
+
+The DECIDE switch can be set for all files by including it in
+the SWITCH.INI file or specifying DECIDE on a separate command line.
+See {referp(FURSWITCHINI)}.
+
+.begin "examples"; nofill; narrow 5,5; skip 1; group;
+Use DECIDE on *.TMP but not *.Z?? or *.Q??
+	/DELETE *.Z??,*.TMP/DECIDE,*.Q??
+Same thing, another way
+	/DECIDE
+	/DELETE *.Z??/NODECIDE,*.TMP,*.Q??/NODECIDE
+.end "examples"; apart;
+.sss BEQUIET;
+`BEQUIET`
+
+.label(FURBEQUIET);
+The BEQUIET switch is used to suppress typeout showing progress of
+the file operations.  Summary information, error printout, and
+information needed for a DECIDE are still printed.
+The opposite of BEQUIET is NOBEQUIET (default).
+FUR runs faster in BEQUIET mode because it need not format
+and print routine messages.
+
+.begin "examples"; nofill; narrow 5,5; skip 1;group;
+Delete *.TMP without printing file names
+	/DELETE *.TMP/BEQUIET
+Copy all of structure USRA: to structure BAKA:
+	/BEQUIET
+	/COPY BAKA:[*,*,*,*,*,*,*]=USRA:[*,*,*,*,*,*,*]
+.end "examples"; apart;
+.sss CONCATENATE
+`CONCATENATE`
+
+.label(FURCONCATENATE);
+The CONCATENATE switch is used to indicate that during a COPY operation,
+the input files are to be concatenated together to form a single
+output file.
+Concatenation refers to the process of making one large output file
+by copying successive input files to the end of the same output file.
+If the output file name has wildcards, they are filled
+in from the first input file to be used.  
+`Comma`
+Commas must be used to delimit input file names if the order of
+files is important.  Separating input file names with a plus sign
+`Plus sign`
+will cause the files to be concatenated together in an order convenient
+for FUR but they must all be contained in one directory.
+See {refersp(FURCONNECTIVES)} for details on using the plus sign.
+
+The normal mode is NOCONCATENATE (default).  In this mode, each
+input file is written to a separate output file.  If the output
+file specification has no wildcards and there are several input
+files, each copy operation supsersedes the file created by the
+last input file and the result will be that only the last input
+file was effectively copied.  
+Since this is usually not the desired result when one (not wild)
+output specification is used with several input files, FUR will
+ask the user if /CONCATENATE should be used.  Under BATCH,
+a warning will be printed and /CONCATENATE assumed.
+
+When CONCATENATION is in effect, some of the speedier FUR shortcuts
+cannot be used and file copying may be slower than usual.
+
+.begin "examples"; nofill; narrow 5,5; skip 1; group;
+Copy all system fact files together except FACT.OLD.
+	/CONCATENATE
+	/COPY MYFACT.FIL=SYS:FACT.* 'NOT' FACT.OLD
+.end "examples"; apart;
+
+The file attributes for the output file are copied from the
+first input file encountered.  Use /NEWFILE if you do not want
+any attributes copied (see {refersp(FURNEWFILE)}).
+.sss ERSUPERSEDE;
+`ERSUPERSEDE`
+
+.label(FURERSUPERSEDE);
+The /ERSUPERSEDE switch is very useful on the COPY command to
+avoid overwriting existing files.
+When the ERSUPERSEDE switch is given, either on an individual
+file name or on a global basis, the COPY command is prohibited from
+overwriting an existing file of the same name (superseding it).
+This technique therefore provides an added measure of protection
+for existing files; they must be explicitly deleted before they
+can be replaced with a new file.
+
+To have ERSUPERSEDE in effect at all times, include it in your
+SWITCH.INI file (se {referp(FURSWITCHINI)}).  To protect certain files, follow the file
+specification with the switch /ERSUPERSEDE.  ERSUPERSEDE can
+be abbreviated to /ERSUP.
+If there is otherwise no file specification to hang the /ERSUPERSEDE
+onto, you can use a file specification of *.  See the example below.
+
+.begin "examples";
+.nofill; narrow 5,5; skip 1; group;
+Copy all files with extension .F10 from [427,1362]
+without overwriting any existing files
+	/COPY */ERSUPERSEDE=*.F10[427,1362]
+Or, do the same thing but in two steps
+	/ERSUP
+	/COPY =*.F10[427,1362]
+.end "examples"; apart;
+
+To turn off the effect of /ERSUPERSEDE, use /OKSUPERSEDE.
+.sss OVERRIDE;
+`OVERRIDE`
+`Deleting`
+.label(FUROVERRIDE);
+
+When using the DELETE command, FUR will ask you if you really wish
+to delete a file which is normally protected against deletion.
+Other options are, however, available:
+
+.begin indent 0,30; turn on "\"; tabs 31; group;
+
+/OVERRIDE:NO\Don't try to delete protected files.  Just give an
+error message.
+
+/OVERRIDE:ASK\(Default) Ask about deleting protected files.
+
+/OVERRIDE:YES\(Dangerous) Delete protected files without asking.
+.end; apart;
+
+The /OVERRIDE:NO switch is the default for batch jobs.  If you
+place /OVERRIDE:NO in your SWITCH.INI file, FUR will never ask
+you to override the protection code that prevents accidental deletion.
+This switch may be appropriate to help protect files that could
+be accidentally deleted by other persons using your account.
+The /OVERRIDE:YES switch will automatically attempt to delete
+the file regardless of protection code and is probably only
+appropriate when you wish to delete ALL files in a given UFD or SFD.
+.sss NEWFILE;
+`NEWFILE`
+`Attributes, file`
+`File attribute`
+.label(FURNEWFILE);
+
+When copying files FUR normally copies the attributes of the input
+file into the attributes of the output file.  Therefore,
+the copied file will have the original file protection code,
+creation date, access date, version number, spooled file name,
+and so on.  When privileged users copy files with FUR, the copied attributes
+also include file quotas, the account string, author field, etc.
+(This means that such parameters will be preserved if a privileged
+user copies entire file structures pack-to-pack.)
+On concatenated copies, the attributes are taken from the first
+file copied.
+
+Should you wish the new file to be unencumbered by the old file
+attributes, you can use the NEWFILE switch.  The creation date
+will be set to today, the protection code will be the default
+(unless you explicitly specify one with /PROTECTION), the
+version number and spooled file name will be blank, and so on.
+
+.begin "examples";
+.nofill; narrow 5,5; skip 1; group;
+Copy A.B to C.B giving C.B default protection code
+and current dates
+	/COPY C/NEWFILE=A.B
+Change the creation date of A.FOR to today
+	/COPY /NEWFILE=A.FOR
+Concatenate *.SYS files from ADM: together
+and give the output file system default attributes
+	/NEWFILE
+	/COPY ALLSYS./CONCATENATE=ADM:*.SYS
+.end "examples";
+
+The output file in a RENAME command can also take the NEWFILE
+switch.  Due to the way the monitor works, this will not change
+the file's protection or dates.  But it can be used to clear
+the version number and spooled file name.
+.sss SPLNAM;
+`SPLNAM`
+`Spooled file name`
+.label(FURSPLNAM);
+
+One of the file attributes is its so-called "spooled file name".
+The usefulness of this name existed primarily as file identification
+on MPB `MPB` spooled files which are no longer used at NIH.
+This field can therefore be used to hold any six-character
+identification that you choose.  Like many file attributes, FUR will
+preserve it when you manipulate the file with FUR but other system
+utilities (like the text editor) may wipe it out.
+
+SPLNAM can be used as both an input file switch and an output
+file switch.  If you specify it globally in SWITCH.INI or
+type it on a line by itself it applies to both input and output files.
+
+On output files, SPLNAM:xyzabc sets the spooled file name attribute
+to XYZABC.
+
+On input files, SPLNAM:xyzabc selects only those files which have
+the spooled file name XYZABC.
+
+If you use just SPLNAM: then FUR will set a blank spooled file
+name on output and select only files with blank spooled file names
+on input.
+
+If you omit the colon and say just SPLNAM then FUR does what it
+would do had the switch not been specified: on output, copy any input
+spooled file name, and on input, do not select files based on the spooled file name.
+
+.begin "examples";
+.nofill; narrow 5,5; skip 1; group;
+Set spooled file name (SPLNAM) to "SAIL"
+	/RENAME /SPLNAM:SAIL=SYS:2OPS2.OPS
+Copy file 2OPS2.OPS to SYS: giving it the SAIL SPLNAM.
+	/COPY SYS:/SPLNAM:SAIL=PAKN:2OPS2.OPS[16,13]
+Change the spooled file name to "SAIL!"
+	/RENAME /SPLNAM:"SAIL!"=SYS:2OPS2.OPS
+Erase the spooled file name
+	/RENAME /SPLNAM:=SYS:2OPS2.OPS
+Copy the file to your own area, retaining SPLNAM
+	/COPY =SYS:2OPS2.OPS
+Move all files with SPLNAM SAIL from SYS: to OLD:
+	/RENAME OLD:=SYS:*.*/SPLNAM:SAIL
+Delete all files with SPLNAM of TEMP
+	/DELETE *.*/SPLNAM:TEMP
+Make a copy of all files marked MASTER in SPLNAM
+	/COPY *.BAK=*.*/SPLNAM:MASTER
+.end "examples"; apart;
+.sss AUTHOR
+`AUTHOR`
+.label(FURAUTHOR)
+
+The /AUTHOR switch takes a [p,pn] argument.  On an input specification,
+the /AUTHOR switch is used to screen files for those written
+by the given [p,pn].  Wildcards can be used and [-] means the PPN
+of the current default path.
+
+On an output specification, the author field of the file is changed
+to the value given and wildcards cannot be used.
+This operation is only permitted to privileged users.
+
+.begin "examples"; nofill; narrow 5,5; skip 1; group;
+Change author field of SPSS.EXE to [5,16]
+	/RENAME /AUTHOR:[5,16]=SPSS.EXE
+Change files with author field [72,*] to [13,23]
+	/RENAME /AUTHOR:[13,23]=*.*/AUTHOR:[72,*]
+.end "examples"; apart;
+.sss STATUS
+`STATUS`
+.label(FURSTATUSBITS)
+
+Files can be selected based on the RIB "status" bits by using
+the /STATUS switch.  The switch can also change the bit settings
+if the user is privileged.
+
+The /STATUS:nnn switch will select files with status bits exactly
+equal to "nnn" octal on input and will change status bits to "nnn" octal on
+output.
+
+If a "+" precedes the octal value, the file is selected if any of
+the bits in the octal word are also present in the file status.
+If a "-" precedes the octal value, the file is selected if all of
+the bits in the octal word are not present in the file status.
+On output, a "+" turns bits on and a "-" turns bits off.
+
+.begin "examples"; nofill; narrow 5,5; skip 1; group;
+Find all files marked as having a checksum error
+	/FIND *.*/STATUS:+400
+Rename files having a bad checksum so they may be read
+	/RENAME /STATUS:+20000=*.*/STATUS:+400
+.end "examples"; apart;
+.sss MAXCORE;
+`MAXCORE`
+`Core growth`
+`Buffers`
+.label (FURMAXCORE);
+
+        The MAXCORE switch enables  users  to  control  core
+usage when FUR is copying or erasing disk files.  Ordinarily
+FUR will attempt to allocate buffer space in such a  way  as
+to   be   as   efficient   as   possible.   In  doing  this
+with  very  large  files   FUR   will   grow
+tremendously,  sometimes  using the maximum core size allowed.
+At sites other than NIH where total user core is not much larger
+than the maximum job size FUR can appear to 'take over' the
+system when it allocates these huge buffers.
+
+	The MAXCORE switch allows a
+user to specify the maximum amount of core that will be made
+available  to  FUR.   It takes as an argument a core size in
+either words, pages, or thousands of words ("K") (Suffixes "W", "P", and
+"K" respectivly).   Normally  words  are used as the default;
+however, if the value given is less than 256 and there was no
+suffix given FUR will assume that the user meant "K".
+
+
+.begin "example";
+.narrow 5,5;
+.nofill;
+.skip 1;
+	e.g.
+        /MAXCORE:30     will limit FUR to a maximum
+			of 30K,
+
+	whereas
+
+	/MAXCORE:30P    will limit FUR to a maximum
+		   	of 30 Pages (or 15K).
+
+.end "example";
+.at!catholic_false;
+.if at!catholic then begin "80p limit"
+	FUR will normally use  80P  as  its
+standard  default.   Most  users will never have any need to
+change this limit.  Priviledged users, on  the  other  hand,
+may  use  the MAXCORE switch to increase the default maximum
+core size used by FUR, up to a system maximum  of  512P  (or
+256K).   If  a  non-priviledged user attempts to raise FUR's
+limit above 80P FUR will issue an error message  and  ignore
+the  attempt.   FUR  will also ignore any attempt by a user,
+priviledged or not, to decrease the maximum core size  below
+that  needed  by  itself  and  its workspaces.  No error is
+given in this case it is just ignored and FUR will use  its
+previous default.
+.end "80p limit";
+.ss Encryption;
+`Encryption`
+`ENCRYPT`
+.label(FURENCRYPTION);
+
+Data may be encrypted during a COPY command.  The encryption algorithm
+is the same one that is used by SOS.  The Catholic University TYPE
+program which is used at NIH for the TYPE command also has compatible
+decryption.
+
+Encrypting a file changes it to gibberish so that even if a copy
+should fall into the wrong hands, the file is unreadable.  Before the
+file can be used again (except with SOS), it must be decrypted using
+the same key.
+
+A key is a sequence of characters that is used to scramble the data
+in the encrypted file.  If the key is forgotten, the original data
+is not recoverable.  Encrypted files can be moved and copied like
+other files.  They cannot be compiled or printed because they have
+been scrambled.  You should be careful not to re-encrypt a file which
+has been encrypted once already since the data will be doubly scrambled
+and have to be decrypted twice using the same keys in the reverse order.
+
+Remember your key!  If it is lost, so is your data.  The extension
+ENC is suggested for encrypted files so that they will not accidentally
+be printed or encrypted over again.
+
+The /ENCRYPT switch should be placed immediately after the file
+to which the key applies.  A file without any key is read/written
+without encryption.  The /ENCRYPT switch must be followed by the key.
+If the key consists of 6 or fewer alphabetic characaters, no
+enclosing quotation marks are required.  If the key is longer or if
+special characters, numbers, or punctuaction is to be included in the
+key, it must be surrounded by quotation marks.
+
+The switch /CRYPT may be used in place of /ENCRYPT for compatibility
+with the TYPE program.  
+
+When using file encryption, multiple file specifications
+separated by 'AND', 'OR', +, or 'NOT' are not recommended because
+FUR can't handle this combination properly.
+
+
+.begin "examples"; skip 1; group;
+.nofill; narrow 5,5;
+Make an encrypted copy of the file SOS.MAC:
+	/COPY SOS.FUN/PROT:077/ENC:"SECRET KEY"=SOS.MAC
+Make this file usable again:
+	/COPY SOS.MAC=SOS.FUN/ENCRYPT:"SECRET KEY"
+Change the key on the file to "WWW"
+	/COPY SOS.MAC/ENC:WWW=SOS.MAC/ENC:"SECRET KEY"
+.end "examples"; apart;
+.ss SWITCH.INI and the OPTION Command
+`SWITCH.INI`
+`OPTION`
+.label(FURSWITCHINI);
+
+The SWITCH.INI file can be used to set defaults which will
+apply to all appropriate FUR commands.  In addition, the
+OPTION command can be used to set a new group of options taken
+from SWITCH.INI.
+
+For example, assume that DECIDE mode should be set by default.
+SWITCH.INI would contain:
+
+.begin "examples"; skip 1; group; nofill; narrow 5,5;
+	FUR/DECIDE
+.end "examples";
+
+In addition, SWITCH.INI can contain "named" sets of options
+which are used when the command "OPTION name" is given as a
+FUR command.
+
+.begin "examples"; skip 1; group; nofill; narrow 5,5;
+SWITCH.INI might contain:
+	FUR:CAREFUL/DECIDE/ERSUPERSEDE
+
+Then, if the FUR command
+	/OPTION CAREFUL
+were given, DECIDE and ERSUPERSEDE modes would be 
+turned on.  This is equivalent to turning on these 
+switches directly as FUR commands:
+	/DECIDE
+	/ERSUPERSEDE
+but may be more convenient.
+.end "examples";
+.s Installation Instructions;
+
+FUR is easily installed.  There is no NIH-specific code in FUR.
+FUR searches the universal files MACTEN, UUOSYM, and SCNMAC which
+should be on device UNV: (or DSK:).  It is loaded with a special version of SCAN (SCN7BF), and standard versions of
+WILD, HELPER, and ENDECR.
+
+A version of ENDECR that has a
+RELOC 400000 added at the beginning will make FUR load much
+faster since there will then be no low segment that must be
+initialized from disk.  To see if a low segment will be loaded,
+do an examine of location 133.  A value of 137 or less means that
+no low segment must be initialized.  If location 133 holds a value
+greater than 137, check to see if ENDECR has been placed in the
+high segment as desired.
+
+In order to allow plenty of room for lowseg expansion, FUR places
+its high segment above 600000 in user addressing space.  This
+technique will not work on KA-10 systems because of the fixed
+relocate-protect registers.  On such systems, FUR should be recompiled.
+The assembly code tests the kind of machine on which it is assembling
+and uses the traditional 400000 high segment start if a KA-10 is in use.
+
+The code is present in FUR to allow it to be run directly by monitor
+commands for COPY, RENAME, and DELETE.  Note that it will not be
+directly compatible with the present versions of these commands.
+For COPY, options such as P, W, A, N, E, etc. which are available
+in PIP are available with FUR.  For RENAME, DECtapes are not supported.
+For DELETE, DECtapes and TMPCOR files are not supported.
+.<<s Maintenance>>;
+.s Known Bugs;
+`Bugs`
+`Known bugs`
+
+There are no known bugs in FUR.  However, the following complaints
+have been noted.
+
+.ss "?Illegal mode for device TTY";
+`Illegal mode`
+
+People will try to use FUR to type out files.  This will fail because
+device TTY cannot be opened in binary mode.  FUR is a disk utility
+only.  Much additional work would have to be expended to make it
+useful on other devices.
+
+.ss "Incorrect PPN";
+`Incorrect PPN`
+
+When trying to RENAME across file structure, Incorrect PPN message
+often results.  The monitor does not allow renames across file
+structures.
+
+.ss SCAN bugs;
+`SCAN`
+
+In general, FUR suffers from all bugs in SCAN and WILD.  One
+particular bug that was quite annoying was getting 
+"No Such Directory" on a file you knew existed.  This particular
+bug was finessed by providing FUR with a special routine which
+simulates WILD when no actual wildcards are present in the
+file specification.  This also makes FUR much faster when the
+file name is completely specified since WILD does not have to
+be initialized.  By bypassing WILD with a completely specified
+filename, the "No Such Directory" bug was bypassed.
+
+If you do
+find a bug that might be SCAN-related, try it on DIRECT,
+BACKUP, DUMP or some other category A product that uses SCAN and
+SPR it directly to Digital.
+
+`No Such Directory`
+
+.ss "No Such Directory";
+
+Depending on what version of WILD you have loaded FUR with, FUR
+may fail to find files on ersatz devices when your default path
+is an SFD.  The error message will say something like "No such
+directory [1,4,FOO]" if you ask for SYS:.  This is a wild bug.
+Circumvention: Find another version of WILD (try WLD7A) to load
+with your version of FUR.
+
+.ss Reports of Bugs and Fixes;
+`Reports`
+`Fixes`
+
+Please alert Glenn Ricart, Building 12A, Room 1039, National
+Institutes of Health, Bethesda, Maryland 20014, (301) 496-4823 of
+any problems found and also with any fixes or enhancements made.
+If of global interest, they will be included in subsequent versions.
+.s Suggestions;
+`Suggestions`
+
+If the time were available, the following are desirable changes
+to the programs:
+
+Work on non-disk devices.  (This would make it easier to use to
+transplant the normal DELETE and RENAME commands.)
+
+Implement a DECSUPEREDE in addition to ERSUPERSEDE.
+
+Make FUR work with DECtapes. (Not much chance.)
+
+Make DELETE command delete all subordinate files before
+trying to delete the SFDs.
+.doappendix(A);
+.s Examples;
+Here is an example of the use of the FUR program:
+`Example`
+.begin "appendix A";
+.nofill;
+.turn on "";
+.turn on "";
+.rfur
+
+/del*.tmp/decide
+DSKA:NEWS.TMP[,] 25 ? n
+/del*.rel[13,20]/decide
+DSKA:ENDECR.REL[13,20] 25 ? n
+DSKA:WAIT.REL[13,20] 5 ? y
+DSKA:DASSES.REL[13,20] 15 ? y
+DSKA:DDT.REL[13,20] 20 ? n
+DSKB:SOSJAN.REL[13,20] 10 ? q
+[20 Blocks Deleted]
+/copydskc:=std:system.exe
+DSKS0:SYSTEM.EXE[1,4]==>DSKC:SYSTEM.EXE[,] 960
+[960 Blocks Copied, Transfer rate = 1170 Kbaud]
+/q
+
+.
+.end "appendix A";
+.s Recent Program Changes
+
+.ss Changes from Version 2B to 2F
+
+Here, in the form of a news release, are the changes from version
+2B to 2F.
+
+The FUR file utility program has been enhanced to improve its
+speed and make it easier and less expensive to run.
+.sss Speed-Ups
+
+The FUR COPY command has been sped up by an order of magnitude
+through the use of unbuffered I/O.  The time it takes to copy
+files is much less than for any other system program or utility.
+The difference is most pronounced on large files where a 10:1
+speedup is not uncommon.  Besides saving time, the cost of performing
+the copy is cut dramatically as well because fewer instructions
+and monitor operations are required.
+
+Single file operations (where the complete file name is specified) are
+now more efficient because the generalized file finding routine
+is not invoked.  Instead, a special one-file routine is used.
+
+A study of FUR showed that an unwarranted fraction of computer
+time was being spent in the type-out routines.  These were made
+more efficient by using buffered input-output.
+.sss Erase Command
+
+A new command, ERASE, has been added.  The ERASE command will
+erase a magnetic tape by using a special function of the tape drive.
+On disk, ERASE will write the file to zeros before deleting it.
+Both functions are intended to allow confident destruction of
+sensitive data, such as that covered by the Privacy Act.
+
+When erasing a magnetic tape, be sure the write ring is in
+place; if the write ring is not in place, the ERASE command will
+take almost no time at all (instead of 30-90 seconds) and the
+tape will not be erased.  You ask the operator to insert the
+write ring by using /WENABLE on a mount request.
+
+Example:
+
+.begin "example"; narrow 5,5; nofill; group; skip 1;
+/ERASE MTB3:
+[MTB3 erased]
+.apart;
+.end "example";
+.sss Version
+
+You can put a version number on a disk file by copying or renaming
+it using the /VERSION switch.
+
+Examples:
+
+.begin "example"; narrow 5,5; nofill; group; skip 1;
+Put version number 23B on file PROD.SAI
+	/RENAME /VERSION:23B=PROD.SAI
+Copy file FOO.FIL adding version number 17C(452)
+	/COPY /VERSION:17C(452)=FOO.FIL[123,456]
+.apart;
+.end "example";
+
+Version numbers can be placed on source files, REL files, EXE
+files, data files, or anything else.  The version number information
+is lost if you copy or change it with PIP or SOS.
+.sss DECIDE And BEQUIET
+
+The DECIDE and BEQUIET switches can now apply to specific files.
+The method previously used (putting them on a separate line) will
+still work.
+
+Example:
+
+.begin "example"; narrow 5,5; nofill; group; skip 1;
+/DELETE ABC.REL,*.TMP/DECIDE
+   (Delete ABC.REL and ask about *.TMP)
+.apart;
+.end "example";
+.sss Messages
+
+FUR has new informational messages.  The file size (in blocks) is
+almost always printed with the file name to help you identify the
+file.  Other informational messages are printed in square brackets
+to advise you of FUR's actions.
+.sss Deleting Protected Files
+
+Files protected so that you cannot accidentally delete them
+can now be deleted by FUR if you insist (providing they are your files).  FUR will ask if you
+really want to delete the protected file if you try to delete it.
+If you say Y(es), FUR will go ahead.  This action is controlled
+by the /OVERRIDE switch.
+
+.begin indent 0,30; turn on "\"; tabs 31; group;
+
+/OVERRIDE:NO\Don't try to delete protected files.  Just give an
+error message as in the past.
+
+/OVERRIDE:ASK\(Default) Ask about deleting protected files.
+
+/OVERRIDE:YES\(Dangerous) Delete protected files without asking.
+.end; apart;
+.sss Monitor Commands
+
+`Monitor commands`
+
+Version 2F of FUR has been changed so that it can be invoked
+from monitor commands.  It has not, however, been tested in this way.
+FUR is insufficient in implementing DELETE because it does not handle
+TMPCOR or DECtapes.  In RENAME, DECtape support is missing.
+For COPY, switches that modify the file, such as PIP switches
+E, N, T, W, P, etc. are not available in FUR because FUR never
+modifies a file (except to encrypt and decrypt it).
+.sss No Such Directory
+
+A major bug plaguing FUR users was the SCAN/WILD (mostly WILD) bug
+where it would claim "% No Such Directory" when you asked for an
+operation on someone else's perfectly good file.  This problem has
+been finessed by writing a WILD substitute that can handle the
+case of a fully specified filespec.  It was precisely this case that was tripping
+up WILD on systems with multiple file structures.  The substitute
+routine is also much faster and quicker, and avoids initializing
+all of WILD when the user has given a complete filespec.
+.sss Minor Bug Fixes
+
+Copying CRASH.EXE from SYS: is no longer a problem.  (In older
+versions, FUR faithfully copied the "do not delete" bit as well
+as the data.)  FUR no longer loses version numbers of files on RENAMEs or
+COPYs.  Operations on device NUL: work better.
+Protection codes are always printed with 3 digits.  FUR doesn't print
+out NEW:XYZ.EXE[1,4] when a LOOKUP on NEW: is performed and the monitor
+returns a specific file found on SYS:; instead it prints SYS:XYZ.EXE[1,4].
+.ss Changes from Version 2F to 2I
+
+Here are the changes present from version 2F to 2I
+
+.sss NEWFILE Switch
+
+The NEWFILE switch was added to FUR.  This switch bypasses
+the routines that preserve RIB `RIB` information from the
+input to output files and can be used to create files with
+virgin attributes.  For more information see {refersp(FURNEWFILE)}.
+.sss SPLNAM Switch
+
+The 2I version of FUR allows files to be given so-called
+spooled file names.  These names were previously only in use
+in the MPB batch system and FUR makes them available for general
+use.  The general idea was that common identifiers could be
+put in the spooled file name to permit operations on groups of
+files that had the same spooled file name.  For example, all
+of the files belonging to a given software system could be given
+a common spooled file name that would permit them to be operated
+upon as a unit with FUR.
+.sss Core Usage
+
+Several bugs were present that prevented FUR from returning all of
+the core that it used.  These have all been fixed.  A problem
+that led to ?Address check for device RPA3 has been solved; it
+was also a core usage problem.
+.sss Concatenation Messages
+
+The messages that are printed now clearly indicate when concatenation
+is taking place.  It is therefore visually clear whether concatenation
+(appending) is happening or whether the output file is being
+continually overwritten.  (The latter is a common problem encountered
+by people who type /COPY A.B=C,D,E.)
+.sss Extra RIB Values Processed
+
+FUR has been updated to understand and process the new values
+present in 6.03 RIBs including directory expiration date,
+last accounting date, account string, etc.  In addition, a bug
+was fixed that often zero'd the .RBTIM value.
+RENAME and COPY are now much more consistent in their use of
+the various exotic RIB parameters.
+.ss Changes from Version 2I to 2L
+
+Here are the changes present from version 2I to 2L
+
+.sss Prompt Made for CONCATENATE
+
+`Concatenate`
+
+The FUR default of NOCONCATENATE was not intuitive if the input
+command is something like "COPY A=B,C".  The user assumed that
+B and C would be concatenated to form A while the FUR rules say
+that B would be first copied to A, then C copied to A (overwriting
+the copy of B) as would normally happen under NOCONCATENATE.
+
+Now FUR will prompt in such a circumstance to ask the user if
+CONCATENATE should be used.  The prompt can be stifled by using
+either CONCATENATE or NOCONCATENATE to begin with.  Running under
+batch, no prompt will be made and CONCATENATE will be used.
+.sss Pad command
+
+The PAD `PAD` command was added to FUR.  This command adds
+additional empty blocks at the end of a file.  It is primarily
+used to protect ISAM `ISAM` index and data files from system
+crashes.  For more information see {refersp(FURPAD)}.
+
+.sss MAXCORE switch
+`MAXCORE`
+
+The MAXCORE switch was added to FUR. This switch allows
+a user to specify a maximum core size for FUR.  When used
+it forces FUR to never use more core than that which was
+specified when it is building it's internal I/O buffers.
+This will prevent FUR from growing to fill all available
+core when copying or erasing very large files.  For more
+information see {refersp(FURMAXCORE)}.
+
+.sss File Already Exists Message
+
+The error message "File Already Exists" usually means /ERSUPERSEDE
+was set (either by SWITCH.INI default or expicitly).  The error
+message has been extended to give this hint to the user.
+.ss Changes from Version 2L to 2M
+
+Here are the changes made after version 2L.
+.sss ERASE Command Gives Error on Write-Lock
+
+The ERASE command has been modified to generate an error
+message if the magnetic tape in question is write-locked (has
+no write ring).  Previously no error message was generated,
+in the erroneous belief that the monitor call to erase the tape
+would take the error return if the tape were write-locked.
+.sss Number of Blocks Re-Defined
+
+FUR's statistics for the number of blocks transferred is being
+calculated in a new way.  Previously, the number of blocks
+copied by a transfer command was computed by keeping track of words
+transferred and rounding to blocks just before printing.  Now
+the rounding will take place on every transfer so that the figure
+will agree with the higher figures given by DIRECT.  The transfer
+rate is still computed according to the number of words transferred.
+.sss Single Star Disallowed as File Spec for DELETE and ERASE
+
+One user reported trying to type "DELETE *.TMP" and actually
+entering "DELETE *,TMP" with disastrous results.  FUR now
+requires the specification "*.*" to be used explicitly on a
+DELETE or ERASE command if you wish to specify all files.
+A null filespec or a single star will be rejected.  Exceptions:
+If /DECIDE was specified on the filename (or as a global switch)
+then "*.*" need not be used because you will have a chance to
+recover the possible error.  Also, in a batch job, "*" and null
+filespecs will work as before to preserve compatibility.
+.ss Changes from Version 2M to 2O
+
+.sss AUTHOR and STATUS Switches Added
+
+The /AUTHOR and /STATUS switches added by Dave Baldwin at Catholic
+University were incorporated for the COPY and RENAME operations.
+
+.sss "MAIL area files names printed as [p,pn]";
+
+If assembled for Catholic University or NIH, MAIL will print out
+the names of files used by the NIH mail system as [p,pn] instead
+of crazy sixbit values.
+
+.sss ISAMDUMP Command
+
+The ISAMDUMP Command Was Added by Dave Baldwin of Catholic University.
+.Standard Back;

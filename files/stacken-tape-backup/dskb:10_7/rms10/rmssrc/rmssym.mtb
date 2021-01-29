@@ -1,0 +1,994 @@
+
+;!	THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY ONLY BE USED
+;!	  OR COPIED IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE.
+
+;!	COPYRIGHT (C) 1977, 1979 BY DIGITAL EQUIPMENT CORPORATION
+
+
+;!	*********************************************************
+;!	*							*
+;!	*		START OF RMSSYM.MTB			*
+;!	*							*
+;!	*	RMS SYMBOL AND MACRO DEFINITIONS		*
+;!	*							*
+;!	*	THIS FILE IS PROCESSED BY BOTH MACRO AND BLISS	*
+;!	*							*
+;!	*********************************************************
+
+;!	AUTHOR: S. BLOUNT
+;!	EDIT DATE: MAY 1, 1976
+
+;!	REVISION HISTORY:
+;!	
+;!	PRODUCT	MODULE	 SPR
+;!	 EDIT	 EDIT	 QAR		DESCRIPTION
+;!	======	======	=====		===========
+;!	
+;!	
+;!		***** END OF REVISION HISTORY *****
+
+;!	*********************************************************
+;!	*							*
+;!	*	==>	READ FILE RMS20T.SNO BEFORE	<==	*
+;!	*	==>	MAKING ANY EDITS TO THIS FILE	<==	*
+;!	*							*
+;!	*********************************************************
+
+
+;!		IN MACRO THIS FILE MUST BE ASSEMBLED AFTER FILE RMSSYM.MPR:
+
+;!			@MACRO
+;!			*,=RMSSYM.MPR,RMSSYM.MTB
+
+
+;!		IN BLISS THIS FILE MUST BE REQUIRED AS SHOWN BELOW:
+
+;!			MODULE ...
+;!				.
+;!				.
+;!				.
+;!				REQUIRE RMSSYM.BPR;
+;!				REQUIRE RMSSYM.MTB;
+;!				REQUIRE RMSSYM.BPS;
+
+
+;!	***********NOTE:  MACROS THAT ARE CALLED IN THIS FILE ARE DEFINED
+;!			  IN RMSSYM.MPR (MACRO) AND RMSSYM.BPR (BLISS).
+;!			  SEE THESE FILES FOR ADDITIONAL INFORMATION.
+
+
+
+;!		CONTENTS:
+
+;!		1.  DEFINE OFFSET CONSTANTS
+;!		2.  DEFINE SIZE, POSITION, COUNT, AND MISC. CONSTANTS
+;!		3.  SYMBOL DEFINITIONS FOR FILE ACCESS BLOCK (FAB)
+;!		4.  FAB DEFINITIONS
+;!		5.  SYMBOL DEFINITIONS FOR RECORD ACCESS BLOCK (RAB)
+;!		6.  RAB DEFINITIONS
+;!		7.  SYMBOL DEFINITIONS FOR EXTENDED ATTRIBUTES BLOCK (XAB)
+;!		8.  XAB DEFINITIONS
+;!		9.  SYMBOL DEFINITIONS FOR DEBUG MACRO
+;!		10. DEFINE RUN TIME OPERATION CODES
+
+
+
+;!	*********************************************************
+;!	*		1.  DEFINE OFFSET CONSTANTS		*
+;!	*********************************************************
+
+
+S$$DC  (XX,OID,0)		;! BID FIELD OFFSET IN A FAB, RAB, OR XAB
+    ;!		MACRO-10 EXPANDS THE ABOVE TO GIVE:	XX$OID==^D0
+    ;!		BLISS EXPANDS THE ABOVE TO GIVE:	BIND XXOID  = 0;
+
+S$$DC  (XX,OLN,0)		;! BLN FIELD OFFSET IN A FAB, RAB, OR XAB
+    ;!		NOTE THAT RMS ASSUMES THE BID (BLOCK TYPE) AND BLN (BLOCK LENGTH)
+    ;!		FIELDS ARE THE SAME SIZE AND ARE IN THE SAME RELATIVE POSITION
+    ;!		IN A FAB (FILE ACCESS BLOCK), RAB (RECORD ACCESS BLOCK), OR
+    ;!		XAB (EXTENDED ATTRIBUTES BLOCK).
+
+
+S$$DC  (XX,OST,1)		;! STS FIELD OFFSET IN A FAB OR RAB
+S$$DC  (XX,OSV,1)		;! STV FIELD OFFSET IN A FAB OR RAB
+S$$DC  (XX,OCT,2)		;! CTX FIELD OFFSET IN A FAB OR RAB
+    ;!		NOTE THAT RMS ASSUMES THE STS (STATUS), STV (STATUS VALUE), AND
+    ;!		CTX (USER CONTEXT WORD) FIELDS ARE THE SAME SIZE AND ARE IN THE
+    ;!		SAME RELATIVE POSITION IN A FAB OR RAB.
+
+S$$DC  (XX,OCO,1)		;! COD FIELD OFFSET IN AN XAB
+S$$DC  (XX,OF0,0)		;! OFFSET 0 (0TH WORD OF THE BLOCK)
+S$$DC  (XX,OF1,1)		;! OFFSET 1
+S$$DC  (XX,OF2,2)		;! OFFSET 2
+S$$DC  (XX,OF3,3)		;! OFFSET 3
+S$$DC  (XX,OF4,4)		;! OFFSET 4
+S$$DC  (XX,OF5,5)		;! OFFSET 5
+S$$DC  (XX,OF6,6)		;! OFFSET 6
+S$$DC  (XX,OF7,7)		;! OFFSET 7
+S$$DC  (XX,OF8,8)		;! OFFSET 8
+S$$DC  (XX,OF9,9)		;! OFFSET 9
+S$$DC  (XX,O10,10)		;! OFFSET 10
+S$$DC  (XX,O11,11)		;! OFFSET 11
+S$$DC  (XX,O12,12)		;! OFFSET 12
+S$$DC  (XX,O13,13)		;! OFFSET 13
+S$$DC  (XX,O14,14)		;! OFFSET 14
+S$$DC  (XX,O15,15)		;! OFFSET 15
+S$$DC  (XX,O16,16)		;! OFFSET 16
+S$$DC  (XX,O17,17)		;! OFFSET 17
+S$$DC  (XX,O18,18)		;! OFFSET 18
+S$$DC  (XX,O19,19)		;! OFFSET 19
+S$$DC  (XX,O20,20)		;! OFFSET 20
+S$$DC  (XX,O21,21)		;! OFFSET 21
+S$$DC  (XX,O22,22)		;! OFFSET 22
+
+
+
+;!	*********************************************************
+;!	*	2.  DEFINE SIZE, POSITION, COUNT, AND		*
+;!	*	    MISC. CONSTANTS				*
+;!	*********************************************************
+
+
+    ;!			DEFINE SIZE CONSTANTS (NUMBER OF BITS)
+S$$DC  (XX,SW,36)		;! WORD SIZE
+S$$DC  (XX,SH,18)		;! HALF WORD SIZE
+S$$DC  (XX,S27,27)		;! 27 BIT FIELD
+S$$DC  (XX,S23,23)		;! 23 BIT FIELD
+S$$DC  (XX,S13,13)		;! 13 BIT FIELD
+S$$DC  (XX,S12,12)		;! 12 BIT FIELD
+S$$DC  (XX,S9,9)		;! 9 BIT FIELD
+S$$DC  (XX,S8,8)		;! 8 BIT FIELD
+S$$DC  (XX,S7,7)		;! 7 BIT FIELD
+S$$DC  (XX,S6,6)		;! 6 BIT FIELD
+S$$DC  (XX,S5,5)		;! 5 BIT FIELD
+S$$DC  (XX,S4,4)		;! 4 BIT FIELD
+S$$SC  (XX,SID,XX,SH)		;! BID FIELD SIZE IN A FAB, RAB, OR XAB
+    ;!		MACRO EXPANDS THE ABOVE TO GIVE:	XX$SID==XX$SH
+    ;!		BLISS EXPANDS THE ABOVE TO GIVE:	BIND XXSID==XXSH;
+
+S$$SC  (XX,SLN,XX,SH)		;! BLN FIELD SIZE IN A FAB, RAB, OR XAB
+S$$SC  (XX,SST,XX,SH)		;! STS FIELD SIZE IN A FAB OR RAB
+S$$SC  (XX,SSV,XX,SH)		;! STV FIELD SIZE IN A FAB OR RAB
+S$$SC  (XX,SCT,XX,SW)		;! CTX FIELD SIZE IN A FAB OR RAB
+S$$DC  (XX,SCO,5)		;! COD FIELD SIZE IN XAB HEADER
+
+    ;!			DEFINE POSITION CONSTANTS (NUMBER OF BITS TO
+    ;!			THE RIGHT OF THE FIELD)
+S$$DC  (XX,PW,0)		;! WORD POSITION
+S$$DC  (XX,P27,27)		;! 27 BITS REMAINING AT RIGHT
+S$$DC  (XX,PL,18)		;! LEFT HALF WORD POSITION
+S$$DC  (XX,P5,5)		;! 5 BITS REMAINING AT RIGHT
+S$$DC  (XX,P8,8)		;! 8 BITS REMAINING AT RIGHT
+S$$DC  (XX,P9,9)		;! 9 BITS REMAINING AT RIGHT
+S$$DC  (XX,P13,13)		;! 13 BITS REMAINING AT RIGHT
+S$$DC  (XX,P14,14)		;! 14 BITS REMAINING AT RIGHT
+S$$DC  (XX,PR,0)		;! RIGHT HALF WORD POSITION
+S$$DC  (XX,P29,29)		;! 29 BITS REMAINING AT RIGHT
+S$$DC  (XX,P23,23)		;! 23 BITS REMAINING AT RIGHT
+S$$DC  (XX,P22,22)		;! 22 BITS REMAINING AT RIGHT
+S$$DC  (XX,P24,24)		;! 24 BITS REMAINING AT RIGHT
+S$$DC  (XX,P30,30)		;! 30 BITS REMAINING AT RIGHT
+S$$SC  (XX,PID,XX,PL)		;! BID FIELD POSITION IN A FAB, RAB, OR XAB
+S$$SC  (XX,PLN,XX,PR)		;! BLN FIELD POSITION IN A FAB, RAB, OR XAB
+S$$SC  (XX,PST,XX,PL)		;! STS FIELD POSITION IN A FAB OR RAB
+S$$SC  (XX,PSV,XX,PR)		;! STV FIELD POSITION IN A FAB OR RAB
+S$$SC  (XX,PCT,XX,PW)		;! CTX FIELD POSITION IN A FAB OR RAB
+S$$SC  (XX,PCO,XX,PL)		;! COD FIELD POSITION IN XAB HEADER
+
+    ;!			COUNT DEFINITIONS
+S$$DC  (XX,C0,0)		;! COUNT = 0 (FIELD IS NOT AN ARRAY)
+S$$DC  (XX,C8,8)		;! COUNT = 8 (FIELD IS AN ARRAY CONTAINING
+    ;!				   8 ELEMENTS - USED FOR POS AND SIZ
+    ;!				   FIELDS IN A XAB)
+
+    ;!			DEFINE MISC. CONSTANTS
+S$$DC  (XX,YES,1)		;! USED TO INDICATE THAT AN INITIALIZATION
+    ;!				   MACRO IS DEFINED FOR A FIELD
+S$$DC  (XX,NO,0)		;! USED TO INDICATE THAT FIELD CANNOT BE
+    ;!				   SET BY A USER AT COMPILE TIME
+S$$DC  (X,ZERO,0)		;! DEFAULT VALUE OF 0 (ZERO)
+
+
+S$$DC  (FB,NIL,0)		;! FLAGS OFF FOR FAB
+S$$DC  (RB,NIL,0)		;! FLAGS OFF FOR RAB
+S$$DC  (XB,NIL,0)		;! FLAGS OFF FOR XAB
+
+;!*********************************************************
+;!*   3.  SYMBOL DEFINITIONS FOR FILE ACCESS BLOCK (FAB)  *
+;!*********************************************************
+
+
+;!			FAC (FILE ACCESS) FIELD
+
+S$$DC  (FB,GET,1)		;! GET ACCESS
+S$$DC  (FB,UPD,2)		;! UPDATE
+S$$DC  (FB,PUT,4)		;! PUT ACCESS
+S$$DC  (FB,DEL,8)		;! DELETE
+S$$DC  (FB,TRN,16)		;! TRUNCATE
+S$$SC  (FB,IN,FB,GET)		;! INPUT ACCESS
+S$$SC  (FB,OUT,FB,PUT)		;! OUTPUT ACCESS
+
+    ;!			FOP (FILE OPTIONS) FIELD
+S$$BC  (FB,WAT,35)		;! WAIT FOR FILE
+S$$BC  (FB,CIF,34)		;! CREATE FILE ONLY IF NON-EXISTENT
+S$$BC  (FB,DRJ,33)		;! DON'T RELEASE THE JFN
+S$$BC  (FB,DFW,32)		;! DEFERRED WRITE TO FILE
+S$$BC  (FB,SUP,31)		;! SUPERSEDE FILE IF IT EXISTS
+
+    ;!		MACRO-10 EXPANDS THE ABOVE TO GIVE:	FB$CIF==1B34
+    ;!		BLISS EXPANDS THE ABOVE TO GIVE:	BIND FBCIF = 1^(35-34);
+
+    ;!			ORG (FILE ORGANIZATION) FIELD
+    ;!			(***NOTE:  DO NOT USE 0 AS VALUE FOR FILE ORGANIZATION
+
+S$$DC  (FB,SEQ,1)		;! SEQUENTIAL FILE
+S$$DC  (FB,REL,2)		;! RELATIVE FILE
+S$$DC  (FB,IDX,3)		;! INDEXED FILE
+
+    ;!			RFM (RECORD FORMAT) FIELD
+S$$DC  (FB,VAR,0)		;! VARIABLE LENGTH RECORDS
+S$$DC  (FB,STM,1)		;! STREAM RECORDS
+S$$DC  (FB,LSA,2)		;! LINE SEQUENCED ASCII RECORDS
+S$$DC  (FB,FIX,3)		;! FIXED LENGTH RECORDS
+
+    ;!			RAT (RECORD ATTRIBUTES) FIELD
+S$$BC  (FB,BLK,35)		;! BLOCKED
+
+    ;!			DEV (DEVICE CHARACTERISTICS) FIELD
+S$$BC  (FB,REC,35)		;! RECORD ORIENTED DEVICE
+S$$BC  (FB,CCL,34)		;! CARRIAGE CONTROL DEVICE
+S$$BC  (FB,TRM,33)		;! TERMINAL
+S$$BC  (FB,MDI,32)		;! MULTIPLE DIRECTORY DEVICE
+S$$BC  (FB,SQD,31)		;! SEQUENTIAL DEVICE
+
+
+
+;!	*********************************************************
+;!	*		4.  FAB DEFINITIONS			*
+;!	*********************************************************
+
+;!			STRUCTURE OF FILE ACCESS BLOCK:
+
+;!		!=====================================!
+;!		!       BID        !       BLN        !
+;!		!-------------------------------------!
+;!		!       STS        !       STV        !
+;!		!-------------------------------------!
+;!		!                 CTX                 !
+;!		!-------------------------------------!
+;!		!       IFI        !       JFN        !
+;!		!-------------------------------------!
+;!		!       FAC        !       SHR        !
+;!		!-------------------------------------!
+;!		!       FOP        !ORG! BSZ !  BLS   !
+;!		!-------------------------------------!
+;!		!                 FNA                 !
+;!		!-------------------------------------!
+;!		!       RAT        !       MRS        !
+;!		!-------------------------------------!
+;!		!                 MRN                 !
+;!		!-------------------------------------!
+;!		!       <UNUSED>        !  BKS  ! RFM !
+;!		!-------------------------------------!
+;!		!       JNL        !       XAB        !
+;!		!-------------------------------------!
+;!		!       DEV        !       SDC        !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!=====================================!
+
+
+    ;!				DEFINE NON-ZERO DEFAULTS THAT HAVE NOT BEEN DEFINED YET 
+;!	==>BEGINIMMEDIATE
+S$$DC  (FA,TYP,1)				;! BLOCK TYPE
+S$$DC  (FA,LNG,16)				;! BLOCK LENGTH
+S$$DC  (FA,BSZ,36)				;! DEFAULT BYTE SIZE
+;!	==>ENDIMMEDIATE
+
+
+
+;!						FILE:  RMSSYM.MTB  (CONTINUED)
+    ;!				DEFINE FAB FIELDS
+;!	==>BEGINSTRUCTURE(FAB,FALNG)
+$$FIELD (F,BID,FA,TYP,OID,SID,PID,NO ,C0)	;! BLOCK TYPE
+$$FIELD (F,BLN,FA,LNG,OLN,SLN,PLN,NO ,C0)	;! BLOCK LENGTH
+$$FIELD (F,STS,X,ZERO,OST,SST,PST,NO ,C0)	;! STATUS
+$$FIELD (F,STV,X,ZERO,OSV,SSV,PSV,NO ,C0)	;! STATUS VALUE
+$$FIELD (F,CTX,X,ZERO,OCT,SCT,PCT,YES,C0)	;! USER CONTEXT WORD
+$$FIELD (F,IFI,X,ZERO,OF3,SH ,PL ,NO ,C0)	;! INTERNAL FILE ID
+$$FIELD (F,JFN,X,ZERO,OF3,SH ,PR ,YES,C0)	;! JFN
+$$FIELD (F,FAC,FB,GET,OF4,SH ,PL ,YES,C0)	;! FILE ACCESS
+$$FIELD (F,SHR,FB,GET,OF4,SH ,PR ,YES,C0)	;! FILE SHARABILITY
+$$FIELD (F,FOP,X,ZERO,OF5,SH ,PL ,YES,C0)	;! FILE OPTIONS
+$$FIELD (F,ORG,FB,SEQ,OF5,S4 ,P14,YES,C0)	;! FILE ORGANIZATION
+$$FIELD (F,BSZ,FA,BSZ,OF5,S6 ,P8 ,YES,C0)	;! BYTE SIZE
+$$FIELD (F,BLS,X,ZERO,OF5,S8 ,PR ,YES,C0)	;! BLOCK SIZE FOR TAPE FILES
+$$FIELD (F,FNA,X,ZERO,OF6,SW ,PW ,YES,C0)	;! FILE-NAME ADDRESS
+$$FIELD (F,RAT,X,ZERO,OF7,SH ,PL ,YES,C0)	;! RECORD ATTRIBUTES
+$$FIELD (F,MRS,X,ZERO,OF7,SH ,PR ,YES,C0)	;! MAXIMUM RECORD SIZE
+$$FIELD (F,MRN,X,ZERO,OF8,SW ,PW ,YES,C0)	;! MAXIMUM RECORD NUMBER
+$$FIELD (F,RF0,X,ZERO,OF9,S23,P13,NO ,C0)	;! ***RESERVED***
+$$FIELD (F,BKS,X,ZERO,OF9,S8 ,P5 ,YES,C0)	;! BUCKET SIZE
+$$FIELD (F,RFM,FB,VAR,OF9,S5 ,PR ,YES,C0)	;! RECORD FORMAT
+$$FIELD (F,JNL,X,ZERO,O10,SH ,PL ,YES,C0)	;! LOG BLOCK
+$$FIELD (F,XAB,X,ZERO,O10,SH ,PR ,YES,C0)	;! XAB POINTER
+$$FIELD (F,DEV,X,ZERO,O11,SH ,PL ,NO ,C0)	;! DEVICE CHARACTERISTICS
+$$FIELD (F,SDC,X,ZERO,O11,SH ,PR ,NO ,C0)	;! SECONDARY DEVICE CHARACTERISTICS
+$$FIELD (F,RF1,X,ZERO,O12,SW ,PW ,NO ,C0)	;! ***RESERVED***
+$$FIELD (F,RF2,X,ZERO,O13,SW ,PW ,NO ,C0)	;! ***RESERVED***
+$$FIELD (F,RF3,X,ZERO,O14,SW ,PW ,NO ,C0)	;! ***RESERVED***
+$$FIELD (F,RF4,X,ZERO,O15,SW ,PW ,NO ,C0)	;! ***RESERVED***
+;!	==>ENDSTRUCTURE
+
+;!	^  ^  ^   ^   ^   ^   ^   ^   ^
+;	!  !  !   !   !   !   !   !   !_____COUNT (IF C0, THEN NOT ARRAY FIELD)
+;	!  !  !   !   !   !   !   !_____ASNFLG (IF NO THEN USER CAN'T
+;	!  !  !   !   !   !   !         INITIALIZE AT COMPILE TIME)
+;	!  !  !   !   !   !   !_____POSITION (NO. BITS AT RIGHT OF FIELD)
+;	!  !  !   !   !   !_____SIZE OF FIELD IN BITS
+;	!  !  !   !   !_____OFFSET INTO THE BLOCK
+;	!  !  !   !_____2ND HALF OF DEFAULT VALUE SYMBOL
+;	!  !  !_____1ST HALF OF DEFAULT VALUE SYMBOL
+;	!  !  	    IF 1ST HALF IS X AND 2ND HALF IS ZERO, THEN MACRO DEFAULT 
+;	!  !	    VALUE IS X$ZERO, AND BLISS DEFAULT VALUE IS XZERO.
+;	!  !_____FIELD NAME
+;	!_____BLOCK TYPE PREFIX
+
+
+
+
+;!*********************************************************
+;!*  5.  SYMBOL DEFINITIONS FOR RECORD ACCESS BLOCK (RAB) *
+;!*********************************************************
+
+
+    ;!			RAC (RECORD ACCESS) FIELD
+
+;!	==>BEGINCOLLECT(RABRAC,K)
+S$$DC  (RB,SEQ,0)		;! SEQUENTIAL ACCESS
+S$$DC  (RB,KEY,1)		;! KEYED ACCESS
+S$$DC  (RB,RFA,2)		;! RFA
+;!	==>ENDCOLLECT
+
+    ;!			ROP (RECORD OPTIONS) FIELD
+
+;!	==>BEGINCOLLECT(RABROP,V)
+S$$BC  (RB,EOF,35)		;! POSITION FILE TO EOF
+S$$BC  (RB,FDL,34)		;! FAST DELETE
+S$$BC  (RB,LOC,33)		;! USE LOCATE MODE ON GET'S
+S$$BC  (RB,RAH,32)		;! READ AHEAD
+S$$BC  (RB,LOA,31)		;! FOLLOW LOAD PERCENTAGES
+S$$BC  (RB,WBH,30)		;! WRITE BEHIND
+S$$BC  (RB,KGT,29)		;! KEY GREATER THAN
+S$$BC  (RB,KGE,28)		;! KEY GREATER THAN OR EQUAL TO
+S$$BC  (RB,PAD,27)		;! USE PAD CHARACTER TO FILL BUFFER
+S$$BC	(RB,NRP,26)		;! SET NEXT RECORD PTR ON FIND
+;!	==>ENDCOLLECT
+
+
+;!	*********************************************************
+;!	*		6.  RAB DEFINITIONS			*
+;!	*********************************************************
+
+;!			STRUCTURE OF RECORD ACCESS BLOCK
+
+;!		!-------------------------------------!
+;!		!       BID        !       BLN        !
+;!		!-------------------------------------!
+;!		!       STS        !       STV        !
+;!		!-------------------------------------!
+;!		!                 CTX                 !
+;!		!-------------------------------------!
+;!		!       ISI        !       FAB        !
+;!		!-------------------------------------!
+;!		!  RAC   !   MBF   !       ROP        !
+;!		!-------------------------------------!
+;!		!                 UBF                 !
+;!		!-------------------------------------!
+;!		!                 RBF                 !
+;!		!-------------------------------------!
+;!		!       RSZ        !       USZ        !
+;!		!-------------------------------------!
+;!		!                 RFA                 !
+;!		!-------------------------------------!
+;!		!  KRF   !   KSZ   !       LSN        !
+;!		!-------------------------------------!
+;!		!                 KBF                 !
+;!		!-------------------------------------!
+;!		!                 BKT                 !
+;!		!-------------------------------------!
+;!		!  PAD   !          <UNUSED>          !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!-------------------------------------!
+
+
+    ;!				DEFINE NON-ZERO DEFAULTS THAT HAVE NOT BEEN DEFINED YET
+;!	==>BEGINIMMEDIATE
+S$$DC  (RA,TYP,2)					;! BLOCK TYPE
+S$$DC  (RA,LNG,16)					;! BLOCK LENGTH
+;!	==>ENDIMMEDIATE
+
+
+
+;!						FILE:  RMSSYM.MTB  (CONTINUED)
+
+    ;!				DEFINE RAB FIELDS
+;!	==>BEGINSTRUCTURE(RAB,RALNG)
+$$FIELD (R,BID,RA,TYP,OID,SID,PID,NO ,C0)	;! BLOCK TYPE
+$$FIELD (R,BLN,RA,LNG,OLN,SLN,PLN,NO ,C0)	;! BLOCK LENGTH
+$$FIELD (R,STS,X,ZERO,OST,SST,PST,NO ,C0)	;! STATUS
+$$FIELD (R,STV,X,ZERO,OSV,SSV,PSV,NO ,C0)	;! STATUS VALUE
+$$FIELD (R,CTX,X,ZERO,OCT,SCT,PCT,YES,C0)	;! USER CONTEXT WORD
+$$FIELD (R,ISI,X,ZERO,OF3,SH ,PL ,NO ,C0)	;! INTERNAL STREAM IDENTIFIER
+$$FIELD (R,FAB,X,ZERO,OF3,SH ,PR ,YES,C0)	;! ADDRESS OF USER FAB
+$$FIELD (R,RAC,RB,SEQ,OF4,S9 ,P27,YES,C0)	;! RECORD ACCESS
+$$FIELD (R,MBF,X,ZERO,OF4,S9 ,PL ,YES,C0)	;! MULTI-BUFFER COUNT
+$$FIELD (R,ROP,RB,WBH,OF4,SH ,PR ,YES,C0)	;! RECORD OPTIONS
+$$FIELD (R,UBF,X,ZERO,OF5,SW ,PW ,YES,C0)	;! USER BUFFER
+$$FIELD (R,RBF,X,ZERO,OF6,SW ,PW ,YES,C0)	;! RECORD BUFFER
+$$FIELD (R,RSZ,X,ZERO,OF7,SH ,PL ,YES,C0)	;! RECORD SIZE
+$$FIELD (R,USZ,X,ZERO,OF7,SH ,PR ,YES,C0)	;! USER BUFFER SIZE
+$$FIELD (R,RFA,X,ZERO,OF8,SW ,PW ,NO ,C0)	;! RECORD-FILE ADDRESS
+$$FIELD (R,KRF,X,ZERO,OF9,S9 ,P27,YES,C0)	;! KEY OF REFERENCE
+$$FIELD (R,KSZ,X,ZERO,OF9,S9 ,PL ,YES,C0)	;! KEY SIZE
+$$FIELD (R,LSN,X,ZERO,OF9,SH ,PR ,YES,C0)	;! LINE-SEQUENCE NUMBER
+$$FIELD (R,KBF,X,ZERO,O10,SW ,PW ,YES,C0)	;! KEY BUFFER
+$$FIELD (R,BKT,X,ZERO,O11,SW ,PW ,NO ,C0)	;! BUCKET HASH CODE
+$$FIELD (R,PAD,X,ZERO,O12,S9 ,P27,YES,C0)	;! PAD CHARACTER
+$$FIELD (R,RR1,X,ZERO,O12,S27,PR ,NO ,C0)	;! ***RESERVED***
+$$FIELD (R,RR2,X,ZERO,O13,SW ,PW ,NO ,C0)	;! ***RESERVED***
+$$FIELD (R,RR3,X,ZERO,O14,SW ,PW ,NO ,C0)	;! ***RESERVED***
+$$FIELD (R,RR4,X,ZERO,O15,SW ,PW ,NO ,C0)	;! ***RESERVED***
+;!	==>ENDSTRUCTURE
+
+;!	^  ^  ^   ^   ^   ^   ^   ^   ^
+;	!  !  !   !   !   !   !   !   !_____COUNT (IF C0, THEN NOT ARRAY FIELD)
+;	!  !  !   !   !   !   !   !_____ASNFLG (IF NO THEN USER CAN'T
+;	!  !  !   !   !   !   !         INITIALIZE AT COMPILE TIME)
+;	!  !  !   !   !   !   !_____POSITION (NO. BITS AT RIGHT OF FIELD)
+;	!  !  !   !   !   !_____SIZE OF FIELD IN BITS
+;	!  !  !   !   !_____OFFSET INTO THE BLOCK
+;	!  !  !   !_____2ND HALF OF DEFAULT VALUE SYMBOL
+;	!  !  !_____1ST HALF OF DEFAULT VALUE SYMBOL
+;	!  !  	    IF 1ST HALF IS X AND 2ND HALF IS ZERO, THEN MACRO DEFAULT 
+;	!  !	    VALUE IS X$ZERO, AND BLISS DEFAULT VALUE IS XZERO.
+;	!  !_____FIELD NAME
+;	!_____BLOCK TYPE PREFIX
+
+
+
+
+;!*********************************************************
+;!*		7.  SYMBOL DEFINITIONS FOR		*
+;!*		EXTENDED ATTRIBUTES BLOCK (XAB)		*
+;!*********************************************************
+
+
+    ;!			COD (XAB TYPE CODE) FIELD
+;!	==>BEGINIMMEDIATE
+S$$DC  (XB,KEY,0)		;! KEY DEFINITION XAB
+S$$DC  (XB,ALL,1)		;! ALLOCATION DEFINITION XAB
+S$$DC  (XB,DAT,2)		;! DATE DEFINTION XAB
+S$$DC  (XB,SUM,3)		;! FILE SUMMARY XAB
+S$$SC  (XB,MAX,XB,SUM)		;! MAX VALUE FOR XAB TYPE CODE
+;!	==>ENDIMMEDIATE
+
+
+    ;!			DTP (DATE TYPE) FIELD
+;!	==>BEGINCOLLECT(XABDTP,K)
+S$$DC  (XB,STG,0)		;! STRING DATA-TYPE
+S$$DC  (XB,EBC,1)		;! EBCDIC DATA-TYPE
+S$$DC  (XB,SIX,2)		;! SIXBIT DATA-TYPE
+;!	==>ENDCOLLECTION
+
+    ;!			FLG (FLAG BITS) FIELD
+;!	==>BEGINCOLLECT(XABFLG,V)
+S$$BC  (XB,DUP,35)		;! DUPLICATES ALLOWED
+S$$BC  (XB,CHG,34)		;! KEYS CAN CHANGE
+S$$BC  (XB,HSH,33)		;! HASH METHOD OF INDEX ORGANIZATION
+;!	==>ENDCOLLECTION
+
+
+
+;!	*********************************************************
+;!	*		8.  XAB DEFINITIONS			*
+;!	*********************************************************
+
+
+    ;!				DEFINE NON-ZERO DEFAULTS
+;!	==>BEGINIMMEDIATE
+S$$DC  (XA,TYP,3)				;! BLOCK TYPE CODE FOR XAB
+S$$DC  (XA,SXKEY,19)				;! SIZE OF KEY XAB
+S$$DC  (XA,SXK,19)				;! SIZE OF KEY XAB
+S$$DC  (XA,SXALL,6)				;! SIZE OF ALLOCATION XAB
+S$$DC  (XA,SXA,6)				;! SIZE OF ALLOCATION XAB
+S$$DC  (XA,SXDAT,5)				;! SIZE OF DATE XAB
+S$$DC  (XA,SXD,5)				;! SIZE OF DATE XAB
+S$$DC  (XA,SXSUM,6)				;! SIZE OF FILE SUMMARY XAB
+S$$DC  (XA,SXS,6)				;! SIZE OF FILE SUMMARY XAB
+S$$DC  (XA,SXX,2)				;! SIZE OF COMMON XAB HEADER
+S$$SC  (XA,LNG,XA,SXKEY)				;! MAXIMUM SIZE FOR AN XAB
+;!	==>ENDIMMEDIATE
+
+
+    ;!	***************** NOTE *******************
+    ;!		WHEN NEW XAB TYPES ARE ADDED,
+    ;!		IT IS NECESSARY TO CHANGE THE
+    ;!		..BEG MACRO IN RMSSYM.MPR
+    ;!		(MACRO PREFILE).
+    ;!	******************************************
+
+
+    ;!				DEFINE COMMON HEADER FOR ALL XAB TYPES
+;!	==>COMMENT;!
+;!	==>COMMENT;!	DEFINE COMMON HEADER FOR ALL XAB'S
+;!	==>COMMENT;!
+;!	==>BEGINTEMPLATE(XAB,2,4)
+$$FIELD (X,BID,XA,TYP,OID,SID,PID,NO ,C0)	;! BLOCK TYPE
+$$FIELD (X,BLN,X,ZERO,OLN,SLN,PLN,NO ,C0)	;! BLOCK LENGTH
+$$FIELD (X,RS1,X,ZERO,OF1,S13,P23,NO ,C0)	;! **RESERVED**
+$$FIELD (X,COD,X,ZERO,OCO,SCO,PCO,NO ,C0)	;! CODE OF THIS XAB
+$$FIELD (X,NXT,X,ZERO,OF1,SH ,PR ,YES,C0)	;! ADDRESS OF NEXT XAB
+;!	==>ENDTEMPLATE
+
+    ;!				DEFINITIONS FOR THE REST OF EACH TYPE OF XAB
+
+
+
+;!						FILE:  RMSSYM.MTB  (CONTINUED)
+    ;!			STRUCTURE OF DATE XAB
+
+;!			!=====================================!
+;!			!       BID        !       BLN        !
+;!			!-------------------------------------!
+;!			!  <UNUSED>  ! COD !       NXT        !
+;!			!-------------------------------------!
+;!			!                CDT                  !
+;!			!-------------------------------------!
+;!			!                RDT                  !
+;!			!-------------------------------------!
+;!			!                EDT                  !
+;!			!=====================================!
+
+;!		FIELD DEFINITIONS FOR DATE/TIME XAB
+
+;!	==>COMMENT;!
+;!	==>COMMENT;!	DATE XAB
+;!	==>COMMENT;!
+;!	==>BEGINTEMPLSTR(XABDAT,XAB,XASXD,XBDAT)
+$$FIELD (X,CDT,X,ZERO,OF2,SW ,PW ,NO ,C0)	;! CREATION DATE AND TIME (READ ONLY)
+$$FIELD (X,RDT,X,ZERO,OF3,SW ,PW ,NO ,C0)	;! DATE AND TIME OF LAST UPDATE (READ ONLY)
+$$FIELD (X,EDT,X,ZERO,OF4,SW ,PW ,YES,C0)	;! DELETION DATE AND TIME
+;!	==>ENDTEMPLSTR
+
+;!	^  ^  ^   ^   ^   ^   ^   ^   ^
+;	!  !  !   !   !   !   !   !   !_____COUNT (IF C0, THEN NOT ARRAY FIELD)
+;	!  !  !   !   !   !   !   !_____ASNFLG (IF NO THEN USER CAN'T
+;	!  !  !   !   !   !   !         INITIALIZE AT COMPILE TIME)
+;	!  !  !   !   !   !   !_____POSITION (NO. BITS AT RIGHT OF FIELD)
+;	!  !  !   !   !   !_____SIZE OF FIELD IN BITS
+;	!  !  !   !   !_____OFFSET INTO THE BLOCK
+;	!  !  !   !_____2ND HALF OF DEFAULT VALUE SYMBOL
+;	!  !  !_____1ST HALF OF DEFAULT VALUE SYMBOL
+;	!  !  	    IF 1ST HALF IS X AND 2ND HALF IS ZERO, THEN MACRO DEFAULT 
+;	!  !	    VALUE IS X$ZERO, AND BLISS DEFAULT VALUE IS XZERO.
+;	!  !_____FIELD NAME
+;	!_____BLOCK TYPE PREFIX
+
+
+;!						FILE:  RMSSYM.MTB  (CONTINUED)
+
+;!		STRUCTURE OF AREA-DEFINITION XAB
+
+;!			!=====================================!
+;!			!       BID        !       BLN        !
+;!			!-------------------------------------!
+;!			!  <UNUSED>  ! COD !       NXT        !
+;!			!-------------------------------------!
+;!			!     <UNUSED>     !   AID  !   BKZ   !
+;!			!-------------------------------------!
+;!			!              <UNUSED>               !
+;!			!-------------------------------------!
+;!			!              <UNUSED>               !
+;!			!-------------------------------------!
+;!			!              <UNUSED>               !
+;!			!=====================================!
+
+    ;!			FIELD DEFINITIONS FOR AREA-DEFINITION XAB
+
+;!	==>COMMENT;!
+;!	==>COMMENT;!	AREA ALLOCATION XAB
+;!	==>COMMENT;!
+;!	==>BEGINTEMPLSTR(XABALL,XAB,XASXA,XBALL)
+$$FIELD (X,RS2,X,ZERO,OF2,SH ,PL ,NO ,C0)	;! **RESERVED**
+$$FIELD (X,AID,X,ZERO,OF2,S9 ,P9 ,YES,C0)	;! AREA-ID
+$$FIELD (X,BKZ,X,ZERO,OF2,S9 ,PR ,YES,C0)	;! BUCKET SIZE OF THIS AREA
+$$FIELD (X,RS3,X,ZERO,OF3,SW ,PW ,NO,C0)		;! **RESERVED**
+$$FIELD (X,RS4,X,ZERO,OF4,SW ,PW ,NO,C0)		;! **RESERVED**
+$$FIELD (X,RS5,X,ZERO,OF5,SW ,PW ,NO,C0)		;! **RESERVED**
+;!	==>ENDTEMPLSTR
+
+;!	^  ^  ^   ^   ^   ^   ^   ^   ^
+;	!  !  !   !   !   !   !   !   !_____COUNT (IF C0, THEN NOT ARRAY FIELD)
+;	!  !  !   !   !   !   !   !_____ASNFLG (IF NO THEN USER CAN'T
+;	!  !  !   !   !   !   !         INITIALIZE AT COMPILE TIME)
+;	!  !  !   !   !   !   !_____POSITION (NO. BITS AT RIGHT OF FIELD)
+;	!  !  !   !   !   !_____SIZE OF FIELD IN BITS
+;	!  !  !   !   !_____OFFSET INTO THE BLOCK
+;	!  !  !   !_____2ND HALF OF DEFAULT VALUE SYMBOL
+;	!  !  !_____1ST HALF OF DEFAULT VALUE SYMBOL
+;	!  !  	    IF 1ST HALF IS X AND 2ND HALF IS ZERO, THEN MACRO DEFAULT 
+;	!  !	    VALUE IS X$ZERO, AND BLISS DEFAULT VALUE IS XZERO.
+;	!  !_____FIELD NAME
+;	!_____BLOCK TYPE PREFIX
+
+
+;!						FILE:  RMSSYM.MTB  (CONTINUED)
+    ;!			STRUCTURE OF KEY DEFINITION XAB
+
+;!		!=====================================!
+;!		!       BID        !       BLN        !
+;!		!-------------------------------------!
+;!		!  <UNUSED>  ! COD !       NXT        !
+;!		!-------------------------------------!
+;!		! <UNUSED>  ! DTP  !       FLG        !
+;!		!-------------------------------------!
+;!		!  IAN   !   DAN   !  LAN   !   REF   !
+;!		!-------------------------------------!
+;!		!       IFL        !       DFL        !
+;!		!-------------------------------------!
+;!		!                 KNM                 !
+;!		!-------------------------------------!
+;!		!             <RESERVED>              !
+;!		!-------------------------------------!
+;!		!             <RESERVED>              !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!-------------------------------------!
+;!		!       POS0       !       SIZ0       !
+;!		!-------------------------------------!
+;!		!       POS1       !       SIZ1       !
+;!		!-------------------------------------!
+;!		!       POS2       !       SIZ2       !
+;!		!-------------------------------------!
+;!		!       POS3       !       SIZ3       !
+;!		!-------------------------------------!
+;!		!       POS4       !       SIZ4       !
+;!		!-------------------------------------!
+;!		!       POS5       !       SIZ5       !
+;!		!-------------------------------------!
+;!		!       POS6       !       SIZ6       !
+;!		!-------------------------------------!
+;!		!       POS7       !       SIZ7       !
+;!		!=====================================!
+
+
+
+;!						FILE:  RMSSYM.MTB  (CONTINUED)
+;!		FIELD DEFINITIONS OF KEY DEFINITION XAB
+
+;!	==>COMMENT;!
+;!	==>COMMENT;!	KEY DEFINITION XAB
+;!	==>COMMENT;!
+;!	==>BEGINTEMPLSTR(XABKEY,XAB,XASXK,XBKEY)
+$$FIELD (X,RX0,X,ZERO,OF2,S12,P24,NO ,C0)	;! ***RESERVED***
+$$FIELD (X,DTP,X,ZERO,OF2,S6 ,PL ,YES,C0)	;! DATA TYPE
+$$FIELD (X,FLG,X,ZERO,OF2,SH ,PR ,YES,C0)	;! FLAG BITS
+$$FIELD (X,IAN,X,ZERO,OF3,S9 ,P27,YES,C0)	;! INDEX-AREA NUMBER
+$$FIELD (X,DAN,X,ZERO,OF3,S9 ,PL ,YES,C0)	;! DATA-AREA NUMBER
+$$FIELD (X,LAN,X,ZERO,OF3,S9 ,P9 ,YES,C0)	;! LOWEST-INDEX AREA NUMBER
+$$FIELD (X,REF,X,ZERO,OF3,S9 ,PR ,YES,C0)	;! KEY OF REFERENCE
+$$FIELD (X,IFL,X,ZERO,OF4,SH ,PL ,YES,C0)	;! INDEX FILL OFFSET
+$$FIELD (X,DFL,X,ZERO,OF4,SH ,PR ,YES,C0)	;! DATA FILL OFFSET
+$$FIELD (X,KNM,X,ZERO,OF5,SW ,PW ,YES,C0)	;! KEY NAME ADDRESS
+$$FIELD (X,RX1,X,ZERO,OF6,SW ,PW ,NO ,C0)	;! ***RESERVED***
+$$FIELD (X,RX2,X,ZERO,OF7,SW ,PW ,NO ,C0)	;! ***RESERVED***
+$$FIELD (X,RX3,X,ZERO,OF8,SW ,PW ,NO ,C0)	;! ***RESERVED***
+$$FIELD (X,RX4,X,ZERO,OF9,SW ,PW ,NO ,C0)	;! ***RESERVED***
+$$FIELD (X,RX5,X,ZERO,O10,SW ,PW ,NO ,C0)	;! ***RESERVED***
+$$FIELD (X,POS,X,ZERO,O11,SH ,PL ,YES,C0)	;! KEY POSITION (ARRAY)
+$$FIELD (X,PS0,X,ZERO,O11,SH ,PL ,YES,C0)
+$$FIELD (X,PS1,X,ZERO,O12,SH ,PL ,YES,C0)
+$$FIELD (X,PS2,X,ZERO,O13,SH ,PL ,YES,C0)
+$$FIELD (X,PS3,X,ZERO,O14,SH ,PL ,YES,C0)
+$$FIELD (X,PS4,X,ZERO,O15,SH ,PL ,YES,C0)
+$$FIELD (X,PS5,X,ZERO,O16,SH ,PL ,YES,C0)
+$$FIELD (X,PS6,X,ZERO,O17,SH ,PL ,YES,C0)
+$$FIELD (X,PS7,X,ZERO,O18,SH ,PL ,YES,C0)
+$$FIELD (X,SIZ,X,ZERO,O11,SH ,PR ,YES,C0)	;! KEY SIZE (ARRAY)
+$$FIELD (X,SZ0,X,ZERO,O11,SH ,PR ,YES,C0)
+$$FIELD (X,SZ1,X,ZERO,O12,SH ,PR ,YES,C0)
+$$FIELD (X,SZ2,X,ZERO,O13,SH ,PR ,YES,C0)
+$$FIELD (X,SZ3,X,ZERO,O14,SH ,PR ,YES,C0)
+$$FIELD (X,SZ4,X,ZERO,O15,SH ,PR ,YES,C0)
+$$FIELD (X,SZ5,X,ZERO,O16,SH ,PR ,YES,C0)
+$$FIELD (X,SZ6,X,ZERO,O17,SH ,PR ,YES,C0)
+$$FIELD (X,SZ7,X,ZERO,O18,SH ,PR ,YES,C0)
+;!	==>ENDTEMPLSTR
+
+;!	^  ^  ^   ^   ^   ^   ^   ^   ^
+;	!  !  !   !   !   !   !   !   !_____COUNT (IF C0, THEN NOT ARRAY FIELD)
+;	!  !  !   !   !   !   !   !_____ASNFLG (IF NO THEN USER CAN'T
+;	!  !  !   !   !   !   !         INITIALIZE AT COMPILE TIME)
+;	!  !  !   !   !   !   !_____POSITION (NO. BITS AT RIGHT OF FIELD)
+;	!  !  !   !   !   !_____SIZE OF FIELD IN BITS
+;	!  !  !   !   !_____OFFSET INTO THE BLOCK
+;	!  !  !   !_____2ND HALF OF DEFAULT VALUE SYMBOL
+;	!  !  !_____1ST HALF OF DEFAULT VALUE SYMBOL
+;	!  !  	    IF 1ST HALF IS X AND 2ND HALF IS ZERO, THEN MACRO DEFAULT 
+;	!  !	    VALUE IS X$ZERO, AND BLISS DEFAULT VALUE IS XZERO.
+;	!  !_____FIELD NAME
+;	!_____BLOCK TYPE PREFIX
+
+
+
+
+;!						FILE:  RMSSYM.MTB  (CONTINUED)
+    ;!			STRUCTURE OF FILE SUMMARY XAB
+
+;!		!=====================================!
+;!		!       BID        !       BLN        !
+;!		!-------------------------------------!
+;!		!  <UNUSED>  ! COD !       NXT        !
+;!		!-------------------------------------!
+;!		!     <UNUSED>     !  NOK   !   NOA   !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!-------------------------------------!
+;!		!              <UNUSED>               !
+;!		!=====================================!
+
+;!		FIELD DEFINITIONS FOR FILE SUMMARY XAB
+
+;!	==>COMMENT;!
+;!	==>COMMENT;!	FILE SUMMARY XAB
+;!	==>COMMENT;!
+;!	==>BEGINTEMPLSTR(XABSUM,XAB,XASXS,XBSUM)
+$$FIELD (X,RS6,X,ZERO,OF2,SH ,PL ,NO ,C0)	;! **RESERVED**
+$$FIELD (X,NOK,X,ZERO,OF2,S9 ,P9 ,NO ,C0)	;! NUMBER OF KEYS
+$$FIELD (X,NOA,X,ZERO,OF2,S9 ,PR ,NO ,C0)	;! NUMBER OF AREAS
+$$FIELD (X,RS7,X,ZERO,OF3,SW ,PW ,NO ,C0)	;! **RESERVED**
+$$FIELD (X,RS8,X,ZERO,OF4,SW ,PW ,NO ,C0)	;! **RESERVED**
+$$FIELD (X,RS9,X,ZERO,OF5,SW ,PW ,NO ,C0)	;! **RESERVED**
+;!	==>ENDTEMPLSTR
+
+;!	^  ^  ^   ^   ^   ^   ^   ^   ^
+;	!  !  !   !   !   !   !   !   !_____COUNT (IF C0, THEN NOT ARRAY FIELD)
+;	!  !  !   !   !   !   !   !_____ASNFLG (IF NO THEN USER CAN'T
+;	!  !  !   !   !   !   !         INITIALIZE AT COMPILE TIME)
+;	!  !  !   !   !   !   !_____POSITION (NO. BITS AT RIGHT OF FIELD)
+;	!  !  !   !   !   !_____SIZE OF FIELD IN BITS
+;	!  !  !   !   !_____OFFSET INTO THE BLOCK
+;	!  !  !   !_____2ND HALF OF DEFAULT VALUE SYMBOL
+;	!  !  !_____1ST HALF OF DEFAULT VALUE SYMBOL
+;	!  !  	    IF 1ST HALF IS X AND 2ND HALF IS ZERO, THEN MACRO DEFAULT 
+;	!  !	    VALUE IS X$ZERO, AND BLISS DEFAULT VALUE IS XZERO.
+;	!  !_____FIELD NAME
+;	!_____BLOCK TYPE PREFIX
+
+
+
+
+
+;!	*********************************************************
+;!	*	9.  SYMBOL DEFINITIONS FOR DEBUG MACRO		*
+;!	*********************************************************
+
+
+
+S$$BC  (DB,TRC,35)		;! TRACE ROUTINE ENTRY
+S$$BC  (DB,ERR,34)		;! TRACE USER ERRORS
+S$$BC  (DB,RTR,33)		;! TRACE ROUTINE EXECUTION
+S$$BC  (DB,LOC,32)		;! TRACE LOCAL VARIABLES
+S$$BC  (DB,BLK,31)		;! DUMP RMS-20 CONTROL BLOCKS
+S$$BC  (DB,LCK,30)		;! PRINT TRACE OF RECORD LOCKS
+S$$BC  (DB,IOT,29)		;! TRACE I/O PAGE ACTIVITY
+S$$BC  (DB,ENT,28)		;! TRACE RMS-20 ENTRY (USER CALLS)
+
+
+;!	ALL PRIMARY SYMBOLS HAVE BEEN DEFINED NOW, SO DEF DEPENDENT SYMS
+;!
+$$SYNM
+
+
+;!	*********************************************************
+;!	*	10.	DEFINE RUN TIME OPERATION VERBS	        *
+;!	*********************************************************
+
+;!	THE CALLING CONVENTION IS:
+;!		PTR TO XAB/FAB/RAB IN AC1
+;!		AC1-AC4 NOT PRESERVED, ALL OTHER AC'S PRESERVED
+;!		JSYS IS DONE ON 20. PUSHJ TO ABSOLUTE LOC DONE ON 10.
+;!		RMS EXAMINES FOR ERCAL/ERJMP FOLLOWING CALLING LOC.
+;!	
+;!	THIS GROUP OF MACROS IS USED IN THE FOLLOWING WAYS:
+;!	
+;!		1.  HERE, TO GENERATE THE APPROPRIATE RUN-TIME MACROS
+;!		2.  IN THE RMS-20 DISPATCHER, TO GENERATE A DISPATCH TABLE
+;!			AND ENTRY ADDRESSES FOR PUSHJ INTERFACE
+;!	
+;!	FOR THE BELOW TO WORK, $$VINI, $$VERB, AND $$VEND MUST BE
+;!		DEFINED IN RMSSYM.BPR AND RMSSYM.MPR
+
+;!	CREATE THE $XXXX MACROS
+	$$VINI
+
+	$$VERB (OPEN)
+	$$VERB (CLOSE)
+	$$VERB (GET)
+	$$VERB (PUT)
+	$$VERB (UPDATE)
+	$$VERB (DELETE)
+	$$VERB (FIND)
+	$$VERB (TRUNCATE)
+	$$VERB (CONNECT)
+	$$VERB (DISCONNECT)
+	$$VERB (CREATE)
+	$$VERB (DEBUG)
+	$$VERB (RELEASE)
+	$$VERB (FLUSH)
+	$$VERB (MESSAGE)
+	$$VERB (NOMESSAGE)
+	$$VERB (DISPLAY)
+	$$VERB (ERASE)
+	$$VERB (FREE)
+	$$VERB	(UTLINT)
+
+	$$VEND
+
+;!	*********************************************************
+;!	*	11.	DEFINE RMS STATUS CODES			*
+;!	*********************************************************
+
+;!	SUCCESS CODES FOR RMS-20
+
+$$SUC (SU$SUC,<%(,OPERATION WAS SUCCESFUL,)%>)
+$$SUC (SU$DUP,<%(,DUPLICATE KEY WAS FOUND,)%>)
+$$SUC (SU$IDX,<%(,AN INDEX UPDATE ERROR OCCURRED,)%>)
+$$SUC (SU$RRV,<%(,ONE OR MORE RRVs COULD NOT BE UPDATED,)%>)
+$$SUC (SU$REO,<%(,FILE SHOULD BE RE-ORGANIZED,)%>)
+$$MAXC(SU)
+
+
+;!	RMS-20 ERROR CODES
+
+$$UERR (ER$AID,<%(,BAD AID VALUE,)%>)
+$$UERR (ER$ALQ,<%(,ALLOCATION QUANTITY INCORRECT,)%>)
+$$UERR (ER$ANI,<%(,NOT ANSI 'D' FORMAT,)%>)
+$$UERR (ER$BKS,<%(,BAD BUCKET SIZE,)%>)
+$$UERR (ER$BKZ,<%(,'BKZ' FIELD INVALID IN XAB,)%>)
+$$UERR (ER$BLN,<%(,BAD BLOCK LENGTH,)%>)
+$$UERR (ER$BSZ,<%(,BAD BYTE SIZE,)%>)
+$$UERR (ER$BUG,<%(,INTERNAL BUG FOUND IN RMS-20,)%>)
+$$UERR (ER$CCF,<%(,CANNOT CLOSE FILE,)%>)
+$$UERR (ER$CCR,<%(,CANNOT CONNECT RAB,)%>)
+$$UERR (ER$CDR,<%(,CANNOT DISCONNECT RAB,)%>)
+$$UERR (ER$CEF,<%(,CANNOT $ERASE FILE,)%>)
+$$UERR (ER$CGJ,<%(,CANNOT GET JFN FOR FILE,)%>)
+$$UERR (ER$CHG,<%(,KEY VALUE CANNOT CHANGE,)%>)
+$$UERR (ER$COD,<%(,BAD COD VALUE IN AN XAB,)%>)
+$$UERR (ER$COF,<%(,CANNOT OPEN FILE,)%>)
+$$UERR (ER$CUR,<%(,NO CURRENT RECORD,)%>)
+$$UERR (ER$DAN,<%(,BAD DATA-AREA NUMBER,)%>)
+$$UERR (ER$DEL,<%(,RECORD HAS BEEN DELETED,)%>)
+$$UERR (ER$DEV,<%(,ILLEGAL DEVICE,)%>)
+$$UERR (ER$DFL,<%(,BAD DATA-FILL PERCENTAGE VALUE,)%>)
+$$UERR (ER$DLK,<%(,DEADLOCK CONDITION DETECTED,)%>)
+$$UERR (ER$DME,<%(,DYNAMIC MEMORY EXHAUSTED,)%>)
+$$UERR (ER$DTP,<%(,BAD DATA-TYPE IN XAB,)%>)
+$$UERR (ER$DUP,<%(,DUPLICATE KEY EXISTS,)%>)
+$$UERR (ER$EDQ,<%(,UNEXPECTED ENQUE/DEQUE ERROR,)%>)
+$$UERR (ER$EOF,<%(,END OF FILE,)%>)
+$$UERR (ER$FAB,<%(,BLOCK IS NOT A VALID FAB,)%>)
+$$UERR (ER$FAC,<%(,BAD FILE ACCESS VALUE,)%>)
+$$UERR (ER$FEX,<%(,FILE ALREADY EXISTS,)%>)
+$$UERR (ER$FLG,<%(,BAD XAB FLAG COMBINATION,)%>)
+$$UERR (ER$FLK,<%(,FILE ALREADY LOCKED BY SOMEONE ELSE,)%>)
+$$UERR (ER$FNA,<%(,BAD FNA VALUE,)%>)
+$$UERR (ER$FNC,<%(,FILE NOT CLOSED,)%>)
+$$UERR (ER$FNF,<%(,FILE NOT FOUND,)%>)
+$$UERR (ER$FOP,<%(,BAD FILE OPTIONS,)%>)
+$$UERR (ER$FSZ,<%(,INVALID HEADER SIZE FOR VFC-FILE,)%>)
+$$UERR (ER$FUL,<%(,FILE FULL,)%>)
+$$UERR (ER$IAL,<%(,INVALID ARGUMENT LIST,)%>)
+$$UERR (ER$IAN,<%(,BAD INDEX-AREA NUMBER,)%>)
+$$UERR (ER$IBC,<%(,ILLEGAL BLOCK MODE CONNECTION,)%>)
+$$UERR (ER$IBO,<%(,ILLEGAL BLOCK MODE OPERATION,)%>)
+$$UERR (ER$IBS,<%(,ILLEGAL BLOCK MODE SHARING,)%>)
+$$UERR (ER$IFI,<%(,BAD IFI VALUE,)%>)
+$$UERR (ER$IFL,<%(,BAD INDEX FILL PERCENTAGE,)%>)
+$$UERR (ER$IMX,<%(,ILLEGAL MULTIPLE XABs,)%>)
+$$UERR (ER$IOP,<%(,INVALID OPERATION ATTEMPTED,)%>)
+$$UERR (ER$IRC,<%(,ILLEGAL RECORD ENCOUNTERED,)%>)
+$$UERR (ER$ISI,<%(,BAD ISI VALUE,)%>)
+$$UERR (ER$JFN,<%(,BAD JFN VALUE,)%>)
+$$UERR (ER$KBF,<%(,BAD KBF VALUE,)%>)
+$$UERR (ER$KEY,<%(,BAD RECORD KEY,)%>)
+$$UERR (ER$KRF,<%(,BAD KEY OF REFERENCE VALUE,)%>)
+$$UERR (ER$KSZ,<%(,BAD KEY SIZE,)%>)
+$$UERR (ER$LSN,<%(,BAD LINE-SEQUENCE NUMBER,)%>)
+$$UERR (ER$MRN,<%(,BAD MRN VALUE,)%>)
+$$UERR (ER$MRS,<%(,BAD MRS VALUE,)%>)
+$$UERR (ER$NEF,<%(,NOT POSITIONED AT EOF,)%>)
+$$UERR (ER$NLG,<%(,LOG FILE NOT ACTIVE,)%>)
+$$UERR (ER$NPK,<%(,INDEXED FILE - NO PRIMARY KEY DEFINED,)%>)
+$$UERR (ER$NXT,<%(, INVALID 'NXT' FIELD IN AN XAB,)%>)
+$$UERR (ER$ORD,<%(,XABs ARE NOT IN CORRECT ORDER,)%>)
+$$UERR (ER$ORG,<%(,BAD FILE ORGANIZATION VALUE,)%>)
+$$UERR (ER$PEF,<%(,CANNOT POSITION TO END-OF-FILE,)%>)
+$$UERR (ER$PLG,<%(,ERROR DETECTED IN FILEs PROLOGUE,)%>)
+$$UERR (ER$POS,<%(,BAD KEY POSITION VALUE,)%>)
+$$UERR (ER$PRV,<%(,PRIVELEGE VIOLATION,)%>)
+$$UERR (ER$QPE,<%(,QUIET POINT ENABLED,)%>)
+$$UERR (ER$RAB,<%(,BLOCK IS NOT A VALID RAB,)%>)
+$$UERR (ER$RAC,<%(,BAD RECORD ACCESS VALUE,)%>)
+$$UERR (ER$RAT,<%(,BAD RECORD ATTRIBUTES,)%>)
+$$UERR (ER$RBF,<%(,INVALID RECORD BUFFER ADDRESS,)%>)
+$$UERR (ER$REF,<%(,BAD KEY REFERENCE (REF) VALUE,)%>)
+$$UERR (ER$RER,<%(,FILE PROCESSOR READ ERROR,)%>)
+$$UERR (ER$REX,<%(,RECORD ALREADY EXISTS,)%>)
+$$UERR (ER$RFA,<%(,BAD RFA VALUE,)%>)
+$$UERR (ER$RFM,<%(,BAD RECORD FORMAT,)%>)
+$$UERR (ER$RLK,<%(,RECORD ALREADY LOCKED BY SOMEONE ELSE,)%>)
+$$UERR (ER$RNF,<%(,RECORD NOT FOUND,)%>)
+$$UERR (ER$RNL,<%(,RECORD NOT LOCKED,)%>)
+$$UERR (ER$ROP,<%(,BAD RECORD OPTIONS,)%>)
+$$UERR (ER$RRV,<%(,INVALID RRV RECORD FOUND,)%>)
+$$UERR (ER$RSA,<%(,RECORD STREAM ACTIVE,)%>)
+$$UERR (ER$RSD,<%(,RECORD SIZE DISCREPANCY,)%>)
+$$UERR (ER$RSZ,<%(,BAD RECORD SIZE VALUE,)%>)
+$$UERR (ER$RTB,<%(,RECORD TOO BIG,)%>)
+$$UERR (ER$SEQ,<%(,KEY VALUE NOT IN SEQUENTIAL ORDER,)%>)
+$$UERR (ER$SIZ,<%(,'SIZ' FIELD IN XAB INVALID,)%>)
+$$UERR (ER$TRE,<%(,INDEX TREE ERROR DETECTED,)%>)
+$$UERR (ER$TRU,<%(,CANNOT TRUNCATE TO THIS FILE,)%>)
+$$UERR (ER$UBF,<%(,BAD BUFFER ADDRESS,)%>)
+$$UERR (ER$UDF,<%(,FILE IS IN UNDEFINED STATE,)%>)
+$$UERR (ER$VER,<%(,ERROR IN VERSION NUMBER,)%>)
+$$UERR (ER$WER,<%(,FILE PROCESSOR WRITE ERROR,)%>)
+$$UERR (ER$XAB,<%(,NOT A VALID XAB,)%>)
+$$UERR (ER$XCL,<%(,FILE MUST BE OPEN IN EXCLUSIVE ACCESS,)%>)
+$$UERR (ER$FSI,<%(,FILE SPEC HAS INVALID FORMAT,)%>)
+$$MAXC(ER)
+
+
+
+;!	RMS-20 FILE CONSISTENCY ERROR CODES
+
+$$FERR (FE$BEM,<%(,EMPTY INDEX BUCKET DETECTED,)%>)
+$$FERR (FE$BFC,<%(,BAD FILE CLASS FOUND IN FILE FDB,)%>)
+$$FERR (FE$BHE,<%(,BUCKET HEADER HAS BAD FORMAT,)%>)
+$$FERR (FE$BIR,<%(,BAD INDEX RECORD DETECTED,)%>)
+$$FERR (FE$ENF,<%(,END BLOCK NOT FOUND IN FILE PROLOGUE,)%>)
+$$FERR (FE$EOP,<%(,END-OF-PAGE MARKER DETECTED WITHOUT FB$BLK ATTRIBUTE,)%>)
+$$FERR (FE$HDR,<%(,INVALID RECORD HEADER FOUND,)%>)
+$$FERR (FE$HNF,<%(,FILE PROLOGUE HEADER NOT FOUND,)%>)
+$$FERR (FE$NOA,<%(,NO AREA DESCRIPTORS FOUND IN FILE,)%>)
+$$FERR (FE$NOI,<%(,NO INDEX DESCRIPTORS FOUND IN FILE,)%>)
+$$FERR (FE$NOR,<%(,NO RRV RECORD FOUND FOR RECORD,)%>)
+$$FERR (FE$NOS,<%(,NO RECORD POINTER FOUND IN SECONDARY INDEX,)%>)
+$$FERR (FE$NOU,<%(,NO DATA RECORD FOUND FOR RFA IN SECONDARY INDEX,)%>)
+$$FERR (FE$PGO,<%(,A FILE PAGE SHOULD DOES NOT EXIST,)%>)
+$$FERR (FE$RSZ,<%(,BAD RECORD-SIZE VALUE DETECTED,)%>)
+$$FERR (FE$UNL,<%(,RECORD SHOULD BE LOCKED, BUT HAS BEEN UNLOCKED,)%>)
+$$MAXC(EX)
+
+
+$$END				;! IN MACRO, GENERATES AND END STATEMENT

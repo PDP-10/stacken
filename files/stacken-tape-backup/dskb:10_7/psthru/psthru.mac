@@ -1,0 +1,3589 @@
+	Title	PSTHRU - Program to do DECnet Phase III pass-through
+	Subttl	General comments
+
+Comment	&
+;+
+;.fig 20
+;.center;PSTHRU.PLM - Documentation for PSTHRU
+;.page
+;Copyright (C) 1982
+;.br
+;Digital Equipment Corporation, Maynard, Massachusetts, U.S.A.
+;.bl 
+;This software is furnished under a license and may be used and copied only
+;in accordance with the terms of such license and with the inclusion of the
+;above copyright notice.  This software or any other copies thereof may not
+;be provided or otherwise made available to any other person.   No title to
+;and ownership of the software is hereby transferred.
+;.bl 
+;The information in this software is subject to change  without  notice and
+;should not be construed as a commitment by Digital Equipment Corporation.
+;.bl 
+;Digital  assumes  no  responsibility  for  the  use  or reliability of its
+;software on equipment which is not supplied by Digital.
+;.page
+;.title PSTHRU.PLM
+;.subtitle General information
+;.autop
+;.lm 10
+;.rm 70
+;I.  General information
+;	PSTHRU is a program which allows connects to be made from
+;any accessable DECnet-10 or ANF-10 node through the host node to
+;any other DECnet-10 or ANF-10 node which is visible to the host
+;node.  The links need not be homogenous.
+;	PSTHRU runs completely asynchronously and handles all incoming
+;connects to the PSTHRU object (object 123 decimal for DECnet-10 or
+;173 octal for ANF-10).  Only one job need be run per installation unless
+;link quotas are such that one job cannot handle the required number of
+;links.  One channel (of the appropriate type) is required for each side
+;of a link (total of two channels per link).
+;	PSTHRU should be started up via SYSJOB.INI.  If it is not logged
+;in, then it will log in to [2,5].  It is recommended that it be run
+;under [1,2], although no privileges are required unless the log file
+;(see below) is to be written to an area to which only [1,2] has file
+;access.
+;	If the PATHological name PSTLOG exits and logging support is
+;enabled, PSTHRU will log all connections, rejections, failures, and
+;disconnects in the specified file.  If the specification is undefined
+;and logging is enabled, then one message will be sent to ORION
+;stating PSTHRU's inability to set logging.
+;	PSTHRU is written to run under TOPS-10 7.02 monitors.
+;DECnet support is required only if the DECnet interface is desired.
+;The MACSYM universal file is required for the BEGSTR/ENDSTR macros.
+;	Known restrictions:
+;.lm 15
+;.list 1
+;.le
+;ANF-10 supports only 32-bit modes (byte mode; I/O mode 3).  This
+;is true both for heterogenous and homogenous connects.  This restriction
+;is to provide a common "known" mode for communicating through
+;the PSTHRU task to maintain correct resolution and byte counts.
+;.le
+;ANF-10 links take precedence over DECnet links when ambiguity
+;is present (i.e. the same node name in both networks and the
+;requested connection object exists on the ANF node).
+;.le
+;Error messages are always a la' DECnet style, even if DECnet
+;support is not build in.
+;.end list
+;.lm 10
+;II.  Assembly instructions
+;.subtitle Assembly instructions
+;	Feature tests:
+;.lm 15
+;.list 1
+;.le
+;FTDECNET:  if on (-1), include DECnet-10 support code.  If off (0)
+;do not.  One of FTDECNET or FTANF10 must be on.
+;.le
+;FTANF10:  if on (-1) include ANF-10 support code.  If off (0),
+;do not.  One of FTDECNET or FTANF10 must be on.
+;.le
+;FTDEBUG:  if on (-1) include a few extra consistency checks.
+;.le
+;FTLOG:  if on (-1) include support for producing log files.
+;.le
+;FTDETACH:  if on (-1), then DETach from the terminal on which
+;the program is started.  This feature should be turned off only
+;for debugging purposes.
+;.end list
+;.lm 10
+;The default list of feature tests is to have FTDECNET, FTANF10,
+;FTDETACH, and FTLOG all turned on and FTDEBUG turned off.
+;	Required files:
+;.lit
+;
+;	PSTHRU.MAC
+;	UUOSYM.UNV
+;	MACTEN.UNV
+;	MACSYM.UNV
+;	NETPRM.UNV
+;	JOBDAT.UNV
+;.end lit
+;	Assembly instructions:
+;.lit
+;
+;	.LOAD PSTHRU
+;	.SSAVE
+;.end lit
+;-
+&	Subttl	Definitions/KBY
+
+	Search	JOBDAT,UUOSYM,MACTEN,MACSYM,NETPRM
+	TWOSEG	400000
+	RELOC	400000
+	.TEXT	^/LOCAL/SYMSEG:HIGH^
+	SALL
+
+;AC definitions:
+
+F=0			;flags AC
+			;LH: Link flags RH:  Global flags
+T1=1			;Temp ACs
+T2=2
+T3=3
+T4=4
+C=5			;AC for character transfers
+B=6			;Points to current psthru control block
+S=7			;Current status of this link
+P=17			;PDL pointer
+
+
+;Fixed channels:
+
+LOG==1			;Log output channel (if logging)
+	Subttl	Feature tests
+
+	ND	FTDECNET,-1
+	ND	FTANF10,-1
+
+	ND	FTDEBUG,0			;Debugging code
+
+	ND	FTDETACH,-1			;Include DETACH code
+	ND	FTLOG,-1			;Logging code
+
+	IFE	FTANF10!FTDECNET,<
+		PASS2
+		PRINTX	?Can't set both FTANF10 and FTDECNET to zero
+		END
+	>
+	Subttl	Miscellaneous definitions
+
+
+	PDLSIZ==200				;PDL size
+	ARRAY	PDL[PDLSIZ]
+
+	ND	BUFNUM,6			;Number of initial buffers
+	ND	BUFSIZ,200			;Buffer data size
+	ND	QUEMAX,20			;Maximum write queue size
+						;(See documentation below)
+	ND	MAXRED,10			;Maximum number of reads to do
+						;at a time
+	ND	QUMLEN,^D132			;Max # of chars in error message
+;+
+;	There are a few additional assembly parameters which may also
+;be changed:
+;.lm 15
+;.list 1
+;.le
+;BUFNUM (default=6):  This is the number of message buffers built at
+;initialization time.  The list will be expanded as is necessary, but
+;buffers are never returned to the free core list (only to the free buffer
+;list).
+;.le
+;BUFSIZ (default=100):  This is the data size of a buffer for input.  Messages
+;larger than this will be fragmented.  This is the size of the data portion
+;of the buffer only and does not include any overhead words (currently
+;there are three additional words).
+;.le
+;QUEMAX (default=20):  This parameter dictates the maximum number of buffers which may be
+;queued up for writing on one side of a link.  The absolute maximum number
+;is also governed by the MAXRED parameter and is equal to QUEMAX+MAXRED.
+;At this point no data available interrupts will be acknowledged on the
+;read side of the link until the write side's queue is empty.  Note that
+;this restriction is held only as long as the link remains in
+;RN state.  This is so that if the read side of the link is just
+;slow and the write side is trying to disconnect, it will be able to.
+;.le
+;MAXRED (default=10):  This is the maximum number of buffers which will
+;be read on a read request if infinited data were available.  See the
+;documentation on QUEMAX for other effects of this parameter.
+;.le
+;QUMLEN (default=132):  This is the maximum length of any error message
+;which will be sent to the operator.
+;.end list
+;.lm 10
+;-
+
+;Flag bits (Right half of F):
+
+	FL$PI==1				;PI system is on
+	FL$P2==2				;Part 2 of the core de-allocator
+	FL$LOG==400000				;Logging enabled
+
+;Version information
+
+	VMAJOR==1				;Version 1
+	VMINOR==0				;Minor version
+	VEDIT==26				;Edit level
+
+	LOC	.JBVER
+	BYTE	(3)0(9)VMAJOR(6)VMINOR(18)VEDIT
+	RELOC
+	Subttl	Edit history
+;+
+;.page
+;.subtitle Edit history
+;.lm 10
+;III.  Edit history
+;.list 1
+;.le
+;(1) Design and implement original features.
+;.le
+;(2) Fix core allocation bug for one word
+;.le
+;(3) Fix bug where a NSP returns no data, but there is more to be read.
+;This could cause a hang after such.
+;.le
+;(4) Fix NPDSTR:  doing a HLRI instead of a HRLI and CPYOBJ doing a
+;HRLI T3,(POINT 8,,) instead of HRLI T3,(POINT 8,,35).  Symptom:
+;causes connections to be made with junk object names (format type 1).
+;.le
+;(5) Change dump area to XPN:
+;.le
+;(6) Change default buffer size from 100 to 200 (octal)
+;.le
+;(7) Update for new DNET. UUO.
+;.le
+;(10) Make DECnet Send/Read Normal/Interrupt ABORT stopcodes instead of INFO.
+;Make ABORT stopcodes work better.
+;.le
+;(11) Range check the size of fields in access control information
+;.le
+;(12) Make sure there's a <NUL> at the end of the string for the QUEUE. UUO
+;so that the message sent to ORION doesn't have old garbage in it.
+;Clean up DIE; remove a HALT that can't be executed and zero out
+;the PPN and access stuff field of the LOOKUP block (which are the PPN
+;and reserved fields of the SAVE. block) before each LOOKUP.
+;.le
+;(13) Edit 11 wasn't complete - changing SOSLE to SOSL causes a bit spray
+;because a core block is allocated and pointed to before we decide
+;the string is terminated.  Change it back to a SOSLE and then check
+;to be sure the last character is a quote, eating one more and checking
+;it if it is not.
+;.le
+;(14) Make NPD object numbers read octal instead of decimal.
+;.le
+;(15) Don't assume "last link" just because access control info is given;
+;this allows users to specify access control info for the PSTHRU they
+;want to connect to (it will have meaning for DECnet at least).
+;.le
+;(16) ANFEOF must clear T2 if it doesn't call ANFRD so we won't think
+;there are any buffers to deallocate.
+;.le
+;(17) Restore ACs before dispatching to type-specific DIE processor
+;(So ABT has the right ACs).  Don't restore on return, it is up to the
+;type-specific processor to preserve those ACs it wants preserved.
+;.le
+;(20) Edit 5 incomplete - check on XPN when looking for new file name
+;to dump on.
+;.le
+;(21) Make source NPD for ANF be the same as FAL:  Use "*" to fill
+;in unused fields.
+;.le
+;(22) Change "Can't Put TSK_. Link into Idle State into a NODUMP
+;STOPCD from an INFO STOPCD.  It happens too often and usually means
+;nothing.
+;.le
+;(23) Make DCNDR not call DCNRD if aborting link; we probably can't
+;read anything anyway.  Gives PDL overflow from recursive ABT stopcodes
+;.le
+;(24) Make SETCNB set format type 1 in the source descriptor PDB it sets up
+;(this is only for passive connections and READ CONNECT INFO), to comply
+;with pending DECnet changes.
+;.le
+;(25) Fix truncated objects on incoming ANF connects.
+;.le
+;(26) Change error return on QUEUE. in stopcode processor from HALT
+;to JFCL (we don't really care if we can't tell ORION what happened).
+;.end list
+;-
+	Subttl	Architecture Philosophies
+
+Comment	&
+;+
+;.page
+;.lm 10
+;IV.  Architecture philosophies
+;.subtitle Architecture philosphies
+;	This section deals with the various implementation decisions
+;that were made in creating the PSTHRU interface.
+;	As was mentioned earlier, all connections are made in 32-bit mode.
+;This decision was made to provide (also as mentioned earlier) a standard
+;connect mode which would maintain proper resolution and byte size.  As you
+;might also guess, it's due to ease of programming due to the DECnet interface
+;which is byte oriented.
+;	ANF connections take precedence over DECnet connections:  this
+;is in conformance with the behaviour of SET HOSTES.
+;	Note also that PSTHRU declares itself to the next succeeding
+;part of the link as whatever it was connected to with.  This is in
+;conformance to the behaviour of PSTHRU objects on other systems.
+;	Below is a quote from the NFT program, reproduced here for your
+;edification, which describes the philosophy of the ANF interface:
+;.lm 15
+;	As ANF-10 basically doesn't support any of the "wonderous" errata of
+;DECnet such as user-id, password, ad nauseum, the TSK. monitor call
+;was invented to give the user fuller control over the network logical
+;link. In particular, in conjunction with versions 3 and later of the
+;DECnet Compatible Port (in the DN8x), the "network process descriptor"
+;was made available to the "user" in order to encode all that stuff in
+;such a way that the DCP can convert it into something the DECnet side
+;understood. The result is a very arcane NPD string (for which honesty
+;requires that I not claim any credit) given to the TSK. in the active
+;and passive init functions. The form of that NPD string, for the first
+;time anywhere ever put in writing, is:
+;.lit
+;	<0>		;leading null byte
+;	DST		;"destination" process identifier
+;	<0>		;punctuation byte
+;	SRC		;"source" process identifier
+;	<0>		;punctuation byte
+;	USERID		;user id string
+;	<0>		;punctuation byte
+;	PASSWORD	;password string for user id
+;	<0>		;punctuation byte
+;	ACCOUNT		;account string for user id
+;	<0>		;punctuation byte
+;	OPTDATA		;"optional user data" a la DECnet connect init
+;	<0>		;punctuation byte
+;
+;.end lit
+;DST and SRC both are one of the following forms:
+;.lit
+;
+;	OBJ		;format 0: DECnet object type
+;	OBJ.NAM		;format 1: DECnet object type and task name
+;			;	   note the "." punctuation character
+;
+;.end lit
+;OBJ is the object type as an ASCII octal number - e.g., "21" for DAP.
+;NAM, USERID, PASSWORD, ACCOUNT, and OPTDATA are all "ASCII" character
+;strings - i.e., 7-bit bytes (with no nulls).
+;.lm 10
+;.page
+
+;-
+&
+	Subttl	Macros
+
+	DEFINE	ASSUME	(SYM,VAL)<
+	IF2,<
+	IFN	<<SYM>-<VAL>>,<
+	PRINTX	?Assumption wrong:  'SYM' not equal 'VAL'
+	>
+	>
+>
+
+	DEFINE	FALL	(ADDR)<
+	IF2,<
+	IFN	<.-ADDR>,<
+	PRINTX	?Cannot FALL into 'ADDR'
+	>
+	>
+>
+
+	DEFINE	PRSERR	(MESSAGE,ADDR)<
+	PUSHJ	P,ADDR
+	CAI	[ASCIZ/'MESSAGE'/]
+>
+
+	DEFINE	STOPCD	(TYPE,MESSAGE)<
+	IFNDEF	STOP,<
+;STOPCD types:
+
+	STOP==0				;Stop the PSTHRU process (don't reload)
+	RELOAD==1			;Reload
+	ABORT==2			;Abort the link
+	INFO==3				;Just type a message on the CTY
+	NODUMP==4			;Just type message, don't even dump
+>
+	PUSHJ	P,DIE
+	CAI	TYPE,[ASCIZ\'MESSAGE'\]
+>
+;+
+;.lm 10
+;V.  Program messages and stop codes
+;.subtitle Program messages and stop codes
+;	PSTHRU is built to notify the operator about various problems
+;which can occur.  These are listed below in detail.
+;	In general, most messages are accompanied by a STOPCD dump.
+;The program dumps on its default path (usually [1,2]).  The name of
+;the first dump file is PSDMP_.EXE.  If creating a new dump would
+;overwrite a previous dump, then the last SIXBIT character of the name
+;will be incremented by one until a unique name is found.  The increment
+;process will continue through the next high order letters if that is
+;necessary.  Thus, the second dump to be written would have the name
+;PSDMP_!_.EXE.  Each STOPCD dump is accompanied by a message to the
+;operator which will also appear in ORION's log file.
+;	If any UUO necessary for the dump fails during stopcode
+;processing, then the program will halt and have to be dumped and
+;restarted manually.
+;	Five types of STOPCDs are recognized:
+;.lm 15
+;.list 1
+;.le
+;STOP - The problem is a serious system failure and the program will
+;not continue.  This usually occurs if some UUO fails which never should.
+;The program will not try to reload itself due to the fact that the
+;failure probably won't go away.
+;.le
+;RELOAD - A serious internal error occured, but it is probably the
+;fault of the PSTHRU program itself.  The program will reload, which
+;will cause all existing links to be aborted.
+;.le
+;ABORT - The current link in which this problem occured will be aborted.
+;PSTHRU continues after the link is aborted.
+;.le
+;INFO - Something happened which may be worth knowing about, but is
+;probably not serious.  PSTHRU continues from the dump point as
+;if nothing happened.
+;.le
+;NODUMP - Something happened which may be worth knowing about, but it's
+;not even serious enough to warrant a dump file.  PSTHRU continues normally.
+;.end list
+;.lm 10
+;The following is a list of the stopcodes which can occur.
+;.list 1
+;-
+	Subttl	Psthru control block
+;definitions for a psthru control block
+;Prefix:  PC
+
+	BEGSTR	PC
+
+		HWORD	LNK		;pointer to other link block
+		HWORD	NXT		;pointer to next block on chain
+
+		FIELD	FLG,^D18
+			BIT	ANF	;flags word:  this is an ANF link
+			BIT	DCN	;  "     " :  this is a DECnet link
+			BIT	PW	;this link is waiting for the PSTHRU msg
+			BIT	LL	;This is the last link
+			BIT	CW	;This link waiting for connect confirm
+			BIT	STF	;Suspended transfer in progress
+			BIT	AL	;Abort this link (when I/O done)
+			BIT	STP	;STOP input on this link when in RN
+			BIT	INI	;This side initiated the link (for logging)
+			BIT	MAB	;Monitor abort:  catastrophic error
+					;is causing link to abort
+		HWORD	CDT		;Pointer to connect/disconnect data
+
+		HWORD	BUF		;Buffer in use by this PCB
+		HWORD	SIZ		;size of this PCB
+
+		HWORD	POL		;Next PCB in the poll queue
+		HWORD	CNT		;Count of characters of buffer in BUF
+
+		HWORD	IDQ		;Interrupt data queue
+
+		WORD	BPT		;Save of byte pointer of current buffer
+
+		ASSUME	.NSAA3,.TKAA3
+		WORD	ARG,.NSAA3+1	;arg blocks for NSP. and TSK.
+
+		WORD	BCO,3		;Output buffer control block for TSK.
+
+		WORD	BCI,3		;Input buffer control block for TSK.
+
+		WORD	NOD		;Node name (SIXBIT)
+
+
+	ENDSTR
+	Subttl	Buffer Block
+
+	BEGSTR	BF
+		HWORD	LNK		;Link to next buffer block
+		FIELD	CNT,18		;Count field
+			BIT EOM		;Sign bit is eom bit
+
+		WORD	BPT		;Byte pointer (used for TSK.)
+
+		WORD	BKP		;Bookeeping (used for TSK.)
+
+		WORD	DAT,BUFSIZ	;The Data in the buffer
+	ENDSTR	BF
+	Subttl	Initialization
+
+PSTHRU:	JFCL
+	RESET
+	MOVE	P,[IOWD PDLSIZ,PDL]
+	MOVE	T1,[-LGNLEN,,LGNARG]
+	LOGIN	T1,
+	  JFCL				;Oh well
+	MOVE	T1,[.STPRV,,T2]
+	MOVEI	T2,.STCCW
+	SETZ	T3,
+	SETUUO	T1,			;Clear capabilities
+	  JFCL
+IFN	FTANF10,<
+	MOVEI	T3,.GTLOC
+	GETTAB	T3,
+	SETZ	T3,
+	MOVEM	T3,MYNODE
+	MOVE	T1,[.NDRNN,,T2]
+	MOVEI	T2,2
+	NODE.	T1,
+	  SETZ	T1,
+	MOVEM	T1,ANFNAM		;Save our ANF name
+>
+IFN	FTDECNET,<
+	MOVEI	T1,DCNBLK
+	DNET.	T1,
+	  SETZM	DCNNAM
+>
+	MOVEI	F,FL$LOG		;Assume we're logging
+IFN	FTDETACH,<
+	MOVSI	T1,-1
+	ATTACH	T1,
+	  JFCL
+>
+	MOVE	T1,.JBFF
+	MOVEI	T4,BUFNUM		;NUMBER OF BUFFERS
+	MOVEM	T1,BUFPTR		;POINTER TO BUFFERR BLOCK
+	MOVEI	T3,BUFNUM*BF.LST(T1)	;WHERE THEY END
+	CORE	T3,
+	  STOPCD STOP,<Can't get core for initial buffers>
+;+
+;.lm 10
+;.le
+;Message:  "Can't get core for initial buffers"
+;.break
+;Type:  STOP
+;	The CORE UUO to set up the initial BUFNUM buffers failed.
+;-
+BUFALC:	MOVEI	T2,BF.LST(T1)		;ADDRESS OF SECOND BUFFER
+	HRLZM	T2,BF.LNK(T1)		;LINK THEM
+	MOVE	T1,T2			;AND POINT TO SECOND
+	SOJG	T4,BUFALC
+	SETZM	(T1)			;NO MORE BUFFERS
+	MOVEI	T1,BF.LST(T1)		;FIRST FREE
+	MOVEM	T1,.JBFF
+	IORI	T3,777
+	MOVEM	T3,HICORE
+	MOVEI	T1,PIVEC		;SET UP PSISER
+	PIINI.	T1,
+	  STOPCD STOP,<Can't initialize PSISER>
+;+
+;.lm 10
+;.le
+;Message:  "Can't initialize PSISER"
+;.br
+;Type:  STOP
+;	The PIINI. UUO to set up the priority software interrupt system
+;failed.  See AC T1 for the error code.
+;-
+IFN	FTDECNET,<
+	MOVE	T1,[PS.FAC+[	.PCNSP	;NSP TRAPS
+			    NSPOFF,,0
+				Z    ]]	;SET THEM UP
+	PISYS.	T1,
+	  STOPCD STOP,<Can't set up PSISER for NSP.>
+;+
+;.lm 10
+;.le
+;Message:  "Can't set up PSISER for NSP."
+;.br
+;Type:  STOP
+;	The PISYS. UUO to add NSP_. conditions to the priority software
+;interrupt system failed.  Error code in T1.
+;-
+	PUSHJ	P,GETPCB		;GET A CONTROL BLOCK
+	MOVEI	B,(T1)
+	PUSHJ	P,DCNENT		;DO ENTER PASSIVE
+	  STOPCD INFO,<Can't set initial DECnet link up>
+;+
+;.lm 10
+;.le
+;Message:  "Can't set initial DECnet link up"
+;.br
+;Type:  INFO
+;	Routine DCNENT does an ENTER PASSIVE function to set up a DECnet
+;link.  It returned non-skip, which means the function failed.  Error
+;code to the NSP_. UUO in T1.  Note that PSTHRU will not be accepting
+;any DECnet connects if this error occurs.
+;-
+>
+IFN	FTANF10,<
+	PUSHJ	P,GETPCB
+	MOVEI	B,(T1)
+	PUSHJ	P,ANFENT		;DO ANF ENTER PASSIVE
+	  STOPCD INFO,<Can't set initial ANF link up>
+;+
+;.lm 10
+;.le
+;Message:  "Can't set initial ANF link up"
+;.br
+;Type:  INFO
+;	Routine ANFENT does an ENTER PASSIVE function to set up an ANF
+;link.  It returned non-skip, which means the function failed.
+;-
+>
+DOSLP:	PUSHJ	P,PION			;TURN ON PSISER
+	SETZ	T1,
+	HIBER	T1,
+	  JFCL
+	PUSHJ	P,PIOFF			;PI should be off for this stuff
+IFN	FTDECNET,<
+	SKIPE	DPLQUE			;DECnet queue?
+	  PUSHJ	P,DCNFRC		;Force an interrupt
+>
+IFN	FTANF10,<
+	SKIPE	APLQUE			;ANF queue?
+	  PUSHJ	P,ANFFRC		;Same for it
+>
+	JRST	DOSLP
+	Subttl	DECnet interrupt routine
+
+IFN	FTDECNET,<
+
+NSPINT:	MOVE	B,BLKPTR			;POINT TO LIST OF BLOCKS
+	MOVE	S,NSPPSI+.PSVIS			;GET THE CHANNEL #
+FNDNSP:	HRRZ	T2,PC.ARG+.NSACH(B)		;GET CHANNEL # OF THIS BLOCK
+	HLL	F,PC.FLG(B)
+	TXNE	F,PCDCN				;Is this DECnet?
+	CAIE	T2,(S)				;Is channel same?
+	  SKIPA					;Wrong link
+	JRST	HAVNSP				;YES
+	HRRZ	B,PC.NXT(B)			;POINT TO NEXT BLOCK
+	JUMPN	B,FNDNSP			;CHECK IT
+	JRST	NOSTR				;Check for queued PCBs
+
+HAVNSP:	LDB	T1,[POINT 6,S,^L<NS.STA>+5]	;GET CURRENT STATE
+	CAMN	B,DCNCWL			;Is this the CW link?
+	CAIN	T1,.NSSCW			;Yes, is it going into CW?
+	  SKIPA					;Going into CW or wrong link
+	SETZM	DCNCWL				;Isn't CW any more
+	MOVEM	S,PC.ARG+.NSACH(B)		;Save this status
+	PUSHJ	P,@DCNSTB(T1)			;CALL ROUTINE
+	  JRST	NOSTR				;Don't update
+	HLLM	F,PC.FLG(B)
+	HLLM	S,PC.ARG+.NSACH(B)		;STORE UPDATE STATUS
+DCNFRC:
+NOSTR:	SKIPN	B,DPLQUE			;See if any PCBs to poll
+	  JRST	DISNSP				;No, dismiss the interrupt
+	HLL	F,PC.FLG(B)			;Get flags
+	HLRZ	T1,PC.POL(B)			;Else de-link this one
+	HRRZM	T1,DPLQUE			;Making DPLQUE point ahead
+	HRRZS	PC.POL(B)
+	MOVE	T1,[NS.WAI!<.NSFRS,,.NSACH+1>]	;Poll the link
+	MOVEM	T1,PC.ARG+.NSAFN(B)
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  JRST	NOSTR				;Toss this one if fail
+	MOVE	S,PC.ARG+.NSACH(B)		;Update S
+	JRST	HAVNSP
+DISNSP:	SKIPE	DCNCWL				;Is there still a link in CW?
+	  JRST	DODBK				;Yes
+	PUSHJ	P,GETPCB			;Get a PCB
+	MOVEI	B,(T1)
+	PUSHJ	P,DCNENT			;Put one there
+	  JFCL					;Oh well
+DODBK:	DEBRK.
+	  STOPCD STOP,<DEBRK. not implemented>
+;+
+;.lm 10
+;.le
+;Message:  "DEBRK_. not implemented"
+;.br
+;Type:  STOP
+;	A DEBRK_. UUO failed with the non-skip return.
+;-
+	POPJ	P,
+	Subttl	DECnet State Dispatch Table
+
+;still under FTDECNET
+
+	DEFINE	DCNVEC	(STATE,ADDR)<
+
+		IFN	<.-DCNSTB-.NSS'STATE>,<
+		PRINTX	%DECnet State Vector Table is out of phase
+		>
+		EXP	ADDR
+	>
+DCNSTB:	EXP	CPOPJ			;NULL INTERRUPT
+
+	DCNVEC	CW,CPOPJ		;CONNECT WAIT
+	DCNVEC	CR,DCNCR		;CONNECT RECEIVE
+	DCNVEC	CS,CPOPJ		;CONNECT SENT
+	DCNVEC	RJ,DCNRJ		;REJECT
+	DCNVEC	RN,DCNRN		;RN
+	DCNVEC	DR,DCNDR		;DISCONNECT RECEIVED
+	DCNVEC	DS,DCNDS		;DISCONNECT SENT
+	DCNVEC	DC,DCNDC		;DISCONNECT CONFIRMED
+	DCNVEC	CF,DCNCF		;NO CONFIDENCE
+	DCNVEC	LK,DCNLK		;NO LINK
+	DCNVEC	CM,DCNCM		;NO COMMUNICATION
+	DCNVEC	NR,DCNNR		;NO RESOURCES
+
+IFN	<.-DCNSTB-.NSSMX-1>,<
+	PRINTX	%DECnet State Vector Table is incomplete
+>
+	Subttl	DECnet Connect Received
+
+;still under FTDECNET
+
+DCNCR:	PUSHJ	P,SETCNB		;Set up to read connect data
+	MOVE	T1,[.NSFRI,,.NSAA1+1]
+	MOVEM	T1,PC.ARG+.NSAFN(B)	;..
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  JRST	RETCNC			;Oh, well, no node to save
+	MOVE	T1,PC.ARG+.NSAA1(B)	;Address of Connect block to T1
+	MOVE	T1,.NSCND(T1)		;String block for node name
+	HRLI	T1,(POINT 8,,35)	;Point to data part
+	MOVE	T2,[POINT 6,PC.NOD(B),]	;Where to put name
+	MOVEI	T3,6			;Maximum number of chars
+CPYNOD:	ILDB	C,T1			;Get a character
+	JUMPE	C,RETCN1		;Done
+	ANDI	C,177			;Mask to seven bits
+	MOVEI	C,<'0'-"0">(C)		;Convert to six bits
+	IDPB	C,T2			;Dump character
+	SOJG	T3,CPYNOD
+RETCN1:	MOVE	T1,PC.ARG+.NSAA1(B)	;Point to connect block
+	MOVE	T2,.NSCSD(T1)		;Point to the source descriptor
+	HRRM	T2,PC.CDT(B)		;Save it for later
+	SETZM	.NSCSD(T1)		;Don't return the block yet
+RETCNC:	PUSHJ	P,GIVBAK		;Return all the blocks, and, in the immortal words
+	SETZM	PC.ARG+.NSAA1(B)	;Of WEM, "Its not polite to point"
+	MOVE	T1,[.NSFAC,,.NSACH+1]	;ACCEPT THE CONNECT
+	MOVEM	T1,PC.ARG+.NSAFN(B)	;..
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  JRST	REJCNC			;OH WELL
+	TXO	F,PCPW			;SET THE LINK TO PW STATE
+	JRST	CPOPJ1
+
+REJCNC:	MOVE	T1,[.NSFRJ,,.NSACH+1]
+	MOVEM	T1,PC.ARG+.NSAFN(B)
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  STOPCD INFO,<DECnet REJECT failed>
+;+
+;.lm 10
+;.le
+;Message:  "DECnet REJECT failed"
+;.br
+;Type:  INFO
+;	A NSP_. function to reject an incoming connect failed.  PSTHRU
+;should only be trying to reject a connection if it could not create
+;an additional channel to have an ever-present channel in connect wait,
+;or if accepting the connection failed.  Error code for the NSP_. UUO
+;in T1.
+;-
+	MOVE	T1,[.NSFRL,,.NSACH+1]
+	MOVEM	T1,PC.ARG+.NSAFN(B)
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  JFCL
+	MOVEI	T1,(B)
+	JRST	FREPCB
+	Subttl	DECnet Disconnect Received
+
+
+;still under FTDECNET
+
+DCNDR:
+IFN	FTLOG,<
+	PUSHJ	P,LOGDCN			;Log the disconnect
+>
+	HRRZ	T1,PC.CDT(B)			;If any connect data around
+	JUMPE	T1,NOCDDR			;(None)
+	HLLZS	PC.CDT(B)			;Clear out pointer to it
+	HRRZ	T2,.NSASL(T1)			;Return it
+	PUSHJ	P,CORFRE			;now
+NOCDDR:	HLRZ	T1,PC.LNK(B)			;See if another side
+	JUMPE	T1,DCNDR1			;None
+	TXNE	F,PCPW!PCMAB			;Don't read anything if in PW
+	  TDZA	T2,T2				;Didn't read anything
+	PUSHJ	P,DCNRD				;Read everything
+	JUMPE	B,CPOPJ
+	PUSH	P,T1				;And save pointers to it
+	PUSH	P,T2				;..
+	MOVE	T1,[NS.WAI!<.NSFRD,,.NSAA2+1>]	;Read the disconnect data
+	MOVEM	T1,PC.ARG+.NSAFN(B)		;..
+	MOVEI	T1,5
+	PUSHJ	P,CORGET			;Get string block for it
+	MOVEI	T2,5
+	MOVEM	T2,.NSASL(T1)			;Set length
+	MOVEM	T1,PC.ARG+.NSAA1(B)
+	MOVEI	T3,(T1)				;Save in T3 for later
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  STOPCD INFO,<DECnet Read Disconnect Information failed>
+;+
+;.lm 10
+;.le
+;Message:  "DECnet Read Disconnect Information failed"
+;Type:  Info
+;	The _.NSFRD function failed.  Error code in T1.
+;-
+DCNDR1:	MOVE	T1,[<.NSFRL,,.NSACH+1>]		;Release the channel
+	MOVEM	T1,PC.ARG+.NSAFN(B)
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  STOPCD INFO,<DECnet RELEASE failed>
+;+
+;.lm 10
+;.le
+;Message:  "DECnet RELEASE failed"
+;.br
+;Type:  INFO
+;	The _.NSFRL function failed.  Usually this means the channel was
+;already gone.  Error code in T1.
+;-
+	MOVEI	T1,(B)				;Free the PCB
+	HLRZ	B,PC.LNK(B)
+	PUSHJ	P,FREPCB
+	JUMPE	B,CPOPJ				;If no other side
+	HRRZS	PC.LNK(B)			;Clear link
+	POP	P,T2				;Restore data pointers
+	POP	P,T1
+	TXNE	F,PCPW				;Was this link in PW?
+	  JRST	RELLNK				;Abort link and release
+	HLL	F,PC.FLG(B)			;Set flags accurately
+	FALL	DSCLNK				;Disconnect the link
+
+>						;End FTDECNET	Subttl	Disconnect other side
+
+;Enter here to disconnect the link in B.  T3 points to disconnect data
+;T1=pointer to interrupt data to queue to outgoing side (if any)
+;T2=pointer to normal data to queue
+;(i.e. T1&T2 set to call DCNWR)
+
+DSCLNK:	HRRM	T3,PC.CDT(B)	;Store disconnect data, if any
+	TXO	F,PCAL		;Set to abort link on I/O done
+	PUSH	P,T1		;Save pointers in case CW
+	PUSH	P,T2
+	TXZE	F,PCSTP		;Clear STOP if aborting link
+	  PUSHJ	P,POLQUE	;And put it on the polling queue
+	TXZN	F,PCCW		;Clear it's in CW now (let data through)
+	  JRST	NOCW		;Not, keep buffers
+	SETZM	(P)		;No new data either
+	SETZM	-1(P)
+	HLRZ	T1,PC.BUF(B)	;Destroy all buffers now
+	JUMPE	T1,NOCW		;Unless there aren't any (should be @least 1)
+	HLRZ	T2,BF.LNK-BF.DAT(T1)	;Remember the next
+	PUSHJ	P,FREBUF	;Free this one
+	MOVEI	T1,(T2)		;Make next current
+	JUMPN	T1,.-3		;And free it
+	HRRZS	PC.BUF(B)	;**No stale pointers!**
+NOCW:	POP	P,T2
+	POP	P,T1		;Restore data pointers
+	HLLM	F,PC.FLG(B)	;Won't be stored by HAVNSP since no <SKP>
+IFN	FTDECNET,<
+	TXNE	F,PCDCN		;DECnet?
+	  PJRST	DCNWR		;Write remaining data
+>
+IFN	FTANF10,<
+	TXNE	F,PCANF		;ANF?
+	  PJRST	ANFWR
+>
+	STOPCD	RELOAD,<Link isn't DECnet or ANF>
+;+
+;.lm 10
+;.le
+;Message:  "Link isn't DECnet or ANF"
+;.br
+;Type:  RELOAD
+;	PSTHRU can't determine whether a link is of type DECnet or
+;ANF.  This implies the internal data base has been trashed.
+;-
+
+;Here to unconditionally abort link in B
+
+RELLNK:	IFN	FTANF10,<
+	TXNE	F,PCANF				;ANF?
+	  JRST	ANFREL				;Yes
+>
+IFN	FTDECNET,<
+	TXNN	F,PCDCN
+>
+	  STOPCD  RELOAD,<Link isn't DECnet or ANF>
+;Note that this was documented earlier.
+IFN	FTDECNET,<
+	MOVE	T1,[.NSFAB,,.NSACH+1]
+	MOVEM	T1,PC.ARG+.NSAFN(B)
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  SKIPA					;Do release if can
+	JRST	RELLN1
+	MOVE	T1,[.NSFRL,,.NSACH+1]
+	MOVEM	T1,PC.ARG+.NSAFN(B)
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  STOPCD INFO,<DECnet RELEASE failed>
+;Note that this was documented earlier.
+RELLN1:	MOVEI	T1,(B)
+	SETZ	B,
+	PJRST	FREPCB
+>
+
+IFN	FTANF10,<
+ANFREL:	HRLZ	T1,PC.ARG+.TKACH(B)	;Channel
+	HRRI	T1,.FOREL
+	MOVEM	T1,FLPBLK+.FOFNC
+	MOVE	T1,[.FOFNC+1,,FLPBLK]
+	FILOP.	T1,
+	  STOPCD INFO,<ANF RELEASE failed>
+;+
+;.lm 10
+;.le
+;Message:  "ANF RELEASE failed"
+;.br
+;Type:  INFO
+;	A FILOP. to release an ANF channel failed.  Probably the channel
+;was already released.  The error code is in T1.
+;-
+	MOVEI	T1,(B)
+	SETZ	B,
+	PJRST	FREPCB
+>
+	Subttl	DECnet error states
+
+;If in CW, send error message as if NSP. failed
+;Else, treat as DR state
+
+IFN	FTDECNET,<
+
+DCNNR:						;No resources
+DCNLK:						;No link
+DCNCF:						;No confidence
+DCNCM:						;No communication
+	TXNN	F,PCCW				;In CW?
+	  JRST	DCNDR				;No, as if a disconnect happened
+	SETZM	PC.ARG+.NSAA2(B)		;Be sure GIVBAK doesn't
+	JRST	DCNRJ				;Treat like connection failure
+	Subttl	DECnet state RN
+
+;still under FTDECNET
+;for data transfer
+
+DCNRN:
+DCNDS:	TXZE	F,PCCW			;Connect wait?
+	  PUSHJ	P,PARSER		;Finish up completing the links
+DCNRNR:	SETZB	T1,T2			;Default no data
+	TXNN	F,PCSTP			;Stop input?
+	PUSHJ	P,DCNRD			;Read data on block pointed to by B
+	JUMPE	B,CPOPJ
+	PUSH	P,T1			;Save interrupt data
+	PUSH	P,T2			;Save normal data
+	TXNN	F,PCPW			;Parse?
+	  JRST	DCNRN1			;No
+	MOVEI	T1,(T2)			;else set byte pointer for it
+	JUMPE	T1,DCNRN1		;No parse if no data
+	PUSHJ	P,PARSE
+	SETZM	(P)			;All buffers already transferred
+DCNRN1:	SETZB	T1,T2			;Nothing additional to queue
+	SKIPE	B			;If link aborted during parse
+	PUSHJ	P,DCNWR			;Write what we can from this link
+	POP	P,T2			;Restore normal
+	POP	P,T1			;And interrupt data
+	JUMPE	B,CPOPJ
+	HLLM	F,PC.FLG(B)		;Store B
+	HLRZ	T3,PC.LNK(B)
+	JUMPE	T3,BUFEAT		;Throw away buffers if no other side
+	HRRZI	B,(T3)
+	HLL	F,PC.FLG(B)		;And flags
+IFN	FTANF10,<
+	LDB	T3,[POINT	1,F,^L<PCANF>]
+	PUSHJ	P,@[	DCNWR
+			ANFWR](T3)
+>
+IFE	FTANF10,<
+	PUSHJ	P,DCNWR
+>
+	JUMPE	B,CPOPJ			;If no link, then don't update
+	HLLM	F,PC.FLG(B)		;Point back to original block
+	HLRZ	B,PC.LNK(B)
+	HLL	F,PC.FLG(B)
+	JRST	CPOPJ1
+
+	Subttl	Reject state
+
+;still under FTDECNET
+
+DCNRJ:
+IFN	FTLOG,<
+	PUSHJ	P,LOGREJ			;Log a REJECT
+>
+	HLRZ	T1,PC.LNK(B)			;Is there another side?
+	JUMPE	T1,DCNRJ1			;No
+	MOVE	T1,[NS.WAI!<.NSFRD,,.NSAA1+1>]
+	MOVEM	T1,PC.ARG+.NSAFN(B)		;Read the disconnect data
+	MOVEI	T1,5
+	PUSHJ	P,CORGET
+	MOVEI	T2,5
+	HRRM	T2,.NSASL(T1)			;Set length
+	MOVEM	T1,PC.ARG+.NSAA1(B)
+	MOVEI	T3,(T1)
+	MOVEI	T1,PC.ARG(B)
+	SETZ	T2,				;Preset T2
+	NSP.	T1,
+	  TROA	T2,400000(T1)			;Flag an error not a reason
+	MOVE	T2,PC.ARG+.NSAA2(B)		;Get reason
+	PUSH	P,T2				;Save it
+DCNRJ1:	MOVE	T1,[<.NSFRL,,.NSACH+1>]
+	MOVEM	T1,PC.ARG+.NSAFN(B)
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  STOPCD INFO,<DECnet RELEASE failed>
+;Note that this was documented earlier.
+	MOVEI	T1,(B)
+	HLRZ	T4,PC.BUF(B)			;Get buffer
+IFN	FTDEBUG,<
+	SKIPN	T4
+	  STOPCD RELOAD,<No buffer>
+;Message:  "No buffer"
+;.br
+;Type:  RELOAD
+;	This STOPCD only occurs if FTDEBUG is turned on.  While
+;processing a REJECT, we could not find the buffer which we would normally
+;have queued to either write the answer back message or the PSTHRU message
+;to the next link.
+;-
+>
+	HLRZ	B,PC.LNK(B)			;Point to other half
+	SKIPE	B				;If no other side, eat buffers
+	HRRZS	PC.BUF(T1)			;Don't let BUFEAT this time
+	PUSHJ	P,FREPCB
+	JUMPE	B,CPOPJ				;Return if nothing else
+	HRRZS	PC.LNK(B)			;No stale links!
+	HLL	F,PC.FLG(B)			;Get flags
+	MOVE	S,PC.ARG+.NSACH(B)		;And last known status
+	HRRM	T3,PC.CDT(B)			;Save the disconnect data
+	POP	P,T2				;Restore T2
+	TRZN	T2,400000			;Error or reason?
+	  SKIPA	T2,DCNRSN(T2)			;A reason
+	MOVE	T2,DCNERR(T2)			;An error
+	FALL	ABTLNK				;Get the message and abort
+
+>						;End FTDECNET	Subttl	Abort Link
+
+;Here from PRSERx to abort a link after sending a reason message
+;T4=pointer to buffer to use
+;T2=byte pointer to string
+;PC.CDT(B) points to disconnect data, if any
+;PC.BUF(B) is buffer
+
+ABTLNK:
+	PUSH	P,T4				;Save buffer pointer
+	HRLI	T4,(POINT 8,,)			;Make data pointer
+	HRLI	T2,(POINT 7,,)			;Make pointer for this
+	MOVEI	C,2				;Failure code
+	IDPB	C,T4				;Put in
+	MOVEI	C,"("
+	IDPB	C,T4
+	MOVSI	T3,-6				;Maximum size of name
+	PUSH	P,T2				;Save pointer
+IFN	FTANF10,<
+	MOVEI	T2,ANFNAM			;Assume ANF
+>
+IFN	FTANF10&FTDECNET,<
+	TXNN	F,PCANF				;Is it?
+>
+IFN	FTDECNET,<
+	MOVEI	T2,DCNNAM			;No, make DECnet
+>
+	HRLI	T2,(POINT 6,,)
+CPYNAM:	ILDB	C,T2
+	JUMPE	C,NAMDON
+	MOVEI	C,"0"-'0'(C)			;Convert from sixbit
+	IDPB	C,T4
+	AOBJN	T3,CPYNAM
+NAMDON:	HRRZI	T3,6(T3)			;Clear left half; include ^B(::)<SP>
+	MOVEI	C,":"
+	IDPB	C,T4
+	IDPB	C,T4
+	MOVEI	C,")"
+	IDPB	C,T4
+	MOVEI	C," "
+	IDPB	C,T4
+	POP	P,T2				;Restore message byte pointer
+CPYMSG:	ILDB	C,T2
+	JUMPE	C,CPYDON
+	IDPB	C,T4
+	AOJA	T3,CPYMSG
+CPYDON:	POP	P,T2				;Restore buffer pointer
+	TRO	T3,BFEOM			;Set EOM
+	HRRM	T3,BF.CNT-BF.DAT(T2)		;Store # of characters
+	SETZ	T1,				;No interrupt data
+	HRRZ	T3,PC.CDT(B)			;Get the connect data
+	PJRST	DSCLNK				;Disconnect the link
+	Subttl	Disconnect confirmed
+
+
+IFN	FTDECNET,<
+
+DCNDC:	HLRZ	T1,PC.LNK(B)			;Is this a funny phase-II DC?
+	JUMPN	T1,DCNRJ			;Yes, treat like reject
+	MOVE	T1,[<.NSFRL,,.NSACH+1>]
+	MOVEM	T1,PC.ARG+.NSAFN(B)
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,				;Release the channel
+	  STOPCD INFO,<DECnet RELEASE failed>
+;Note that this was documented earlier.
+	MOVEI	T1,(B)
+	PJRST	FREPCB				;And release the core
+
+>		;END OF FTDECNET
+	Subttl	ANF-10 interrupt routine
+
+COMMENT	&
+			***NOTE***
+
+	In order to appear similar to the DECnet code, .TKACH stores
+the channel in the right half of the word and the PSI interrupt bits
+in the left half (as also does AC S).  It is OK to leave the junk bits
+around for the TSK. since it calls SETUF (P1=channel) which does a
+HRRZS P1 upon entry.  This will not necessarily be true.
+
+							&
+
+IFN	FTANF10,<
+
+ANFINT:	HLRZ	S,ANFPSI+.PSVIS			;Get channel
+	HRL	S,ANFPSI+.PSVFL			;And reason
+	MOVE	B,BLKPTR			;Point to list of blocks
+FNDANF:	HRRZ	T2,PC.ARG+.TKACH(B)		;Get the TSK. channel
+	HLL	F,PC.FLG(B)			;Flags for this link
+	TXNE	F,PCANF				;ANF link?
+	CAIE	T2,(S)				;Yes, right channel?
+	  SKIPA					;Not right link or wrong channel
+	JRST	HAVANF				;Found the culprit
+	HRRZ	B,PC.NXT(B)			;Point to next
+	JUMPN	B,FNDANF			;Check it out
+	JRST	NOSTRA				;Pitch it if don't know who
+
+HAVANF:	MOVEM	S,PC.ARG+.TKACH(B)		;Save current status
+	CAMN	B,ANFCWL
+	  SETZM	ANFCWL				;If this is the CW link
+HAVAN2:	PUSHJ	P,DOANF				;Ponder what to do
+ANFFRC:	SKIPN	B,APLQUE			;ANF polling queue
+	  JRST	NOSTRA				;None
+	HLRZ	T1,PC.POL(B)			;Take this one off
+	MOVEM	T1,APLQUE
+	HRRZS	PC.POL(B)
+	MOVE	S,PC.ARG+.TKACH(B)
+	HLL	F,PC.FLG(B)
+	JRST	HAVAN2
+NOSTRA:	SKIPE	ANFCWL				;Is there still a link in CW?
+	  JRST	DODBKA				;No, do the DEBRK.
+	PUSHJ	P,GETPCB			;Get a PCB for new link
+	MOVEI	B,(T1)
+	PUSHJ	P,ANFENT
+	  JFCL
+DODBKA:	DEBRK.
+	  STOPCD STOP,<DEBRK. not implemented>
+;Note that this was documented earlier.
+	POPJ	P,
+
+DOANF:	TLNE	S,PS.RDO				;Off-line interrupt?
+	  JRST	ANFOFL					;Yes, go handle it
+	TLNE	S,PS.REF				;End of file?
+	  JRST	ANFEOF					;Yes, close down link
+	TLNE	S,PS.ROL				;On-line interrupt?
+	  PUSHJ	P,ANFONL				;Yes, see what kind
+	SETZ	T2,					;So don't queue junk
+	TXNN	F,PCSTP					;STOP bit set?
+	PUSHJ	P,ANFRD					;Read data on this link
+	TXNN	F,PCPW					;In PSTHRU wait?
+	  JRST	ANFNPW					;No
+	SKIPE	T1,T2					;Call PARSE if anything
+	PUSHJ	P,PARSE
+	JUMPE	B,CPOPJ					;If the parse failed
+	SETZ	T2,					;String has been processed
+ANFNPW:	PUSH	P,T2					;Save buffer string
+	SETZB	T1,T2
+	PUSHJ	P,ANFWR					;Start I/O on this link
+	SETZ	T1,
+	POP	P,T2					;Restore buffer chain
+	JUMPE	B,BUFEAT				;If was queued for abort
+							;then partner is gone
+							;anyway
+	HLLM	F,PC.FLG(B)				;Switch to partner link
+	HLRZ	B,PC.LNK(B)				;..
+	JUMPE	B,BUFEAT				;If none, toss input
+	HLL	F,PC.FLG(B)
+	ASSUME	.NSACH,.TKACH				;**must be equal**
+	MOVE	S,PC.ARG+.NSACH(B)
+	MOVEI	T3,ANFWR				;Assume ANF
+IFN	FTDECNET,<
+	TXNN	F,PCANF					;Is it?
+	  MOVEI	T3,DCNWR				;Nope
+>
+	PUSHJ	P,(T3)
+	JUMPE	B,CPOPJ
+	HLLM	F,PC.FLG(B)				;Store flags
+	POPJ	P,
+	Subttl	ANF off-line interrupt
+
+;still under FTANF10
+
+ANFOFL:	TXZN	F,PCCW			;Was link in CW?
+	  JRST	ANDRDC			;DR or DC maybe
+	TXZ	F,PCANF			;Was, then is a reject
+	HLLM	F,PC.FLG(B)		;Update the permanent copy too
+	HRLZ	T1,PC.ARG+.TKACH(B)	;Get the channel
+	SETZM	PC.ARG+.TKACH(B)	;And don't remember it here
+	HRRI	T1,.FOREL		;Release function
+	MOVEM	T1,FLPBLK+.FOFNC	;Set function
+	MOVE	T1,[.FOFNC+1,,FLPBLK]
+	FILOP.	T1,
+	  STOPCD INFO,<ANF RELEASE failed>
+;Note that this was documented earlier.
+	JRST	DCNACT			;Now try DECnet enter active
+
+ANDRDC:	TLNE	S,PS.RID!PS.ROD!PS.REF	;If any of these, then
+	  JRST	ANFEOF			;Treat like EOF
+	PJRST	ANFREL			;Else like a DC
+	Subttl	ANF On-line interrupt
+
+;Still under FTANF10
+
+ANFONL:	TXZN	F,PCCW				;Was link in CW?
+	  JRST	ANFCR				;No, connect received then
+	HLLZS	PC.CDT(B)			;Clear connect data ptr
+	PUSHJ	P,GIVBAK			;Yes, return DECnet blocks
+	PUSHJ	P,ZAPARG			;Clear all traces to them
+	PJRST	PARSER				;Finish up the string
+
+ANFCR:	MOVEI	T1,<<2*<3+1+^D16>>+<3*^D39>+^D16+7>/5+1+.TKNPN
+	PUSHJ	P,CORGET			;Get block to read NPDs
+	HRLI	T1,<<2*<3+1+^D16>>+<3*^D39>+^D16+7>/5+1+.TKNPN
+	MOVEM	T1,PC.ARG+.TKAA3(B)		;Store where it needs to be
+	HLRZS	T1				;Get length again
+	PUSHJ	P,CORGET			;Get another block
+	HRLI	T1,<<2*<3+1+^D16>>+<3*^D39>+^D16+7>/5+1+.TKNPN
+	MOVEM	T1,PC.ARG+.TKAA2(B)		;This one too
+	MOVEI	T1,.TKFRS			;Function read status
+	MOVEM	T1,PC.ARG+.TKAFN(B)		;Set it
+	MOVEI	T1,PC.ARG(B)
+	HRLI	T1,.TKAA3+1			;Length of arg block
+	TSK.	T1,				;Read ths status
+	  JFCL					;Oh well
+	MOVEI	T1,<<<^D16/4>+1>+<.NSDPN+1>>	;Get core for DECnet process blk
+	PUSHJ	P,CORGET			;Get it
+	MOVEI	T2,.NSDPN+1			;Set its length
+	MOVEM	T2,.NSDFL(T1)			;..
+	ASSUME	<<^D16/4>+1>,<.NSDPN+1>		;Save an instruction here
+	MOVEM	T2,.NSDPN+1(T1)			;Link in name block
+	ADDI	T2,(T1)				;Point to name block
+	MOVEM	T2,.NSDPN(T1)			;Save it
+	HRRM	T1,PC.CDT(B)			;Save pointer to it here
+	HRRZ	T1,PC.ARG+.TKAA2(B)		;Point to NPD
+	MOVEI	T2,.TKNPN(T1)			;Make byte pointer of T2
+	HRLI	T2,(POINT 7,,)			;..
+	MOVEI	T4,2				;Number of <NUL>s to pass
+FNDNUL:	SOSGE	.TKNLN(T1)			;Count characters
+	  JRST	NOCDAC				;None
+	ILDB	C,T2				;Get a character of it
+	JUMPN	C,FNDNUL			;Look for a <NUL>
+	SOJG	T4,FNDNUL			;Look for the nth (n=2) one
+	SETZ	T4,				;Clear number AC
+OBJNUM:	SOSGE	C,.TKNLN(T1)
+	  AOJA	C,HOBJ1				;Have an object (C=0 here)
+	ILDB	C,T2				;Get a character
+	SKIPE	C				;A <NUL>
+	CAIN	C,"."				;Or end of this field?
+	  JRST	HOBJ1				;Yes
+	LSH	T4,3				;Octal
+	ADDI	T4,-"0"(C)			;..
+	JRST	OBJNUM				;Back for more
+
+HOBJ1:	HRRZ	T3,PC.CDT(B)			;Point to connect block
+	MOVEM	T4,.NSDOB(T3)			;Set object
+	JUMPE	C,HOBJ3				;Also if so
+	MOVEI	T4,1				;Set format 1
+	MOVEM	T4,.NSDFM(T3)
+	MOVE	T3,.NSDPN(T3)			;Get process name
+	PUSH	P,T3				;Save pointer
+	HRLI	T3,(POINT 8,,35)		;Point there
+	MOVSI	T4,-^D16			;Be defensive
+CPYOBJ:	SOSGE	.TKNLN(T1)			;Here too
+	  JRST	HOBJ2				;Figure we're done
+	ILDB	C,T2				;Get character from NPD
+	JUMPE	C,HOBJ2				;Done on <NUL>
+	IDPB	C,T3				;Put in here
+	AOBJN	T4,CPYOBJ			;Copy more
+HOBJ2:	POP	P,T3
+	HRLM	T4,.NSASL(T3)			;Set length
+	JRST	HOBJ3				;Done
+NOCDAC:	HRRZ	T1,PC.CDT(B)			;Else flag none
+	HRRZI	T2,<<^D16/4>+1+<.NSDPN+1>>	;Free the block
+	PUSHJ	P,CORFRE
+	HLLZS	PC.CDT(B)			;And forget it
+HOBJ3:	HRRZ	T1,PC.ARG+.TKAA3(B)		;Remote NPD
+	MOVE	T4,.TKNND(T1)			;And the remote node number
+	MOVEI	T2,<<2*<3+1+^D16>>+<3*^D39>+^D16+7>/5+1+.TKNPN
+	PUSHJ	P,CORFRE			;Zap block
+	HRRZ	T1,PC.ARG+.TKAA2(B)		;Free local NPD too
+	MOVEI	T2,<<2*<3+1+^D16>>+<3*^D39>+^D16+7>/5+1+.TKNPN
+	PUSHJ	P,CORFRE			;Zap it too
+	MOVEI	T3,2				;Arg block for NODE.
+	MOVE	T1,[.NDRNN,,T3]			;Find the name
+	NODE.	T1,
+	  SETZ	T1,				;Oops
+	MOVEM	T1,PC.NOD(B)			;Store the node name
+	TXO	F,PCPW				;Link into PW state
+	HLLM	F,PC.FLG(B)			;Set in permanent copy too
+	POPJ	P,				;And return
+	PJRST	ZAPARG				;Return killing stale pointers
+	Subttl	ANF End-of-file interrupt
+
+;Still under FTANF10
+;Like DCNDR
+
+ANFEOF:
+IFN	FTLOG,<
+	PUSHJ	P,LOGDCN			;Log the disconnect
+>
+	TXNE	F,PCMAB!PCPW			;If here, don't do anything
+	  TDZA	T2,T2				;Didn't read anything
+	PUSHJ	P,ANFRD				;Read all data possible
+	PUSH	P,T2				;Save pointer to it
+	HLRZ	T1,PC.LNK(B)			;Remember partner
+	PUSH	P,T1				;Save it
+	PUSHJ	P,ANFREL			;Release us
+	POP	P,B				;Get partner
+	POP	P,T2				;Restore buffer string
+	SETZ	T1,				;No interrupt data
+	JUMPE	B,BUFEAT			;If none
+	HRRZS	PC.LNK(B)			;No stale links here
+	SETZB	T1,T3				;No interrupt or disconnect data
+	HLL	F,PC.FLG(B)			;Get flags
+	PJRST	DSCLNK				;Disconnect the link
+
+>						;End FTANF10
+	Subttl	Subroutines
+
+;PIOSAV:  Routine to turn off the PSI if it wasn't
+;and restore it upon exit from the subroutine
+
+
+PIOSAV:	TRNN	F,FL$PI			;Was it on?
+	  POPJ	P,			;No, nothing to remember
+	PUSHJ	P,PIOFF			;Turn it off
+	POP	P,(P)			;OK to do this with PIs off
+	PUSHJ	P,@1(P)			;Call subroutine
+	SKIPA
+	AOS	(P)
+					;fall thru to PION
+;PION: Routine to turn on PSI
+;Call:
+;
+;	PUSHJ	P,PION
+;	  <only return>			;all ACs saved
+
+PION:	TROE	F,FL$PI			;Was it off?
+	  POPJ	P,			;No
+	PUSH	P,T1
+	MOVSI	T1,(PS.FON)
+	PISYS.	T1,
+	  STOPCD STOP,<Can't turn PSISER on>
+;+
+;.lm 10
+;.le
+;Message:  "Can't turn PSISER on"
+;.br
+;Type:  STOP
+;	A PISYS_. UUO to turn the priority software interrupt system back
+;on failed.  Error code in T1.
+;-
+	JRST	TPOPJ
+
+;PIOFF: Complementary routine of above
+;called as above
+
+PIOFF:	TRZN	F,FL$PI			;Was PI on?
+	  POPJ	P,			;No
+	PUSH	P,T1
+	MOVSI	T1,(PS.FOF)
+	PISYS.	T1,
+	  STOPCD STOP,<Can't turn PSISER off>
+;+
+;.lm 10
+;.le
+;Message:  "Can't turn PSISER off"
+;.br
+;Type:  STOP
+;	A PISYS_. UUO to turn the priority software interrupt system off
+;failed.  Error code in T1.
+;-
+	JRST	TPOPJ
+;Find predecessor of block in T1 (searching BLKPTR)
+;Return with it in T1
+;All ACs respected
+
+GETPRD:	PUSH	P,T1
+	PUSH	P,T2				;Save ACs
+	MOVEI	T2,BLKPTR			;Point to start of list
+	ASSUME	PC.LNK,0			;Assume PC.LNK is zero
+PRDLP:	HRRZ	T1,PC.LNK(T2)			;**NOTE** PC.LNK==0
+	EXCH	T2,T1
+	CAME	T2,-1(P)			;one we want?
+	JRST	PRDLP
+	POP	P,T2
+	POP	P,(P)
+	POPJ	P,
+
+;Routine to eat buffer chains
+;T1=pointer to interrupt data, t2=pointer to normal data
+
+BUFEAT:	PUSHJ	P,SAVT
+	PUSH	P,T2			;Save normal pointer
+	JUMPE	T1,BUFEAN		;Eat normal data
+BUFEAI:	HLRZ	T3,BF.LNK-BF.DAT(T1)
+	HRRZI	T2,5+1			;Size of interrupt data block
+	PUSHJ	P,CORFRE
+	HRRZI	T1,(T3)
+	JUMPN	T1,BUFEAI
+BUFEAN:	POP	P,T1
+	JUMPE	T1,CPOPJ
+BUFEN1:	HLRZ	T2,BF.LNK-BF.DAT(T1)
+	PUSHJ	P,FREBUF
+	HRRZI	T1,(T2)
+	JUMPN	T1,BUFEN1
+	POPJ	P,
+;Zap .NSAAx args in block pointed to by B (So GIVBAK won't try to return junk))
+;Uses T1
+
+ZAPARG:	HRLI	T1,PC.ARG+.NSAA1(B)
+	HRRI	T1,PC.ARG+.NSAA1+1(B)
+	SETZM	-1(T1)
+	BLT	T1,PC.ARG+.NSAA3(B)
+	POPJ	P,
+	Subttl	Routines to insert "B" into the polling queue
+
+;Routines to put the PCB pointed to by B on the polling list
+;All ACs respected
+
+;Arbitrary queue, based on B
+IFN	FTDECNET&FTANF10,<
+POLQUE:	PUSH	P,T1			;Save T1
+	HLL	T1,PC.FLG(B)
+	LDB	T1,[POINT 1,T1,^L<PCDCN>]
+	PUSHJ	P,@[ANFPOL
+		    DCNPOL](T1)		;Call proper routine
+	JRST	TPOPJ
+>
+
+IFE	FTDECNET&FTANF10,<
+POLQUE:
+>
+
+;DECnet queue:
+IFN	FTDECNET,<
+DCNPOL:	PUSH	P,T1			;Save T1
+	MOVE	T1,DPLQUE		;Get first in queue
+	HRRZM	B,DPLQUE		;Make us first
+	HRLM	T1,PC.POL(B)		;And him second
+	SETO	T1,
+	WAKE	T1,
+	  JFCL
+	JRST	TPOPJ			;Restore T1 and return
+>
+
+;ANF queue:
+IFN	FTANF10,<
+ANFPOL:	PUSH	P,T1			;Save T1
+	MOVE	T1,APLQUE		;Get first in queue
+	HRRZM	B,APLQUE		;Make us first
+	HRLM	T1,PC.POL(B)		;And him second
+	SETO	T1,
+	WAKE	T1,
+	  JFCL
+	JRST	TPOPJ			;Restore T1 and return
+>
+	Subttl	Numeric Conversion
+
+;Enter at DECIN1 with initial value in T1 already set
+;Exit with T1=#
+
+DECIN:	SETZ	T1,
+DECIN1:	PUSHJ	P,NXTCHR
+	  POPJ	P,
+	CAIL	C,"0"
+	CAILE	C,"9"
+	POPJ	P,
+	IMULI	T1,^D10
+	ADDI	T1,-"0"(C)
+	JRST	DECIN1
+	Subttl	Routine to read data for B
+;Read all available data for the link whose PCB is pointed to by B
+;Return with T1=pointer to interrupt data buffer string (zero if none)
+;Return with T2=pointer to normal data string (zero if none)
+;S must also already be set up and is updated
+;All T ACs used
+
+IFN	FTDECNET,<
+DCNRD:	SETZ	T1,
+	TXNE	S,NS.IDA			;Interrupt data available?
+	  PUSHJ	P,DCNRDI			;Yes, read it
+	JUMPE	B,CPOPJ				;Done
+	PUSH	P,T1				;Store it
+	PUSH	P,[0]				;Clear place on stack
+	MOVEI	T4,BF.DAT-BF.LNK(P)		;Fake first buffer
+	MOVEI	T2,MAXRED			;Maximum number of reads to do
+DCNRDN:	TXNN	S,NS.NDA			;Normal data available?
+	  JRST	DCNRDR				;No return
+	PUSHJ	P,GETBUF			;Get a buffer
+	MOVEI	T3,(T1)				;Save it
+DCNRDO:	HRLI	T1,(POINT 8,,)			;Make a byte pointer
+	MOVEM	T1,PC.ARG+.NSAA2(B)
+	MOVEI	T1,BUFSIZ*4			;4 characters per word
+	MOVEM	T1,PC.ARG+.NSAA1(B)
+	MOVE	T1,[<.NSFDR,,.NSAA2+1>]		;Read normal
+	MOVEM	T1,PC.ARG+.NSAFN(B)
+	MOVEI	T1,PC.ARG(B)			;Point to args
+	NSP.	T1,				;Read the data
+	  STOPCD ABORT,<DECnet READ NORMAL failed>
+;+
+;.lm 10
+;.le
+;Message:  "DECnet READ NORMAL failed"
+;.br
+;Type:  ABORT
+;	A NSP_. function to read normal data from a DECnet link
+;failed.  The error code is in T1.  Data may have been lost.
+;-
+	JUMPE	B,DCNRDR			;In case link was aborted
+	MOVE	S,PC.ARG+.NSACH(B)		;Update S
+	MOVEI	T1,BUFSIZ*4			;Compute # of characters read
+	SUB	T1,PC.ARG+.NSAA1(B)		;..
+	JUMPGE	T1,DCNRD3			;Go
+	MOVEI	T1,(T3)				;Free the buffer
+	TXNE	S,NS.NDA			;Still data to be read?
+	  JRST	DCNRDO				;Yes, toss this and read it
+	PUSHJ	P,FREBUF
+DCNRDR:	POP	P,T2
+	POP	P,T1
+	MOVSS	T2				;Normal data is reversed
+	POPJ	P,				;Return with strings
+
+DCNRD3:	HRLM	T3,BF.LNK-BF.DAT(T4)
+	HRRZI	T4,(T3)				;Point it to this buffer
+	MOVE	T3,PC.ARG+.NSAFN(B)		;Get function again
+	TXNE	T3,NS.EOM			;EOM?
+	TXO	T1,BFEOM			;Yes, set it
+	HRRM	T1,BF.CNT-BF.DAT(T4)
+	LDB	T3,[POINT 6,S,^L<NS.STA>+5]	;Get current state
+	CAIE	T3,.NSSRN			;RN state?
+	  JRST	DCNRDN				;No, no limit on reads then
+	SOJGE	T2,DCNRDN			;Only read this many
+	PUSHJ	P,DCNPOL			;Else put this on polling queue
+	JRST	DCNRDR				;Return
+;Routine for interrupt data
+;Returns with T1 pointing to interrupt data string
+;Still under FTDECNET
+
+DCNRDI:	PUSH	P,[0]			;Default none
+	MOVEI	T4,BF.DAT-BF.LNK(P)	;Start address to store in
+RIDA1:	TXNN	S,NS.IDA		;Interrupt data available?
+	  JRST	RIDAR			;No, return
+	MOVEI	T1,5+1			;Interrupt data in 16 chars max+header
+	PUSHJ	P,CORGET		;Get the mini-buffer
+	MOVEI	T1,BF.DAT(T1)		;Point to data area
+	MOVEI	T2,5			;Size of data part of message
+	HRRZM	T2,.NSASL(T1)		;Which is a string block
+	MOVEM	T1,PC.ARG+.NSAA1(B)	;Buffer addr
+	MOVE	T3,[<.NSFIR,,.NSAA1+1>]	;The function
+	MOVEM	T3,PC.ARG+.NSAFN(B)
+	MOVEI	T3,PC.ARG(B)
+	NSP.	T3,			;Read the data
+	  STOPCD ABORT,<DECnet READ INTERRUPT failed>
+;+
+;.lm 10
+;.le
+;Message:  "DECnet READ INTERRRUPT failed"
+;.br
+;Type:  ABORT
+;	A NSP_. UUO to read interrupt data failed.  Error code in T3.
+;Some data may have been lost.
+;-
+	JUMPE	B,TPOPJ			;Done
+	HLL	S,PC.ARG+.NSACH(B)	;Update S
+	HLRZ	T3,.NSASL(T1)		;Get characters read
+	JUMPN	T3,RIDA2		;Proceed if there are any
+	MOVEI	T1,BF.LNK-BF.DAT(T1)	;Else free the buffer
+	MOVEI	T2,5+1
+	PUSHJ	P,CORFRE		;..
+RIDAR:	POP	P,T1
+	MOVSS	T1,			;It was reversed
+	POPJ	P,
+
+RIDA2:	HRLZM	T1,BF.LNK-BF.DAT(T4)	;Point previous to us
+	HRRZI	T4,(T1)			;Make us predecessor of next
+	JRST	RIDA1
+	Subttl	Routine to write all data for B
+
+;Write all buffers possible.  Enter with T1=interrupt data buffer string
+;Enter with T2=normal data buffer string (either are zero if none).
+;Queue the buffers up and crank up any I/O possible.
+;Still under FTDECNET
+
+DCNWR:	JUMPE	T1,QUENRM			;Queue the normal data
+	PUSH	P,[0]				;Count number of entries
+	MOVEI	T4,PC.IDQ+BF.DAT-BF.LNK(B)	;Do interrupt queue first
+	HLRZ	T3,BF.LNK-BF.DAT(T4)		;Get next item in queue
+	JUMPE	T3,.+4				;Done if no more
+	MOVEI	T4,(T3)				;Else remember us
+	AOS	(P)				;Count another buffer
+	JRST	.-4				;And go to next
+	HRLM	T1,BF.LNK-BF.DAT(T4)		;Point him to us
+	POP	P,T1				;Count of buffers (not incl added)
+	CAIG	T1,QUEMAX
+	  JRST	QUENRM				;OK here
+	HLRZ	T1,PC.LNK(B)			;If there is another side
+	JUMPE	T1,QUENRM
+	HLL	T3,PC.FLG(T1)
+	TXO	T3,PCSTF
+	HLLM	T3,PC.FLG(T1)			;Then stop input on it
+QUENRM:	PUSH	P,[0]				;Initialize buffer count
+	MOVEI	T1,PC.BUF+BF.DAT-BF.LNK(B)	;Initialize pointer
+QNM1:	HLRZ	T3,BF.LNK-BF.DAT(T1)		;Get link to next
+	JUMPE	T3,QNM2				;Done
+IFN	FTDEBUG,<
+	CAIN	T2,(T3)
+	  STOPCD RELOAD,<DECnet buffer queued for write twice>
+;+
+;.lm 10
+;.le
+;Message:  "DECnet buffer queued for write twice"
+;.br
+;Type:  RELOAD
+;	The same buffer was queued for write twice on a given link.
+;This only occurs under FTDEBUG.
+;-
+>
+	AOS	(P)				;Count buffer
+	MOVEI	T1,(T3)				;Point to next
+	JRST	QNM1				;Find end
+QNM2:	HRLM	T2,BF.LNK-BF.DAT(T1)		;Link up buffers
+	POP	P,T1				;Count
+	CAIG	T1,QUEMAX
+	  JRST	DEQN1
+	HLRZ	T1,PC.LNK(B)
+	JUMPE	T1,DEQN1
+	HLL	T2,PC.FLG(T1)
+	TXO	T2,PCSTP
+	HLLM	T2,PC.FLG(T1)
+DEQN1:	TXNE	F,PCCW				;Is link in CW?
+	  POPJ	P,				;Don't dq anything if in CW
+	HLRZ	T1,PC.IDQ(B)			;Get interrupt data queue ptr
+	JUMPE	T1,DEQN2			;If none
+	MOVEM	T1,PC.ARG+.NSAA1(B)		;Set this block as arg
+	MOVE	T1,[<.NSFIS,,.NSAA1+1>]		;..
+	MOVEM	T1,PC.ARG+.NSAFN(B)
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  STOPCD ABORT,<DECnet SEND INTERRUPT failed>
+;+
+;.lm 10
+;.le
+;Message:  "DECnet SEND INTERRUPT failed"
+;.br
+;Type:  ABORT
+;	A NSP_. function to send interrupt data failed.  The error code
+;is in T1.  Some data may be lost.
+;-
+	JUMPE	B,CPOPJ				;Done
+	MOVE	T1,PC.ARG+.NSAA1(B)		;Point to block again
+	HLRZ	T2,.NSASL(T1)			;Get number written
+	JUMPN	T2,DEQN2			;Didn't finish
+	HLRZ	T2,BF.LNK-BF.DAT(T1)		;Else free this buffer
+	HRLM	T2,PC.IDQ(B)			;Pointing queue to sucessorr
+	MOVEI	T2,5+1
+	PUSHJ	P,CORFRE
+	JRST	DEQN1				;And send more
+DEQN2:	TXZN	F,PCSTF				;Suspended transfer?
+	  JRST	DEQN3				;No, just get the rest
+	MOVE	T3,PC.BPT(B)			;Get byte pointer
+	MOVEM	T3,PC.ARG+.NSAA2(B)
+	MOVE	T3,PC.CNT(B)
+	JRST	DEQN6				;Send data
+DEQN3:	HLRZ	T3,PC.BUF(B)
+	JUMPE	T3,DEQN7			;None to write
+	HRLI	T3,(POINT 8,,)
+	MOVEM	T3,PC.ARG+.NSAA2(B)
+	HRRZ	T3,BF.CNT-BF.DAT(T3)
+DEQN6:	MOVE	T1,[<.NSFDS,,.NSAA2+1>]
+	TXZE	T3,BFEOM
+	TXO	T1,NS.EOM
+	MOVEM	T3,PC.ARG+.NSAA1(B)
+	MOVEM	T1,PC.ARG+.NSAFN(B)		;Function send normal
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  STOPCD ABORT,<DECnet SEND NORMAL failed>
+;+
+;.lm 10
+;.le
+;Message:  "DECnet SEND NORMAL failed"
+;.br
+;Type:  ABORT
+;	The NSP_. UUO to send normal data failed.  Error code in T1.
+;Some data may have been lost.
+;-
+	JUMPE	B,CPOPJ				;Return if link aborted
+	HRRZ	T3,PC.ARG+.NSAA1(B)		;Get count
+	JUMPE	T3,DCNWR7			;Free buffer and process more
+	MOVE	T1,PC.ARG+.NSAFN(B)		;Else was EOM set?
+	TXNE	T1,NS.EOM
+	TXO	T3,BFEOM
+	MOVEM	T3,PC.CNT(B)
+	MOVE	T3,PC.ARG+.NSAA2(B)
+	MOVEM	T3,PC.BPT(B)			;Save aborted byte pointer
+	TXO	F,PCSTF				;Suspended transfer
+	POPJ	P,				;Return
+DCNWR7:	HLRZ	T1,PC.BUF(B)
+	HLRZ	T2,BF.LNK-BF.DAT(T1)
+	HRLM	T2,PC.BUF(B)
+	PUSHJ	P,FREBUF
+	JRST	DEQN3
+
+DEQN7:	HLRZ	T1,PC.LNK(B)			;Put other side
+	JUMPE	T1,DEQN8			;(if there is one)
+	EXCH	T1,B				;temporarily this side
+	HLL	T2,PC.FLG(B)			;on proper polling queue
+	TXZE	T2,PCSTP			;if input was stopped
+	  PUSHJ	P,POLQUE
+	HLLM	T2,PC.FLG(B)
+	MOVE	B,T1
+DEQN8:	TXZN	F,PCAL				;Aborting link?
+	  POPJ	P,				;No, just return
+	HLLM	F,PC.FLG(B)			;Update flags
+	HRRZ	T3,PC.CDT(B)			;Get disconnect data (if any)
+	MOVEM	T3,PC.ARG+.NSAA1(B)		;Put in correct place
+	MOVE	T1,[.NSFSD,,.NSAA1+1]		;Get function
+	MOVEM	T1,PC.ARG+.NSAFN(B)		;Set it
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,				;Send the disconnect
+	  PUSH	P,[RELLNK]			;Kill it unconditionally
+	HLLZS	PC.CDT(B)			;Get rid of disconnect data
+	SKIPN	T1,PC.ARG+.NSAA1(B)		;Get addr of it if any
+	  POPJ	P,				;None
+	HRRZ	T2,.NSASL(T1)			;Get length
+	PJRST	CORFRE				;And free it
+>						;End FTDECNET
+	Subttl	ANF Read data routine
+
+;The (ANF) block pointed to by "B" is TSK.d to return all buffer
+;strings, just like the DECnet routine.  Note that since ANF doesn't
+;support a concept analagous to DECnet's interrupt data, T1 will always
+;be returned as zero.
+
+IFN	FTANF10,<
+ANFRD:	PUSH	P,[0]				;Default no buffer
+	MOVEI	T4,BF.DAT-BF.LNK(P)		;And point T4 to into it
+	MOVEI	T3,MAXRED			;Maximum number of reads
+ANFRD1:	PUSHJ	P,GETBUF			;Get a buffer
+	MOVEI	T2,BF.BPT-BF.DAT(T1)		;Point to the buffer pointer
+	HRLI	T2,BUFSIZ+1			;This is how big
+	MOVEM	T2,(T2)				;Point buffer to itself
+	HRRZM	T2,PC.BCI+.BFADR(B)		;Set the header up
+	HRLI	T1,(BF.VBR)			;Also set virgin bit
+	HLLM	T1,PC.BCI+.BFADR(B)
+	HRLI	T1,(POINT 8,,)			;Byte mode
+	HLLZM	T1,PC.BCI+.BFPTR(B)		;Set the pointer
+	SETZM	PC.BCI+.BFCTR(B)		;Remember we ate it all
+	MOVEI	T2,.TKFIN			;IN function
+	MOVEM	T2,PC.ARG+.TKAFN(B)		;Set it
+	MOVEI	T2,PC.ARG(B)
+	HRLI	T2,.TKAA1+1			;The size
+	TSK.	T2,
+	  JRST	ANFRD5				;Failed, go see why
+	HRLM	T1,BF.LNK-BF.DAT(T4)		;Point previous to us
+	MOVEI	T4,(T1)				;And we are now current
+	MOVE	T1,PC.BCI+.BFCNT(B)		;Get count of words
+	MOVE	T2,PC.ARG+.TKAA1(B)		;Get DAP type
+	CAIN	T2,DC.DAR			;EOR?
+	TRO	T1,BFEOM			;Yes, set EOM bit
+	HRRZM	T1,BF.LNK-BF.DAT(T4)		;Set the data
+	MOVEM	T1,BF.BPT-BF.DAT(T4)		;Remember it
+	TLNE	S,PS.RDO!PS.REF			;If link trying to shut down,
+	  JRST	ANFRD1				;Read all
+	SOJG	T3,ANFRD1			;Get more
+	PUSHJ	P,ANFPOL			;If quota exceeded for polling
+	MOVEM	S,PC.ARG+.TKACH(B)		;Be sure status is stored
+	HLLM	F,PC.FLG(B)			;And flags
+	JRST	ANFRD6
+
+;Here if the TSK. failed
+
+ANFRD5:	SETZM	PC.BCI+.BFADR(B)		;Clear the stale pointer
+	PUSHJ	P,FREBUF			;Free the buffer
+ANFRD6:	POP	P,T2				;Restore buffer string
+	HLRZS	T2				;Make RH pointer
+	SETZ	T1,				;No interrupt data
+	POPJ	P,				;Done
+	Subttl	ANF write routine
+
+;Enter with T2=pointer to buffer string
+;Using non-blocking I/O, all buffers are queued to ANF.
+;If the last buffer is written and the abort bit is on, destroy
+;the link.
+
+ANFWR:	TLNE	S,PS.ROD			;Output done?
+	SKIPG	PC.BCO+.BFCNT			;Maybe
+	  JRST	ANFWR0				;Nope
+	TXZ	F,PCSTF				;No longer suspended
+	HRRZ	T1,PC.BCO(B)			;Point to the buffer
+	MOVEI	T1,BF.DAT-BF.BPT(B)		;..
+	PUSHJ	P,FREBUF
+ANFWR0:	JUMPE	T2,ANFWR2			;Don't bother if nothing to q
+	SETZ	T3,				;Initialize buffer count
+	MOVEI	T4,PC.BUF+BF.DAT-BF.LNK(B)	;Point T4 to where to look
+ANFWR1:	HRLI	T4,(T4)				;LH=predecessor
+	HLR	T4,BF.LNK-BF.DAT(T4)		;RH=successor
+	TRNE	T4,-1				;If there is one
+	  AOJA	T3,ANFWR1
+	HLRZS	T4				;Go to predecessor
+	HRLM	T2,BF.LNK-BF.DAT(T4)		;We are the successor
+	CAIG	T3,QUEMAX
+	  JRST	ANFWR2
+	HLRZ	T1,PC.LNK(B)			;Stop input if necessary
+	JUMPE	T1,ANFWR2
+	HLL	T2,PC.FLG(T1)
+	TXO	T2,PCSTP
+	HLLM	T2,PC.FLG(T1)
+ANFWR2:	TXNE	F,PCCW				;In CW?
+	  POPJ	P,				;Don't write if in CW
+	TXNE	F,PCSTF				;If a suspended transfer,
+	  JRST	ANFWR9				;See if we should restart it
+ANFWR3:	HLRZ	T1,PC.BUF(B)			;Get the buffer
+	JUMPE	T1,ANFWR8			;Check for abort
+	HLRZ	T2,BF.LNK-BF.DAT(T1)		;Get next in q
+	HRLM	T2,PC.BUF(B)			;Make it first
+	MOVEI	T2,BF.BPT-BF.DAT(T1)		;Point to BPT word
+	HRLI	T2,BUFSIZ+1			;Set use bit and size
+	MOVEM	T2,(T2)				;Set BPT part of buffer
+	HRRZM	T2,PC.BCO+.BFADR(B)		;Set address of buffer
+	MOVSI	T3,(BF.VBR!BF.IBC)		;Set the virgin bit
+	HLLM	T3,PC.BCO+.BFADR(B)
+	HRLI	T1,(POINT 8,,)			;Make a byte pointer
+	HRRZS	T2,BF.CNT-BF.DAT(T1)		;Get the count, clear link
+	HRRM	T2,PC.CNT(B)			;Save as is in case need to restart
+	MOVEI	T3,DC.DAT			;Assume no EOM
+	TRZE	T2,BFEOM			;Clear EOM bit if DECnet
+	  MOVEI	T3,DC.DAR			;Assume EOR then
+	MOVEM	T3,PC.ARG+.TKAA1(B)		;Set DAP word for the OUT
+	MOVEI	T3,BUFSIZ			;# of words in buffer
+	SUBI	T3,(T2)				;minus number used
+	SETOM	PC.BCO+.BFCTR(B)		;So can tell when monitor is done
+	ADJBP	T2,T1				;Set new byte pointer
+	HLLZM	T2,PC.BCO+.BFPTR(B)		;Set the byte pointer
+ANFWR4:	MOVEI	T1,.TKFOT
+	MOVEM	T1,PC.ARG+.TKAFN(B)		;Function out
+	MOVEI	T1,PC.ARG(B)
+	HRLI	T1,.TKAA1+1			;Size
+	TXZE	F,PCSTF				;Is this suspended?
+	  JRST	ANFWR5
+	TSK.	T1,				;Do the dummy out
+	  JFCL
+	MOVEM	T2,PC.BCO+.BFPTR(B)		;Now do the "real" out
+	SETOM	PC.BCO+.BFCNT(B)		;..
+ANFWR5:	TSK.	T1,				;..
+	  JRST	ANFWR7
+ANFWR6:	HRRZS	T1,PC.BCO+.BFADR(B)		;Get the pointer
+	MOVEI	T1,BF.DAT-BF.BPT(T1)
+	PUSHJ	P,FREBUF			;Release the buffer
+	JRST	ANFWR3				;And try next
+
+;Here if TSK. fails
+
+ANFWR7:	CAIE	T1,TKUDW%			;UUO failed?
+	  JRST	TSKERR				;No, abort link
+	HRL	T1,PC.ARG+.TKAA1(B)		;Get file status
+	TLNE	T1,IO.BKT!IO.IMP		;Any errors?
+	  JRST	TSKERR				;Abort link if so
+	TXO	F,PCSTF				;Set suspended tranfer bit
+	HLLM	F,PC.FLG(B)
+	POPJ	P,				;Wait for done interrupt
+
+ANFWR8:	SETZM	PC.BCO+.BFADR(B)		;No buffer here
+	HLRZ	T1,PC.LNK(B)			;Queue empty,
+	JUMPE	T1,ANFWRN			;If there is another side
+	EXCH	T1,B				;Put in B temporarily
+	HLLZ	T2,PC.FLG(B)			;Then clear the STP bit
+	TXZE	T2,PCSTP
+	PUSHJ	P,POLQUE			;put on polling queue
+	HLLM	T2,PC.FLG(B)			;on its side
+	MOVE	B,T1				;Get B back
+ANFWRN:	TXZN	F,PCAL				;Aborting link?
+	  POPJ	P,				;No, just return then
+ANFREE:	MOVEI	T1,.TKFEI			;Put link in idle
+	MOVEM	T1,PC.ARG+.TKAFN(B)
+	MOVEI	T1,PC.ARG(B)
+	HRLI	T1,.TKACH+1
+	TSK.	T1,				;Do the TSK.
+	  STOPCD NODUMP,<Can't put TSK. link into IDLE state>
+;+
+;.lm 10
+;.le
+;Message:  "Can't put TSK_. link into IDLE state"
+;.br
+;Type:  NODUMP
+;	The TSK_. function to set a TSK link into idle state failed.  The
+;error code is in T1.  Actually, this can occur under normal circumstances
+;if the other side released the link already.  Since this stopcode seems
+;to occur with alarming regularity, it is assembled as a NODUMP STOPCD.
+;It can be patched to a INFO STOPCD if a dump is actually desired.
+;-
+	POPJ	P,				;Then don't release link yet
+
+
+ANFWR9:	TLNN	S,PS.ROD			;Got an output done interrupt?
+	  POPJ	P,				;Nope
+	HRRZ	T1,PC.CNT(B)
+	MOVEI	T2,DC.DAT
+	TXNE	T1,BFEOM
+	MOVEI	T2,DC.DAR
+	MOVEM	T2,PC.ARG+.TKAA1(B)		;Set EOM correctly
+	JRST	ANFWR4				;Do a TSK. and exit
+
+TSKERR:	STOPCD ABORT,<I/O error on TSK. link>
+;+
+;.lm 10
+;.le
+;Message:  "I/O error on TSK_. link"
+;.br
+;Type:  ABORT
+;	A TSK link suffered an I/O error.
+;-
+	POPJ	P,				;Return
+>						;End FTANF10
+	Subttl	String Parse Routines
+;Enter with T1 pointing to buffer (which contains count)
+;All temp ACs trashed here
+;Exit with T1 pointing to next buffer on string, this one 
+
+PARSE:	PUSH	P,T1				;Save buffer addr
+	HLRZ	T1,PC.LNK(B)			;Already got one?
+	JUMPN	T1,PARSEX
+	PUSHJ	P,GETPCB			;Get a PCB
+	HRLM	T1,PC.LNK(B)			;Set up link words
+	HRLM	B,PC.LNK(T1)
+PARSEX:	HRRZI	T2,PC.BUF+BF.DAT-BF.LNK(B)	;In case message is fragmented
+	HLL	T2,BF.LNK-BF.DAT(T2)
+	MOVSS	T2
+	TRNE	T2,-1				;Reached end yet?
+	  JRST	.-3				;No
+	POP	P,T3				;Get buffer addr
+	MOVSS	T2
+	HRLM	T3,BF.LNK-BF.DAT(T2)
+	MOVEI	T4,BFEOM			;Now see if EOM yet
+PARSEY:	TDNE	T4,BF.CNT-BF.DAT(T3)
+	  JRST	PARSEZ				;Yes, complete parse
+	HLL	T3,BF.LNK-BF.DAT(T3)
+	MOVSS	T3
+	TRNE	T3,-1
+	  JRST	PARSEY
+	MOVSI	T2,(PCCW)			;Make sure nothing gets qd
+	HLLM	T2,PC.FLG(T1)
+	POPJ	P,				;No EOM, don't start parsing yet
+PARSEZ:	TXZ	F,PCPW				;No longer waiting for string
+	HLLM	F,PC.FLG(B)			;Save current flags
+	HLRZ	T2,PC.BUF(B)			;Transfer buffer to here
+	HRRZS	PC.BUF(B)
+	HRLM	T2,PC.BUF(T1)
+	HRRZ	T2,PC.CDT(B)			;Transfer connect data
+	HRRM	T2,PC.CDT(T1)
+	HLLZS	PC.CDT(B)			;..
+	MOVEM	T3,PC.CNT(T1)			;Set count
+	MOVEI	B,(T1)				;Set B,F for new block
+	HRRZS	F
+	HLRZ	T1,PC.BUF(B)			;Start of buffer
+	HRLI	T1,(POINT 8,,)			;Make byte pointer
+	HRRZ	T3,BF.CNT-BF.DAT(T1)		;Get the count
+	ANDCMI	T3,BFEOM
+	MOVEM	T3,PC.CNT(B)			;Store count
+	MOVEM	T1,PC.BPT(B)			;And byte pointer
+	PUSHJ	P,NXTCHR			;Get a character
+	PRSERR	<Ran out of characters parsing string>,PRSER3
+;HERE TO PARSE THE NODE NAME
+
+	SETZ	T1,				;Clear T1
+NODA:	PUSHJ	P,NXTCHR
+	 PRSERR	<Ran out of characters parsing string>,PRSER3
+	CAIE	C,""""				;Access control info?
+	CAIN	C,":"				;End?
+	  JRST	NODB
+	LSH	T1,6
+	IORI	T1,-<"0"-'0'>(C)
+	JRST	NODA
+NODB:	JUMPE	T1,NODD
+NODC:	TLNE	T1,770000			;Left justify the node name
+	  JRST	NODD
+	LSH	T1,6
+	JRST	NODC
+NODD:	MOVEM	T1,PC.NOD(B)			;Save the node name
+;Here to parse access control information if it exists
+
+	CAIE	C,""""				;Is there access control info?
+	  JRST	NOACI				;No
+	MOVEI	T1,.NSCUD+1			;Get a connect block
+	PUSHJ	P,CORGET
+	MOVEM	T1,PC.ARG+.NSAA1(B)		;Save where it is useful
+	MOVEI	T3,.NSCUD+1			;And put length in
+	MOVEM	T3,.NSCNL(T1)			;..
+	MOVEI	T3,.NSCUS(T1)			;Point T3 to username area
+	PUSH	P,[4]				;Count of things to scan
+PARSE1:	MOVEI	T1,^D11				;Get core block for it
+	PUSHJ	P,CORGET
+	MOVEM	T1,(T3)
+	HRLI	T1,(POINT 8,,35)		;Where to store characters
+	MOVSI	T4,-<^D39+1>			;These are 39 character fields
+PARSE2:	PUSHJ	P,NXTCHR			;Get next character
+	 PRSERR	<Ran out of characters parsing string>,PRSER2
+	CAIE	C," "				;End of user name?
+	CAIN	C,""""				;??
+	  JRST	PARSE3				;Yes
+	IDPB	C,T1
+	AOBJN	T4,PARSE2			;Continue as can
+	 PRSERR	<Too many characters in access control field>
+;Note the above works because 40 bytes are actually allocated
+PARSE3:	HRLI	T4,^D11				;Size in words
+	MOVSM	T4,@(T3)			;Store
+	SOSLE	(P)				;More things to parse?
+	CAIN	C,""""				;And not end of string?
+	  JRST	PARSE4				;Nothing more or end
+	AOJA	T3,PARSE1			;Continue
+
+PARSE4:	POP	P,(P)				;Clear junk
+	CAIN	C,""""				;Was last character quote?
+	  JRST	PARS4A				;Yes
+	PUSHJ	P,NXTCHR			;Else next one should be
+	 PRSERR	<Ran out of characters parsing string>,PRSER3
+	CAIE	C,""""				;Is it?
+	 PRSERR	<Access control information doesn't end with a quote>,PRSER3
+PARS4A:	PUSHJ	P,NXTCHR
+	 PRSERR	<Ran out of characters parsing string>,PRSER3
+;Now parse destination
+;Fill in rest of fields as well
+NOACI:	CAIE	C,":"				;Colon?
+	 PRSERR	<Node terminator not "::">,PRSER3
+	PUSHJ	P,NXTCHR
+	 PRSERR	<Ran out of characters parsing string>,PRSER3
+	CAIE	C,":"
+	 PRSERR	<Node terminator not "::">,PRSER3
+	PUSHJ	P,NXTCHR
+	 PRSERR	<Ran out of characters parsing string>,PRSER3
+	MOVEI	T1,.OBPST			;Default not last
+	CAIE	C,""""				;Are we?
+	  JRST	PARSE9				;No
+	PUSHJ	P,NXTCHR
+	 PRSERR	<Ran out of characters parsing string>,PRSER3
+	CAIL	C,"0"
+	CAILE	C,"9"				;Numeric type?
+	  JRST	PARSE5				;No
+	MOVEI	T1,-"0"(C)			;Set starting value
+	PUSHJ	P,DECIN1
+	PUSHJ	P,NXTCHR			;Eat the "="
+	 PRSERR	<Ran out of characters parsing string>,PRSER3
+	TXO	F,PCLL				;Last
+	JRST	PARSE9				;And finish up
+
+PARSE5:	SETZ	T1,				;Clear the object name
+PARSE6:	LSH	T1,7				;Shift over
+	IORI	T1,(C)				;Move in character
+	PUSHJ	P,NXTCHR
+	 PRSERR	<Ran out of characters parsing string>,PRSER3
+	CAIE	C,"="
+	JRST	PARSE6
+	LSH	T1,1				;Must be at least one more
+PARSE7:	TLNE	T1,774000			;Left justify it
+	  JRST	PARSE8
+	LSH	T1,7
+	JRST	PARSE7
+PARSE8:
+	CAME	T1,[ASCII/TASK/]
+	 PRSERR	<Final destination isn't numeric or TASK=>,PRSER3
+;Here to parse an object name
+
+PARSED:	TXO	F,PCLL			;This is the last link
+	MOVE	T1,PC.ARG+.NSAA1(B)	;Is there already a connect block?
+	JUMPN	T1,PARSD0		;Yes
+	MOVEI	T1,.NSCUD+1		;Get the connect block
+	PUSHJ	P,CORGET		;Get core for it
+	MOVEI	T2,.NSCUD+1		;Mark its length
+	MOVEM	T2,.NSCNL(T1)		;..
+	MOVEM	T1,PC.ARG+.NSAA1(B)	;Store the block addr
+PARSD0:	MOVEI	T2,(T1)			;Point T2 to the connect block
+	MOVEI	T1,.NSDPN+1		;Get the destination object block
+	PUSHJ	P,CORGET		;Get the core block
+	MOVEM	T1,.NSCDD(T2)		;Save it
+	MOVEI	T3,.NSDPN+1		;Set length
+	MOVEM	T3,.NSDFL(T1)		;Save it
+	MOVEI	T2,(T1)			;Now point T2 at process block
+	MOVEI	T1,5			;Get core for process name
+	PUSHJ	P,CORGET		;Get block
+	MOVEM	T1,.NSDPN(T2)		;Set address
+	MOVEI	T3,1			;Format type 1
+	MOVEM	T3,.NSDFM(T2)		;Set it
+	MOVEI	T3,5			;Set length
+	HRRZM	T3,.NSASL(T1)		;..
+	PUSH	P,T1			;Save pointer
+	HRLI	T1,(POINT 8,,35)	;Make byte pointer
+	MOVEI	T3,^D16			;Max characters in name
+OBJA:	PUSHJ	P,NXTCHR
+	 PRSERR	<Ran out of characters parsing string>,PRSER2
+	CAIE	C,"/"			;Start of optional data?
+	CAIN	C,""""			;End of string?
+	  JRST	OBJB			;Yes, done
+	IDPB	C,T1
+	SOJGE	T3,OBJA			;More characters
+	 PRSERR	<Object name more than 16 characters>,PRSER2
+
+OBJB:	SUBI	T3,16+2			;Convert # of characters
+	MOVNS	T3
+	POP	P,T1
+	HRLM	T3,.NSASL(T1)		;Set count
+;Here with object type parsed if object name (block filled in)
+;or with T1=object number if a numeric object
+
+PARSE9:	SKIPE	T2,PC.ARG+.NSAA1(B)		;Already have connect block?
+	  JRST	PARSD1				;Yes
+	PUSH	P,T1				;Save T1
+	MOVEI	T1,.NSCUD+1
+	PUSHJ	P,CORGET
+	MOVEM	T1,PC.ARG+.NSAA1(B)		;Save it
+	MOVEI	T2,(T1)
+	MOVEI	T1,.NSCUD+1
+	MOVEM	T1,.NSCNL(T2)
+	POP	P,T1
+PARSD1:	TXNE	F,PCLL				;Is this the last link?
+	CAIE	C,"/"				;Yes, was data specified?
+	  JRST	NOOPT				;No, no optional data
+	MOVEI	T1,^D16/4+1			;Get data
+	PUSHJ	P,CORGET			;Get memory for it
+	MOVEM	T1,.NSCUD(T2)			;Store it
+	MOVEI	T4,^D16/4+1			;Set length
+	HRRM	T4,.NSASL(T1)			;..
+	MOVSI	T4,-^D16			;Max number of chars
+	MOVEI	T3,(T1)				;Point T3 to block so
+	HRLI	T3,(POINT 8,,35)		;As to make a byte pointer
+OPT1:	PUSHJ	P,NXTCHR			;Get a character
+	 PRSERR	<Ran out of characters parsing string>,PRSER3
+	CAIN	C,""""				;End of string?
+	  JRST	OPT4				;Yes
+	IDPB	C,T3				;Put character in
+	AOBJN	T4,OPT1				;Get more
+	 PRSERR	<Too many characters in connect data>,PRSER3
+
+OPT4:	HRLM	T4,.NSASL(T1)			;Store the character count
+NOOPT:	SKIPE	.NSCDD(T2)			;Already set destination?
+	  JRST	PARSD2				;Yes
+	PUSH	P,T1				;Save object type
+	MOVEI	T1,.NSDOB+1
+	PUSHJ	P,CORGET
+	MOVEI	T3,.NSDOB+1
+	MOVEM	T3,.NSDFL(T1)
+	POP	P,.NSDOB(T1)
+	MOVEM	T1,.NSCDD(T2)			;Set it if none
+PARSD2:	HRRZ	T1,PC.CDT(B)
+	JUMPN	T1,PRSD2A			;If connect data, use it
+	MOVEI	T1,.NSDOB+1			;Set source
+	PUSHJ	P,CORGET
+	MOVEI	T3,.OBPST
+	MOVEM	T3,.NSDOB(T1)
+	MOVEI	T3,.NSDOB+1
+	MOVEM	T3,.NSDFL(T1)
+PRSD2A:	MOVEM	T1,.NSCSD(T2)
+	MOVEI	T1,3
+	PUSHJ	P,CORGET			;Node name block
+	HRRZM	T1,.NSCND(T2)
+	MOVE	T2,PC.NOD(B)				;Get name
+	PUSH	P,T1
+	HRLI	T1,(POINT 8,,35)
+PARSD3:	SETZ	T3,
+	ROTC	T2,6
+	MOVEI	T3,"0"-'0'(T3)
+	IDPB	T3,T1
+	AOS	@(P)
+	JUMPN	T2,PARSD3
+	POP	P,T1
+	MOVEI	T3,3
+	HRLM	T3,.NSASL(T1)
+	MOVSS	.NSASL(T1)
+IFN	FTANF10,<
+	PUSHJ	P,TRYANF		;See if can do ANF connect
+	  JRST	TSKWAT			;Maybe, wait for it to happen
+>
+DCNACT:
+IFE	FTDECNET,<
+	SETZ	T1,			;In case FTDECNET is off
+>					;Fake error code 0 from NSP.
+IFN	FTDECNET,<
+	TXO	F,PCDCN			;No, this is a DECnet link then
+	MOVEI	T1,PC.ARG(B)
+	MOVE	T2,[<.NSFEA,,.NSAA1+1>]
+	MOVEM	T2,.NSAFN(T1)
+	NSP.	T1,
+>
+	  JRST	CNCFAL
+IFN	FTDECNET,<
+	TXO	F,PCCW			;Set this link to CW
+	HLLZS	PC.CDT(B)		;Don't double-point to this
+	PUSHJ	P,GIVBAK		;Return connect block etc.
+	PUSHJ	P,DNPION
+	  STOPCD INFO,<Can't add DECnet channel to the PI system>
+;+
+;.lm 10
+;.le
+;Message:  "Can't add DECnet channel to the PI system"
+;.br
+;Type:  INFO
+;	Routine DNPION which does the NSP_. UUO to add a DECnet channel
+;to the priority software interrupt system didn't skip.  Note that the affected
+;link half is probably dead.
+
+;-
+	PUSHJ	P,ZAPARG		;Zap argument block so GIVBAK won't try
+	HLLM	F,PC.FLG(B)		;Restore previous context & save this one
+	HLRZ	B,PC.LNK(B)
+	HLL	F,PC.FLG(B)
+	POPJ	P,
+>					;End FTDECNET
+;Here to finish up the connects after the connect to the
+;other side is completed
+
+PARSER:
+IFN	FTLOG,<
+	PUSHJ	P,LOGCON		;Log the connection
+>
+	TXNN	F,PCLL			;Last link?
+	  PJRST	SNDPST			;No, send the pass-thru string
+	HLRZ	T2,PC.BUF(B)		;Get buffer
+	HLRZ	T1,BF.LNK-BF.DAT(T2)	;Get next buffer
+	HRRZS	BF.LNK-BF.DAT(T2)	;De-link this buffer
+	HRLM	T1,PC.BUF(B)		;Store buffer
+	HLLM	F,PC.FLG(B)		;Point back to initiating link
+	HLRZ	B,PC.LNK(B)
+	HRLM	T2,PC.BUF(B)		;Move buffer back
+	HLL	F,PC.FLG(B)
+	MOVEI	T1,1			;Send success string
+	HRLI	T2,(POINT 8,,7)
+	DPB	T1,T2			;Put in character
+	TXO	T1,BFEOM		;EOM to be sent
+	HRRZM	T1,BF.LNK-BF.DAT(T2)	;Count of 1
+	HLLM	F,PC.FLG(B)		;Switch context back to original block
+	HLRZ	B,PC.LNK(B)
+	HLL	F,PC.FLG(B)
+	POPJ	P,			;Return
+
+
+SNDPST:
+IFN	FTANF10&FTDECNET,<
+	TXNE	F,PCANF			;Is this link ANF?
+	  JRST	ANFPST			;Yes, can't do fancy forward pointing
+>
+IFN	FTDECNET,<
+	MOVNI	T2,2			;Back up pointer 2 places
+	ADJBP	T2,PC.BPT(B)
+	MOVEM	T2,PC.BPT(B)
+	MOVEI	T3,1
+	IDPB	T3,T2			;Make a legal message
+	MOVE	T2,PC.CNT(B)		;Get count
+	ADDI	T2,2			;Account for character added etc.
+	TXO	T2,BFEOM		;Set EOM
+	MOVEM	T2,PC.CNT(B)
+	TXO	F,PCSTF			;Fake a suspended transfer
+	POPJ	P,			;And return
+>
+IFN	FTANF10,<
+ANFPST:	MOVEI	T1,2
+	ADD	T1,PC.CNT(B)		;Get the count
+	HLRZ	T2,PC.BUF(B)		;Get beginning of buffer
+	PUSH	P,T1			;Save unadulterated count
+	TXO	T1,BFEOM		;and set EOM bit
+	HRRM	T1,BF.CNT-BF.DAT(T2)	;Store the new count
+	POP	P,T1			;Restore count
+	HRLI	T2,(POINT 8,,)		;Make the pointer
+	MOVEI	C,1			;Set correct first character
+	IDPB	C,T2
+	LDB	C,PC.BPT(B)		;Get character
+	SOJA	T1,.+2			;Decrement count for "1"
+	ILDB	C,PC.BPT(B)		;all other times increment
+	IDPB	C,T2			;Store character
+	SOJG	T1,.-2			;Decrenent count
+	POPJ	P,			;Done
+>
+
+	Subttl	ANF routines
+
+;Routine after calling TRYANF and getting success (non-skip) return
+;to do minor bookeeping while we wait for confirm or reject
+
+IFN	FTANF10,<
+TSKWAT:	TXO	F,PCCW!PCANF		;Set link to CW
+	HLLM	F,PC.FLG(B)		;Set flags
+	HLRZ	B,PC.LNK(B)		;Point back
+	HLL	F,PC.FLG(B)		;Restore those flags
+	POPJ	P,			;And return
+;Routine to try an ANF connection
+;Enter:	PC.NOD(B)=node name (sixbit).
+;Exit:  All T ACs preserved always.  CPOPJ if should wait for confirm or
+;	reject from the TSK. Exit CPOPJ1 if must try DECnet (no such ANF
+;	node, for example).
+
+;Still under FTANF10
+TRYANF:	PUSHJ	P,SAVT			;Save ACs
+	MOVE	T1,PC.ARG+.NSAA1(B)	;Can't do format type 2,
+	MOVE	T1,.NSCDD(T1)		;So fail now if it is
+	MOVE	T1,.NSDFM(T1)
+	CAIN	T1,2			;Is it?
+	  JRST	CPOPJ1			;Yes, do DECnet connect
+	MOVEI	T1,2			;Length of arg block
+	MOVE	T3,[.NDRNN,,T1]		;And where it is
+	MOVE	T2,PC.NOD(B)		;Get node name
+	NODE.	T3,			;Is there such a node?
+	  JRST	CPOPJ1			;No, restore ACs and return
+	MOVEI	T1,<<2*<3+1+^D16>>+<3*^D39>+^D16+7>/5+1+.TKNPN
+	PUSHJ	P,CORGET		;Get maximum needed for NPD
+	MOVEM	T3,.TKNND(T1)		;Store node number
+	MOVEI	T4,.TKNPN(T1)		;And byte pointer to string
+	HRLI	T4,(POINT 7,,)		;..
+	PUSHJ	P,NPDNUL		;Do a <NUL>
+	MOVE	T2,PC.ARG+.NSAA1(B)	;Point to connect block
+	MOVE	T2,.NSCDD(T2)		;And destination process block
+	PUSHJ	P,NPDOBJ		;Do object
+	MOVEI	T3,.OBPST		;Get our number
+	HRRZ	T2,PC.CDT(B)		;Get connect dat if any
+	JUMPE	T2,NOCDTA
+	PUSHJ	P,NPDOBJ		;Do this object to
+	JRST	OBJDON			;Done
+NOCDTA:	PUSHJ	P,NPDOCT		;And put in
+	PUSHJ	P,NPDNUL		;Do the <NUL>
+OBJDON:	MOVE	T2,PC.ARG+.NSAA1(B)	;Get connect block again
+	MOVEI	T3,.NSCUS+1(T2)
+	CAMG	T3,.NSCNL(T2)
+	SKIPN	T2,.NSCUS(T2)		;Username?
+	  SKIPA
+	PUSHJ	P,NPDSTR		;Yes, output it
+	PUSHJ	P,NPDNUL		;Finish it off
+	MOVE	T2,PC.ARG+.NSAA1(B)
+	MOVEI	T3,.NSCPW+1
+	CAMG	T3,.NSCNL(T2)
+	SKIPN	T2,.NSCPW(T2)		;Any password?
+	  SKIPA
+	PUSHJ	P,NPDSTR
+	PUSHJ	P,NPDNUL		;Yes, put in and nul it
+	MOVE	T2,PC.ARG+.NSAA1(B)	;Likewise do account
+	MOVEI	T3,.NSCAC+1
+	CAMG	T3,.NSCNL(T2)
+	SKIPN	T2,.NSCAC(T2)
+	  SKIPA
+	PUSHJ	P,NPDSTR
+	PUSHJ	P,NPDNUL
+	MOVE	T2,PC.ARG+.NSAA1(B)
+	MOVEI	T3,.NSCUD+1		;Be sure the is some
+	CAMG	T3,.NSCNL(T2)
+	SKIPN	T2,.NSCUD(T2)		;Optional data?
+	  SKIPA
+	PUSHJ	P,NPDSTR		;Yes, do it
+	PUSHJ	P,NPDNUL		;And add it in
+	HRLI	T1,<<2*<3+1+^D16>>+<3*^D39>+^D16+7>/5+1+.TKNPN
+	PUSH	P,T1			;Save pointer to NPD
+	MOVEI	T1,.TKAA2+1		;Get block for args
+	PUSHJ	P,CORGET		;Get it
+	POP	P,.TKAA2(T1)		;Store NPD in correct place
+	PUSH	P,T1			;Save arg block pointer
+	MOVE	T2,[MYNODL,,MYNODE]
+	MOVEM	T2,.TKAA1(T1)		;Set local NPD
+	MOVE	T2,[FO.ASC!.FOSIO]
+	MOVEM	T2,FLPBLK+.FOFNC	;Open TSK.
+	HRLZI	T2,PC.BCO(B)
+	HRRI	T2,PC.BCI(B)
+	MOVEM	T2,FLPBLK+.FOBRH
+	MOVE	T2,[FLPLEN,,FLPBLK]
+	FILOP.	T2,
+	  JRST	NOANF			;Oh well, try DECnet
+	LDB	T2,[POINT 9,FLPBLK+.FOFNC,^L<FO.CHN>+9-1]
+	MOVEM	T2,PC.ARG+.TKACH(B)	;Remember the channel
+	PUSHJ	P,ANPION
+	  STOPCD INFO,<Can't add ANF channel to PI system>
+;+
+;.lm 10
+;.le
+;Message:  "Can't add ANF channel to the PI system"
+;.br
+;Type:  INFO
+;	ANPION, which does the appropriate PISYS_. UUO to add a
+;new ANF channel to the priority software interrupt system, failed
+;and didn't skip.  Note that the affected link half is probably
+;dead.
+;-
+	MOVEM	T2,.TKACH(T1)		;And here
+	MOVEI	T2,.TKFEA		;enter Active
+	MOVEM	T2,.TKAFN(T1)
+	HRLI	T1,.TKAA2+1		;Length of arg block
+	TSK.	T1,			;Do the enter active
+	  JRST	NOANF			;Oh well
+	SOS	-1(P)			;Set non-skip return
+NOANF:	POP	P,T4			;Restore block addr
+	MOVE	T1,.TKAA2(T4)		;Get NPD addr
+	MOVEI	T2,<<2*<3+1+^D16>>+<3*^D39>+^D16+7>/5+1+.TKNPN
+	PUSHJ	P,CORFRE
+	MOVEI	T1,(T4)
+	MOVEI	T2,.TKAA2+1
+	AOS	(P)			;Skip return
+	TXO	F,PCCW			;Set the link to CW
+	HLLM	F,PC.FLG(B)		;And link is in wait state
+	PJRST	CORFRE			;Free core and return
+;Subroutines to be used by the above
+
+;Routine to put a <NUL> into the NPD string
+
+NPDNUL:	SETZ	C,			;Get a <NUL>
+					;Fall into NPDCHR
+
+;Routine to place character in C in the NPD where T4 is the byte pointer
+;to the next byte in the NPD; T1 is the address of the NPD
+
+NPDCHR:	AOS	.TKNLN(T1)		;Increment length	
+	IDPB	C,T4			;And put byte in
+	POPJ	P,			;Return
+
+;Routine to put an octal number given in T3 in ASCII format into the
+;NPD string.  Implied inputs:  T1, T4 set up for NPDCHR calls
+
+NPDOCT:	PUSHJ	P,SAV3			;Save T3
+NPDOC1:	LDB	C,[POINT 3,T3,35]	;Get low order digit
+	HRLM	C,(P)
+	LSH	T3,-3			;And shift out character
+	SKIPE	T3
+	PUSHJ	P,NPDOC1
+	HLRZ	C,(P)
+	MOVEI	C,"0"(C)
+	PJRST	NPDCHR
+
+;Routine to put string from string block pointed to by T2 into the
+;NPD pointed to by T1 and byte pointed to by T4
+
+NPDSTR:	HLRZ	T3,.NSASL(T2)
+	JUMPE	T3,CPOPJ
+	HRLI	T2,(POINT 8,,35)	;Make a byte pointer
+NPDST1:	ILDB	C,T2
+	PUSHJ	P,NPDCHR
+	SOJG	T3,NPDST1
+	POPJ	P,			;return
+
+;Routine to put NPD object pointed to by DECnet process block in T2
+;into NPD string pointed to by T4.  Uses T2, T3, C.
+;Updates pointer and count in .TKNLN(T1)
+
+NPDOBJ:	MOVE	T3,.NSDOB(T2)		;Get object number
+	PUSHJ	P,NPDOCT		;Output the number
+	HRRZ	T3,.NSDFL(T2)		;Get length
+	CAILE	T3,.NSDOB+1		;Can block have anything else?
+	SKIPN	.NSDFM(T2)		;Format 0 or 1?
+	  PJRST	NPDNUL			;Format 0 or can't have anything
+	MOVE	T2,.NSDPN(T2)		;Get name string block
+	MOVEI	C,"."			;Put in punctuation
+	PUSHJ	P,NPDCHR		;..
+	PUSHJ	P,NPDSTR		;Do the string
+	PJRST	NPDNUL			;Punctuate
+>			;end FTANF10
+;Errors in the PSTHRU string
+;Enter at PRSER2 with 1 junk item on the stack
+;Enter at PRSER3 with nothing on the stack
+
+PRSER2:	POP	P,-1(P)			;Clear stack
+PRSER3:	POP	P,T2
+	MOVE	T2,@T2
+PRSER4:	PUSHJ	P,GIVBAK		;Return affiliated blocks
+	HLRZ	T1,PC.LNK(B)
+	HLRZ	T4,PC.BUF(B)		;Point back to buffer
+	HRRZS	PC.BUF(B)		;Clear it out of here
+	HRRZS	PC.LNK(T1)		;Destroy the link
+	EXCH	T1,B
+	PUSH	P,T2
+	PUSHJ	P,FREPCB		;Return the PCB
+	HLRZ	T2,BF.LNK-BF.DAT(T4)
+	JUMPE	T2,PRSER6		;If any
+PRSER5:	SETZ	T1,
+	PUSHJ	P,BUFEAT
+
+PRSER6:	POP	P,T2			;Restore T2
+	HLL	F,PC.FLG(B)		;Point to this links flags
+	PJRST	ABTLNK			;And abort the link
+
+CNCFAL:
+IFN	FTLOG,<
+	PUSHJ	P,LOGFAL		;Log connection failure
+>
+	HLLZS	PC.CDT(B)		;Don't point
+	MOVE	T2,DCNERR(T1)
+	JRST	PRSER4
+	Subttl	Logging
+
+;The logging routines preserve all ACs.
+;Assume one of the partners of the link to be logged is in B,
+;Also assume P is set up
+;Do not log anything if both sides of the link don't exist
+
+IFN	FTLOG,<
+;Log a disconnect
+
+LOGDCN:	PUSHJ	P,SAVT				;Save ACs
+	JSP	T1,LOGEVT			;The string addr in T1
+	ASCIZ	/Link broken from /	;..
+
+;Log a connection
+
+LOGCON:	PUSHJ	P,SAVT				;Save the world
+	JSP	T1,LOGEVT
+	ASCIZ	/Link established from /	;..
+
+;Log a reject
+
+LOGREJ:	PUSHJ	P,SAVT
+	JSP	T1,LOGEVT
+	ASCIZ	/Connection rejected from /
+
+;Log a connection failure
+
+LOGFAL:	PUSHJ	P,SAVT
+	JSP	T1,LOGEVT
+	ASCIZ	/Connection failed from /
+
+LOGEVT:
+	PUSHJ	P,PIOSAV			;So core doesn't get messed up
+	MOVSI	T2,(PCLNK)			;Do both sides exist?
+	TDNE	T2,PC.LNK(B)			;??
+	TRNN	F,FL$LOG			;Logging?
+	  POPJ	P,				;No
+	PUSH	P,.JBFF				;Keep monitor from messing up core
+	MOVE	T2,[DEFLOG,,LOGLEB]
+	BLT	T2,LOGLEB+3			;Clean log area
+	MOVE	T2,[LOGLEN,,LOGBLK]		;Open the channel
+	SETZM	LOBFH+.BFADR
+	SETZM	LOBFH+.BFPTR
+	SETZM	LOBFH+.BFCTR			;Zap buffer header to
+	FILOP.	T2,
+	  JRST	LOGOFF				;Turn logging off
+	PUSHJ	P,DSKSTR			;Output string to disk
+	MOVEI	T4,(B)				;Set B to the initiating side
+	MOVSI	T1,(PCINI)
+	TDNN	T1,PC.FLG(B)			;Is this it?
+	HLRZ	T4,PC.LNK(B)			;No, must be other side
+	PUSHJ	P,DSKNOD			;Output source node& chan
+	MOVEI	T1,[ASCIZ/ to /]
+	PUSHJ	P,DSKSTR			;Output this too
+	HLRZ	T4,PC.LNK(T4)			;Other side
+	PUSHJ	P,DSKNOD			;Output the node name
+	MOVEI	T1,[ASCIZ/ at /]
+	PUSHJ	P,DSKSTR
+	MSTIME	T1,
+	PUSHJ	P,DSKTIM			;Output time
+	DATE	T1,
+	PUSHJ	P,DSKDAT
+	MOVEI	T1,[ASCIZ/
+/]
+CLSLOG:	PUSHJ	P,DSKSTR
+	CLOSE	LOG,				;Close the LOG file
+	RELEAS	LOG,				;Free the channel
+	POP	P,T1
+	MOVEM	T1,.JBFF			;Reset core boundaries
+	CORE	T1,
+	  JFCL
+	POPJ	P,				;And return
+
+LOGOFF:	POP	P,.JBFF				;Since FILOP failed
+	TRZ	F,FL$LOG			;Don't try to log any more
+	STOPCD	NODUMP,<Couldn't open log file, logging turned OFF>
+;+
+;.lm 10
+;.le
+;Message:  "Couldn't open log file, logging turned OFF"
+;.br
+;Type:  NODUMP
+;	PSTHRU couldn't open the log file.  This usually means the
+;appropriate logical name, PSTLOG, hasn't been defined.  Logging
+;of events will not occur.
+;-
+	POPJ	P,
+;Utility log routines
+;Still under FTLOG
+
+;Routine to output node and channel name from block pointed to by T4 (not B!)
+
+DSKNOD:	MOVE	T1,PC.NOD(T4)			;Get node name
+	PUSHJ	P,SIXDSK			;Output
+	MOVSI	T3,(PCDCN!PCANF)		;Are any bits set?
+	TDNN	T3,PC.FLG(T4)			;?
+	  JRST	CPOPJ				;No channel then
+	MOVEI	T1,[ASCIZ/ (DECnet-/]
+	MOVSI	T3,(PCDCN)			;Default DECnet
+	TDNN	T3,PC.FLG(T4)
+	MOVEI	T1,[ASCIZ/ (ANF-/]
+	PUSHJ	P,DSKSTR			;Output
+	ASSUME	.NSACH,.TKACH
+	HRRZ	T1,PC.ARG+.NSACH(T4)
+	MOVEI	T2,DECDSK			;Assume DEcnet again
+	TDNN	T3,PC.FLG(T4)
+	MOVEI	T2,OCTDSK			;Nope, ANF
+	PUSHJ	P,(T2)				;Output in proper format
+	MOVEI	C,")"
+	PJRST	DSKCHR				;Finish up
+
+;Routine to output ASCIZ string pointed to by T1 to the log channel
+
+DSKSTR:	HRLI	T1,(POINT 7,,)			;Make byte pointer
+DSKST1:	ILDB	C,T1				;Get character
+	JUMPE	C,CPOPJ				;Done
+	PUSHJ	P,DSKCHR			;Output the character
+	JRST	DSKST1
+
+DSKCHR:	SOSGE	LOBFH+.BFCNT
+	  JRST	DOLOUT
+	IDPB	C,LOBFH+.BFPTR
+	POPJ	P,				;Return
+
+DOLOUT:	OUT	LOG,
+	  JRST	DSKCHR
+	STOPCD	INFO,<Logging output failed>
+;+
+;.lm 10
+;.le
+;Message:  "Logging output failed"
+;.br
+;Type:  INFO
+;	An OUT UUO to the log file failed.  The log file will be closed.
+;-
+	JRST	CLSLOG
+
+;Output a decimal number to the log file.  Number in T1, all Ts preserved
+
+DECDSK:	PUSHJ	P,SAVT
+	JUMPGE	T1,DCDS1		;If non-negative
+	MOVEI	C,"-"
+	PUSHJ	P,DSKCHR
+	MOVNS	T1
+DCDS1:	IDIVI	T1,^D10
+	HRLM	T2,(P)
+	SKIPE	T1
+	PUSHJ	P,DCDS1
+	HLRZ	C,(P)			;Get character
+	MOVEI	C,"0"(C)
+	PJRST	DSKCHR
+
+;Output octal number to the log file.  Number in T1, all Ts preserved
+
+OCTDSK:	PUSHJ	P,SAVT
+OCTLPD:	LDB	C,[POINT 3,T1,35]
+	HRLM	C,(P)
+	LSH	T1,-3
+	SKIPE	T1
+	PUSHJ	P,OCTLPD
+	HLRZ	C,(P)
+	MOVEI	C,"0"(C)
+	PJRST	DSKCHR
+
+;Output 15-bit date in T1 to log file.  Saves Ts
+
+DSKDAT:	PUSHJ	P,SAVT
+	MOVEI	T3,(T1)
+	IDIVI	T3,^D31
+	MOVEI	T1,1(T4)
+	PUSHJ	P,DECDSK
+	IDIVI	T3,^D12
+	MOVEI	T1,MONTAB(T4)
+	PUSHJ	P,DSKSTR
+	MOVNI	T1,^D64(T3)
+	PJRST	DECDSK
+
+;Output MSTIME in T1 into the log file.  Saves Ts
+
+DSKTIM:	PUSHJ	P,SAVT
+	IDIVI	T1,^D1000
+TIMLP:	IDIVI	T1,^D60
+	PUSH	P,T2
+	SKIPE	T1
+	PUSHJ	P,TIMLP
+	POP	P,T1
+	CAIL	T1,^D10				;Need extra leading zero?
+	  JRST	NOL0				;No
+	MOVEI	C,"0"
+	PUSHJ	P,DSKCHR
+NOL0:	PUSHJ	P,DECDSK
+	MOVEI	C,":"
+	PJRST	DSKCHR
+
+;Output SIXBIT to LOG file.  Preserves Ts
+
+SIXDSK:	JUMPE	T1,CPOPJ			;If nothing to do
+	PUSHJ	P,SAVT
+SIXDLP:	SETZ	T2,
+	ROTC	T1,6				;Get a character
+	MOVEI	C,"0"-'0'(T2)			;Convert to ASCII
+	PUSHJ	P,DSKCHR
+	JUMPN	T1,SIXDLP			;Back for more
+	POPJ	P,
+>
+	Subttl	Routines to set up Enter Passive links
+
+;subroutine to do a DECnet Enter Passive
+;Call:
+;	MOVEI	B,<address of passive link block>
+;	PUSHJ	P,DCNENT
+;	  <failed, reason code in T1>
+;	<success>
+;Uses T1-T4
+
+IFN	FTDECNET,<
+DCNENT:	MOVE	T1,[.NSFEP,,.NSAA1+1]
+	MOVEM	T1,PC.ARG+.NSAFN(B)		;SET FUNCTIONS
+	PUSHJ	P,SETCNB			;Set up connect block
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  POPJ	P,
+	PUSHJ	P,PIOSAV			;No interrupts here
+	PUSHJ	P,GIVBAK			;Give back all blocks
+	HRLI	T1,(PCDCN!PCINI)		;THIS IS A DECnet LINK
+	HLLM	T1,PC.FLG(B)			;SET IT SUCH
+	PUSHJ	P,DNPION
+	  POPJ	P,
+	MOVEM	B,DCNCWL
+	AOS	(P)
+	PJRST	ZAPARG				;Clear argument block
+;Routine to set up a CONNECT block and all its affiliated sub-blocks
+;for a DECnet Enter Passive (or Read Connect Data)
+;Uses T1-T4.
+;Puts block in PC.ARG+.NSAA1(B)
+;Still under FTDECNET
+
+SETCNB:	MOVEI	T1,.NSCUD+1			;Length of connect block
+	PUSHJ	P,CORGET
+	MOVEM	T1,PC.ARG+.NSAA1(B)		;Set it in arg block
+	MOVEI	T2,.NSCUD+1
+	MOVEM	T2,.NSCNL(T1)			;LENGTH OF CONNECT BLOCK
+	MOVEI	T2,(T1)				;Point T2 at connect block
+	MOVEI	T1,.NSDOB+1
+	PUSHJ	P,CORGET
+	MOVEM	T1,.NSCDD(T2)
+	MOVEI	T3,.OBPST			;PSTHRU OBJECT TYPE
+	MOVEM	T3,.NSDOB(T1)			;SET IT
+	MOVEI	T3,.NSDOB+1
+	MOVEM	T3,.NSDFL(T1)
+	MOVEI	T1,.NSDPN+1
+	PUSHJ	P,CORGET			;Now get source block
+	MOVEM	T1,.NSCSD(T2)
+	MOVEI	T3,.NSDPN+1
+	EXCH	T1,T3
+	MOVEM	T1,.NSDFL(T3)
+	MOVEI	T1,1				;Dummy format
+	MOVEM	T1,.NSDFM(T3)
+	MOVEI	T1,<^D16/4>+1
+	PUSHJ	P,CORGET
+	MOVEM	T1,.NSDPN(T3)			;In case a name
+	MOVEI	T3,<^D16/4>+1
+	MOVEM	T3,.NSASL(T1)
+	MOVEI	T1,3
+	PUSHJ	P,CORGET			;Name block
+	MOVEM	T1,.NSCND(T2)
+	MOVEI	T3,3
+	MOVEM	T3,.NSASL(T1)
+	MOVEI	T1,5				;Get connect data block
+	PUSHJ	P,CORGET
+	MOVEI	T3,5
+	MOVEM	T3,.NSDFL(T1)
+	MOVEM	T1,.NSCUD(T2)
+	POPJ	P,				;Return
+>
+;subroutine to do an ANF10 enter passive
+
+IFN	FTANF10,<
+
+ANFENT:	MOVSI	T1,(FO.ASC)		;Assign extended channel
+	HLLM	T1,FLPBLK+.FOFNC	;Set function
+	HRLZI	T1,PC.BCO(B)
+	HRRI	T1,PC.BCI(B)		;Get buffer headers
+	MOVEM	T1,FLPBLK+.FOBRH	;Set them
+	MOVE	T1,[FO.ASC!.FOSIO]
+	MOVEM	T1,FLPBLK+.FOFNC
+	MOVE	T1,[FLPLEN,,FLPBLK]
+	FILOP.	T1,			;Open the channel
+	  POPJ	P,			;Failed
+	LDB	T1,[POINT 9,FLPBLK+.FOFNC,^L<FO.CHN>+9-1]
+	MOVEM	T1,PC.ARG+.TKACH(B)	;Set the channel number for TSK.
+	PUSHJ	P,ANPION		;Turn on PSISER
+	  POPJ	P,			;Failed
+	MOVE	T1,[MYNODL,,MYNODE]
+	MOVEM	T1,PC.ARG+.TKAA1(B)	;Set it
+	MOVE	T1,[WLDNPL,,WLDNPD]
+	MOVEM	T1,PC.ARG+.TKAA2(B)	;Set other side
+	MOVEI	T1,.TKFEP
+	MOVEM	T1,PC.ARG+.TKAFN(B)
+	MOVEI	T1,PC.ARG(B)
+	HRLI	T1,.TKAA2+1
+	TSK.	T1,
+	  JRST	ENTFAI				;Failed
+	AOS	(P)
+	MOVEM	B,ANFCWL			;This is the CW link
+	HRLI	T1,(PCANF!PCINI)
+	HLLM	T1,PC.FLG(B)			;Set ANF bit in flags
+ENTFAI:	PJRST	ZAPARG				;Kill stale pointers
+>
+	Subttl	Parsing I/O
+
+;Routine to get next character from buffer chain pointed to
+;by PC.BPT (count PC.CNT) or PC.BUF, all (B).
+;Return with character in C, translated to upper case if necessary
+;and also stripped of parity
+
+NXTCHR:	SOSGE	PC.CNT(B)		;Any more in this buffer?
+	  JRST	NEWBUF			;No
+	ILDB	C,PC.BPT(B)		;Else get a character
+	ANDI	C,177			;Mask to 7 bits
+	CAIL	C,"a"			;In the lower case range?
+	CAILE	C,"z"			;??
+	  JRST	CPOPJ1			;No, just get next character
+	ANDCMI	C,<"a"-"A">		;Yes, translate
+	JRST	CPOPJ1			;And return
+
+NEWBUF:	PUSHJ	P,SAVT			;Save ACs
+	PUSHJ	P,PIOSAV		;Turn PSISER off
+	HLRZ	T1,PC.BUF(B)		;Get buffer pointer
+	MOVEI	T2,BFEOM		;Was this end of message?
+	TDNE	T2,BF.CNT-BF.DAT(T1)	;??
+	  JRST	CPOPJ			;Yes, lose
+	HLRZ	T3,BF.LNK-BF.DAT(T1)	;Else get next buffer
+	PUSHJ	P,FREBUF		;Free this one
+	HRLM	T3,PC.BUF(B)		;Make this one current
+	HRLI	T3,(POINT 8,,)		;Make the byte pointer
+	MOVEM	T3,PC.BPT(B)
+	HRRZ	T3,BF.CNT-BF.DAT(T3)	;Set the count
+	ANDCMI	T3,BFEOM
+	MOVEM	T3,PC.CNT(B)
+	JRST	NXTCHR
+	Subttl	Add new links to PSISER status
+
+IFN	FTANF10,<
+
+ANPION:	PUSHJ	P,SAVT				;Save ACs
+	MOVE	T1,[PS.FAC!T2]			;The arg pointer
+	HRRZ	T2,PC.ARG+.TKACH(B)		;The channel
+	MOVE	T3,[ANFOFF,,PS.RID!PS.REF!PS.RIE!PS.ROE!PS.RDF!PS.RQE!PS.RRC!PS.ROD!PS.RDO!PS.ROL]
+	SETZ	T4,
+	PISYS.	T1,
+	  POPJ	P,				;Failed
+	JRST	CPOPJ1				;Success
+>
+
+IFN	FTDECNET,<
+
+DNPION:	PUSH	P,T1
+	MOVE	T1,[.NSFPI,,.NSAA1+1]
+	MOVEM	T1,PC.ARG+.NSAFN(B)
+	MOVEI	T1,(NS.STA!NS.NDR!NS.IDR!NS.NDA!NS.IDA)
+	MOVEM	T1,PC.ARG+.NSAA1(B)
+	MOVEI	T1,PC.ARG(B)
+	NSP.	T1,
+	  JRST	TPOPJ
+	JRST	TPOPJ1
+>	Subttl	Core management routines
+
+comment	&
+	The following strategy is what will be implemented at the
+current time:
+	1.  Blocks will be variable length
+	2.  The allocator will first check a linked free list
+	    of blocks.
+	3.  If a free block doesn't exist on the free list, the allocator
+	    will see if a block will fit between .JBFF and HICORE.  If so,
+	    the block will be allocated here.
+	4.  If a block won't fit, the HICORE will be expanded via a CORE
+	    UUO to increase.
+	5.  The de-allocator will return blocks to the free list.  Currently,
+	    it will not shrink core size.
+	6.  The de-allocator will merge blocks together.
+&
+;ROUTINE TO ALLOCATE A PCB.  RETURNS POINTER IN T1; USES T1-T2
+;Enter with size of PCB desired in T1 at GETPC1 if non-standard
+;sized PCB is desired, else enter at GETPCB.
+
+GETPCB:	MOVEI	T1,PC.LEN
+GETPC1:	PUSH	P,T1
+	PUSHJ	P,CORGET
+	POP	P,PC.SIZ(T1)
+	MOVE	T2,BLKPTR
+	HRRZM	T2,PC.NXT(T1)
+	MOVEM	T1,BLKPTR
+	POPJ	P,
+;ROUTINE TO FREE A PCB BLOCK.  POINTER TO BLOCK IN T1
+
+FREPCB:	PUSH	P,T1		;Save T1
+	SKIPN	T1,PC.BCO+.BFADR(T1)	;Get ANF buffer if any
+	  JRST	FREPC1			;None
+	MOVEI	T1,BF.DAT-BF.BPT(T1)	;Point to data area
+	PUSHJ	P,FREBUF		;Free the buffer
+FREPC1:	MOVE	T1,(P)			;Restore T1
+	HLRZ	T2,PC.BUF(T1)	;Free normal buffers
+	HLRZ	T1,PC.IDQ(T1)	;Free interrupt buffers eaten up
+	PUSHJ	P,BUFEAT
+	MOVE	T1,(P)		;Restore block pointer
+IFN	FTDECNET,<
+	SKIPN	T2,DPLQUE	;Check DECnet queue first
+	  JRST	CHKAPL		;None, check ANF queue
+	CAME	T1,T2		;Same as head?
+	  JRST	CKDCN1
+	HLRZ	T2,PC.POL(T1)
+	MOVEM	T2,DPLQUE	;Make successor us
+	JRST	POLCHK		;Done
+CKDCN1:	HRLI	T2,(T2)		;Predecessor is us
+	HLR	T2,PC.POL(T2)	;Successor is current
+	TRNN	T2,-1		;Any?
+	  JRST	CHKAPL		;No
+	CAIE	T1,(T2)		;Is it us?
+	  JRST	CKDCN1		;No
+	HLR	T2,PC.POL(T2)	;Pred,,succ to current block
+	MOVSS	T2		;Succ,,Pred
+	HLLM	T2,PC.POL(T2)	;Take us out
+	JRST	POLCHK		;Done
+>
+CHKAPL:
+IFN	FTANF10,<
+	SKIPN	T2,APLQUE	;Anything here?
+	  JRST	POLCHK		;No
+	CAME	T1,T2		;Are we at the head?
+	  JRST	CKAPL1		;No
+	HLRZ	T2,PC.POL(T1)
+	MOVEM	T2,APLQUE
+	JRST	POLCHK		;Done if we were at the head
+CKAPL1:	HRLI	T2,(T2)		;Predecessor is us
+	HLR	T2,PC.POL(T2)	;Successor is currnet
+	TRNN	T2,-1
+	  JRST	POLCHK		;Done
+	CAIE	T1,(T2)		;Us?
+	  JRST	CKAPL1		;No
+	HLR	T2,PC.POL(T2)	;Pred,,succ
+	MOVSS	T2,
+	HLLM	T2,PC.POL(T2)
+>
+POLCHK:	HRRZ	T1,PC.CDT(T1)	;Get connect/disconnect data if any
+	JUMPE	T1,NODSC
+	HRRZ	T2,.NSASL(T1)	;Get length if there is
+	PUSHJ	P,CORFRE	;Deallocate it
+NODSC:	MOVE	T1,(P)		;Get block addr again
+	PUSHJ	P,GETPRD	;Get the predecessor
+	POP	P,T2		;Get the block back
+	HRL	T2,PC.LNK(T2)	;Get successor to us
+	HLRM	T2,PC.LNK(T1)	;Point predecessor to him
+	HRRZI	T1,(T2)		;Get block addr again
+	HRRZ	T2,PC.SIZ(T1)
+	PJRST	CORFRE
+;Routine to give back the connect block pointed to by
+;PC.ARG+.NSAA1(B).  Gives back all affiliated blocks first.
+
+
+GIVBAK:	PUSHJ	P,SAVT
+	SKIPN	T4,PC.ARG+.NSAA1(B)
+	  POPJ	P,			;Nothing to return
+	HRRZ	T3,.NSCNL(T4)		;Length of the block
+	SOJLE	T3,GIVBK5		;-1=max offset
+	HRLI	T4,T3			;Index by it
+GIVBK1:	SKIPN	T1,@T4			;If no block there
+	  JRST	GIVBK4			;Don't give one back
+	CAIE	T3,.NSCSD		;Source block?
+	CAIN	T3,.NSCDD		;Destination block?
+	  SKIPA				;Yes, may be more blocks here
+	JRST	GIVBK3			;No, no blocks on it then
+	HRRZ	T2,.NSDFL(T1)		;Does this block contain a string block?
+	CAIGE	T2,.NSDPN+1		;??
+	  JRST	GIVBK3			;No
+	PUSH	P,T1			;Save process block pointer
+	SKIPE	T1,.NSDPN(T1)		;Get the string block if there is one
+	PUSHJ	P,CORFRE		;Free it as well
+	POP	P,T1
+GIVBK3:	HRRZ	T2,(T1)			;Get length
+	PUSHJ	P,CORFRE
+GIVBK4:	SOJG	T3,GIVBK1		;Loop over all blocks
+GIVBK5:	MOVEI	T1,(T4)			;Now kill connect block
+	HRRZ	T2,.NSCNL(T1)
+	PJRST	CORFRE
+	Subttl	Core Allocation
+
+;Core allocator
+;Enter with T1=size of block desired
+;Exit with T1=pointer to block.
+
+CORGET:	PUSHJ	P,PIOSAV		;PI OFF if necessary
+	PUSH	P,T2			;Save the world
+	PUSH	P,T3
+	PUSH	P,T4
+	SKIPN	T2,FRELST		;Any blocks on the free list?
+	JRST	CORG20			;No, make the block
+	SETZB	T3,T4			;Not remembering any block
+	HRLI	T2,FRELST		;Remember precessor
+CORG1:	PUSH	P,(T2)			;Push size of block
+	HLRZS	(P)			;Move to right half
+	CAMN	T1,(P)			;Same size as we want?
+	JRST	CORG7			;Yes, allocate it
+	CAML	T1,(P)			;Do we want smaller than this block?
+	JRST	CORG6			;No, don't remember it
+	JUMPE	T3,CORG4		;If not remembering anything, then this
+	CAMG	T4,(P)			;Else is this closer to the size than previous remembered?
+	JRST	CORG6			;No, remember previous then
+CORG4:	MOVE	T3,T2			;Remember this block & its predecessor
+	MOVE	T4,(P)			;And its size
+CORG6:	POP	P,(P)			;Fix stack
+	HRLI	T2,(T2)			;Remember precessor
+	HRR	T2,(T2)			;Point to successor
+	TRNE	T2,-1			;If there is one
+	JRST	CORG1			;There is, check it out
+	JUMPE	T3,CORG20		;If didn't find anything
+	MOVE	T2,T3			;Point T2 to block we want
+	PUSH	P,(T2)			;And push its size
+	HLRZS	(P)			;on the right side
+CORG7:	CAMN	T1,(P)			;Size the same as we want?
+	JRST	CORG9			;Yes, just de-link it then
+	PUSH	P,(P)			;Duplicate size of desired block
+	SUBM	T1,(P)			;No, subtract out what we want
+	MOVNS	(P)			;Leaving size left
+	HRRZI	T3,(T2)			;Start of the block as it is
+	ADDI	T3,(T1)			;Where it will now start
+	POP	P,(T3)			;Put new size in
+	MOVSS	(T3)			;left half, of course
+	HRL	T3,(T2)			;Get successor
+	HLRM	T3,(T3)			;and place in new block
+	MOVSS	T2			;Point to predecessor
+	HRRM	T3,(T2)			;Point it to new block
+	HRRZM	T1,(P)			;Put desired size on
+	HLRZ	T1,T2			;Return with new block in T1
+	JRST	CORG30			;Cleared, of course
+
+CORG9:	HRRZI	T1,(T2)			;Point T1 to desired block
+	HRRZ	T3,(T2)			;Get successor
+	MOVSS	T2			;Get predecessor
+	HRRM	T3,(T2)			;Link to new sucessor
+	JRST	CORG30			;Clear it and return
+
+CORG20:	PUSH	P,T1			;Save size
+	MOVE	T2,.JBFF		;Point to first free location
+	ADDI	T2,(T1)			;The address which must be allocated to
+	CAMLE	T2,HICORE		;Does that far exist?
+	JRST	CORG23			;No, go allocate it
+	MOVE	T1,.JBFF		;Point to block
+	MOVEM	T2,.JBFF		;Update first free
+	JRST	CORG30			;Clear and return
+
+CORG23:	MOVE	T1,.JBFF		;Point to new block
+	MOVEM	T2,.JBFF		;Store pointer to new
+	IORI	T2,777			;To next page
+	MOVEM	T2,HICORE		;Save max
+	CORE	T2,			;Get it
+	  STOPCD RELOAD,<CORE UUO failed>
+;+
+;.lm 10
+;.le
+;Message:  "CORE UUO failed"
+;.br
+;Type:  RELOAD
+;	A CORE UUO to create more free core or buffers failed.
+;-
+
+CORG30:	EXCH	T1,(P)			;Exchange size for address
+	HRRZ	T2,(P)			;Make BLT pointer
+	HRLI	T2,1(T2)		;..	
+	SETZM	(T2)			;Clear first location
+	SOJLE	T1,CORG40		;Skip the BLT if only one word
+	MOVSS	T2
+	ADD	T1,(P)			;Last location(+1)
+	BLT	T2,(T1)			;Clear core
+CORG40:	POP	P,T1
+	POP	P,T4
+	POP	P,T3
+	POP	P,T2
+	POPJ	P,
+	Subttl	Core De-allocator
+;Enter with T1=address of block to free
+;T2=# of words to free
+;All ACs respected
+
+CORFRE:	IFN	FTDEBUG,<
+	SKIPE	T1
+	SKIPN	T2
+	  STOPCD RELOAD,<Returning junk core block>
+;+
+;.lm 10
+;.le
+;Message:  "Returning junk core block"
+;.br
+;Type:  RELOAD
+;	This is only enabled under FTDEBUG.  The core de-allocator
+;was called with either a base address of zero or a length of zero
+;to return to the free core pool.
+;-
+>
+	PUSHJ	P,PIOSAV
+	TRZ	F,FL$P2			;First pass
+	PUSHJ	P,SAVT
+	SETZM	(T1)			;No links here yet!
+	ADDI	T2,(T1)			;Compute end address(+1)
+	HRLI	T3,FRELST
+	HRR	T3,FRELST		;Get free list pointer
+	TRNN	T3,-1
+	  JRST	CORF10
+CORF1:	HLRZ	T4,(T3)			;Get size of block
+	ADDI	T4,(T3)			;Compute its last addr(+1)
+	CAME	T4,T1			;Does that block end at us?
+	  JRST	CORF4			;No
+	SUBI	T2,(T1)			;Get length again
+	TRON	F,FL$P2			;Pass 2?
+	  JRST	CORF2			;No, don't return yet
+	MOVSS	T2			;Put in left half
+	ADDM	T2,(T3)			;Make that block bigger
+	POPJ	P,			;And return
+
+CORF2:	HLRZ	T4,(T3)			;Get length of existing block
+	ADDI	T2,(T4)			;Add length of new block
+	MOVEI	T1,(T3)			;Point T1 at new larger block
+CORF3:	HRR	T3,(T3)			;Point T3 at successor
+	MOVSS	T3			;Get predecessor
+	HLRM	T3,(T3)			;Point it at sucessor
+	SETZM	(T1)			;No links yet to new block
+	ADDI	T2,(T1)
+	MOVSS	T3			;Point T3 at current block
+	JRST	CORF9			;And continue scan
+
+CORF4:	CAIE	T2,(T3)			;Does our block end at his?
+	  JRST	CORF7			;No
+	SUBI	T2,(T1)			;Get length again
+	HLRZ	T4,(T3)			;And length of this block
+	ADDI	T2,(T4)			;Get length of new block
+	TRON	F,FL$P2			;Pass 2?
+	  JRST	CORF3			;No, de-link and continue search
+	HRLM	T2,(T1)			;Store in proper place
+	HRRZ	T2,(T3)			;Get successor block
+	HRRM	T2,(T1)			;And point us to him
+	MOVSS	T3			;Get predecessor
+	HRRM	T1,(T3)			;And point him to us
+	POPJ	P,			;Return
+
+CORF7:	HRLI	T3,(T3)			;Remember us as prececessor
+	HRR	T3,(T3)			;Get successor
+CORF9:	TRNE	T3,-1			;See if there is one
+	  JRST	CORF1			;Yes, check it
+CORF10:	MOVSS	T3			;No, point back to last block
+	HRRM	T1,(T3)			;Save
+	SUBI	T2,(T1)			;Get real length again
+	HRLM	T2,(T1)			;Store it
+	POPJ	P,
+	Subttl	Buffer Handling routines
+
+;Note that the header word is "invisible" to the calling routines -
+;i.e. GETBUF and FREBUF return/expect T1 to point to the data area of
+;the buffer.
+
+;Allocate a buffer:  Uses T1
+
+GETBUF:	PUSHJ	P,PIOSAV		;No interrupts here
+	PUSH	P,T2
+	SKIPE	T1,BUFPTR		;See if any cached buffers
+	  JRST	HAVBUF			;Yes, win
+	MOVEI	T1,BF.LST		;Else allocate one from free core
+	PUSHJ	P,CORGET
+
+HAVBUF:	HLRZ	T2,BF.LNK(T1)		;Link to next
+	HRRZM	T2,BUFPTR		;Update
+	SETZM	BF.LNK(T1)		;Clear this word
+	MOVEI	T1,BF.DAT-BF.LNK(T1)	;Return pointer to data
+	POP	P,T2			;Restore T2
+	POPJ	P,
+
+
+;Free a buffer:  address in T1
+
+FREBUF:	IFN	FTDEBUG,<
+	CAM	(T1)			;See if it exists
+>
+	PUSHJ	P,PIOSAV
+	MOVEI	T1,BF.LNK-BF.DAT(T1)
+IFN	FTDEBUG,<
+	PUSH	P,T2
+	MOVE	T2,BUFPTR
+	JUMPE	T2,DEB2
+DEB1:	CAIN	T1,(T2)
+	HALT	.
+	HLRZ	T2,(T2)
+	JUMPN	T2,DEB1
+DEB2:	POP	P,T2
+>
+	EXCH	T1,BUFPTR
+	ASSUME	BF.LNK,0
+	HRLZM	T1,@BUFPTR
+	POPJ	P,
+	Subttl	STOPCD processor
+
+;+
+;.end list
+;-
+
+DIE:	MOVEM	17,CRSACS+17			;Save ACs in dump
+	MOVE	17,[0,,CRSACS]
+	BLT	17,CRSACS+16
+	MOVE	17,CRSACS+17			;Restore AC 17
+	LDB	T1,[POINT 4,@(P),12]		;Get the AC field
+	CAIL	T1,NODUMP			;One of the no-dump STOPCDs?
+	  JRST	DIDDMP				;Yes
+	MOVE	T1,[SIXBIT/PSDMP/]
+	OPEN	[	.IODMP			;See if the file exists
+		 SIXBIT/XPN/
+			Z	]
+	  HALT	.				;Stop if can't dump anywhere
+FNDDMP:	MOVEM	T1,DMPFIL
+	SETZM	DMPPPN
+	SETZM	DMPPPN+1			;Be sure these are zapped
+	LOOKUP	DMPFIL
+	  JRST	DODMP
+	AOJA	T1,FNDDMP			;Look again
+DODMP:	HLLZS	DMPEXT
+	SETZM	DMPPPN
+	SETZM	DMPPPN+1
+	SETZM	DMPCOR
+	MOVEI	T1,DMPDEV
+	SAVE.	T1,
+	  HALT	.				;If can't dump, then halt
+	MOVE	P,CRSACS+P			;Restore P since SAVE.
+DIDDMP:	HRRZI	T1,@(P)				;Point to ASCIZ string
+	HRRZI	T1,@(T1)
+	HRLI	T1,(POINT 7,,)
+	MOVSI	T2,-QUMLEN*5			;Queue message length
+	MOVE	T3,[POINT 7,QUEMSG+.QBMAS]	;Where to copy to
+CPYERR:	ILDB	C,T1				;Get character
+	IDPB	C,T3
+	JUMPE	C,DOQUE				;Done, do the QUEUE.
+	AOBJN	T2,CPYERR			;Copy unless can't
+DOQUE:	HRRZI	T2,(T2)				;Number of bytes
+	JUMPE	T2,NOMSG			;Don't bother if nothing
+	IDIVI	T2,5				;Convert to words
+	SKIPE	T3				;Round up if necessary
+	  AOJ	T2,
+	AOJ	T2,				;Now include length
+	HRLM	T2,QUEBLK+.QUARG
+	MOVE	T1,[.QUARG+2,,QUEBLK]
+	QUEUE.	T1,
+	  JFCL					;Oh well
+NOMSG:	LDB	T1,[POINT 4,@(P),12]		;Get STOPCD type
+	MOVE	T1,[[HALT	.]		;Save dispatch:  STOP
+		    RLD				;Reload
+		    ABT				;Abort
+		    CPOPJ			;Informational
+		    CPOPJ	 ](T1)		;Informational w/o dump
+	MOVEM	T1,DIEPRC			;Save dispatch
+	MOVSI	17,CRSACS			;Restore ACs
+	BLT	17,16
+	MOVE	17,CRSACS+17
+	PJRST	@DIEPRC				;Process and return
+
+
+;Reload processor
+
+RLD:	HRROI	T1,.GTRDV			;Device run from
+	GETTAB	T1,
+	  MOVSI	T1,'SYS'			;Assume SYS: if fail
+	MOVEM	T1,RUNDEV			;Store it
+	HRROI	T1,.GTRFN			;File name
+	GETTAB	T1,
+	  MOVE	T1,[SIXBIT/PSTHRU/]		;Default
+	MOVEM	T1,RUNFIL			;Set it
+	SETZM	RUNEXT				;That also
+	HRROI	T1,.GTRDI			;Directory
+	GETTAB	T1,
+	  SETZ	T1,				;Default if can't find
+	PUSH	P,[0]				;First two words are zero
+	HRRZM	P,RUNPPN			;P points to path block
+	PUSH	P,[0]				;..
+	PUSH	P,T1				;Put PPN in
+	MOVE	T1,[%LDSFD]			;Maximum number
+	GETTAB	T1,				;of SFDs
+	  MOVEI	T1,5				;"normal" default
+	MOVNS	T1
+	MOVSI	T1,(T1)				;Make aobjn
+	ASSUME	.GTRS1,<<.GTRS0+1>>
+	ASSUME	.GTRS2,<<.GTRS1+1>>
+	ASSUME	.GTRS3,<<.GTRS2+1>>
+	ASSUME	.GTRS4,<<.GTRS3+1>>
+SFDLP:	HRROI	T2,.GTRS0(T1)
+	GETTAB	T2,
+	  SETZ	T2,
+	PUSH	P,T2				;Save it
+	AOBJN	T1,SFDLP
+	MOVEI	T1,RUNBLK
+	RUN	T1,
+	  HALT	.				;If fail
+
+;Abort processor
+
+ABT:
+	PUSHJ	P,SAVT				;Save the Ts (just in case)
+IFN	FTDECNET,<
+	MOVEI	T1,DCNDR			;Assume DECnet
+>
+IFN	FTDECNET&FTANF10,<
+	HLL	F,PC.FLG(B)			;Must be the link in B
+	TXNN	F,PCDCN				;DECnet?
+>
+IFN	FTANF10,<
+	MOVEI	T1,ANFOFL			;No, must be ANF
+>
+	TXO	F,PCMAB				;We are aborting link
+	HLLM	F,PC.FLG(B)
+	PUSHJ	P,(T1)				;Call disconnect routine
+	  JFCL					;Ignore any skip
+	SETZ	B,				;This link doesn't exist
+	POPJ	P,				;Anymore
+	Subttl	Returns
+
+TPOPJ1:	POP	P,T1
+CPOPJ1:	AOSA	(P)
+TPOPJ:	POP	P,T1
+CPOPJ:	POPJ	P,
+	Subttl	AC saving routines
+
+SAVT:	EXCH	T1,(P)
+	PUSH	P,T2
+	PUSH	P,T3
+	PUSH	P,T4
+	PUSH	P,[REST]		;Do it this way so no interrupt
+	PUSH	P,T1			;stuff clobbers the stack
+	MOVE	T1,-5(P)
+	POPJ	P,
+REST:	SKIPA
+	AOS	-4(P)
+	POP	P,T4
+	POP	P,T3
+	POP	P,T2
+	POP	P,T1
+	POPJ	P,
+
+
+SAV3:	EXCH	T3,(P)
+	PUSH	P,[RES3]
+	PUSH	P,T3
+	MOVE	T3,-2(P)
+	POPJ	P,
+RES3:	SKIPA
+	AOS	-1(P)
+	POP	P,T3
+	POPJ	P,
+	Subttl	Message table
+
+	DEFINE	ERRMSG(TEXT)<
+	[ASCIZ/'TEXT'/]
+>
+
+DCNERR:	ERRMSG	<ANF connection failed and FTDECNET is off>
+	ERRMSG	<Argument error>
+	ERRMSG	<Allocation failure>
+	ERRMSG	<Bad channel>
+	ERRMSG	<Bad format type>
+	ERRMSG	<Connect block format error>
+	ERRMSG	<Interrupt data too long>
+	ERRMSG	<Illegal flow control mode>
+	ERRMSG	<Illegal function>
+	ERRMSG	<Job quota exhausted>
+	ERRMSG	<Link quota exhausted>
+	ERRMSG	<No connect data to read>
+	ERRMSG	<Percentage input out of bounds>
+	ERRMSG	<No privileges>
+	ERRMSG	<Segment size too big>
+	ERRMSG	<Unknown node name>
+	ERRMSG	<Unexpected state: Unspecified>
+	ERRMSG	<Wrong number of arguments>
+	ERRMSG	<Function called in wrong state>
+	ERRMSG	<Connect block length error>
+	ERRMSG	<Process block length error>
+	ERRMSG	<String block length error>
+	ERRMSG	<Unexpected state:  Disconnect sent>
+	ERRMSG	<Unexpected state:  Disconnect confirmed>
+	ERRMSG	<Unexpected state:  No confidence>
+	ERRMSG	<Unexpected state:  No link>
+	ERRMSG	<Unexpected state:  No communication>
+	ERRMSG	<Unexpected state:  No resources>
+	ERRMSG	<Connect rejected>
+	ERRMSG	<Rejected or disconnected by object>
+	ERRMSG	<No resources>
+	ERRMSG	<Unrecognized node name>
+	ERRMSG	<Remote node shut down>
+	ERRMSG	<Unrecognized object>
+	ERRMSG	<Invalid object name format>
+	ERRMSG	<Object too busy>
+	ERRMSG	<Abort by network management>
+	ERRMSG	<Abort by object>
+	ERRMSG	<Invalid node name format>
+	ERRMSG	<Local node shut down>
+	ERRMSG	<Access control rejection>
+	ERRMSG	<No response from object>
+	ERRMSG	<Node unreachable>
+	ERRMSG	<No link>
+	ERRMSG	<Disconnect complete>
+	ERRMSG	<Image field too long>
+	ERRMSG	<Unspecified reject reason>
+	ERRMSG	<Bad flag combination>
+	ERRMSG	<Address check>
+;Disconnect reason table:
+
+DCNRSN:	ERRMSG	<Rejected or disconnected by object>
+	ERRMSG	<No resources>
+	ERRMSG	<Remote node shut down>
+	ERRMSG	<Unrecognized object>
+	ERRMSG	<Invalid object name format>
+	ERRMSG	<Object too busy>
+	ERRMSG	<>
+	ERRMSG	<Abort by network management>
+	ERRMSG	<Abort by object>
+	ERRMSG	<Local node shut down>
+	REPEAT	<^D34-^D12>,<
+	ERRMSG	<>
+	>
+	ERRMSG	<Access control rejection>
+	ERRMSG	<>
+	ERRMSG	<>
+	ERRMSG	<>
+	ERRMSG	<>
+	ERRMSG	<No response from object>
+	ERRMSG	<Node unreachable>
+	ERRMSG	<>
+	ERRMSG	<No link>
+	ERRMSG	<Disconnect complete>
+	ERRMSG	<image field too long>
+	Subttl	Miscellaneous data
+
+MONTAB:	ASCII/-Jan/
+	ASCII/-Feb/
+	ASCII/-Mar/
+	ASCII/-Apr/
+	ASCII/-May/
+	ASCII/-Jun/
+	ASCII/-Jul/
+	ASCII/-Aug/
+	ASCII/-Sep/
+	ASCII/-Oct/
+	ASCII/-Nov/
+	ASCII/-Dec/
+
+IFN	FTLOG,<
+DEFLOG:	SIXBIT/PSTHRU/			;Virgin LEB for logging
+	SIXBIT/LOG/
+	Z
+	30,,5730
+>
+	Subttl	Impure storage
+
+	RELOC	0
+
+;The following is for the PSI system
+
+PIVEC:					;START OF PSI VECTORS
+IFN	FTDECNET,<
+	NSPOFF==.-PIVEC			;THE FIRST IS THE NSP. VECTOR
+NSPPSI:	EXP	NSPINT			;THE NSP INTERRUPT ROUTINE
+	Z
+	Z
+	Z
+>
+
+IFN	FTANF10,<
+	ANFOFF=.-PIVEC
+ANFPSI:	EXP	ANFINT
+	Z
+	Z
+	Z
+>
+
+HICORE:	BLOCK	1			;Highest available location
+FRELST:	BLOCK	1			;Pointer to free PCBs
+BLKPTR:	BLOCK	1			;Pointer to PCBs in use
+BUFPTR:	BLOCK	1			;Pointer to message buffers
+
+IFN	FTDECNET,<
+DPLQUE:	BLOCK	1			;Poll queue for DECnet
+>
+IFN	FTANF10,<
+APLQUE:	BLOCK	1			;Poll queue for ANF
+>
+
+
+FLPBLK:	.FOSIO				;Super I/O (just do OPEN)
+	UU.DMR!UU.IBC!UU.AIO!.IOBYT		;Byte mode I/O
+	SIXBIT/TSK/			;Device TSK
+	Z				;Buffer header pointers
+	Z				;Number of buffers
+
+	FLPLEN==.-FLPBLK
+
+IFN	FTANF10,<
+;**NOTE** that these to things MUST be contigues as MYNODE is the node
+;number for the NPD described here***
+	ASSUME	.OBPST,^D123
+MYNODE:	Z
+LOCNPD:	^D15
+	BYTE	(7)0,"1","7","3",0,"*",0,"*",0,"*",0,"*",0,"*",0	;**TEMP**
+	MYNODL==.-MYNODE
+
+WLDNPD:	-1
+	5
+	BYTE	(7)0,"1","7","3","*"
+	WLDNPL==.-WLDNPD
+>
+
+IFN	FTLOG,<
+LOGBLK:	LOG,,.FOAPP
+	.IOASC
+	SIXBIT/PSTLOG/
+	LOBFH,,0
+	Z					;Default number of buffers
+	LOGLEB					;LOOKUP/ENTER block
+	LOGLEN==.-LOGBLK
+
+LOBFH:	BLOCK	3
+LOGLEB:	BLOCK	4
+
+>
+
+LGNARG:	2,,5
+	Z
+	SIXBIT/SYSJOB/
+	Z
+	0
+	LGNLEN==.-LGNARG
+
+IFN	FTDECNET,<
+DCNCWL:	BLOCK	1				;Current CW DECnet link
+>
+
+IFN	FTANF10,<
+ANFCWL:	BLOCK	1
+>
+
+IFN	FTANF10,<
+ANFNAM:	BLOCK	1				;Our ANF node name
+>
+
+IFN	FTDECNET,<
+DCNBLK:	<DN.FLE!<.DNLNN,,.DNNMS+1>>		;For DNET.
+	BLOCK	.DNNMS
+	DCNNAM=DCNBLK+.DNNMS			;Local node name
+>
+
+CRSACS:	BLOCK	20				;AC saving block
+
+DIEPRC:	BLOCK	1				;Address of type specific processor
+
+DMPDEV:	SIXBIT/XPN/
+DMPFIL:	Z
+DMPEXT:	SIXBIT/EXE/
+DMPPPN:	Z
+	Z
+DMPCOR:	Z
+
+QUEBLK:	.QUWTO					;Write to Operator
+	1					;Central
+	Z					;No response
+	.QBMSG					;Type of arg block
+	QUEMSG					;Where it is
+
+QUEMSG:	BLOCK	QUMLEN
+
+RUNBLK:
+RUNDEV:	Z					;Device to run from
+RUNFIL:	Z					;File to run from
+RUNEXT:	Z					;Extension
+	Z					;Zero word
+RUNPPN:	Z					;Pointer to PATH block
+RUNCOR:	Z					;core assignment
+	Subttl	End
+
+	END	PSTHRU

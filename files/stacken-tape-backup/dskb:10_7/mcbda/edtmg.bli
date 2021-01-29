@@ -1,0 +1,634 @@
+
+MODULE EDTMG (					!Edit data into ASCII string.
+		IDENT = '001020',
+		LANGUAGE (BLISS16, BLISS36) %BLISS36 (, ENTRY ($EDMSG))
+		) =
+BEGIN
+!
+!
+!
+! COPYRIGHT (C) 1978 BY
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+! COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: SYSTEM LIBRARY
+!
+! ABSTRACT:
+!
+!
+! THIS MODULE CONTAINS A GENERAL PURPOSE ROUTINE TO EDIT BINARY DATA
+! INTO AN ASCII TEXT STRING SUITABLE FOR DISPLAY
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 25-AUG-78
+!
+! MODIFIED BY:
+!
+!	, : VERSION
+! 01	-
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    $EDMSG,					!Edit binary data into text
+    NEXT_PRM,					!Return the next parameter.
+    REPEAT : NOVALUE;				!Call routine repeatedly.
+
+!
+! INCLUDE FILES
+!
+!	NONE
+!
+! MACROS:
+!
+!	NONE
+!
+! EQUATED SYMBOLS:
+!
+
+LITERAL
+    SPACE = %C' ',
+    TAB = %C'	';
+
+!
+! OWN STORAGE:
+!
+
+OWN
+    BUF_PTR,					!Current position in output buffer.
+    PRM_LIST : REF VECTOR,			!Address of next parameter to fetch.
+    REPT;					!Repetition count.
+
+GLOBAL
+    $LNCNT : INITIAL (0);			!Count of new lines.
+
+!
+! EXTERNAL REFERENCES:
+!
+
+EXTERNAL ROUTINE
+    $C5TA,					!Convert RAD50 to ASCII
+    $CBDMG,					!Convert binary to unsigned decimal
+    $CBDSG,					!Convert binary to signed decimal
+    $CBOMG,					!Convert binary to unsigned octal
+    $CBOSG,					!Convert binary to signed octal
+    $CBTMG,					!Convert binary byte to unsigned octal
+    $CDTB,					!Convert decimal ASCII to binary
+    $DAT,					!Insert specified date in output buffer
+    $TIM;					!Insert specified time in output buffer
+
+GLOBAL ROUTINE $EDMSG (BUF_PTR_ADR, PATTERN_PTR, PARAMETER_LIST) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!	DIRECTIVES:
+!
+!	%A %nA %#A		ASCII STRING
+!
+!	%B %nB %#B		BINARY BYTE TO OCTAL
+!
+!	%D %nD %#D		BINARY SIGNED DECIMAL (NO SUPPRESSION)
+!
+!	%E %nE %#E		EXTENDED ASCII
+!
+!	%M %nM %#M		BINARY TO DECIMAL MAGNITUDE (ZERO SUPPRESSION)
+!
+!	%O %nO %#O		BINARY TO SIGNED OCTAL
+!
+!	%P %nP %#P		BINARY TO OCTAL MAGNITUDE
+!
+!	%R %nR %#R		RAD50
+!
+!	%nS %#S			SPACE
+!
+!	%T %nT %#T		TAB TO COLUMN (1 TO N)
+!
+!	%U %nU %#U		BINARY TO DECIMAL MAGNITUDE (NO SUPPRESSION)
+!
+!	%X %nX %#X		FILE NAME
+!
+!	%Y			DATE CONVERSION
+!
+!	%0Z %1Z			CONVERT UP HOURS 'HH'
+!
+!	%2Z			CONVERT UP TO MINUTES 'HH:MM'
+!
+!	%3Z			CONVERT UP TO SECONDS 'HH:MM:SS'
+!
+!	%4Z %5Z			CONVERT UP UP TO TICKS 'HH:MM:SS.S'
+!
+!	%^ %n^ %#^		FORM FEED
+!
+!	%/ %n/ %#/		NEW LINE (CR/LF)
+!
+!	%+ %n+			BYPASS PARAMETERS
+!
+!	%- %n-			BACK UP PARAMETERS
+!
+!	%@			CALL USER ROUTINE
+!
+!	%%			INSERT SINGLE CHARACTER '%'
+!
+!	%n<			DEFINE BYTE FIELD
+!
+!	%n>			LOCATE FIELD MARK
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.BUF_PTR_ADR				!Address of character sequence
+!						!pointer to buffer to receive
+!						!text.
+!	.PATTERN_PTR				!Character sequence pointer to
+!						!ASCIZ pattern string.
+!	.PARAMETER_LIST				!Address of list of parameters
+!						!for inclusion in output.
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer ..BUF_PTR_ADR is updated to point past
+!	the information inserted.
+!
+! ROUTINE VALUE:
+!
+!	A count of the number of characters inserted is returned.
+!
+! SIDE EFFECTS
+!
+!	The global variable $LNCNT is updated to count and CR/LFs inserted
+!	into the text.
+!
+!--
+
+    BEGIN
+
+    MAP
+	PARAMETER_LIST : REF VECTOR;
+
+    LOCAL
+	BUF_PTR_INI,				!INITIAL POINTER INTO BUFFER
+	CHAR,					!CURRENT PATTERN CHARACTER
+	PAT_PTR;				!POINTER INTO PATTERN
+
+    BUF_PTR_INI = (BUF_PTR = ..BUF_PTR_ADR);	!Save the initial buffer position
+    PAT_PTR = .PATTERN_PTR;			!Copy the pointer to the pattern
+    PRM_LIST = .PARAMETER_LIST;			!and to the parameters.
+
+    !+
+    ! Pick up consecutive characters from the pattern until
+    ! we hit the null byte.
+    !-
+
+    WHILE (CHAR = CH$RCHAR_A (PAT_PTR)) NEQ 0 DO
+
+	IF .CHAR NEQ %C'%'			!Check if it is a directive.
+	THEN 					!If not, then
+	    CH$WCHAR_A (.CHAR, BUF_PTR)		!just transfer the character.
+	ELSE 					!Look for a repeat count.
+	    BEGIN
+	    CHAR = CH$RCHAR (.PAT_PTR);		!Peek at the next character
+	    REPT = (SELECTONE .CHAR OF
+		SET
+		[%C'0' TO %C'9'] :
+
+		    !+
+		    ! A number is provided in the pattern
+		    !-
+
+		    $CDTB (PAT_PTR);		!Call the decimal-to-binary converter
+		[%C'#'] :
+
+		    !+
+		    ! A number is provided in the parameter list
+		    !-
+
+		    BEGIN
+		    PAT_PTR = CH$PLUS (.PAT_PTR, 1);	!Bypass the pattern character
+		    NEXT_PRM ()			!and return the next parameter.
+		    END;
+		[OTHERWISE] :
+
+		    !+
+		    ! The default count is one.
+		    !-
+
+		    1;
+		TES);
+
+	    !+
+	    ! Now check to see which directive is being invoked
+	    ! and perform the appropriate action.
+	    !-
+
+	    CASE (CHAR = CH$RCHAR_A (PAT_PTR))	!Get the next character.
+	    FROM %C'%' TO %C'^' OF 		!Range it on our list
+		SET
+
+		[%C'%'] :
+
+		    !+
+		    ! Insert a '%' into the output stream
+		    !-
+
+		    CH$WCHAR_A (%C'%', BUF_PTR);
+
+		[%C'+'] :
+
+		    !+
+		    ! Bypass some parameters
+		    !-
+
+		    PRM_LIST = PRM_LIST [.REPT];
+
+		[%C'-'] :
+
+		    !+
+		    ! Back up over some parameters
+		    !-
+
+		    PRM_LIST = PRM_LIST [-.REPT];
+
+		[%C'/'] :
+
+		    !+
+		    ! Insert one or more cr/lf pairs
+		    !-
+
+		    DO
+			BEGIN
+			$LNCNT = .$LNCNT + 1;
+			CH$WCHAR_A (13, BUF_PTR);
+			CH$WCHAR_A (10, BUF_PTR)
+			END
+		    UNTIL (REPT = .REPT - 1) LEQ 0;
+
+		[%C'<'] :
+
+		    !+
+		    ! Initialize field mark
+		    !-
+
+		    BEGIN
+
+		    LOCAL
+			PTR;
+
+		    PTR = .BUF_PTR;
+
+		    WHILE (REPT = .REPT - 1) GEQ 0 DO
+			CH$WCHAR_A (SPACE, PTR);
+
+		    CH$WCHAR (0, .PTR);
+		    END;
+
+		[%C'>'] :
+
+		    !+
+		    ! Position to end of field
+		    !-
+
+		    BEGIN
+
+		    LOCAL
+			PTR;
+
+		    PTR = CH$FIND_CH (.REPT, .BUF_PTR, 0);
+		    BUF_PTR = (IF CH$FAIL (.PTR) THEN CH$PLUS (.BUF_PTR, .REPT) ELSE .PTR);
+		    END;
+
+		[%C'A'] :
+
+		    !+
+		    ! Transfer character string to output stream.
+		    !-
+
+		    BEGIN
+
+		    LOCAL
+			PTR;			!Pointer into paramter string
+
+		    PTR = NEXT_PRM ();		!Get the pointer
+
+		    WHILE (REPT = .REPT - 1) GEQ 0 DO
+			CH$WCHAR_A (CH$RCHAR_A (PTR), BUF_PTR);
+
+		    END;
+
+		[%C'B'] :
+
+		    !+
+		    ! Display character item as unsigned octal number.
+		    ! Parameter item is a pointer to characters.
+		    !-
+
+		    IF .REPT GTR 0
+		    THEN
+			BEGIN
+
+			LOCAL
+			    PTR;
+
+			PTR = NEXT_PRM ();
+			$CBTMG (BUF_PTR, CH$RCHAR_A (PTR), 1);
+
+			WHILE (REPT = .REPT - 1) GTR 0 DO
+			    BEGIN
+			    CH$WCHAR_A (SPACE, BUF_PTR);
+			    $CBTMG (BUF_PTR, CH$RCHAR_A (PTR), 1);
+			    END;
+
+			END;
+
+		[%C'D'] :
+
+		    !+
+		    ! Display parameter as signed decimal.
+		    !-
+
+		    REPEAT ($CBDSG, 0, TAB);
+
+		[%C'E'] :
+
+		    !+
+		    ! Insert character string while editing undisplayable
+		    ! characters to the character '.'.
+		    !-
+
+		    BEGIN
+
+		    LOCAL
+			CHAR,			!Current character being processed
+			PTR;			!Pointer into paramter string
+
+		    PTR = NEXT_PRM ();		!Get the pointer
+
+		    WHILE (REPT = .REPT - 1) GEQ 0 DO
+			BEGIN
+			CHAR = CH$RCHAR_A (PTR) AND 127;
+
+			IF .CHAR LSS 32 OR .CHAR EQL 127 THEN CHAR = SPACE;
+
+			CH$WCHAR_A (.CHAR, BUF_PTR)
+			END;
+
+		    END;
+
+		[%C'M'] :
+
+		    !+
+		    ! Display parameter as unsigned decimal.
+		    !-
+
+		    REPEAT ($CBDMG, 0, TAB);
+
+		[%C'O'] :
+
+		    !+
+		    ! Display parameter as signed octal.
+		    !-
+
+		    REPEAT ($CBOSG, 0, TAB);
+
+		[%C'P'] :
+
+		    !+
+		    ! Display parameter as unsigned octal.
+		    !-
+
+		    REPEAT ($CBOMG, 1, TAB);
+
+		[%C'R'] :
+
+		    !+
+		    ! Translate parameter from RAD50 format to ASCII.
+		    !-
+
+		    DO
+			$C5TA (BUF_PTR, NEXT_PRM ())
+		    UNTIL (REPT = .REPT - 1) LEQ 0;
+
+		[%C'S'] :
+
+		    !+
+		    ! Insert one or more spaces.
+		    !-
+
+		    WHILE (REPT = .REPT - 1) GEQ 0 DO
+			CH$WCHAR_A (%C' ', BUF_PTR);
+
+		[%C'T'] :
+
+		    !+
+		    ! Tab to specified column.
+		    !-
+
+		    BEGIN
+
+		    LOCAL
+			NEW_BUF_PTR;
+
+		    NEW_BUF_PTR = CH$PLUS (.BUF_PTR_INI, .REPT - 1);
+
+		    WHILE CH$DIFF (.NEW_BUF_PTR, .BUF_PTR) GTR 0 DO
+			CH$WCHAR_A (%C' ', BUF_PTR);
+
+		    BUF_PTR = .NEW_BUF_PTR
+		    END;
+
+		[%C'U'] :
+
+		    !+
+		    ! Display next parameter as unsigned decimal.
+		    ! no zero suppression is done.
+		    !-
+
+		    REPEAT ($CBDMG, 1, TAB);
+
+		[%C'X'] :
+
+		    !+
+		    ! Display next four parameters as a file name and extension.
+		    !-
+
+		    0;				!Not ready yet.
+
+		[%C'Y'] :
+
+		    !+
+		    ! Date converion.
+		    !-
+
+		    $DAT (BUF_PTR, NEXT_PRM ());
+
+		[%C'Z'] :
+
+		    !+
+		    ! Time conversion.
+		    !-
+
+		    $TIM (BUF_PTR, NEXT_PRM (), .REPT);
+
+		[%C'@'] :
+
+		    !+
+		    ! Call user supplied routine.
+		    !-
+
+		    BEGIN
+
+		    BIND ROUTINE
+			USER_ROUTINE = NEXT_PRM ();
+
+		    USER_ROUTINE (BUF_PTR, PAT_PTR, PRM_LIST);
+		    END;
+
+		[%C'^'] :
+
+		    !+
+		    ! Insert one or more form-feeds.
+		    !-
+
+		    WHILE (REPT = .REPT - 1) GEQ 0 DO
+			CH$WCHAR_A (12, BUF_PTR);
+
+		[INRANGE, OUTRANGE] :
+
+		    !+
+		    ! Invalid character - insert the directive sequence
+		    ! into the output stream.
+		    !-
+
+		    0;				!Not ready yet.
+		TES;
+
+	    END;
+
+    CH$WCHAR (0, .BUF_PTR);			!Make result ASCIZ.
+    .BUF_PTR_ADR = .BUF_PTR;			!Return updated buffer pointer
+    CH$DIFF (.BUF_PTR, .BUF_PTR_INI)		!Return the number of characters inserted.
+    END;					!OF EDMSG
+
+ROUTINE NEXT_PRM =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	The variable .PRM_LIST is left to address the next parameter
+!	to fetch.
+!
+! ROUTINE VALUE:
+!
+!	The value of the parameter addressed by .PRM_LIST[0] .
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	PARAMETER;
+
+    PARAMETER = .PRM_LIST [0];
+    PRM_LIST = PRM_LIST [1];
+    .PARAMETER
+    END;					!End of NEXT_PRM
+ROUTINE REPEAT (ROUTINE_ADR, FLAGS, SEPARATOR) : NOVALUE =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+! FORMAL PARAMETERS:
+!
+!	.ROUTINE_ADR				!Conversion routine to call.
+!	.FLAGS					!Flag word to feed the
+!						!conversion routine.
+!	.SEPARATOR				!Separating character to insert
+!						!between converted texts.
+!
+! IMPLICIT INPUTS:
+!
+!	.REPT					!Number of times to repeat.
+!	.BUF_PTR				!Contains pointer to buffer
+!						!to receive text.
+!
+! IMPLICIT OUTPUTS:
+!
+!	The buffer pointer .BUF_PTR is updated to point past the information
+!	inserted.
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS:
+!
+!	".REPT" parameters are obatined from the parameter list.
+!	The contents of REPT is undefined on return.
+!
+!--
+
+    BEGIN
+
+    BIND ROUTINE
+	CVTNUM = .ROUTINE_ADR;
+
+    IF .REPT GTR 0
+    THEN
+	BEGIN
+	CVTNUM (BUF_PTR, NEXT_PRM (), .FLAGS);
+
+	WHILE (REPT = .REPT - 1) NEQ 0 DO
+	    BEGIN
+	    CH$WCHAR_A (.SEPARATOR, BUF_PTR);
+	    CVTNUM (BUF_PTR, NEXT_PRM (), .FLAGS)
+	    END
+
+	END
+
+    END;					!Of routine REPEAT
+END
+
+ELUDOM

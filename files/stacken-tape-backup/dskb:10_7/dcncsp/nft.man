@@ -1,0 +1,3537 @@
+                                   Document: RDH-80-002-00-S
+
+                                   Date: 15-AUG-85
+
+                                   Project: NFT-10
+
+                                   Charge Number: 18-07155
+
+                                   Product ID:
+
+                     
+
+
+
+
+
+                     FUNCTIONAL SPECIFICATION FOR
+
+                     NFT-10 NIP/FAL/TSC Executive
+
+
+
+
+
+
+
+                                                          
+Issued By:      Robert HoukNFT-10 NIP/FAL/TSC Executive                                    Page 2
+                                                             12-Jan-84
+
+
+
+
+                          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1984,1986. ALL RIGHTS RESERVED.
+
+THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE AND WITH THE INCLUSION
+OF THE ABOVE COPYRIGHT NOTICE. THIS SOFTWARE OR ANY OTHER COPIES
+THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY OTHER
+PERSON. NO TITLE TO AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+
+THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT NOTICE 
+AND SHOULD NOT BE CONSTRUED AS A COMMITMENT BY DIGITAL EQUIPMENT 
+CORPORATION.
+
+DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY OF ITS
+SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+
+NFT-10 NIP/FAL/TSC Executive                                    Page 3
+Product Overview                                             12-Jan-84
+
+
+
+1.0 Product Overview1.0 Product Overview1.0 Product Overview1.0 Product Overview1.0 Product Overview1.0 Product Overview
+
+
+1.1 Product Abstract
+
+NFT-10 is a user-mode system  utility designed to provide  distributed
+file manipulation capabilities to TOPS-10 users.
+
+NFT-10 provides  facilities with  which users  may copy,  change,  and
+delete data files residing anywhere within a DECnet computer network.
+
+NFT-10 also provides the File Access Listener (FAL) which enables  re-
+mote systems to access files within the local TOPS-10 file system.
+
+The NFT-10 command  language will  be similar to  other TOPS-10  CUSPs
+such as DIRECT, PIP, and the languages.
+
+1.2 Markets
+
+See the DECnet-10 product plan.
+
+1.3 Competitive Analysis
+
+Not Applicable.
+
+1.4 Product Audience
+
+NFT-10 is aimed at the TOPS-10 user who must deal with data files in a
+distributed computer network.NFT-10 NIP/FAL/TSC Executive                                    Page 4
+Product Goals                                                12-Jan-84
+
+
+
+2.0 Product Goals2.0 Product Goals2.0 Product Goals2.0 Product Goals2.0 Product Goals2.0 Product Goals
+
+
+2.1 Environments
+
+NFT-10 will run under TOPS-10 7.02 or later monitors with DECnet  net-
+works.
+
+NFT-10 has no explicit environmental requirements.
+
+2.2 Reliability Goals
+
+Since NFT-10 is  the major  data file access  mechanism supplied  with
+DECnet-10 it must be of the utmost reliability.
+
+It is a specific goal that NFT-10 will NEVER claim to have successful-
+ly copied a data  file when it  has not in fact  done so. NFT-10  will
+have  many  internal  redundancy  checks  on  both  internal   program
+operation and overall data integrity.
+
+2.3 Non-Goals
+
+It is not a goal that NFT-10 should replace PIP-10.
+
+NFT-10 will not provide "OPR" control over FAL operations.
+
+NFT-10 will not provide a queued network file spooling mechanism.
+
+NFT-10 will not provide user accounting/logging information.
+
+NFT-10 will not support non-sequential file access.NFT-10 NIP/FAL/TSC Executive                                    Page 5
+General Functional/Operational Definition                    12-Jan-84
+
+
+
+3.0 General Functional/Operational Definition3.0 General Functional/Operational Definition3.0 General Functional/Operational Definition3.0 General Functional/Operational Definition3.0 General Functional/Operational Definition3.0 General Functional/Operational Definition
+
+NFT-10 (NIP/FAL/TSC Executive) is a user-mode system utility which can
+manipulate (copy, rename, delete, execute) data files in a distributed
+(network) computer  system environment  in response  to user  commands
+either typed in from a command terminal or from a pre-defined commands
+file.
+
+NFT accepts commands in a  "verb" mode compatible with native  TOPS-10
+command syntax. NFT command syntax is of the form:
+
+        <command> [[<arg>]] <eol>
+
+Where <command> is the name of a valid NFT command function; and <arg>
+is/are any required and/or optional  arguments needed to complete  the
+command. All commands must be  terminated by an End-Of-Line  condition
+(typically a carriage-return line-feed sequence).
+
+Appendix A lists a syntactical  definition of the command language  in
+general, and of "file specification"s in particular.
+
+Command-specific switches are  listed with  each command  description;
+general non-command-specific switches  are listed with  each NFT  mode
+section; the "standard" file-specific switches are listed in  Appendix
+B.
+
+The NFT program operates in one of three modes: NIP, FAL, or TSC. Each
+operational mode is both conceptually and pragmatically distinct  from
+the others. In  effect each NFT  operational mode can  be viewed as  a
+separate program, replete with  its own prompt,  set of commands,  and
+operational philosophy.NFT-10 NIP/FAL/TSC Executive                                    Page 6
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation
+
+
+3.1 NIP Mode Operation
+
+NIP (Network Interchange Process) is the default operational mode  for
+NFT, and is the mode in which NFT always starts.
+
+NIP mode provides the  interactive file manipulation facilities  which
+constitute the major visible portion of NFT as a whole.
+
+NIP commands are:
+
+1.   COPY - Make new copies of selected files
+2.   DDT - Call  DDT if  it is  loaded (force  an "unsolicited  break-
+     point")
+3.   DELETE - Delete selected files
+4.   DIRECTORY - List selected files
+5.   EXIT - Terminate program execution; return to monitor mode
+6.   HELP - Provide help on NIP operation
+7.   NETWORK - Display information about network nodes
+8.   PRINT - Queue selected files to line printer spooler
+9.   RENAME - Change the names and/or attributes of selected file(s)
+10.  SUBMIT - Submit selected files to batch command processor
+11.  TLINK - Cross-connect ("link") two terminals
+12.  TYPE - Type the selected files on controlling terminal
+13.  DDELETE - DAP-mode DELETE command
+14.  DDIRECTORY - DAP-mode DIRECTORY command
+15.  DRENAME - DAP-mode RENAME command
+16.  DSUBMIT - DAP-mode SUBMIT command
+17.  FAL - Enter FAL mode
+18.  TSC - Enter TSC mode
+
+The general NIP command switches are:
+
+/[NO]MOAN      Do [not] issue general warning complaints.
+
+               The /MOAN switch is used to instruct NIP to issue warn-
+               ings when a dubious condition is encountered, typically
+               requiring NIP to  make some  "wild" guess  (e.g., in  a
+               file copy operation, the data  type or data byte  size)
+               in order to  compete the command.  The default is  /NO-
+               MOAN.
+
+/[NO]OKERROR   Do [not] abort on execution errors.
+
+               The /[NO]OKERROR  switch controls  whether or  not  NIP
+               will abort  the command  if an  error occurs.  /OKERROR
+               directs NIP to  ignore file  access and  I/O errors  as
+               appropriate, issuing warning  messages. /NOOKERROR  in-
+               structs NIP to abort the  current command on the  first
+               occurence of a  file access or  I/O error. The  default
+               setting is /NOOKERROR.
+
+/TOTALS[:lst]  Explicitly control the totals summary.
+
+               The /TOTALS switch controls the totals summary  printed
+               at the end of the command execution. The various totalsNFT-10 NIP/FAL/TSC Executive                                    Page 7
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation
+
+
+               quantities (files,  errors, etc.)  may be  individually
+               controlled by specifying  the totals  quantities to  be
+               listed as the ":lst" value  to the switch. All  /TOTALS
+               quantities are "additive" in that the specification  of
+               one quantity does not affect  any other quantity. If  a
+               quantity-name is preceded with a "NO" then that quanti-
+               ty will not  be listed.  If more that  one quantity  is
+               specified then the individual quantities must be separ-
+               ated with  commas, and  the entire  list enclosed  with
+               parenthesis. /TOTALS  or  /TOTALS:ALL  directs  NIP  to
+               print a totals summary of all applicable quantities  at
+               the completion (successful or otherwise) of the current
+               command. /TOTALS:NONE instructs NIP to not print a  to-
+               tals summary. The /TOTALS quantitites are:
+
+               1.   BITS - List the total number of data bits
+               2.   BYTES - List the total number of data bytes
+               3.   WORDS - List the total number of 36-bit words
+               4.   RECORDS - List the total number of records
+               5.   BLOCKS - List the total number of 128-word blocks
+               6.   PAGES - List the total number of 512-word pages
+               7.   FILES - List the total number of files
+               8.   BAUD - List the effective data transfer rate (bits
+                    per second)
+               9.   ERRORS - List the total number of execution errors
+
+
+               Inappropriate items (e.g., DELETE/TOTALS:BAUD) are  ig-
+               nored.
+
+
+
+3.1.1 COPY command
+
+The COPY command is  used to copy one  or more data files,  optionally
+providing limited manipulation of the data being copied.
+
+The COPY command syntax is:
+
+        COPY [<out-fil> "="] <in-fil-expr> <eol>
+
+Where <out-fil> is  the simple output  or destination file  specifica-
+tion; and  <in-fil-expr> is  the input  or source  file  specification
+expression.
+
+Although by definition  an output  file is required,  the output  file
+specification is optional. If no output file specification is provided
+then the  output file  specification is  defaulted completely  as  de-
+scribed below. Output file defaults are:
+
+1.   Node - Local host
+2.   Device - DSK: if local host, none if a remote node
+3.   Path - [] (no explicit path selected)
+4.   File Name - * (filled in from matching input file name)
+5.   File Type - * (filled in from matching input file type)NFT-10 NIP/FAL/TSC Executive                                    Page 8
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation - COPY command
+
+
+
+6.   /IOMODE - determined by data type from input file
+
+The input file specification expression  is required and is  defaulted
+as specified below:
+
+1.   Node - Local host
+2.   Device - DSK: if local host, none if a remote node
+3.   Path - [] (no explicit path selected)
+4.   File Name - *
+5.   File Type - *
+6.   /IOMODE - determined by file creation mode, default is ASCII
+
+By default, the COPY command will make exact copies of the files being
+copied. NIP can provide some elementary data manipulation.
+
+The COPY command-specific switches are:
+
+/[NO]ARROW     Do [not] print in "up-arrow" format.
+
+               The /[NO]ARROW  switch controls  whether or  not  ASCII
+               control characters will  be "printed"  literally or  in
+               "up-arrow" form. /ARROW directs NIP to convert all con-
+               trol characters except tab, carriage-return, line-feed,
+               and form-feed into the corresponding arrow form. /NOAR-
+               ROW directs NIP to not convert control characters  into
+               arrow form. The default is /NOARROW.
+
+/[NO]BAUD      Do [not] print the baud rate in the totals summary.
+
+               The /[NO]BAUD switch controls whether or not the totals
+               summary will include the baud (bits per second) rate of
+               the data transfer. /BAUD  will always include the  baud
+               rate in the totals summary. /NOBAUD will never  include
+               the baud  rate in  the  totals summary.  The  /[NO]BAUD
+               switch is merely a  "shorthand" way of controlling  the
+               printing of the baud rate  without having to specify  a
+               complete /TOTALS switch. The default for network trans-
+               fers is /BAUD, and /NOBAUD otherwise.
+
+/[NO]CONCAT    Do [not] concatenate input files.
+
+               The /CONCATENATE switch controls whether or not  multi-
+               ple input files are concatenated into one single output
+               file or kept as  separate distinct output files.  /CON-
+               CATENATE directs NIP  to combine  multiple input  files
+               into a single output  file. /NOCONCATENATE directs  NIP
+               to keep  the input  files distinct  in separate  output
+               files. The default is /NOCONCATENATE.
+
+/CRLF:nnn      Issue free carriage-return line-feeds.
+
+               The  /CRLF  switch  controls  the  generation  of  free
+               carriage-return line-feeds if the ASCII line width  ex-
+               ceeds "nnn" columns. /CRLF:nnn  directs NIP to start  aNFT-10 NIP/FAL/TSC Executive                                    Page 9
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation - COPY command
+
+
+
+               new line (issue  a free  carriage-return line-feed)  if
+               the accumulated line width of the current line  exceeds
+               "nnn" characters. If "nnn" is 0 then no free  carriage-
+               return line-feeds will be issued. The default is /CRLF:
+               0.
+
+/[NO]CSN       Do [not] generate card sequence numbers.
+
+               The /CSN switch controls the generation or  suppression
+               of card sequence  numbers. /CSN directs  NIP to  supply
+               incremental card sequence numbers  to each line  ("rec-
+               ord") within the file  data stream. /NOCSN directs  NIP
+               to suppress  card sequence  numbers. The  default is  /
+               NOCSN.
+
+/CSNCOL:nnn    Sets the starting column for CSNs.
+
+               The /CSNCOLUMN switch is used in conjunction with the /
+               CSN switch to control  the generation of card  sequence
+               numbers. /CSNCOLUMN:nnn specifies  the starting  column
+               for the generation  of card sequence  numbers. The  de-
+               fault is /CSNCOLUMN:72.
+
+/CSNINC:nnn    Sets the CSN incremental value.
+
+               The /CSNINCREMENT switch  is used  in conjunction  with
+               the /CSN  switch  to  control the  generation  of  card
+               sequence numbers. /CSNINCREMENT:nnn  specifies the  in-
+               cremental value to be added to each succesive card  se-
+               quence number (the  "nnn" is  also the  first card  se-
+               quence number). The default is /CSNINCREMENT:1.
+
+/CSNWID:nnn    Sets the width of the CSNs.
+
+               The /CSNWIDTH switch is used in conjunction with the  /
+               CSN switch to control  the generation of card  sequence
+               numbers. /CSNWIDTH:nnn specifies  the width (number  of
+               digits) of each card sequence number. The default is  /
+               CSNWIDTH:8.
+
+/[NO]EBCDIC    Indicates that the character data is [not] EBCDIC.
+
+               The /EBCDIC switch is  used to control the  translation
+               of ASCII  data to  or from  EBCDIC data  (depending  on
+               whether the /EBCDIC  switch is  used on  the output  or
+               input file respectively). /EBCDIC indicates that  ASCII
+               data should be translated in EBCDIC data. /NOEBCDIC in-
+               dicates that no translation  of ASCII data into  EBCDIC
+               data should  be  performed. If  any  character-oriented
+               processing of the data is to be performed (such as man-
+               ipulating "CSN's",  "WRAPping"  of  lines,  etc.)  then
+               EBCDIC data must first  be translated into ASCII  data.
+               The default is /NOEBCDIC.NFT-10 NIP/FAL/TSC Executive                                   Page 10
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation - COPY command
+
+
+
+/FLAG:(UP-     Flag upper or lower case characters.
+PER,LOWER)
+               The /FLAG switch controls the "flagging" of certain AS-
+               CII characters. /FLAG:UPPER directs  NIP to flag  upper
+               case alphabetic ASCII  characters. /FLAG:LOWER  directs
+               NIP to flag lower  case alphabetic ASCII characters.  A
+               character is "flagged" by preceding the character  with
+               a single quote character  ("'"). The default is  /FLAG:
+               NONE.
+
+/[NO]LSN       Do [not] generate ASCII line sequence numbers.
+
+               The /LSN switch controls the generation or  suppression
+               of line sequence  numbers. /LSN directs  NIP to  supply
+               incremental line sequence numbers  to each line  ("rec-
+               ord") within the file  data stream. /NOLSN directs  NIP
+               to suppress  line sequence  numbers. The  default is  /
+               NOLSN.
+
+/[NO]LSNCON    Do [not] reset LSNs on page boundry.
+
+               The /LSNCONTINUOUS switch is  used in conjunction  with
+               the /LSN  switch  to  control the  generation  of  line
+               sequence numbers. /LSNCONTINUOUS directs NIP to  ignore
+               page boundries in ASCII  files, and just increment  the
+               line sequence number continuously  for each ASCII  line
+               of text. /NOLSNCONTINUOUS directs NIP to reset the line
+               sequence number at each ASCII page boundry. The default
+               is /NOLSNCONTINUOUS.
+
+/LSNINC:nnn    Sets the LSN incremental value.
+
+               The /LSNINCREMENT switch  is used  in conjunction  with
+               the /LSN switch to control  the generation of line  se-
+               quence numbers. /LSNINCREMENT:nnn sets the increment to
+               be added to each  successive line sequence number  (the
+               "nnn" is also the first line sequence number). The  de-
+               fault is /LSNINCREMENT:10.
+
+/[NO]NULLS     Do [not] preserve ASCII nulls.
+
+               The /NULLS switch controls whether or not NIP will sup-
+               press or preserve ASCII null characters. /NULLS directs
+               NIP to preserve  ASCII nulls. /NONULLS  directs NIP  to
+               suppress ASCII nulls. The default is /NONULLS.
+
+/[NO]SPACES    Do [not] convert tabs into spaces.
+
+               The /SPACES switch controls whether or not NIP converts
+               ASCII tab  characters  into  multiple  spaces.  /SPACES
+               directs NIP to  replace ASCII tab  characters with  the
+               corresponding number of space characters. /NOSPACES di-
+               rects NIP to not convert tabs into spaces. The  default
+               is /NOSPACES.NFT-10 NIP/FAL/TSC Executive                                   Page 11
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation - COPY command
+
+
+
+/[NO]TABS      Do [not] convert spaces into tabs.
+
+               The /TABS switch controls  whether or not NIP  converts
+               multiple ASCII space  characters into  tabs. /TABS  di-
+               rects NIP to convert (and compress) multiple spaces in-
+               to the corresponding  number of  tabs. /NOTABS  directs
+               NIP to not convert spaces  into tabs. The default is  /
+               NOTABS.
+
+/[NO]TRUNCA    Do [not] truncate trailing blanks.
+
+               The /TRUNCATE switch controls  whether or not  trailing
+               ASCII blanks are  suppressed (or truncated).  /TRUNCATE
+               directs NIP  to  suppress or  truncate  trailing  ASCII
+               blanks (i.e., spaces and/or tabs). /NOTRUNCATE  directs
+               NIP to not supppess trailing  blanks. The default is  /
+               NOTRUNCATE.
+
+/WRAP:nnn      Word-wrap ASCII line after "nnn" columns.
+
+               The /WRAP switch controls the ASCII word-wrapper mecha-
+               nism. /WRAP:nnn directs NIP  to issue a free  carriage-
+               return line-feed  at the  first blank  character  after
+               "nnn" columns  of text.  If "nnn"  is 0  then no  word-
+               wrapping is performed. The default is WRAP:0.
+
+
+
+3.1.2 DDT Command
+
+The DDT command is used to enter DDT if it is loaded.
+
+The DDT command syntax is:
+
+        DDT <eol>
+
+DDT is the  program debugger,  and is  typically not  loaded with  the
+standard system NFT, but only with  a "private debugging" NFT. To  re-
+turn from DDT-mode to NFT command mode, type <ESC>P (i.e., the  normal
+breakpoint procede command).
+
+There are no DDT command-specific switches.
+
+
+3.1.3 DELETE Command
+
+The DELETE  command is  used to  delete or  destroy one  or more  data
+files.
+
+The DELETE command syntax is:
+
+        DELETE <in-fil-expr> <eol>
+
+Where <in-fil-expr> is the input or source file specification  expres-NFT-10 NIP/FAL/TSC Executive                                   Page 12
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation - DELETE Command
+
+
+
+sion which identifies the files to be deleted.
+
+The input file specification expression  is required and is  defaulted
+as specified below:
+
+1.   Node - Local host
+2.   Device - DSK: if local host, none if a remote node
+3.   Path - [] (no explicit path selected)
+4.   File Name - not defaulted - must be explicitly specified
+5.   File Type - not defaulted - must be explicitly specified
+
+There are no DELETE command-specific switches.
+
+
+3.1.4 DIRECT Command
+
+The DIRECT command  is used to  obtain a directory  listing of one  or
+more files.
+
+The DIRECT command syntax is:
+
+        DIRECT [<out-fil> "="] <in-fil-expr> <eol>
+
+Where <out-fil> is  the simple  output or  listing file  specification
+(i.e., where the directory listing is made); and <in-fil-expr> is  the
+input or source file specification expression identifying those  files
+for whom a directory listing is desired.
+
+Although by definition a  listing file is  required, the listing  file
+specification is optional. If no listing file specification is provid-
+ed  then  the  directory  listing  will  be  directed  to  the   job's
+controlling terminal. Listing file defaults are:
+
+1.   Node - Local host
+2.   Device - TTY: if no listing file is specified, DSK: otherwise
+3.   Path - [] (no explicit path selected)
+4.   File Name - a unique name will be generated
+5.   File Type - DIR
+6.   /IOMODE - ASCII
+
+The input file specification expression  is required and is  defaulted
+as specified below:
+
+1.   Node - Local host
+2.   Device - DSK: if local host, none if a remote node
+3.   Path - [] (no explicit path selected)
+4.   File Name - *
+5.   File Type - *
+
+There are no DIRECT command-specific switches.
+
+
+3.1.5 EXIT CommandNFT-10 NIP/FAL/TSC Executive                                   Page 13
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation - EXIT Command
+
+
+
+The EXIT command is  used to terminate  NFT/NIP program execution  and
+return to monitor level.
+
+The EXIT command syntax is:
+
+        EXIT <eol>
+
+The EXIT command takes no command arguments.
+
+There are no EXIT command-specific switches.
+
+
+3.1.6 HELP Command
+
+The HELP command is used  to obtain helpful information pertaining  to
+the NIP-mode operation of NFT.
+
+The HELP command syntax is:
+
+        HELP [<command> [<switch>]] <eol>
+
+Where <command> is a  valid NIP mode command  name; and <switch> is  a
+valid command switch for the specified command name.
+
+If no <command> is provided, then  a general terse description of  NIP
+operation is given, followed by a listing of each command available.
+
+If <command> is given then a general terse description of the specific
+command operation  is given,  followed by  a listing  of each  command
+switch available.
+
+If <command> <switch> is given then a general terse description of the
+specific command switch is  given, possibly followed  by a listing  of
+legal command switch arguments if appropriate.
+
+There are no HELP command-specific switches.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The  HELP  command  does  not  yet  accept  the   [<command>
+     [<switch>] ] construction.
+
+
+
+3.1.7 NETWORK Command
+
+The NETWORK  command  is used  to  display information  about  network
+nodes.
+
+The NETWORK command syntax is:
+
+        NETWORK<in-fil-expr> <eol>
+
+Where <in-fil-expr>  is the  input node  specification. Although  fullNFT-10 NIP/FAL/TSC Executive                                   Page 14
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation - NETWORK Command
+
+
+
+file expressions are accepted, only the node name(s) has any  semantic
+meaning to the NETWORK command.
+
+There are no NETWORK command-specific switches.
+
+
+3.1.8 PRINT Command
+
+The PRINT command is used to print  files onto a line printer via  the
+system line printer spooling facilities.
+
+The PRINT command syntax is:
+
+        PRINT  <in-fil-expr> <eol>
+
+Where <in-fil-expr> is the input or source file specification  expres-
+sion.
+
+The actual operation of the PRINT  command is dependent on the  actual
+operating system which executes the command, and has no intrinsic  re-
+lation to the system from which the command was issued. For either the
+TOPS-10 or TOPS-20 operating system, the PRINT command passes the  se-
+lected file(s) to the  line printer spooler for  execution as a  print
+job exactly as if PRINTed normally from the account specified in the /
+USERID switch.
+
+The input file specification expression  is required and is  defaulted
+as specified below:
+
+1.   Node - Local host
+2.   Device - DSK: if local host, none if a remote node
+3.   Path - [] (no explicit path selected)
+4.   File Name - *
+5.   File Type - none
+
+There are no PRINT command-specific switches.
+
+
+3.1.9 RENAME Command
+
+The RENAME command is used to change the name or attribute information
+of one or more files.
+
+The RENAME command syntax is:
+
+        RENAME <out-fil> "=" <in-fil-expr> <eol>
+
+Where <out-fil> is the  simple output or  new file specification;  and
+<in-fil-expr> is the input or old file specification expression  which
+identifies the files to be renamed.
+
+The output or new file defaults are:NFT-10 NIP/FAL/TSC Executive                                   Page 15
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation - RENAME Command
+
+
+
+1.   Node - unchanged
+2.   Device - unchanged
+3.   Path - unchanged
+4.   File Name - unchanged
+5.   File Type - unchanged
+
+The input file specification expression  is required and is  defaulted
+as specified below:
+
+1.   Node - Local host
+2.   Device - DSK: if local host, none if a remote node
+3.   Path - [] (no explicit path selected)
+4.   File Name - *
+5.   File Type - *
+
+There are no RENAME command-specific switches.
+
+
+3.1.10 SUBMIT Command
+
+The SUBMIT command  is used  to execute  command files  via a  command
+interpreter or batch processing facility.
+
+The SUBMIT command syntax is:
+
+        SUBMIT <in-fil-expr> <eol>
+
+Where  <in-fil-expr>  is  the  input  or  source  file   specification
+expression.
+
+The actual operation of the SUBMIT command is dependent on the  actual
+operating system which executes the command, and has no intrinsic  re-
+lation to the system from which the command was issued. For either the
+TOPS-10 or TOPS-20  operating system,  the SUBMIT  command passes  the
+selected file(s) to the batch  processing facility for execution as  a
+batch job exactly as if submitted normally from the account  specified
+in the /USERID switch  (SUBMIT is normally illegal  if no /USERID  has
+been given).
+
+There is no output file specification, any "log" files or the like are
+generated in accordance with whatever rules  are in effect on the  re-
+mote system which "executes" the SUBMIT command.
+
+The input file specification expression  is required and is  defaulted
+as specified below:
+
+1.   Node - Local host
+2.   Device - DSK: if local host, none if a remote node
+3.   Path - [] (no explicit path selected)
+4.   File Name - *
+5.   File Type - CTL
+
+There are no SUBMIT command-specific switches.NFT-10 NIP/FAL/TSC Executive                                   Page 16
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation - TLINK Command
+
+
+
+3.1.11 TLINK Command
+
+The TLINK command is used to  establish a terminal to terminal  "link"
+for the exchange of ASCII characters.
+
+The TLINK command syntax is:
+
+        TLINK [<out-fil> "="] <in-fil-expr> <eol>
+
+Where <out-fil> is the simple output or destination terminal  specifi-
+cation;  and   <in-fil-expr>  is   the   input  or   source   terminal
+specification expression.
+
+The TLINK command is  identical to a TSC  command, followed by a  TSC-
+mode TLINK command (see  section 3.4.3 for  a detailed description  of
+the TLINK command).  It is  provided in NIP  mode solely  as a  conve-
+nience.
+
+
+3.1.12 TYPE Command
+
+The TYPE command  is used  to type  or print  one or  more files  onto
+[typically] the job's controlling terminal.
+
+The TYPE command syntax is:
+
+        TYPE [<out-fil> "="] <in-fil-expr> <eol>
+
+Where <out-fil> is  the simple output  or destination file  specifica-
+tion; and  <in-fil-expr> is  the input  or source  file  specification
+expression.
+
+Although by definition  an output  file is required,  the output  file
+specification is optional. If no output file specification is provided
+then the  output file  specification is  defaulted completely  as  de-
+scribed below. Output file defaults are:
+
+1.   Node - Local host
+2.   Device - TTY:
+3.   Path - [] (no explicit path selected)
+4.   File Name - * (filled in from matching input file name)
+5.   File Type - * (filled in from matching input file type)
+6.   /IOMODE - ASCII
+7.   Switches - /ARROW/BYTESIZE:7/NOTOTALS
+
+The input file specification expression  is required and is  defaulted
+as specified below:
+
+1.   Node - Local host
+2.   Device - DSK: if local host, none if a remote node
+3.   Path - [] (no explicit path selected)
+4.   File Name - *
+5.   File Type - *
+6.   /IOMODE - ASCIINFT-10 NIP/FAL/TSC Executive                                   Page 17
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation - TYPE Command
+
+
+
+The TYPE command is essentially equivilent to a COPY command to device
+TTY:, with a default of /ASCII/ARROW/BYTESIZE:7/NOTOTALS.
+
+The TYPE command-specific switches are the  same as for the COPY  com-
+mand.
+
+
+3.1.13 DDELETE Command
+
+The DDELETE command is a special DAP-mode variant of the more  general
+DELETE command.
+
+The DDELETE command syntax is:
+
+        DDELETE <in-fil> <eol>
+
+Where <in-fil> is the simple input file specification.
+
+The DDELETE command may  be used in place  of the DELETE command  when
+exactly one simple file specification is used, and exactly one  remote
+node is specified (no node wildcards). Under these circumstances  (for
+the time being) the DDELETE command  may execute much faster than  the
+more general DELETE command.
+
+
+3.1.14 DDIRECT Command
+
+The DDIRECT command is a special DAP-mode variant of the more  general
+DIRECT command.
+
+The DDIRECT command syntax is:
+
+        DDIRECT [<out-fil> "="] <in-fil> <eol>
+
+Where <out-fil> is the simple output file specification; and  <in-fil>
+is the simple input file specification.
+
+The DDIRECT command may  be used in place  of the DIRECT command  when
+exactly one simple input file  specification is used, and exactly  one
+remote node  is specified  (no node  wildcards). Under  these  circum-
+stances (for  the time  being) the  DDIRECT command  may execute  much
+faster than the more general DIRECT command.
+
+
+3.1.15 DRENAME Command
+
+The DRENAME command is a special DAP-mode variant of the more  general
+RENAME command.
+
+The DRENAME command syntax is:
+
+        DRENAME [<out-fil> "="] <in-fil> <eol>
+
+Where <out-fil> is the simple output file specification; and  <in-fil>NFT-10 NIP/FAL/TSC Executive                                   Page 18
+General Functional/Operational Definition                    12-Jan-84
+NIP Mode Operation - DRENAME Command
+
+
+
+is the simple input file specification.
+
+The DRENAME command may  be used in place  of the RENAME command  when
+exactly one simple input file  specification is used, and exactly  one
+remote  node   is  specified   (no   node  wildcards).   Under   these
+circumstances (for the  time being)  the DRENAME  command may  execute
+much faster than the more general RENAME command.
+
+
+3.1.16 DSUBMIT Command
+
+The DSUBMIT command is a special DAP-mode variant of the more  general
+SUBMIT command.
+
+The DSUBMIT command syntax is:
+
+        DSUBMIT <in-fil> <eol>
+
+Where <in-fil> is the simple input file specification.
+
+The DSUBMIT command may  be used in place  of the SUBMIT command  when
+exactly one simple file specification is used, and exactly one  remote
+node is specified (no node wildcards). Under these circumstances  (for
+the time being) the DSUBMIT command  may execute much faster than  the
+more general SUBMIT command.
+
+
+3.1.17 FAL Command
+
+The FAL command switches NFT into FAL mode.
+
+The FAL command syntax is:
+
+        FAL <eol>
+
+See section 3.2 for a description of FAL operation.
+
+There are no FAL command-specific switches.
+
+
+3.1.18 TSC Command
+
+The TSC command switches NFT into TSC mode.
+
+The TSC command syntax is:
+
+        TSC <eol>
+
+See section 3.3 for a description of TSC operation.
+
+There are no TSC command-specific switches.NFT-10 NIP/FAL/TSC Executive                                   Page 19
+General Functional/Operational Definition                    12-Jan-84
+FAL Mode Operation
+
+
+3.2 FAL Mode Operation
+
+FAL (File Access Listener)  is the NFT mode  which provides the  slave
+processing which enables  remote network processes  to gain access  to
+the local TOPS-10 file system.
+
+At least one FAL process must be running on each network node in order
+for that node's  file system  to be accessible  from the  rest of  the
+distributed network.
+
+FAL mode is entered via  the "FAL" command to NFT.  FAL must run as  a
+system-privileged process (i.e., as the OPR account).
+
+FAL commands are:
+
+1.   HELP - provide helpful text on FAL operation
+2.   NETPPN - set default "NETPPN"
+3.   REJECT - reject incoming requests from specified nodes
+4.   START - start FAL I/O streams
+5.   NIP - enter NIP mode
+6.   TSC - enter TSC mode
+
+
+
+3.2.1 HELP Command
+
+The HELP command is used  to obtain helpful information pertaining  to
+the FAL-mode operation of NFT.
+
+The HELP command syntax is:
+
+        HELP [<command>] <eol>
+
+Where <command> is a valid FAL mode command name.
+
+If no <command> is provided, then  a general terse description of  FAL
+operation is given, followed by a listing of each command available.
+
+If <command> is given then a general terse description of the specific
+command operation  is given,  followed by  a listing  of each  command
+switch available.
+
+There are no HELP command-specific switches.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The  HELP  command  does  not  yet  accept  the   [<command>
+     [<switch>] ] construction.
+
+
+
+3.2.2 NETPPN Command
+
+The NETPPN command is used to set the default network access ppn.NFT-10 NIP/FAL/TSC Executive                                   Page 20
+General Functional/Operational Definition                    12-Jan-84
+FAL Mode Operation - NETPPN Command
+
+
+
+The NETPPN command syntax is:
+
+        NETPPN <ppn> <eol>
+
+Where <ppn> specifies the project-programmer number.
+
+The default network access ppn is used by FAL for file access  valida-
+tion when the remote accessor does not specify a USERID. This facility
+allows remote accessors  to gain some  degree of access  to the  local
+file system without requiring a  valid account (to, e.g., read  suffi-
+ciently unprotected files). If <ppn>  is blank then no default  access
+ppn is provided and  only valid accounts may  gain access to the  file
+system.
+
+
+3.2.3 REJECT Command
+
+The REJECT command is used to specify nodes and/or accounts which will
+not be accepted by FAL.
+
+The REJECT command syntax is:
+
+        REJECT <in-fil-list> <eol>
+
+Where <in-file-list> is the list  of nodes and/or accounts which  will
+always be rejected by FAL.
+
+The REJECT command allows for the selective unconditional rejection of
+"undesirable" remote file access requests  based on the remote  USERID
+and/or remote node. The  <in-fil-list> is a  list of "file  specifica-
+tions" of which only the node  and directory (ppn) names have a  valid
+semantic meaning (i.e., the  file name, while syntactically  accepted,
+is ignored). If  only a node  is specified, then  all access  requests
+from that  node  will  be  rejected; if  only  a  directory  (ppn)  is
+specified then all access requests whose USERID matches the  directory
+will be rejected; if both a node and directory are specified then  all
+access requests by the specified USERID on the specified node will  be
+rejected (but that USERID is still valid from other nodes).
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     Currently, only one REJECT  command is allowed, all  desired
+     rejection specifications must be  specified in the same  RE-
+     JECT command.  A second  (or  further) REJECT  command  will
+     override any previous REJECT command in effect.
+
+
+
+3.2.4 START Command
+
+The START command is used to startup FAL's I/O streams to allow remote
+file access.
+
+The START command syntax is:NFT-10 NIP/FAL/TSC Executive                                   Page 21
+General Functional/Operational Definition                    12-Jan-84
+FAL Mode Operation - START Command
+
+
+
+
+        START <ntyp> <eol>
+
+Where <ntyp> is either "ANF" or "DECNET".
+
+The START command directs FAL to start "FALling", i.e., to initiate  a
+quiescent I/O stream so that remote file accessors may gain entry into
+the local file system. The START  command does not actually start  any
+I/O, it merely enables the FAL process to receive and act upon  remote
+file access requests.
+
+
+3.2.5 NIP Command
+
+The NIP command switches NFT into NIP mode.
+
+The NIP command syntax is:
+
+        NIP <eol>
+
+The NIP command is illegal if any I/O streams are outstanding.
+
+See section 3.1 for a description of NIP operation.
+
+
+3.2.6 TSC Command
+
+The TSC command switches NFT into TSC mode.
+
+The TSC command syntax is:
+
+        TSC <eol>
+
+The TSC command is illegal if any I/O streams are outstanding.
+
+See section 3.4 for a description of TSC operation.NFT-10 NIP/FAL/TSC Executive                                   Page 22
+General Functional/Operational Definition                    12-Jan-84
+TSC Mode Operation
+
+
+3.3 TSC Mode Operation
+
+TSC (Terminal Service Controller) mode  provides a data link using  an
+asychronous terminal line.
+
+TSC provides a  data path  analguous to  a network  logical link,  but
+using a regular 8-bit asychronous communications line (a "TTY") rather
+than a formal network  link. TSC provides  all network management  for
+the async link.
+
+The async link can be used either as a terminal line or as a file data
+path into the remote system.
+
+When the async link is being used  as a terminal line the user's  con-
+trolling terminal is effectively routed directly into the async line -
+TSC (and the TOPS-10 monitor) act solely as an expensive null modem.
+
+When the async link  is being used  as a file data  path the user  can
+transfer, rename, and delete data files on the remote computer system,
+as well as obtaining directory listings  of files resident on the  re-
+mote system.
+
+The async link can be used as a file data path only with other TOPS-10
+or TOPS-20 operating systems.
+
+TSC commands are:
+
+1.   BOOT - bootstrap a TSC file server to the remote system
+2.   HANGUP - hangup and terminate dataset terminal link
+3.   HELP - provide helpful text on TSC operation
+4.   TLINK - establish a terminal link
+5.   TTY - enter into terminal dialoge mode
+6.   NIP - enter NIP mode
+7.   FAL - enter FAL mode
+                            
+
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The "file mode" usage  of TSC is  not yet implemented,  only
+     the "terminal mode" commands work.
+
+
+
+3.3.1 HANGUP Command
+
+The HANGUP command is used to  terminate the dataset terminal link  by
+"hanging up" the phone.
+
+The HANGUP command syntax is:
+
+        HANGUP <eol>
+
+The HANGUP command causes the phone to hangup, thereby terminating the
+dataset terminal link. After  the HANGUP command  has been issued  the
+dataset terminal is released.NFT-10 NIP/FAL/TSC Executive                                   Page 23
+General Functional/Operational Definition                    12-Jan-84
+TSC Mode Operation - HANGUP Command
+
+
+
+3.3.2 HELP Command
+
+The HELP command is used  to obtain helpful information pertaining  to
+the TSC-mode operation of NFT.
+
+The HELP command syntax is:
+
+        HELP [<command>] <eol>
+
+Where <command> is a valid TSC mode command name.
+
+If no <command> is provided, then  a general terse description of  TSC
+operation is given, followed by a listing of each command available.
+
+If <command> is given then a general terse description of the specific
+command operation  is given,  followed by  a listing  of each  command
+switch available.
+
+There are no HELP command-specific switches.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The  HELP  command  does  not  yet  accept  the   [<command>
+     [<switch>] ] construction.
+
+
+
+3.3.3 TLINK Command
+
+The TLINK command is used to establish a [dataset] terminal link  with
+another computer system.
+
+The TLINK command syntax is:
+
+        TLINK [<out-fil> "="] <in-fil-expr> <eol>
+
+Where <out-fil> is the simple output or destination terminal  specifi-
+cation; and <in-fil-expr> is the  input or source terminal  specifica-
+tion expression.
+
+The <in-fil> file specification is required. A terminal must be speci-
+fied as  the  device. Any  directory,  file  name, or  file  type  are
+ignored.
+
+The TLINK command OPENs the specified terminal in special "packed  im-
+age mode" I/O data mode. The TLINK command does not itself perform any
+terminal I/O, it merely establishes the terminal link. Actual terminal
+I/O must be initiated via further TSC commands.
+
+If the terminal is a dataset terminal with dialout capability, and the
+user supplied a /DIAL:nnn switch with the <in-fil> specification, then
+TSC will place an  outgoing call on the  dataset phone. When the  call
+completes successfully control is returned  to TSC ready for  terminal
+I/O. If the call  does not complete successfully  then the dataset  isNFT-10 NIP/FAL/TSC Executive                                   Page 24
+General Functional/Operational Definition                    12-Jan-84
+TSC Mode Operation - TLINK Command
+
+
+
+released before returning control to TSC.
+
+
+3.3.4 TTY Command
+
+The TTY command places TSC into terminal dialoge mode using the  async
+terminal link.
+
+The TTY command syntax is:
+
+        TTY <eol>
+
+The TTY command  is valid only  after a terminal  link has been  esta-
+blished with a "remote system".
+
+Terminal dialoge mode effectively  links the user's terminal  directly
+into the async  terminal link path,  providing a transparent  terminal
+connection to the remote system.
+
+All characters except ^S, ^Q, and  ^\ are sent directly to the  remote
+terminal line; all characters received  from the remote terminal  line
+are sent directly to the users terminal.
+
+The XOFF/XON (^S/^Q)  protocol is  obeyed with respect  to the  user's
+command terminal.
+
+The ^\ character is the escape  character which will return to  normal
+command mode.
+
+
+3.3.5 NIP Command
+
+The NIP command switches NFT into NIP mode.
+
+The NIP command syntax is:
+
+        NIP <eol>
+
+The NIP command  is illegal if  a dataset terminal  link is  currently
+active.
+
+See section 3.1 for a description of NIP operation.
+
+
+3.3.6 FAL Command
+
+The FAL command switches NFT into FAL mode.
+
+The FAL command syntax is:
+
+        FAL <eol>
+
+The FAL command  is illegal if  a dataset terminal  link is  currently
+active.NFT-10 NIP/FAL/TSC Executive                                   Page 25
+General Functional/Operational Definition                    12-Jan-84
+TSC Mode Operation - FAL Command
+
+
+
+
+See section 3.2 for a description of FAL operation.NFT-10 NIP/FAL/TSC Executive                                   Page 26
+Compatibility                                                12-Jan-84
+
+
+
+4.0 Compatibility4.0 Compatibility4.0 Compatibility4.0 Compatibility4.0 Compatibility4.0 Compatibility
+
+
+4.1 Where Compatible
+
+NFT will be generally compatible  with native TOPS-10 command  syntax,
+and command conventions such as SWITCH.INI options defaulting.
+
+NFT will be compatible with all TOPS-10 file formats.
+
+NFT will be  compatible with all  Digital Equipment Corporation  ASCII
+file formats.
+
+NFT will be compatible with DECnet DAP 6.0.
+
+4.2 Where Incompatible
+
+The command  syntax used  by NFT  is not  necessarily compatible  with
+corresponding command syntax used in the local operating and file sys-
+tems implicitly  accessed  by  NFT.  In  particular,  the  syntactical
+definition of a file specification accepted by NFT may not match  that
+of the various non-TOPS-10 file systems.
+
+The command syntax used by NFT  is not compatible with DCLS (DEC  Com-
+mand Language Standard).NFT-10 NIP/FAL/TSC Executive                                   Page 27
+Packaging and System Generation                              12-Jan-84
+
+
+
+5.0 Packaging and System Generation5.0 Packaging and System Generation5.0 Packaging and System Generation5.0 Packaging and System Generation5.0 Packaging and System Generation5.0 Packaging and System Generation
+
+NFT-10 will be bundled with DECnet-10.
+
+
+6.0 References6.0 References6.0 References6.0 References6.0 References6.0 References
+
+DECnet Product Plan
+
+DAP 6.0 Functional SpecificationNFT-10 NIP/FAL/TSC Executive                                  Page A-1
+Appendix A: Syntax                                           12-Jan-84
+
+
+
+
+                              Appendix A                              Appendix A                              Appendix A                              Appendix A                              Appendix A                              Appendix A
+                                Syntax                                Syntax                                Syntax                                Syntax                                Syntax                                Syntax
+
+
+
+
+This section formally defines the command  syntax for NFT as a  whole,
+and for "canonical" file specifications in particular.
+
+
+A.1.0 DescriptionA.1.0 DescriptionA.1.0 DescriptionA.1.0 DescriptionA.1.0 DescriptionA.1.0 Description
+
+The following syntactical definition is a variation of the traditional
+"BNF" construction, as follows:
+
+   Construct                   Meaning
+                
+   ASCII-ooo   The ASCII character whose octal representation  in
+               the ASCII collating sequence is "ooo". This is the
+               axiomatic foundation  of  the  entire  syntactical
+               definition.
+
+               A blank space has no intrinsic meaning to the syn-
+               tactical definition, it is used merely to make the
+               definition more readable.
+
+    " xxx "    The construction "xxx" enclosed within the  quotes
+               is to be taken literally as specified.
+
+    < xxx >    The enclosed construction "xxx" is a single  "ele-
+               mentary" syntactical item. If the construction  is
+               in lower case then the item is generic in  nature.
+               If the construction is in upper case then the item
+               is specific in nature.
+
+    [ xxx ]    The enclosed construction  "xxx" is optional.  The
+               construction may be omitted,  or it may be  speci-
+               fied exactly once.
+
+   [[ xxx ]]   The enclosed construction  "xxx" is optional,  and
+               may be iterated indefinitely.
+
+ n * [[ xxx ]] The enclosed construction  "xxx" is optional,  and
+               may be iterated up to "n" times.
+
+       |       The exclusive-or operator; "|" is used to separate
+               two or  more constructions  of which  exactly  one
+               must be choosen.
+
+       +       The inclusive-or operator; "+" is used to separate
+               two or more constructions of which any combination
+               may be chosen (the exact order is not relevant).NFT-10 NIP/FAL/TSC Executive                                  Page A-2
+Appendix A: Syntax                                           12-Jan-84
+Formal Syntactical Definition
+
+
+
+A.2.0 Formal Syntactical DefinitionA.2.0 Formal Syntactical DefinitionA.2.0 Formal Syntactical DefinitionA.2.0 Formal Syntactical DefinitionA.2.0 Formal Syntactical DefinitionA.2.0 Formal Syntactical Definition
+
+<ctlchr> ::=   ASCII-000 | ASCII-001 | ASCII-002 | ASCII-003 |
+               ASCII-004 | ASCII-005 | ASCII-006 | ASCII-007 |
+               ASCII-010 | ASCII-011 | ASCII-012 | ASCII-013 |
+               ASCII-014 | ASCII-015 | ASCII-016 | ASCII-017 |
+               ASCII-020 | ASCII-021 | ASCII-022 | ASCII-023 |
+               ASCII-024 | ASCII-025 | ASCII-026 | ASCII-027 |
+               ASCII-030 | ASCII-031 | ASCII-032 | ASCII-033 |
+               ASCII-034 | ASCII-035 | ASCII-036 | ASCII-037 |
+               ASCII-177
+
+<prtchr> ::=   ASCII-040 | ASCII-041 | ASCII-042 | ASCII-043 |
+               ASCII-044 | ASCII-045 | ASCII-046 | ASCII-047 |
+               ASCII-050 | ASCII-051 | ASCII-052 | ASCII-053 |
+               ASCII-054 | ASCII-055 | ASCII-056 | ASCII-057 |
+               ASCII-060 | ASCII-061 | ASCII-062 | ASCII-063 |
+               ASCII-064 | ASCII-065 | ASCII-066 | ASCII-067 |
+               ASCII-070 | ASCII-071 | ASCII-072 | ASCII-073 |
+               ASCII-074 | ASCII-075 | ASCII-076 | ASCII-077 |
+               ASCII-100 | ASCII-101 | ASCII-102 | ASCII-103 |
+               ASCII-104 | ASCII-105 | ASCII-106 | ASCII-107 |
+               ASCII-110 | ASCII-111 | ASCII-112 | ASCII-113 |
+               ASCII-114 | ASCII-115 | ASCII-116 | ASCII-117 |
+               ASCII-120 | ASCII-121 | ASCII-122 | ASCII-123 |
+               ASCII-124 | ASCII-125 | ASCII-126 | ASCII-127 |
+               ASCII-130 | ASCII-131 | ASCII-132 | ASCII-133 |
+               ASCII-134 | ASCII-135 | ASCII-136 | ASCII-137 |
+               ASCII-140 | ASCII-141 | ASCII-142 | ASCII-143 |
+               ASCII-144 | ASCII-145 | ASCII-146 | ASCII-147 |
+               ASCII-150 | ASCII-151 | ASCII-152 | ASCII-153 |
+               ASCII-154 | ASCII-155 | ASCII-156 | ASCII-157 |
+               ASCII-160 | ASCII-161 | ASCII-162 | ASCII-163 |
+               ASCII-164 | ASCII-165 | ASCII-166 | ASCII-167 |
+               ASCII-170 | ASCII-171 | ASCII-172 | ASCII-173 |
+               ASCII-174 | ASCII-175 | ASCII-176
+
+<char> ::=     <ctlchr> | <prtchr>
+
+<TAB> ::=      ASCII-011
+
+<LF> ::=       ASCII-012
+
+<VT> ::=       ASCII-013
+
+<FF> ::=       ASCII-014
+
+<CR> ::=       ASCII-015
+
+<XON> ::=      ASCII-021
+
+<XOFF> ::=     ASCII-023
+
+<CTRL-V> ::=   ASCII-026NFT-10 NIP/FAL/TSC Executive                                  Page A-3
+Appendix A: Syntax                                           12-Jan-84
+Formal Syntactical Definition
+
+
+
+
+<CTRL-Z> ::=   ASCII-032
+
+<ESC> ::=      ASCII-033
+
+<SPACE> ::=    ASCII-040
+
+<QUOTE> ::=    ASCII-042
+
+<blank> ::=    (<SPACE> | <TAB>) [[<SPACE> | <TAB>]]
+
+<eol> ::=      <LF> | <VT> | <FF> | <CTRL-Z> | <ESC>
+
+<letter> ::=   "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" |
+               "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" |
+               "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" |
+               "Y" | "Z" | "a" | "b" | "c" | "d" | "e" | "f" |
+               "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" |
+               "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" |
+               "w" | "x" | "y" | "z"
+
+<digit> ::=    "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" |
+               "8" | "9"
+
+<octdgt> ::=   "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7"
+
+<decdgt> ::=   <octdgt> | "8" | "9"
+
+<hexdgt> ::=   <decdgt> | "A" | "B" | "C" | "D" | "E" | "F"
+
+<sign> ::=     "  | "-"
+
+<comment> ::=  (";" | "!") [[<prtchr>]]
+
+<cmdlin> ::=   [[ [<cmdnam> [[<arg>]] [["-" [<comment>] <eol>]]
+               [[<arg>]] [<comment>] ] ]] <eol>
+
+<arg> ::=      <prtchr>[[<prtchr>]]
+
+<octnum> ::=   <octdgt>[[<octdgt>]]
+
+<decnum> ::=   <decdgt>[[<decdgt>]]
+
+<hexnum> ::=   <hexdgt>[[<hexdgt>]]
+
+<octval> ::=   [<sign>]<octnum>
+
+<decval> ::=   [<sign>]<decnum>
+
+<hexval> ::=   [<sign>]<hexnum>
+
+<namchr> ::=   <letter> | <digit> | "-" | <CTRL-V><prtchr>
+
+<name> ::=     (<namchr>[[<namchr>]]) |NFT-10 NIP/FAL/TSC Executive                                  Page A-4
+Appendix A: Syntax                                           12-Jan-84
+Formal Syntactical Definition
+
+
+
+               (<QUOTE><prtchr>[[<prtchr>]]<QUOTE>)
+
+<cmdnam> ::=   <name>
+
+<nodnam> ::=   <name>
+
+<devnam> ::=   <name>
+
+<dirnam> ::=   <name>
+
+<projno> ::=   <octnum>
+
+<progno> ::=   <octnum>
+
+<filnam> ::=   <name>
+
+<typnam> ::=   <name>
+
+<genval> ::=   <decval>
+
+<swtnam> ::=   <name>
+
+<swtarg> ::=   <arg>
+
+<nod-spec> ::= <nodnam>("::" | "_")
+
+<dev-spec> ::= <devnam>":"
+
+<dir-spec> ::= "[" (<dirnam>[[("."|",")<dirnam>]]) |
+               ([<projno>]","[<progno>][[("."|",")<dirnam>]]) "]"
+
+<nam-spec> ::= <filnam>
+
+<typ-spec> ::= "."<typnam>[<gen-spec>]
+
+<gen-spec> ::= "."<genval>
+
+<swt-spec> ::= "/"<swtnam>[":"<swtarg>]
+
+<filopr> ::=   "'AND'" | "'OR'" | "'NOT'" | "'IFAND'" | "'IFNOT'" |
+               "'IFSAME'" | "'IFDIFFERENT'" | "'IFOLDER'" |
+               "'IFNEWER'" | "'IFSMALLER'" | "'IFBIGGER'"
+
+<naked-file-spec> ::= <nod-spec> + <dev-spec> + <dir-spec> +
+               <nam-spec> + <typ-spec> + <gen-spec>
+
+<file-spec> ::= <naked-file-spec> + [[<swt-spec>]]
+
+<file-expr> ::= <file-spec> [[<filopr><file-spec>]]
+
+<file-expr-list> ::= <file-expr> [[","<file-expr>]]NFT-10 NIP/FAL/TSC Executive                                  Page A-5
+Appendix A: Syntax                                           12-Jan-84
+Commands
+
+
+
+A.3.0 CommandsA.3.0 CommandsA.3.0 CommandsA.3.0 CommandsA.3.0 CommandsA.3.0 Commands
+
+The command syntax used by NFT, in all modes, is:
+
+<command> ::= <cmdnam> [[<arg>]] <eol>
+
+The command is read from the command input stream, which by default is
+initially the user's command terminal. The user can redirect the  com-
+mand input to  any file system  device which can  provide ASCII  input
+data. This action is  called command indirection,  and the file  which
+contains the redirected ASCII input data is called a command file.
+
+Command indirection has two different modes of operation, depending on
+how the user invokes the command file. In both cases a command file is
+invoked by  specifiying  an  atsign ("@"  character)  in  the  command
+stream, followed by the command file specification. Formally:
+
+<cmdfil> ::= "@" <naked-file-spec>
+
+A command file may be invoked anywhere within a command string as long
+as the "@"  is not  in some  way quoted. In  effect, the  "@" and  the
+following naked file specification (including the final delimiter) act
+as a macro  and are  simply replaced verbatim  with the  corresponding
+text (or "macro definition"). The "@" does however delimit the current
+name or "field" being parsed.
+
+If the command file invocation is the first thing on the line then the
+command stream is  simply switched  or "indirected"  to the  specified
+file(s), and command processing procedes normally.
+
+If the command file invocation  follows the command name then  command
+processing enters locked mode,  wherein the specified command  becomes
+locked and all subsequent command stream input up to and including the
+end of the invoked  command file is  considered to be  part of one  or
+more iterations of arguments to the locked command.
+
+This allows a list of files (contained in a command file) to be  mani-
+pulated as a whole  rather than requiring a  command to be present  on
+each separate line within the  command file. For example, assume  that
+the  command  file  "FILE.CCL"  contains  the  text  "FILE.1,  FILE.2,
+FILE.3". The sequence of commands:
+
+  RENAME *.*/PROTECTION:155 = @FILE.CCL
+  COPY MYCOPY.* = @FILE.CCL
+  DELETE @FILE.CCL
+
+would: first) protect  the three  files so  that they  could be  read;
+second) copy the files; and third) delete the original files.NFT-10 NIP/FAL/TSC Executive                                  Page B-1
+Appendix B: Standard File Switches                           12-Jan-84
+
+
+
+
+                              Appendix B                              Appendix B                              Appendix B                              Appendix B                              Appendix B                              Appendix B
+                        Standard File Switches                        Standard File Switches                        Standard File Switches                        Standard File Switches                        Standard File Switches                        Standard File Switches
+
+
+
+
+This  appendix  describes  the  individual  "standard"   file-specific
+switches supported by NFT-10.
+
+Basically, a file-specific switch is a switch which is associated with
+one particular  file specification  rather than  with a  command as  a
+whole. File-specific switches are broken  down into two classes:  Con-
+trol, and Qualifying.NFT-10 NIP/FAL/TSC Executive                                  Page B-2
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+
+
+
+B.1.0 Control SwitchesB.1.0 Control SwitchesB.1.0 Control SwitchesB.1.0 Control SwitchesB.1.0 Control SwitchesB.1.0 Control Switches
+
+Control switches govern or control file access. Control switches allow
+the user to  specify or modify  aspects of file  access which are  not
+normally used.
+
+Control switches are:
+
+B.1.1 /ALLOCATE:size
+
+The /ALLOCATE switch is used to specify the physical file allocation.
+
+/ALLOCATE accepts a single mandatory argument "size" which is the file
+allocation in physical device blocks, expressed as a positive  decimal
+integer.
+
+The /ALLOCATE switch indicates that the resultant file is to be  guar-
+anteed a  specified minimum  allocation on  the device  media. If  the
+specified allocation is not available then an error indication is giv-
+en.  Any  "extra"  blocks  allocated  at  file  close  time  are   not
+deallocated.
+
+/ALLOCATE is meaningless on input files.
+
+See also the /CONTIGUOUS and /ESTIMATE switches.
+
+
+B.1.2 /[NO]APPEND
+
+The /APPEND switch is  used to specify  that an output  file is to  be
+appended to its extant predecessor.
+
+The /APPEND switch accepts no arguments.
+
+/APPEND indicates that the output file  data is to be appended to  any
+extant file of the same name rather than to overwrite or supersede the
+"old" file. /NOAPPEND indicates that the output file data is not to be
+appended to any extant file of the same name.
+
+The /APPEND switch is meaningless for input files.
+
+See also the /SUPERSEDE and /UPDATE switches.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The /APPEND switch is not yet implemented.
+
+
+
+B.1.3 /BLKSIZE:size
+
+The /BLKSIZE switch is  used to specify the  physical device I/O  data
+blocksize, which in turn specifies the minimum I/O buffer size.NFT-10 NIP/FAL/TSC Executive                                  Page B-3
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/BLKSIZE:size
+
+
+/BLKSIZE accepts a single mandatory  argument "size" which is the  de-
+vice blocksize, expressed in terms  of physical frame bytes (see  also
+the /FRAMESIZE switch).
+
+The I/O  data blocksize  is the  size of  a single  physical block  or
+record of data resident within the I/O device. A physical block has no
+relation to a logical data record, it  is solely a product of how  the
+device stores and retrieves data from  its media. Actual I/O is  ulti-
+mately based on the physical device blocksize, as a physical block  is
+the minimum "unit" for an I/O operation (i.e., any read or write  must
+deal with at least one full block). As such, specifying the  blocksize
+also specifies a minimum I/O buffer size.
+
+Generally, larger blocksizes provide more efficient utilization of the
+device media, but with  a corresponding cost  of requiring larger  I/O
+buffers. Not all devices  support variable blocksizes  - DEC disks  in
+particular typically have a fixed blocksize. Other devices don't real-
+ly have a  blocksize at  all - typical  interactive command  terminals
+(such as a VT52 or VT100  for example) deal only with individual  data
+bytes.
+
+
+B.1.4 /BUFFERS:count
+
+The /BUFFERS switch is  used to specify the  number of I/O buffers  to
+use for input and/or output from/to the I/O device.
+
+/BUFFERS accepts  a single  mandatory argument  "count" which  is  the
+number of buffers  to use  for I/O,  expressed as  a positive  decimal
+integer.
+
+Generally, specifying more buffers allows the file system to more  ef-
+ficiently read/write the device  media by "batching" several  distinct
+device blocks into one "scatter/gather" I/O operation.
+
+
+B.1.5 /BYTESIZE:bits
+
+The /BYTESIZE switch is used to specify the logical data bytesize.
+
+/BYTESIZE accepts a single mandatory argument "bits" which is the size
+of an individual logical  data byte in bits,  expressed as a  positive
+decimal integer.
+
+The /BYTESIZE switch is used to explicitly select the size of an indi-
+vidual logical data byte independently of the file data mode, the file
+I/O mode, and the physical frame size.
+
+A logical data byte is the actual unit data element being manipulated.
+For ASCII character data a logical  data byte is one ASCII  character,
+typically 7  bits in  size, but  may be  8 bits,  or even  36 bits.  A
+logical data byte  is contained within  a physical frame  byte (see  /
+FRAMESIZE). The logical data byte should not be larger than the  frame
+size since information may be lost  (the highorder bits will be  trun-NFT-10 NIP/FAL/TSC Executive                                  Page B-4
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/BYTESIZE:bits
+
+
+cated to fit the framesize).
+
+See also /DATAMODE, /FRAMESIZE, and /IOMODE.
+
+
+B.1.6 /[NO]CONTIGUOUS
+
+The /CONTIGUOUS  switch is  used to  specify that  the file  is to  be
+created contiguously on its media.
+
+The /CONTIGUOUS switch accepts no arguments.
+
+/CONTIGUOUS indicates that the  file to be  created should be  created
+contiguously on the device media - the file may not be fragmented  nor
+may the file allocation cross a volume boundary. If the file cannot be
+created contiguously then an error indication is given.  /NOCONTIGUOUS
+indicates that the file  does not need to  be created contiguously  on
+the media  (although it  does  not prevent  the  file system  from  so
+doing).
+
+/CONTIGUOUS is meaningless for input files.
+
+See also /ALLOCATE and /ESTIMATE.
+
+
+B.1.7 /DATAMODE:mode
+
+The /DATAMODE switch is used to specify the type of data being manipu-
+lated.
+
+/DATAMODE accepts a single  mandatory argument "mode" which  specifies
+the type of data which  makes up the file  I/O stream. The legal  data
+types are:
+
+1.   ASCII
+2.   BINARY
+3.   IMAGE
+
+The /DATAMODE switch  is used to  specify the actual  data type  which
+constitutes the file  I/O stream independently  of the data  bytesize,
+framesize, and I/O mode selected.
+
+See also the /BYTESIZE, /FRAMESIZE, and /IOMODE switches.
+
+
+B.1.8 /[NO]DELETE
+
+The /[NO]DELETE switch is used to [not] delete the specified file when
+the file is logically CLOSEd.
+
+The /DELETE switch accepts no arguments
+
+/DELETE says to delete  the file when the  file is CLOSEd (i.e.,  when
+the access of the file is completed, be it a read or write operation);NFT-10 NIP/FAL/TSC Executive                                  Page B-5
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/[NO]DELETE
+
+
+/NODELETE says to not delete the file when the file is CLOSEd.
+
+See also the /PRINT and /SUBMIT switches.
+
+
+B.1.9 /DENSITY:bpi
+
+The /DENSITY switch is used to specify the tape density to be used for
+magnetic tapes.
+
+The /DENSITY switch accepts a single mandatory argument "bpi" which is
+the recording density in "bits per inch", expressed as a keyword.  The
+legal tape densitys are:
+
+1.   200 - NRZI; 200 bits per inch
+2.   556 - NRZI; 556 bits per inch
+3.   800 - NRZI; 800 bits per inch
+4.   1600 - PE; 1600 bits per inch
+5.   6250 - PE; 6250 bits per inch
+6.   INSTALLATION - system default density
+
+Although the tape density may be  specified for both input and  output
+files, some tape drives will  automatically select the "correct"  tape
+density for reading based on the tape itself, effectively ignoring any
+explicit selection by the user.
+
+See also the /PARITY switch.
+
+
+B.1.10 /ERSUPERSEDE
+
+The /ERSUPERSEDE switch is used to prevent the superseding of an exis-
+tant data file.
+
+The /ERSUPERSEDE switch accepts no arguments.
+
+/ERSUPERSEDE indicates that an error indication is to be given and the
+file creation aborted when a file create operation would supersede  an
+extant file  of the  same  name. /ERSUPERSEDE  is equivilent  to  /SU-
+PERSEDE:NEVER.
+
+/ERSUPERSEDE is meaningless on input files.
+
+See also the /APPEND, /OKSUPERSEDE, and /SUPERSEDE switches.
+
+
+B.1.11 /ESTIMATE:size
+
+The /ESTIMATE switch  is used  to specify an  initial file  allocation
+guideline.
+
+/ESTIMATE accepts a single mandatory argument "size" which is the file
+allocation in physical device blocks, expressed as a positive  decimal
+integer.NFT-10 NIP/FAL/TSC Executive                                  Page B-6
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/ESTIMATE:size
+
+
+
+/ESTIMATE is  useful for  indicating the  approximate size  of a  file
+without committing the  file to that  size. If the  resultant file  is
+smaller then any unused blocks will be deallocated at file close time;
+if the resultant file is larger then extra blocks will be allocated as
+they are needed. /ESTIMATE  merely gives the file  system a chance  to
+optimize the  placement and  allocation of  the file  on the  physical
+media.
+
+/ESTIMATE is meaningless on input files.
+
+See also /ALLOCATE and /CONTIGUOUS.
+
+
+B.1.12 /FIXED
+
+The /FIXED switch  is used  to specify  fixed length  records, and  is
+shorthand for (identical to) /RECFORMAT:FIXED.
+
+See also the /RECFORMAT, /RECSIZE, and /VARIABLE switches.
+
+
+B.1.13 /FRAMESIZE:bits
+
+The /FRAMESIZE switch is  used to specify how  logical data bytes  are
+packed within physical I/O bytes.
+
+/FRAMESIZE accepts a  single mandatory  argument "bits"  which is  the
+size of  the frame  byte  in bits,  expressed  as a  positive  decimal
+integer, which contains a single logical data byte.
+
+The /FRAMESIZE switch is used  to explicitly specify how logical  data
+bytes are  packed within  the file  I/O stream,  independently of  the
+actual data bytesize, data mode,  and I/O mode selected. Logical  data
+bytes are packed  right-justified one per  physical frame "byte".  For
+most cases /BYTESIZE and /FRAMESIZE are the same.
+
+/FRAMESIZE in no way affects the physical organization of the file I/O
+bit stream on the device media.
+
+See also the /BYTESIZE, /DATAMODE, and /IOMODE switches.
+
+
+B.1.14 /IOMODE:mode
+
+The /IOMODE switch is used to specify  the device I/O mode to be  used
+for the file I/O stream.
+
+/IOMODE accepts a single mandatory argument "mode" which specifies the
+device I/O mode to be used. The legal I/O modes supported are:
+
+1.   ASCII
+2.   BINARY
+3.   BYTENFT-10 NIP/FAL/TSC Executive                                  Page B-7
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/IOMODE:mode
+
+
+4.   IMAGE
+5.   IBINARY
+6.   PIM
+
+Not all file systems necessarily support all listed /IOMODES.
+
+/IOMODE is used to explicitly specify  the device I/O mode to be  used
+for a file data stream independently  of the selected data byte  size,
+data type, and framesize.
+
+See also the /BYTESIZE, /DATAMODE, and /FRAMESIZE switches.
+
+
+B.1.15 /[NO]LIB
+
+The /LIB switch is used to  control searching of any "libraries" on  a
+file open operation.
+
+The /LIB switch accepts no arguments.
+
+/LIB indicates  that  user-  and/or system-defined  libraries  may  be
+searched in order to find  the specified file. /[NO]LIB indicates  the
+no libraries are to be searched looking for the file - if the file  is
+not found as specified an error indication is to be given.
+
+Not all file systems support automatic library searching.
+
+/LIB is meaningless on output files.
+
+See also the /NEW, /SCAN, /STRS, and /SYS switches.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The /LIB switch is not yet implemented.
+
+
+
+B.1.16 /[NO]MACY11
+
+The /[NO]MACY11 switch is  used to control  reading and/or writing  of
+files in "MACY11" mode.
+
+The /MACY11 switch accepts no arguments.
+
+MACY11 mode (in honor of the PDP-11 cross assembler of the same  name)
+is a record-formatted 8-bit-byte binary file access mode wherein 8-bit
+data (such as used for PDP-11s, VAXii, and the like) is stored in  36-
+bit words,  preserving record-length  information as  required by  the
+various 8-bit minicomputers.
+
+/MACY11 forces /BYTESIZE:8, /BINARY, and ignores completely /RECFORMAT
+and /RECSIZE.NFT-10 NIP/FAL/TSC Executive                                  Page B-8
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/[NO]MECY11
+
+
+B.1.17 /[NO]MECY11
+
+The /[NO]MECY11 switch is used like the /MACY11 switch.
+
+The /MECY11 switch accepts no arguments.
+
+/MECY11 behaves exactly like /MACY11  except that in writing  "MACY11"
+formatted files the "PDP-11 words" will always be aligned into  PDP-10
+halfwords for ease of looking at the file with (e.g.,) FILDDT.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The MACY11  cross-assembler  (and thus  the  /MACY11  switch
+     which mimics same) writes 6 null filler bytes between  logi-
+     cal records. This results in every other record being  half-
+     word-aligned, with  the  interspersed  records  being  split
+     across halfwords.
+
+
+
+B.1.18 /[NO]NEW
+
+The /NEW switch is used to control searching the system  "experimental
+library" when the system device "SYS" is specified.
+
+The /NEW switch accepts no arguments.
+
+/NEW indicates that whenever the system device "SYS" is specified  the
+file system should look first on the system experimental library "NEW"
+before using the  standard system library.  /NONEW indicates that  the
+system experimental library "NEW" should not be searched when  search-
+ing the standard system library.
+
+Not all file systems support the "NEW" concept.
+
+/NEW is meaningless on output files.
+
+See also the /LIB, /SCAN, /STRS and /SYS switches.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The /NEW switch is not yet implemented.
+
+
+
+B.1.19 /OKSUPERSEDE
+
+The /OKSUPERSEDE switch is used  to control the superseding of  extant
+data files.
+
+The /OKSUPERSEDE switch accepts no arguments.
+
+/OKSUPERSEDE indicates that a file create operation may supersede  any
+already-existing file of the same name. /OKSUPERSEDE is equivilent  toNFT-10 NIP/FAL/TSC Executive                                  Page B-9
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/OKSUPERSEDE
+
+
+/SUPERSEDE:ALWAYS.
+
+/OKSUPERSEDE is meaningless for input files.
+
+See also the /APPEND, /ERSUPERSEDE, and /SUPERSEDE switches.
+
+
+B.1.20 /PARITY:par
+
+The /PARITY switch is used to select the data parity used for magnetic
+tapes.
+
+/PARITY accepts a  single mandatory argument  "par" which selects  the
+resultant tape parity. Legal arguments are:
+
+1.   EVEN - read/write even parity
+2.   ODD - read/write odd parity
+
+Although /PARITY is legal  for both input  and output file  specifica-
+tions, some tape  drives may automatically  select the "correct"  read
+parity based on the physical tape, ignoring any explicit specification
+by the user.
+
+See also the /DENSITY switch.
+
+
+B.1.21 /PASSWORD[:psw]
+
+The /PASSWORD switch is used to specify the password necessary to gain
+access to a protected file.
+
+/PASSWORD accepts a single argument  "psw" which is the password,  ex-
+pressed as a possibly-quoted character  string, needed to gain  access
+to the specified file. If no argument is explicitly provided then  the
+user will be asked for the password at the time of the file access.
+
+The /PASSWORD  switch  enables access  to  a specific  file  which  is
+normally protected such that  the file access  would otherwise be  de-
+nied.
+
+/PASSWORD is valid only for a remote network file access operation, it
+is meaningless for a local file access.
+
+The exact behaviour of /PASSWORD is dependent on the remote file  sys-
+tem being accessed.  In particular, not  all file systems  necessarily
+support password access. Further, it is unspecified whether or not the
+password is verified before the file access is attempted (i.e., if the
+file is not protected then the  password might be ignored, even if  it
+is invalid).
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The /PASSWORD switch is  completely independent of (and  has
+     absolutely nothing to do with)  the /USERID switch -  /PASS-NFT-10 NIP/FAL/TSC Executive                                 Page B-10
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/PASSWORD[:psw]
+
+
+     WORD specifies  a  file-specific password,  whereas  /USERID
+     governs access to a remote node, without regard to the  file
+     access operation. The password for the /USERID is  specified
+     only with the  /USERID switch,  and NOT  with the  /PASSWORD
+     switch.
+
+
+
+B.1.22 /[NO]PHYSICAL
+
+The /PHYSICAL switch  controls usage  of logical  device name  defini-
+tions.
+
+/PHYSICAL accepts no arguments.
+
+/PHYSICAL indicates that  the file  system should  ignore any  logical
+device definitions and use only system physical device definitions  to
+select a device. /[NO]PHYSICAL  indicates that logical device  defini-
+tions are acceptable.
+
+
+B.1.22.1 /[NO]PRINT
+The /[NO]PRINT switch is  used to cause the  file to [not] be  printed
+when the file is CLOSEd.
+
+The /PRINT switch accepts no arguments.
+
+/PRINT specifies that the file is to be printed (i.e., "queued" to the
+system line printer spooler facility to be printed on a line  printer)
+when the file is CLOSEd; /NOPRINT specifies that the file is not to be
+printed when the file is CLOSEd.
+
+See also the /DELETE and /SUBMIT switches.
+
+
+B.1.23 /PROTECTION:prot
+
+The /PROTECTION switch is  used to specify  the access protection  at-
+tributes of a file.
+
+/PROTECTION accepts a  single mandatory argument  "prot" which is  the
+file access  protection code,  expressed as  an octal  integer in  the
+range 1 to 777. A protection code of 0 selects the default  protection
+for the job/system.
+
+/PROTECTION is meaningless for input files.
+
+
+B.1.24 /QUERY[:nta]
+
+The /QUERY switch is used to selectively accept or reject  [presumably
+wildcarded] file operations.
+
+/QUERY accepts a single  argument "nta" specifying  the type of  queryNFT-10 NIP/FAL/TSC Executive                                 Page B-11
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/QUERY[:nta]
+
+
+processing requested. The types of query processing available are:
+
+1.   NEVER - no processing
+2.   TELL - just list the file(s) selected
+3.   ASK - confirm operation with user
+
+The default if no  argument is supplied is  "ASK" (many commands  will
+default to /QUERY:TELL if no explicit /QUERY is specified).
+
+B.1.24.1 /QUERY:NEVER
+/QUERY:NEVER indicates that all query processing should be suppressed.
+
+
+B.1.24.2 /QUERY:TELL
+/QUERY:TELL indicates that each file selected should be listed on  the
+command output device.
+
+B.1.24.3 /QUERY:ASK
+/QUERY:ASK indicates that each file  selected should be listed on  the
+command output device.
+
+The user is then prompted to either accept or reject the file selected
+by typing either  "YES" or  "NO". This  answer ALWAYS  comes from  the
+command input terminal  even if  the original file  access command  is
+from a command file. A "blank" answer (i.e., carriage return) defaults
+to either  "YES"  or  "NO"  as  appropriate;  any  other  answer  will
+reprompt.
+
+If the prompt is "[Y/N]" then the  default is "YES"; if the prompt  is
+"[N/Y]" then the default is "NO".
+
+
+B.1.25 /RECFORMAT:format
+
+The /RECFORMAT switch  is used to  specify the type  of record  format
+associated with a file I/O stream.
+
+/RECFORMAT accepts the record format type, expressed as a single  key-
+word which defines the record structure  used by the file I/O  stream.
+The record formats are:
+
+1.   NONE - no record formatting
+2.   FIXED - fixed length records
+3.   VARIABLE - variable length records
+4.   VFC - variable length records with fixed length header
+5.   36PACK - bizarre packing of 36-bit words into 8-bit bytes
+
+Not all file  systems necessarily  support any  or all  of the  listed
+record format types.
+
+The /RECFORMAT switch allows the user to explicitly specify the struc-
+ture of the  file data records  which constitute the  file I/O  stream
+independently of the data and I/O modes employed.NFT-10 NIP/FAL/TSC Executive                                 Page B-12
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/RECFORMAT:format
+
+
+See also the /FIXED, /RECSIZE, and /VARIABLE switches. The 36PACK rec-
+ord format  controls the  "funny" packing  of 36-bit  data into  8-bit
+bytes in such a manner  that 36-bit data is able  to be stored on  and
+retrieved from 8-bit systems  such as RSX or  VAX. The 36-bit data  is
+stored in 4.5 consecutive 8-bit bytes (or consecutive pairs of  36-bit
+words are stored  in 9 consecutive  8-bit bytes) as  per the DAP  bit-
+packing specification:
+
+               7    4 3    0
+               -------------
+  Byte 0/      |  28 - 35  |
+               -------------
+  Byte 1/      |  20 - 27  |
+               -------------
+  Byte 2/      |  12 - 19  |
+               -------------
+  Byte 3/      |  04 - 11  |
+               -------------
+  Byte 4/      |00-03:32-35|
+               -------------
+  Byte 5/      |  24 - 31  |
+               -------------
+  Byte 6/      |  16 - 23  |
+               -------------
+  Byte 7/      |  08 - 15  |
+               -------------
+  Byte 8/      |  00 - 07  |
+               -------------
+
+
+B.1.26 /RECSIZE:size
+
+The /RECSIZE  switch is  used to  specify the  size of  the file  data
+records which constitute the file I/O stream.
+
+/RECSIZE accepts a single mandatory argument "size" which is the  size
+of the  file data  records, expressed  in  terms of  data bytes  as  a
+positive decimal integer.
+
+The /RECSIZE switch is used to explicitly specify the file data record
+size for the  file I/O  stream. The  record size  includes any  record
+header associated with the record. For fixed length records the record
+size specifies the size  of all records.  For variable length  records
+the record size specifies the  maximum record size allowable -  actual
+records may well be much smaller.
+
+See also the /RECFORMAT switch.
+
+
+B.1.27 /[NO]SCAN
+
+The /SCAN switch is used to control directory tree scanning on a  file
+access operation.NFT-10 NIP/FAL/TSC Executive                                 Page B-13
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/[NO]SCAN
+
+
+The /SCAN switch accepts no arguments.
+
+/SCAN indicates that the file system should scan the specified  direc-
+tory tree looking for the specified file  if the file is not found  in
+the specified directory. /NOSCAN  indicates that directory tree  scan-
+ning should not be performed.
+
+Not all file systems support directory tree scanning.
+
+/SCAN is meaningless on output files.
+
+See also the /LIB, /NEW, /STRS, and /SYS switches.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The /SCAN switch is not yet implemented.
+
+
+
+B.1.28 /[NO]SUBMIT
+
+The /[NO]SUBMIT switch is used to cause the file to [not] be SUBMITted
+when the file is CLOSEd.
+
+The /SUBMIT switch accepts no arguments.
+
+/SUBMIT specifies that the file is to be SUBMITted (i.e., "queued"  to
+the system batch processor facility) when the file is CLOSEd;  /NOSUB-
+MIT specifies that the file  is not to be  submitted when the file  is
+CLOSEd.
+
+See also the /DELETE and /PRINT switches.
+
+
+B.1.29 /SUPERSEDE:cond
+
+The /SUPERSEDE switch controls the superseding of extant files.
+
+/SUPERSEDE accepts a  single argument "cond",  expressed as a  keyword
+name, which specifies the conditions  under which the extant file  may
+be superseded. The keywords are:
+
+1.   NEVER - never supersede an extant file
+2.   OLDER - supersede only if extant file is older
+3.   NEWER - supersede only if extant file is newer
+4.   ALWAYS - always supersede extant file
+
+/SUPERSEDE:NEVER is equivilent  to /ERSUPERSEDE; /SUPERSEDE:ALWAYS  is
+equivilent to /OKSUPERSEDE.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The /SUPERSEDE switch is not yet implemented.NFT-10 NIP/FAL/TSC Executive                                 Page B-14
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/SUPERSEDE:cond
+
+
+B.1.30 /[NO]SYS
+
+The /SYS switch is used to control system library searching on a  file
+access operation.
+
+The /SYS switch accepts no arguments.
+
+/SYS indicates that the file  system should search the system  library
+area (as further controlled by the /NEW switch) if the specified  file
+is not found. /NOSYS indicates that  the system library should not  be
+searched if the file is not found.
+
+Not all file systems support system library searching.
+
+/SYS is meaningless for output files.
+
+See also the /LIB, /NEW, /SCAN, and /STRS switches.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The /SYS switch is not yet implemented.
+
+
+
+B.1.31 /[NO]UPDATE
+
+The /UPDATE switch is  used to specify  that an output  file is to  be
+overwritten rather than superseded (or appended).
+
+The /UPDATE switch accepts no arguments.
+
+/UPDATE indicates that the output file data is to overwrite any extant
+file of the  same name rather  than to supersede  or append the  "old"
+file. /NOUPDATE indicates that the file is not to be overwritten.
+
+/UPDATE is meaningless for input files.
+
+See also the /APPEND and /SUPERSEDE switches.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The /UPDATE switch is not yet implemented.
+
+
+
+B.1.32 /USERID[:[uid][:[act][:psw]]]
+
+The /USERID  switch  is  used to  specify  the  "on-behalf-of"  access
+verification and accounting for file access operations.
+
+/USERID accepts  up  to three  optional  arguments "uid",  "act",  and
+"psw", each of which is a possibly-quoted ASCII character string.  The
+"uid" argument string may additionally contain the directory  bracket-
+ting characters "[", "]",  "<", ">", as well  as the comma (","),  dotNFT-10 NIP/FAL/TSC Executive                                 Page B-15
+Appendix B: Standard File Switches                           12-Jan-84
+Control Switches
+/USERID[:[uid][:[act][:psw]]]
+
+
+("."), and underscore ("_") characters.
+
+The /USERID switch is used to identify file access requests with  user
+accounting and access verification mechanisms associated with the file
+system. The "uid" argument is the  "userid" (or user name or user  ac-
+count or user ppn) to be used  by the remote for the file access;  the
+"act" is any optional accounting information associated with the spec-
+ified userid; and "psw" is the password associated with the  specified
+userid (and typically used to verify the userid file access rights).
+
+/USERID is valid only for a  remote network file access operation;  it
+is meaningless for local file access.
+
+Basically, /USERID is  used to  identify yourself to  the remote  file
+system (and operating system) as a known "local" user. This allows the
+file system  to grant  file access  in terms  of local  users  without
+having to deal with non-secure  network interfaces. It further  allows
+for more detailed accounting operations to be performed, charging  the
+file access to a known account.
+
+The actual operation of /USERID is dependent on the remote file system
+selected - not all file systems necessarily support the /USERID  func-
+tionality, or even require that a /USERID be supplied by the accessor.
+
+For use with NFT, the various arguments may be left blank and NFT will
+prompt for the three fields at program runtime as the file  specifica-
+tion is actually being used.
+
+
+B.1.33 /VARIABLE
+
+The /VARIABLE switch is used  to specify variable length records,  and
+is shorthand for (identical to) /RECFORMAT:VARIABLE.
+
+See also the /FIXED, /RECFORMAT, and /RECSIZE switches.
+
+
+B.1.34 /VERSION:ver
+
+The /VERSION switch is used to specify the file's "version" attribute.
+
+/VERSION accepts a  single mandatory  argument "ver",  expressed as  a
+standard TOPS-10 version  string, which  is to be  the file's  created
+version.
+
+Not all file systems necessarily support the version attribute.
+
+/VERSION is meaningless for input files.NFT-10 NIP/FAL/TSC Executive                                 Page B-16
+Appendix B: Standard File Switches                           12-Jan-84
+Qualifying Switches
+
+
+
+B.2.0 Qualifying SwitchesB.2.0 Qualifying SwitchesB.2.0 Qualifying SwitchesB.2.0 Qualifying SwitchesB.2.0 Qualifying SwitchesB.2.0 Qualifying Switches
+
+Qualifying switches are used to "qualify" or constrain the naked  file
+specification insofar as the actual  selection of a resultant file  is
+concerned. In  effect, qualifying  switches act  as implicit  wildcard
+operations, accepting or rejecting files based on some specified  con-
+straint.
+
+Qualifying switches are:
+
+B.2.1 /ABEFORE:datime
+
+The /ABEFORE switch restricts file  selection to those files  accessed
+before the specified date/time.
+
+/ABEFORE accepts a  single mandatory argument  "datime", expressed  as
+either an absolute date and  time or as a  period of time relative  to
+the present, which specifies the file selection constraint.
+
+/ABEFORE is used to allow only  files which have been accessed  (i.e.,
+read, written, or updated) before a specifed date/time. Any file which
+fails the specified /ABEFORE constraint is considered to not match the
+file specification, and will not be used.
+
+/ABEFORE is meaningless for output files.
+
+See also the /ASINCE, /BEFORE, /SINCE, /PBEFORE, and /PSINCE switches.
+
+
+
+B.2.2 /ANYDEV
+
+The /ANYDEV switch is used to  specify whether or not any device  type
+is acceptable.
+
+The /ANYDEV switch accepts no arguments.
+
+/ANYDEV indicates  that any  device type  is acceptable  for the  file
+specification (i.e., impose no  constraints on device selection).  For
+input files, the device types searched include disks, magnetic  tapes,
+DECtapes, line  printers,  card  readers,  card  punches,  paper  tape
+readers, paper tape punches, plotters, and terminals. For output files
+no device constraints will be applied. /ANYDEV implies /TTYDEV  (refer
+to the /TTYDEV switch below).
+
+See also /DSKONLY and /TTYDEV.
+
+
+B.2.3 /ASINCE:datime
+
+The /ASINCE switch  restricts file selection  to those files  accessed
+since the specified date/time.
+
+/ASINCE accepts  a single  mandatory argument  "datime", expressed  asNFT-10 NIP/FAL/TSC Executive                                 Page B-17
+Appendix B: Standard File Switches                           12-Jan-84
+Qualifying Switches
+/ASINCE:datime
+
+
+either an absolute date and  time or as a  period of time relative  to
+the present, which specifies the file selection constraint.
+
+/ASINCE is  used to  allow only  files which  have not  been  accessed
+(i.e., read, written, or updated) since a specifed date/time. Any file
+which fails  the specified  /ASINCE constraint  is considered  to  not
+match the file specification, and will not be used.
+
+/ASINCE is meaningless for output files.
+
+See also the /ABEFORE, /BEFORE, /SINCE, /PBEFORE, and /PSINCE  switch-
+es.
+
+
+B.2.4 /BEFORE:datime
+
+The /BEFORE switch restricts file  selection to those files  logically
+created before the specified date/time.
+
+/BEFORE accepts  a single  mandatory argument  "datime", expressed  as
+either an absolute date and  time or as a  period of time relative  to
+the present, which specifies the file selection constraint.
+
+/BEFORE is used to allow only files which were created before a  spec-
+ifed date/time. Any file which fails the specified /BEFORE  constraint
+is considered to  not match the  file specification, and  will not  be
+used. /BEFORE uses the file's logical data creation date/time which is
+independent of the file's  physical creation on  the device media  (in
+particular, COPYing a file does not change the logical creation  date/
+time but does change the new file's media creation date/time).
+
+/BEFORE is meaningless for output files.
+
+See also the /ABEFORE, /ASINCE, /SINCE, /PBEFORE, and /PSINCE  switch-
+es.
+
+
+B.2.5 /[NO]DSKONLY
+
+The /DSKONLY switch is used to restrict input devices to disks only.
+
+The /DSKONLY switch accepts no arguments.
+
+/DSKONLY indicates that only disk-type devices are to be accepted, all
+other devices should  be ignored/rejected.  /NODSKONLY indicates  that
+the disk-only constraint is not to be applied.
+
+See also the /ANYDEV and /TTYDEV switches.
+
+
+B.2.6 /ERNONE
+
+The /ERNONE switch controls the issuance of an error if no files match
+the input request.NFT-10 NIP/FAL/TSC Executive                                 Page B-18
+Appendix B: Standard File Switches                           12-Jan-84
+Qualifying Switches
+/ERNONE
+
+
+
+The /ERNONE switch accepts no arguments.
+
+/ERNONE indicates that an error indication is to be issued if no files
+are found which match the input file specification.
+
+See also the /OKNONE switch.
+
+
+B.2.7 /ERPROT
+
+The /ERPROT switch controls  the issuance of an  error if a  potential
+file is protected.
+
+The /ERPROT switch accepts no arguments.
+
+/ERPROT indicates that a  file protection violation (e.g.,  attempting
+to read a file that is read-protected) is to cause an error indication
+rather than being ignored.
+
+See also the /OKPROT switch.
+
+
+B.2.8 /LENGTH:min[:max]
+
+The /LENGTH switch is used to specify file size constraints.
+
+/LENGTH accepts two arguments "min" and "max"; "min" is mandatory  and
+is the minimum  file size, expressed  in words as  a positive  decimal
+integer; "max" is optional and is the maximum file size, expressed  in
+words as a positive decimal integer.
+
+The /LENGTH switch is used to  select input files whose data size  (as
+distinct from  allocated  size)  is  greater  than  or  equal  to  the
+specified minimum, and less than or  equal to the specified maximum  -
+if any. Any  file whose  data size does  not meet  the specified  con-
+straints is considered to not  match the file specification, and  will
+not be used.
+
+/LENGTH is meaningless on output files.
+
+
+B.2.9 /OKNONE
+
+The /OKNONE switch  controls the issuance  of an error  message if  no
+files are found to match the file specification.
+
+The /OKNONE switch accepts no arguments.
+
+/OKNONE indicates that no error indication is to be given if no  files
+are found to match the input file specification.
+
+See also the /ERNONE switch.NFT-10 NIP/FAL/TSC Executive                                 Page B-19
+Appendix B: Standard File Switches                           12-Jan-84
+Qualifying Switches
+/OKPROT
+
+
+B.2.10 /OKPROT
+
+The /OKPROT switch  controls the  issuance of  an error  message if  a
+potential file is protected against access.
+
+The /OKPROT switch accepts no arguments.
+
+/OKPROT indicates  that file  protection failures  are acceptable  and
+should not cause an error indication to be given.
+
+See also the /ERPROT switch.
+
+
+B.2.11 /PBEFORE:datime
+
+The /PBEFORE switch restricts file selection to those files physically
+created before the specified date/time.
+
+/PBEFORE accepts a  single mandatory argument  "datime", expressed  as
+either an absolute date and  time or as a  period of time relative  to
+the present, which specifies the file selection constraint.
+
+/PBEFORE is used  to allow  only files which  were physically  created
+before a  specifed date/time.  Any file  which fails  the specified  /
+PBEFORE constraint is considered to not match the file  specification,
+and will not be  used. /PBEFORE uses the  file's media creation  date/
+time, which is distinct  from the file's  logical data creation  date/
+time.
+
+/PBEFORE is meaningless for output files.
+
+See also the /ABEFORE, /ASINCE, /BEFORE, /SINCE, and /PSINCE switches.
+
+
+
+B.2.12 /PSINCE:datime
+
+The /PSINCE switch restricts file selection to those files  physically
+created after the specified date/time.
+
+/PSINCE accepts  a single  mandatory argument  "datime", expressed  as
+either an absolute date and  time or as a  period of time relative  to
+the present, which specifies the file selection constraint.
+
+/PSINCE is  used to  allow only  files which  were physically  created
+after a specifed date/time. Any file which fails the specified /PSINCE
+constraint is considered to not match the file specification, and will
+not be used. /PSINCE uses the file's media creation date/time which is
+distinct from the file's logical data creation date/time.
+
+/PSINCE is meaningless for output files.
+
+See also the /ABEFORE, /ASINCE, /BEFORE, /SINCE, and /PBEFORE  switch-
+es.NFT-10 NIP/FAL/TSC Executive                                 Page B-20
+Appendix B: Standard File Switches                           12-Jan-84
+Qualifying Switches
+/PSINCE:datime
+
+
+B.2.13 /SINCE:datime
+
+The /SINCE switch  restricts file selection  to those files  logically
+created since the specified date/time.
+
+/SINCE accepts a single mandatory argument "datime", expressed as  ei-
+ther an absolute date and time or as a period of time relative to  the
+present, which specifies the file selection constraint.
+
+/SINCE is used to allow only files which were created after a specifed
+date/time. Any file  which fails  the specified  /SINCE constraint  is
+considered to not match the file specification, and will not be  used.
+/BEFORE uses  the  file's logical  data  creation date/time  which  is
+independent of the file's  physical creation on  the device media  (in
+particular, COPYing a file does not change the logical creation  date/
+time but does change the new file's media creation date/time).
+
+/SINCE is meaningless for output files.
+
+See also the /ABEFORE, /ASINCE, /BEFORE, /PBEFORE, and /PSINCE switch-
+es.
+
+
+B.2.14 /SCERROR:keyword
+
+The /SCERROR switch  controls the relative  error constraints used  in
+secondary wildcarding operations.
+
+/SCERROR accepts a single  mandatory argument "keyword" which  identi-
+fies the error  constraints, expressed  as a  name, to  be applied  to
+secondary file  wildcarding  operations.  The  acceptable  error  con-
+straints are:
+
+1.   NEVER - no constraints imposed
+2.   INSUFFICIENT - error if insufficient secondary wildcards
+3.   DIFFERENT  -  error  if  primary  and  secondary  wildcards   are
+     different
+4.   EXCESSIVE - error if excessive secondary wildcards
+
+See Appendix C for a detailed defintion of secondary wildcarding error
+constraints.
+
+See also the /SCWILD switch.
+
+
+B.2.15 /SCWILD:mode
+
+The /SCWILD switch controls the secondary wildcard mode employed.
+
+/SCWILD accepts a  single mandatory argument  "mode" which  identifies
+the secondary wildcarding mode, expressed as a name, to be employed in
+filling out secondary wildcarded file specifications. The legal  modes
+are:NFT-10 NIP/FAL/TSC Executive                                 Page B-21
+Appendix B: Standard File Switches                           12-Jan-84
+Qualifying Switches
+/SCWILD:mode
+
+
+1.   ANY - any field wildcards acceptable
+2.   FIELD - use only corresponding field wildcards
+3.   DFIELD - FIELD but allow directory level shifting
+4.   AFIELD - FIELD but allow any field to be chosen
+5.   SAME - use only corresponding character within chosen same field
+6.   DSAME - SAME but allow directory level shifting
+7.   ASAME - SAME but allow any field to be chosen.
+
+See Appendix C for a detailed definition of secondary wildcarding  op-
+erations.
+
+See also the /SCERROR switch.
+
+
+B.2.16 /[NO]STRS
+
+The /STRS switch is used to "match" multiple copies of files with  the
+same name  but residing  in different  "parts" of  the specified  file
+directory(s).
+
+The /STRS switch accepts no arguments.
+
+/STRS indicates  that any  implicit structure,  directory, or  library
+wildcarding should be explicitly expanded in such a manner that  files
+with multiple incarnations are  matched one at  a time. /NOSTRS  indi-
+cates that any implicit  structure, directory, or library  wildcarding
+should be left implicit and not expanded.
+
+/STRS is useful to determine if multiple copies of a file exist, or if
+a file implicitly  exists even  though not explicitly  matched by  the
+file specification. /STRS addresses four areas: logical names,  struc-
+ture "search lists", directory tree scanning, and library searching.
+
+If the  device  specified is  a  logical name  definition  then  /STRS
+explicitly expands the logical name definition into its componet spec-
+ifications and  treats each  one separately,  handling directory  tree
+scanning and device search lists as below, returning all file  matches
+found as separate files.
+
+If the device specified expands into a search list (e.g., device "DSK"
+might be "DSKB:, DSKC:") then /STRS indicates that each device in turn
+should be explicitly searched independently of any other device in the
+search list, handling directory tree scanning as below, returning  all
+file matches found as separate files.
+
+If directory tree scanning  is enabled then  /STRS indicates that  the
+directory tree is to  be explicitly scanned  upwards to the  top-level
+directory, returning all file matches found as separate files.
+
+Finally, if the  job has  a default library  set to  be searched  then
+specifying /STRS indicates  that after the  file specification is  ex-
+hausted (as above) the library  is to be searched, handling  directory
+tree scanning, device  search lists, and  logical name definitions  as
+above, returning all file matches found as separate files.NFT-10 NIP/FAL/TSC Executive                                 Page B-22
+Appendix B: Standard File Switches                           12-Jan-84
+Qualifying Switches
+/[NO]STRS
+
+
+
+If the file specification has no explicit wildcards then /STRS acts as
+an implicit wildcard operator, returning an arbitrary number of  files
+as matches. If the file  specification has explicit wildcards in  only
+the file name, file  type, of file generation  fields then /STRS  acts
+solely to broaden the range over which the wildcard operation acts. If
+the file specification has explicit wildcards in the device or  direc-
+tory fields then /STRS is ignored.
+
+Not all file systems necessarily support /STRS operation.
+
+/STRS is meaningless on output files.
+
+See also the /LIB, /NEW, /SCAN, and /SYS switches.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The  /LIB/SYS/NEW/SCAN  functions  of  /STRS  are  not   yet
+     implemented.NFT-10 NIP/FAL/TSC Executive                                  Page C-1
+Appendix C: Wildcarding                                      12-Jan-84
+
+
+
+
+                              Appendix C                              Appendix C                              Appendix C                              Appendix C                              Appendix C                              Appendix C
+                             Wildcarding                             Wildcarding                             Wildcarding                             Wildcarding                             Wildcarding                             Wildcarding
+
+
+
+
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     This appendix is included not as a detailed (and  supported)
+     functional  specification  but  rather  as  a  philosophical
+     treatise for the amusement  and possible edification of  the
+     reader. Some of the described functionality is actually  im-
+     plemented in extant software, and some is merely, ah, "spec-
+     ulation".
+
+Wildcarding - What is it? The  general term "wildcard" is used in  the
+context of identifying some object or [sub]set of objects. A  wildcard
+is used within the  specification for the  object(s) to indicate  that
+something other than the wildcard itself is acceptable, and  typically
+that any-and-everything is  acceptable in  the place  occupied by  the
+wildcard.
+
+There are two general classes of wildcarding: primary wildcarding  and
+secondary wildcarding.NFT-10 NIP/FAL/TSC Executive                                  Page C-2
+Appendix C: Wildcarding                                      12-Jan-84
+Primary Wildcarding
+
+
+
+C.1.0 Primary WildcardingC.1.0 Primary WildcardingC.1.0 Primary WildcardingC.1.0 Primary WildcardingC.1.0 Primary WildcardingC.1.0 Primary Wildcarding
+
+Primary wildcarding is the process wherein an extant set of objects is
+matched against a  set of  constraints (e.g.,  a "name")  in order  to
+identify (or select) a subset of objects.
+
+For the purposes of this specification, I shall implicitly use as  the
+"set of objects" a  set of files which  might exist on a  hypothetical
+distributed [network] computer system, using the accepted naming  con-
+vention of
+   nod_dev:[pth]fil.ext.gen
+as the  way  of uniquely  identifying  any specific  file  ("element")
+within the set.
+
+Further, unless explicitly stated otherwise, alphabetic case is irrel-
+evant to a character  match operation - "A"  is EXACTLY equivalent  to
+"a" and so on.  In particular, some file  systems such as TOPS-10  and
+RSX-11 do not even allow lowercase alphabetics in file specifications.
+
+Finally, it should be understood that not all file systems necessarily
+support any or all of the following wildcard operations.
+
+C.1.1 Basic primary wildcarding
+
+The basic primary wildcarding functions are to match any single  char-
+acter or any single group of characters.
+
+The Asterisk character  indicates that  any character  or sequence  of
+characters is to  be considered  a match  in the  position within  the
+specification occupied  by the  "*". The  "*" character  even  matches
+"nothing"!
+
+The Question Mark character indicates  that any character may be  pre-
+sent in the indicated character  position, with the proviso that  some
+character be present (i.e., unlike the "*" construction the "?"  char-
+acter does not match "nothing" - some character must be present in the
+character position).
+
+Following are some representative examples of basic primary  wildcard-
+ing.
+
+The specification "ABC"  matches one  and only  one name  - "ABC",  no
+other name  in the  whole  universe matches  (remember that  "AbC"  is
+EXACTLY the same as "aBc", and so on).
+
+The specification "*" matches every name that can exist, regardless of
+the number of characters in the name (a blank name - i.e., a name with
+no characters at all - is  implicitly disallowed, although if a  blank
+name could exist, it  too would be matched  by "*"). "A", "BC",  "DEF-
+GHIJKLMNOPQRSTUVWXYZ", etc., are all matched by "*".
+
+The specification  "AB?" matches  all names  that have  exactly  three
+characters, the first two of which are "AB". "ABA", "ABB", "ABZ",  are
+all matched by "AB?" while "AB" doesn't match because it only has  twoNFT-10 NIP/FAL/TSC Executive                                  Page C-3
+Appendix C: Wildcarding                                      12-Jan-84
+Primary Wildcarding
+Basic primary wildcarding
+
+
+characters, and "ABCD" doesn't match because it has four characters.
+
+The specification "A?C"  matches all three  character names  beginning
+with "A" and ending with "C", such as "AAC", "AZC", and so on.
+
+The specification "AB*" matches all names that have at least two char-
+acters, the  first  two of  which  are  "AB", such  as  "ABC",  "ABZ",
+"ABCDEFGHIJKL", and so on.
+
+The specification "AB?*" matches  all names that  have at least  three
+characters, the first two of which are "AB". The names "ABC",  "ABCD",
+"ABBA", and "ABCDEFGHIJKLMNOPQRSTUVWXYZ" are all matched by the speci-
+fication "AB?*".
+
+The above examples have one thing in common insofar as wildcards go  -
+the "*" wildcard (whenever used) is  always the last character in  the
+wildcarded specification, it  is never encased  (in particular, it  is
+never followed) by any other part of the wildcarded specification. The
+examples shown so far constitute simple or "elementary" primary  wild-
+carding.
+
+C.1.2 Advanced primary wildcarding
+
+Advanced primary wildcarding takes the  ideas of simple primary  wild-
+carding and expands on them,  providing more flexibility and power  in
+matching names, but at  the cost of being  somewhat more difficult  to
+comprehend in the "most flexible" constructions.
+
+The simplest "advanced" construction is the embedding of the anything-
+goes  "*"  wildcard  completely  within  non-wildcarded  parts  of   a
+specification. The specification "A*Z" for example, matches all  names
+that have at least two  characters, the first of  which is an "A"  and
+the last of which is a "Z". The names "AZ", "ABZ", and "ABCDEFGHIJKLZ"
+are all matched by "A*Z".
+
+An obvious extension is multiple embedded "*"'s, such as the  specifi-
+cation "A*M*Z", which  would match any  name that has  at least  three
+characters, the first of which is an "A", the last of which is a  "Z",
+and of which at least one of the intervening characters is an "M". The
+names "AMZ",  "AMMZ", "AMMMMMZ",  "AMAZ", and  "AMAMAMAMAMAZ" are  all
+matched by "A*M*Z".
+
+The specification "AB*?" matches exactly the same set of names as  the
+specification "AB?*" in  the example  above (all names  which have  at
+least three characters and begin with  "AB"), but is yet distinct  be-
+cause the "*" wildcard is embedded within fixed portions of the speci-
+fication rather than at the end. This points out the  not-necessarily-
+obvious detail that so far  as primary wildcarding has been  described
+up to  this point  the only  difference is  in the  algorithm used  to
+decide what names  match a given  wildcarded specification. For  basic
+primary wildcarding a  very simple  algorithm can be  used, while  the
+advanced primary  wildcarding  requires a  fairly  involved  recursive
+matching algorithm. In particular, the  algorithm used by the  current
+versions of SCAN/WILD is a  straight two-step operation regardless  ofNFT-10 NIP/FAL/TSC Executive                                  Page C-4
+Appendix C: Wildcarding                                      12-Jan-84
+Primary Wildcarding
+Advanced primary wildcarding
+
+
+the number of wildcards involved -  the candidate name is first  XORed
+with the specification  name, and  then ANDed with  the wildcard  mask
+(which has a "1" for each non-wild character in a wildcarded  specifi-
+cation) - if the result is 0 then the candidate name is matched by the
+specification (this  is why  trailing "?"  wildcards will  match  even
+"nothing").
+
+C.1.3 ^E primary wildcarding
+
+An even more powerful  (i.e., flexible) primary wildcard  construction
+is the ^E wildcard.  The ^E (Control-E)  character indicates that  the
+character(s) immediately following the ^E is(are) an "extended"  wild-
+card operation. The ^E wildcard  allows the specification to match  or
+reject the candidate name on a  large variety of constraints, such  as
+decimal digit only,  everything except alphabetic  characters, and  so
+on.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     The ^E wildcard derives from  the ^E search match  operation
+     in the text editor TECO
+
+Following are the ^E wildcard constructions:
+
+^EA       Match any alphabetic character. ^EA matches any charac-
+          ter which is a letter (regardless of case) - i.e.,  ^EA
+          matches if the candidate character is an "A", "B", "C",
+          ..., "Y", "Z", "a", "b", "c", ..., "y", or a "z".
+^ED       Match any  decimal  digit. ^ED  matches  any  character
+          which is a number. ^ED matches if the candidate charac-
+          ter is a "0", "1", "2", ..., "8", "9".
+^ENx      Match anything  but  "x". ^EDx  matches  any  character
+          which is NOT "x" - e.g., ^ENA matches a "B", "C", etc.,
+          but NOT an "A".
+^EX       Match any  single  character. ^EX  matches  any  single
+          character in that position. ^EX is the same as the  "?"
+          wildcard - it is included merely for completeness.
+^E<ddd>   Match ASCII code "ddd".  ^E<ddd> matches the  character
+          whose ASCII character  code is "ddd"  where "ddd" is  a
+          decimal number.  For example  ^E<65> matches  only  "A"
+          (and NOT "a").
+^E[x,y,z] Match either "x" or "y"  or "z". ^E[x,y,z] matches  any
+          of the list entries  "x", "y", or "z",  the list is  of
+          arbitrary length (it may be only two entries, or it may
+          be 88 entries).
+
+As specified above, the ^E constructions always count for exactly  one
+character position in the candidate name.
+
+The ^E constructs may also  be nested. For example, the  specification
+"^EN^E[A,B,C,^ED]" accounts  for exactly  one character  position  and
+matches any character  which is  NOT an "A",  "B", "C",  or a  decimal
+digit.NFT-10 NIP/FAL/TSC Executive                                  Page C-5
+Appendix C: Wildcarding                                      12-Jan-84
+Secondary Wildcarding
+
+
+
+C.2.0 Secondary WildcardingC.2.0 Secondary WildcardingC.2.0 Secondary WildcardingC.2.0 Secondary WildcardingC.2.0 Secondary WildcardingC.2.0 Secondary Wildcarding
+
+Secondary wildcarding  is the  process whereby  a wholly  new name  is
+generated based on the extant name matched in a [presumabably] related
+primary wildcarded operation. For example, when one or more files  are
+copied from one place to  another the copies of  the files have to  be
+named something (even if the "name" is no more than a device name such
+as LPT:)  - it  is  the "something"  which secondary  wildcarding  ad-
+dresses.
+
+Basically, secondary wildcarding is merely copying part of the primary
+wildcarded name into the  corresponding secondary wildcarded name.  In
+the COPY command
+   COPY DSKB:[me]*.* = DSKC:[him]*.*
+the specification "DSKC:[him]*.*" is the primary wildcarded file spec-
+ification, and "DSKB:[me]*.*" is the secondary wildcarded file  speci-
+fication, with the  intent of copying  all of "his"  files from  DSKC:
+into "my" DSKB:.
+
+Secondary wildcarding is broken down into three realms.
+
+First  is  the  "error   constraints"  on  secondary  versus   primary
+wildcards. The error constraints govern when an error is to be  gener-
+ated based on the relative secondary versus primary wildcards. An  er-
+ror may be "flagged":
+
+1.   Never
+2.   If there are more primary wildcards than secondary wildcards
+3.   If the primary wildcards are  different from the secondary  wild-
+     cards
+4.   If there are more secondary wildcards than primary wildcards
+
+Second is the  relative primary source  for each secondary  wildcarded
+field generated.  There  are  four  basic  field  selection  modes  of
+operation:
+
+1.   Same field (device to device, SFD1 to SFD1, etc.)
+2.   Same field, but allowing directories to shift one or more  entire
+     levels
+3.   Any field (e.g., secondary file type from primary device)
+4.   None (i.e., field boundaries irrelevant)
+
+Third is the manner in which the individual secondary name  characters
+are actually generated from the appropriate primary name fields. There
+are four basic character replacement modes of operation:
+
+1.   Same exact position (first name  character to first name  charac-
+     ter, etc.)
+2.   In strict order of occurence, from the selected field
+3.   In order of occurence, filling with non-wild characters
+4.   In order of occurence, without regard to field boundaries
+
+These three "realms"  of operation are  broken down into  two axes  of
+control - SCERROR and  SCWILD. The SCWILD  control is essentially  theNFT-10 NIP/FAL/TSC Executive                                  Page C-6
+Appendix C: Wildcarding                                      12-Jan-84
+Secondary Wildcarding
+
+
+
+combination of  the field  selection modes  and character  replacement
+modes as described immediately above. SCERROR and SCWILD operate  more
+or less independently of each other, with some interaction.
+
+SCERROR governs basically  when a syntax  error is to  be issued.  The
+four modes for SCERROR are NEVER, INSUFFICIENT, DIFFERENT, and  EXCES-
+SIVE.
+
+1.   SCERROR:NEVER indicates that any combination of primary and  sec-
+     ondary  wildcards  is  acceptable,  regardless  of  the  possible
+     conflicts which might arise.
+2.   SCERROR:INSUFFICIENT indicates that an error should be flagged if
+     there are insufficient secondary  wildcards to match the  corres-
+     ponding primary wildcarded fields.
+3.   SCERROR:DIFFERENT indicates  an error  should be  flagged if  the
+     secondary wildcards and the primary wildcards are different.
+4.   SCERROR:EXCESSIVE indicates that  an error should  be flagged  if
+     there are excessive secondary wildcards to match the  correspond-
+     ing primary wildcarded fields.
+
+SCWILD controls how the secondary wildcarded fields are actually  gen-
+erated. The  seven modes  for  SCWILD are  ANY, FIELD,  SAME,  DFIELD,
+DSAME, AFIELD, and ASAME.
+
+1.   SCWILD:ANY indicates that the secondary wildcards are to be  gen-
+     erated from any  primary wildcards available  without respect  to
+     field boundaries.
+2.   SCWILD:FIELD indicates that secondary wildcards are to be  gener-
+     ated only from the corresponding primary wildcard fields  (device
+     to device, etc.).
+3.   SCWILD:SAME indicates that the secondary wildcards are to be gen-
+     erated from the corresponding primary characters, without  regard
+     to primary wildcards.
+4.   SCWILD:DFIELD is the  same as SCWILD:FIELD  except that within  a
+     directory specification, entire directory  levels may be  shifted
+     about in order to match secondary and primary wildcards.
+5.   SCWILD:DSAME is  the same  as SCWILD:SAME  except that  within  a
+     directory specification, entire directory  levels may be  shifted
+     about in order to match secondary and primary wildcards.
+6.   SCWILD:AFIELD is  the same  as  SCWILD:FIELD except  that  entire
+     fields may be shifted about in order to match secondary and  pri-
+     mary wildcards.
+7.   SCWILD:ASAME is the same as SCWILD:SAME except that entire fields
+     may be  shifted about  in order  to match  secondary and  primary
+     wildcards.
+
+To translate some of  the above, The SCWILD  ANY mode pretty much  ig-
+nores field boundries and  simply generates secondary characters  from
+the "first" primary wildcard found, regardless of field boundries. The
+results of SCWILD:ANY can be very bizarre indeed!
+
+The relative ordering of fields (names) within a specification is node
+name, device name, directory name level one (TOPS-10 project  number),
+directory name level two  (TOPS-10 programmer number), directory  nameNFT-10 NIP/FAL/TSC Executive                                  Page C-7
+Appendix C: Wildcarding                                      12-Jan-84
+Secondary Wildcarding
+
+
+
+level three (TOPS-10  first SFD), etc.,  directory name lowest  level,
+file name, and finally file type.
+                            
+                                 Note                                 Note                                 Note                                 Note                                 Note                                 Note
+
+     Due to various historical  reasons, the current versions  of
+     SCAN/WILD treat the project and programmer numbers as 18-bit
+     fields, and NOT 6-character fields. In particular, the  sec-
+     ondary wildcarding provided  by WILD  works on  a bit  basis
+     rather than  on a  character basis.  This can  provide  very
+     confusing results  when mixing  ppn wildcards  with  non-ppn
+     wildcards.
+
+
+The SCWILD FIELD modes always stick with a selected field,  generating
+secondary characters from the primary field selected. As long as there
+are more secondary than primary wildcards the secondary characters are
+generated from the corresponding primary characters whether or not the
+primary input characters  were originally wildcarded.  When there  are
+the same or fewer secondary wildcards than primary wildcards then  the
+secondary characters will  be generated only  from primary  wildcarded
+character positions.
+
+The SCWILD SAME modes always  stick with a selected field,  generating
+secondary characters from the primary  field selected without any  re-
+gard for the primary wildcards.  This means that a secondary  wildcard
+in position "n" is generated  from the corresponding primary  position
+"n", whether or not primary position "n" was wildcarded.
+
+A prefix of "A"  or "D" coupled  with either the  FIELD or SAME  modes
+described above indicates that field shuffling is allowed in order  to
+satisfy secondary wildcard requests which  would otherwise not have  a
+corresponding primary wildcard match. A  prefix of "D" indicates  that
+field shifting is limited to  solely within the directory name,  while
+the prefix "A" indicates that unlimited field shifting may take place.
+
+The default secondary  wildcard operating  modes are  SCERROR:INSUFFI-
+CIENT and SCWILD:FIELD.
+
+C.2.1 Secondary wildcarding examples
+
+Some examples are in  order which might  help clarify secondary  wild-
+carding operation.
+
+All examples will be assumed to be a command string to a COPY command,
+of the form "out = in" a la standard TOPS-10 conventions.
+
+The examples assume a TOPS-10 network environment with three hosts  in
+the network - KI514, KL1026, and KS4101. The examples ignore  non-host
+(non-MCR) nodes.
+
+Each of the  three host nodes  is assumed  to contain a  set of  files
+residing on disk structures, and no other files.NFT-10 NIP/FAL/TSC Executive                                  Page C-8
+Appendix C: Wildcarding                                      12-Jan-84
+Secondary Wildcarding
+Secondary wildcarding examples
+
+
+The examples are assumed to be executed on host KL1026. As such, if  a
+node name does not appear in  a file specification in an example  then
+the node is implicitly KL1026.
+
+The examples will assume the existence of the following files:
+
+   KI514_DSKE:[1,4]AVAIL.SYS
+   KI514_DSKE:[1,4]CRASH.SYS
+
+   KL1026_DSKC:[1,4]ACCT.SYS
+   KL1026_DSKC:[1,4]AUXACC.SYS
+   KL1026_DSKC:[1,4]AVAIL.SYS
+   KL1026_DSKC:[1,4]CRASH.SYS
+   KL1026_DSKC:[1,10,KI514,SYS]ACCT.SYS
+   KL1026_DSKC:[1,10,KI514,SYS]AUXACC.SYS
+   KL1026_DSKC:[1,10,KI514,ACT]USAGE.BIN
+   KL1026_DSKC:[1,10,KL1026,SYS]ACCT.SYS
+   KL1026_DSKC:[1,10,KL1026,SYS]AUXACC.SYS
+   KL1026_DSKC:[1,10,KL1026,ACT]USAGE.BIN
+   KL1026_DSKC:[1,10,KS4101,SYS]ACCT.SYS
+   KL1026_DSKC:[1,10,KS4101,SYS]AUXACC.SYS
+   KL1026_DSKC:[1,10,KS4101,ACT]USAGE.BIN
+   KL1026_DSKC:[17,341]C14ACC.T
+   KL1026_DSKC:[17,341]C14AUX.ACC
+   KL1026_DSKC:[17,341]B17USA.GE
+   KL1026_DSKB:[226,4563]SWITCH.INI
+   KL1026_DSKB:[226,4563]A0B1C2.DAT
+   KL1026_DSKB:[226,4563]A3B4C5.DAT
+   KL1026_DSKB:[226,4563]A6B7C8.DAT
+   KL1026_DSKB:[226,4563]A9XXXX.DAT
+   KL1026_DSKB:[226,4563,RDH1,RDH2]BLAH0A.FOO
+   KL1026_DSKB:[226,4563,RDH1,RDH2]BLAH0B.FOO
+   KL1026_DSKB:[226,4563,RDH1,RDH2]BLAH1A.FOO
+   KL1026_DSKB:[226,4563,RDH1,RDH2]BLAH1B.FOO
+   KL1026_DSKC:[226,4563,RDH1,RDH2]BLAH0A.FOO
+   KL1026_DSKC:[226,4563,RDH1,RDH2]BLAH0B.FOO
+   KL1026_DSKC:[226,4563,RDH1,RDH2]BLAH1A.FOO
+   KL1026_DSKC:[226,4563,RDH1,RDH2]BLAH1B.FOO
+
+   KS4101_DSKA:[1,4]AVAIL.SYS
+   KS4101_DSKA:[1,4]CRASH.SYS
+
+Starting off with a trivial case, consider the specification
+   DSKX:[10,11]*.* = DSKC:[1,4]*.*
+This case is obvious and unambiguous, and behaves in exactly the  same
+manner with all secondary wildcard modes. Each file in the  DSKC:[1,4]
+area is to be copied to the DSKX:[10,11] area, with the same file name
+and type  (or extension).  This specification  will never  generate  a
+secondary wildcarding  syntax error  since even  the most  restrictive
+constraints (SCERROR:DIFFERENT) are  satisfied -  the secondary  wild-
+cards match EXACTLY the primary wildcards. The end result of the  COPY
+operation would be:
+   DSKX:[10,11]ACCT.SYS
+   DSKX:[10,11]AUXACC.SYSNFT-10 NIP/FAL/TSC Executive                                  Page C-9
+Appendix C: Wildcarding                                      12-Jan-84
+Secondary Wildcarding
+Secondary wildcarding examples
+
+
+   DSKX:[10,11]AVAIL.SYS
+   DSKX:[10,11]CRASH.SYS
+
+A slightly ("epsilon") less obvious case is the specification
+   DSKX:[10,11]*.* = DSKC:[1,4]A*.*
+This case is still pretty much  obvious and unambiguous. Each file  in
+the DSKC:[1,4] area which starts  with an "A" is  to be copied to  the
+DSKX:[10,11] area, with the same file name and type. If SCERROR:EXCES-
+SIVE had been specified then a  syntax error would result since  there
+are more secondary wildcards than primary wildcards. (Strictly  speak-
+ing, there  are  the same  number  or "ordinality"  of  secondary  and
+primary wildcards, but the secondary  filename wildcard "*" is  bigger
+than the corresponding  primary filename wildcard  "*" - specifying  a
+size relationship between wildcards refers  to the cardinality of  the
+wildcards, not the  ordinality.) Using  either the ANY  or the  FIELD/
+DFIELD/AFIELD SCWILD replacement mode the resulting files would be:
+   DSKX:[10,11]ACCT.SYS
+   DSKX:[10,11]AUXACC.SYS
+   DSKX:[10,11]AVAIL.SYS
+For this  particular example,  using the  SAME/DSAME/ASAME SCWILD  re-
+placement modes would have the  same results, since for every  primary
+wildcard there is an EXACT matching secondary wildcard.
+
+The specification
+   DSKX:[10,11]*.* = DSKB:[226,4563]A?B?C?.*
+behaves in the same way - each file in the DSKB:[226,4563] area  which
+matches the  primary specification  is  copied into  the  DSKX:[10,11]
+area, with the same file name and type. The resulting files would be:
+   DSKX:[10,11]A0B1C2.DAT
+   DSKX:[10,11]A3B4C5.DAT
+   DSKX:[10,11]A6D7B8.DAT
+
+In essentially the same way, the specification
+   DSKX:[10,11]A?B?C?.* = DSKB:[226,4563]A?B?C?.*
+would generate exactly the same resulting files:
+   DSKX:[10,11]A0B1C2.DAT
+   DSKX:[10,11]A3B4C5.DAT
+   DSKX:[10,11]A6D7B8.DAT
+Note however that unlike the immediately preceding example (for  which
+SCERROR:EXCESSIVE will cause  a syntax error  because there were  more
+secondary wildcards  than primary  wildcards) this  example can  never
+cause a syntax error because  the secondary wildcards again match  EX-
+ACTLY the primary wildcards.
+
+The above examples were all  really straightforward, with the  desired
+results being quite "obvious" (and  the same regardless of the  secon-
+dary wildcarding mode  used). Now, consider  the following three  not-
+quite-so-obvious specifications
+   DSKX:[10,11]?X?Y?Z.DAT = DSKB:[226,4563]A?B?C?.DAT
+   DSKX:[10,11]XYZ???.DAT = DSKB:[226,4563]A?B?C?.DAT
+   DSKX:[10,11]???XYZ.DAT = DSKB:[226,4563]A?B?C?.DAT
+It is at this  point that the various  SCWILD replacement modes  start
+showing their differences. The ANY and FIELD/DFIELD/AFIELD modes still
+generate the  same results  since the  total number  of secondary  andNFT-10 NIP/FAL/TSC Executive                                 Page C-10
+Appendix C: Wildcarding                                      12-Jan-84
+Secondary Wildcarding
+Secondary wildcarding examples
+
+
+primary wildcards  per field  is the  same, but  the  SAME/DSAME/ASAME
+modes are different since the relative placement of the secondary  and
+primary wildcards differ.  The SAME/DSAME/ASAME  modes would  generate
+the files:
+   DSKX:[10,11]AXBYCZ.DAT / XYZ1C2.DAT / A0BXYZ.DAT
+   DSKX:[10,11]AXBYCZ.DAT / XYZ4C5.DAT / A3BXYZ.DAT
+   DSKX:[10,11]AXBYCZ.DAT / XYZ7C8.DAT / A6BXYZ.DAT
+for the three  specifications respectively. The  ANY or  FIELD/DFIELD/
+AFIELD modes however would generate the files:
+   DSKX:[10,11]0X1Y2Z.DAT / XYZ012.DAT / 012XYZ.DAT
+   DSKX:[10,11]3X4Y5Z.DAT / XYZ345.DAT / 345XYZ.DAT
+   DSKX:[10,11]6X7Y8Z.DAT / XYZ678.DAT / 678XYZ.DAT
+for the three  specifications respectively. This  demonstrates one  of
+the two major "flexibilities" of the ANY or FIELD/DFIELD/AFIELD  modes
+- the ability to shift the primary-wildcard-matched characters  around
+in order to fill out scattered secondary wildcards. Finally, the  only
+error constraints which  would fail these  examples is again  SCERROR:
+DIFFERENT because, even though the total number of secondary and  pri-
+mary wildcards are the same for each field, the relative placement  of
+the wildcards is different.
+
+From the preceding examples, the two specifications
+   DSKX:[10,11]Q*.DAT = DSKB:[226,4563]A*.DAT
+   DSKX:[10,11]Q*.DAT = DSKB:[226,4563]A?B?C?.DAT
+would always result in:
+   DSKX:[10,11]Q0B1C2.DAT
+   DSKX:[10,11]Q3B4C5.DAT
+   DSKX:[10,11]Q6B7C8.DAT
+   DSKX:[10,11]Q9XXXX.DAT (first specification only)
+No syntax errors are possible  with the first specification since  the
+primary and secondary wildcards EXACTLY match, but either one of  DIF-
+FERENT or EXCESSIVE  would fail the  second specification since  there
+are more secondary wildcards than primary wildcards. (As an aside, the
+construction SCERROR:(INSUFFICIENT,EXCESSIVE) may be used to guarantee
+the same number of secondary  and primary wildcards without  requiring
+that the wildcards match EXACTLY.)
+
+Likewise, the two specifications
+   DSKX:[10,11]Q???.DAT = DSKB:[226,4563]A*.DAT
+   DSKX:[10,11]Q???.DAT = DSKB:[226,4563]A?B?C?.DAT
+would, if using the SAME/DSAME/ASAME modes, result in:
+   DSKX:[10,11]Q0B1.DAT
+   DSKX:[10,11]Q3B4.DAT
+   DSKX:[10,11]Q6B7.DAT
+   DSKX:[10,11]Q9XX.DAT (first specification only)
+for the two  specifications respectively. If,  however, either of  the
+ANY or FIELD/DFIELD/AFIELD modes were used, the results would be  dif-
+ferent for the two specifications, as follows:
+   DSKX:[10,11]Q0B1.DAT / Q012.DAT
+   DSKX:[10,11]Q3B4.DAT / Q345.DAT
+   DSKX:[10,11]Q6B7.DAT / Q678.DAT
+   DSKX:[10,11]Q9XX.DAT (first specification only)
+SCERROR:INSUFFICIENT  would  cause  a  syntax  error  for  the   first
+specification only, while SCERROR:DIFFERENT would cause a syntax errorNFT-10 NIP/FAL/TSC Executive                                 Page C-11
+Appendix C: Wildcarding                                      12-Jan-84
+Secondary Wildcarding
+Secondary wildcarding examples
+
+
+for both specifications.
+
+Finally, for this set of examples, consider the specification
+   DSKX:[10,11]HOHUM?.BAR = DSKB:[226,4563,RDH1,RDH2]BLAH??.FOO
+The files generated  by this  specification using  FIELD/DFIELD/AFIELD
+modes would be:
+   DSKX:[10,11]HOHUM0.BAR
+   DSKX:[10,11]HOHUM0.BAR
+   DSKX:[10,11]HOHUM1.BAR
+   DSKX:[10,11]HOHUM1.BAR
+or, if using the SAME/DSAME/ASAME modes:
+   DSKX:[10,11]HOHUMA.BAR
+   DSKX:[10,11]HOHUMB.BAR
+   DSKX:[10,11]HOHUMA.BAR
+   DSKX:[10,11]HOHUMB.BAR
+This example  demonstrates why  SCERROR:INSUFFICIENT is  the  default,
+since the above  example ends up  superseding its very  own brand  new
+files, leaving only two instead of four new files. However, this  very
+operation can be desired if,  for example, /APPEND had been  specified
+as part of the  output file specification, for  in that case the  copy
+operation would have  been essentially  one of  grouping together  and
+combining [presumably] related files. This action borders on the  eso-
+teric, but starts to give some  idea of the flexibility available  for
+manipulating files.
+
+So far, all  of the examples  shown have avoided  "field shifting"  in
+generating the secondary  outputs. Field shifting  adds another  whole
+dimension to the secondary wildcarding process.
+
+Consider the fairly straight-forward Kinkyness
+   DSKX:[10,11,COPY,*,*]*.* = DSKB:[226,4563,*,*]*.*
+From the examples above, it might seem that the resultant files  would
+be:
+   DSKX:[10,11,COPY]RDH1.SFD
+   DSKX:[10,11,COPY]RDH2.SFD
+   DSKX:[10,11,COPY,RDH2]BLAH0A.FOO
+   DSKX:[10,11,COPY,RDH2]BLAH0B.FOO
+   DSKX:[10,11,COPY,RDH2]BLAH1A.FOO
+   DSKX:[10,11,COPY,RDH2]BLAH1B.FOO
+which is exactly what  would happen in either  SAME or FIELD mode.  If
+DSAME or DFIELD  mode is  used (or for  that matter,  ASAME or  AFIELD
+mode, for this example they  are equivalent) then the secondary  wild-
+card processor has  another option  available. As the  same number  of
+secondary and primary  wildcards were specified  within the  directory
+field but in  different relative  positions (in  this case,  different
+subfields), the relative positions of the secondary and primary  wild-
+cards can  be shifted  in order  to  re-align them,  in this  case  by
+shifting the  primary directory  SFD wildcards  "right" one  directory
+level. The resulting files are then:
+   DSKX:[10,11,COPY]RDH1.SFD
+   DSKX:[10,11,COPY,RDH1]RDH2.SFD
+   DSKX:[10,11,COPY,RDH1,RDH2]BLAH0A.FOO
+   DSKX:[10,11,COPY,RDH1,RDH2]BLAH0B.FOO
+   DSKX:[10,11,COPY,RDH1,RDH2]BLAH1A.FOONFT-10 NIP/FAL/TSC Executive                                 Page C-12
+Appendix C: Wildcarding                                      12-Jan-84
+Secondary Wildcarding
+Secondary wildcarding examples
+
+
+   DSKX:[10,11,COPY,RDH1,RDH2]BLAH1B.FOO
+
+Moving along on the path to Extreme Kinkyness is the specification
+   DSKX:[10,11,COPY,*,*,*]*.* = *:[226,4563,*,*]*.*
+If either FIELD or SAME modes were used then the results would be  the
+same as in the first  list of the example  above. If either DFIELD  or
+DSAME modes were used  then the results  would be the  same as in  the
+second list of the  example above. But if  AFIELD or ASAME were  used,
+allowing field  shifting to/from  any field,  then a  new output  list
+would be generated:
+   DSKX:[10,11,COPY,DSKB]RDH1.SFD
+   DSKX:[10,11,COPY,DSKB,RDH1]RDH2.SFD
+   DSKX:[10,11,COPY,DSKB,RDH1,RDH2]BLAH0A.FOO
+   DSKX:[10,11,COPY,DSKB,RDH1,RDH2]BLAH0B.FOO
+   DSKX:[10,11,COPY,DSKB,RDH1,RDH2]BLAH1A.FOO
+   DSKX:[10,11,COPY,DSKB,RDH1,RDH2]BLAH1B.FOO
+   DSKX:[10,11,COPY,DSKC]RDH1.SFD
+   DSKX:[10,11,COPY,DSKC,RDH1]RDH2.SFD
+   DSKX:[10,11,COPY,DSKC,RDH1,RDH2]BLAH0A.FOO
+   DSKX:[10,11,COPY,DSKC,RDH1,RDH2]BLAH0B.FOO
+   DSKX:[10,11,COPY,DSKC,RDH1,RDH2]BLAH1A.FOO
+   DSKX:[10,11,COPY,DSKC,RDH1,RDH2]BLAH1B.FOO
+
+Similarly, in a networking environment, the specification
+   DSKX:[10,11,*,*]13JUN. = *_SYS:*.SYS
+would, using  ANY  or  AFIELD/ASAME  mode,  gather  all  (.e.g,  "this
+weeks'")  scattered   (throughout   the   network)   AVAIL.SYSes   and
+CRASH.SYSes together into sorted-by-name subdirectories under  [10,11]
+as so:
+   DSKX:[10,11,KI514,AVAIL]13JUN.
+   DSKX:[10,11,KI514,CRASH]13JUN.
+   DSKX:[10,11,KL1026,AVAIL]13JUN.
+   DSKX:[10,11,KL1026,CRASH]13JUN.
+   DSKX:[10,11,KS4101,AVAIL]13JUN.
+   DSKX:[10,11,KS4101,CRASH]13JUN.
+
+As can  be readily  seen from  the above  results, secondary  wildcard
+processing can  indeed be  flexible in  gathering "dispersed"  primary
+fields and gathering them together in order to fill out closely relat-
+ed secondary fields. The processing is symmetric - it can take closely
+related primary fields and  scatter them all  over the secondary  file
+specification, as in
+   *_*:*.* = DSKC:[1,10,*,*]*.*
+The results of the  above specification, using  either ANY or  AFIELD/
+ASAME mode, would be:
+   KI514_SYS:[0,0]ACCT.SYS
+   KI514_SYS:[0,0]AUXACC.SYS
+   KI514_ACT:[0,0]USAGE.BIN
+   KL1026_SYS:[0,0]ACCT.SYS
+   KL1026_SYS:[0,0]AUXACC.SYS
+   KL1026_ACT:[0,0]USAGE.BIN
+   KS4101_SYS:[0,0]ACCT.SYS
+   KS4101_SYS:[0,0]AUXACC.SYS
+   KS4101_ACT:[0,0]USAGE.BINNFT-10 NIP/FAL/TSC Executive                                 Page C-13
+Appendix C: Wildcarding                                      12-Jan-84
+Secondary Wildcarding
+Secondary wildcarding examples
+
+
+It should be noted that, although "SYS:[0,0]" and "ACT:[0,0]" are  the
+actual device and directory fields  generated, which might well  cause
+problems if talking to a VAX  system, the TOPS-10 monitor treats  them
+as (essentially) "SSL:[1,4]" and "SSL:[1,7]" respectively. This  beha-
+viour, like most obscure behaviours, can be very advantageously put to
+use by the enterprising user . . .
+
+And penultimatly, Penultimate Kinkyness: consider the specification
+   DSK?:[?,?]??????.SYS = DSKC:[17,341]*.*
+Using the ANY mode, the resulting files would be:
+   DSKC:[1,4]ACCT.SYS
+   DSKC:[1,4]AUXACC.SYS
+   DSKB:[1,7]USAGE.SYS
+If one looks closely at  the algorithm used in  ANY mode it is  really
+quite simple - starting at the "left" and working to the "right"  each
+secondary wildcard character position encountered is simply filled  by
+the next-in-line primary wildcarded character position, without regard
+to field boundries.
+
+The SCERROR  constraints, when  field shifting  is occurring,  "shift"
+along with the fields. The three specifications
+   DSKX:[10,11,COPY,*,*]*.* = DSKC:[226,4563,????,*]*.*
+   DSKX:[10,11,COPY,????,*]*.* = DSKC:[226,4563,*,*]*.*
+   DSKX:[10,11,COPY,*,*,*,*]*.* = DSKC:[1,4,*,*,*,*,*]*.*
+all have different secondary  and primary wildcards.  SCERROR:INSUFFI-
+CIENT (the default) would pass the first (it would map "*,*]*.*"  from
+"????,*]*.*",  which  has  sufficient  secondary  wildcards  for  each
+primary wildcarded  field) but  fail  both the  second (it  would  map
+"????,*]*.*" from "*,*]*.*",  which has  insufficient secondary  wild-
+cards in the very  first matched wildcarded field)  and the third  (it
+would map "*,*,*,*]*.*"  from "*,*,*,*,*]*.*", which  using DFIELD  or
+DSAME modes has one too many primary wildcarded directory name fields,
+or using AFIELD or ASAME has  one too many primary wildcarded  fields,
+or using ANY has 6 (TOPS-10) too many primary wildcarded  characters).
+Similarly, SCERROR:EXCESSIVE would pass  the second specification  but
+fail the first and third specifications. SCERROR:DIFFERENT would  fail
+all three  specifications since  the  first two  have a  "????"  field
+mapped to/from a  "*" field,  and the  third has  a nonexistent  field
+mapped from a "*" field.
+
+Up until this  point all  of the secondary  wildcarding examples  have
+been restricted to  the simple  or "basic"  wildcard constructions  as
+defined in the previous section on primary wildcarding. As such,
+
+Finally, for Ultimate Kinkyness, consider:
+   DSKX:[10,11]X*Y*Z.BAR = DSKB:[226,4563,RDH1,RDH2]B*A?^EDB.FOO
+
+The interaction of secondary and advanced wildcarding is not supported
+and will cause an error indication.

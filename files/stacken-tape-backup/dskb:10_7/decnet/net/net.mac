@@ -1,0 +1,1087 @@
+	TITLE	NET	Network information program for DECnet-10
+
+	SEARCH	UUOSYM		; Tops-10 definitions
+	SEARCH	MACTEN		; Handy macros
+	SEARCH	SCNMAC		; Get SCAN definitions
+
+	.REQUEST REL:SCAN	; Satisfy Externals
+
+	TWOSEG	400K		; Give us a high and a low seg
+
+	SALL			; Suppress macro expansions
+
+	F=0			; Flags
+	T1=1			; Define
+	T2=2			;  usual
+	T3=3			;  junk
+	T4=4			;  AC's
+
+	P1=5			; Define the usual perm AC's
+	P2=6			; . . .
+	P3=7
+	P4=<C=10>
+
+	AP=12			; Primary string pointer
+	AL=13			; Primary string length
+	BP=14			; Wildcard string pointer
+	BL=15			; Wildcard string length
+
+	CH=16			; Character
+
+	P=17			; Stack pointer
+
+	.HELPR==:.POPJ
+	SUBTTL	Flags and other definitions
+
+	F.SORT==1B0		; Sort node names alphabetically
+	F.SBKW==1B1		; Sort node names backwards
+	F.LINK==1B2		; Show links instead of nodes
+;	F.NNUM==1B3		; Print node numbers
+	F.ACT==1B4		; Print out active nodes only
+	F.STR==1B5		; A (possibly) wildcard string was specified
+	F.WILD==1B6		; The constraint string has wildcards in it
+	F.DET==1B7		; Type out node info in detail
+	F.ODET==1B8		; Type out detailed info for a single node
+
+	F.DEFAULT==F.ACT	; Define symbol for default flags
+
+	C$NODE==8		; Print width of nodename
+
+	TOSIZ==^D2500		; Size of TTY buffer
+
+	DEFINE	ERROR(PFX,TEXT)<
+	JRST	[MOVX	T1,<SIXBIT |NET'PFX|> ;; Get Prog name, error prefix
+		 MOVE	T2,["?",,[ASCIZ |TEXT|]] ;; Get lead char, error text
+		 JRST	ERRDIE]		;; And go croak
+	>
+
+	DEFINE	WARN(PFX,TEXT)<
+	PUSHJ	P,WRNRTN		;; Call the warning routine
+	JUMP	[SIXBIT |NET'PFX|	;; Get Prog name, error prefix
+		 "%",,[ASCIZ |TEXT|]]	;; Get lead char, error text
+	>
+	SUBTTL	NET	Start of program
+
+NET:	JFCL			; Ignore CCL entry
+	RESET			; Reset the world
+	SETZ	F,		; Clear flags
+	MOVE	P,[IOWD	STKLEN,STACK] ; Set up the stack
+
+	PUSHJ	P,REDXTR	; Go read info about this node
+
+	MOVE	T1,THARG	; Get arg for TRMOP.
+	TRMOP.	T1,		; Read height of terminal
+	 MOVEI	 T1,^D24	;  Reasonable default
+	SOJ	T1,		; Decrement one for tty stop syncronization
+	MOVEM	T1,TRMHIT	; Save it
+	MOVEM	T1,SNCTTY+3	; Save it in TRMOP block
+
+	MOVE	T1,TWARG	; Get arg for TRMOP.
+	TRMOP.	T1,		; Get width of terminal
+	 MOVEI	 T1,^D80	;  Reasonable default
+	AOJ	T1,		; Account for last node on the line
+	IDIVI	T1,8		; Compute number of nodes per line
+	MOVEM	T1,NODPLN	; Save for later
+
+	MOVE	T1,ISCARG	; Get arg for .ISCAN
+	PUSHJ	P,.ISCAN##	; Initialize the command scanner
+	PUSHJ	P,SCNLIN	; Go scan the command line
+
+	PUSHJ	P,TYPINI	; Initialize the typeout routines
+
+	TXNE	F,F.LINK	; Do we want to know about links??
+	 JRST	 LSTLNK		;  Yes, go do different stuff
+
+	PUSHJ	P,REDLIS	; Read active (or known) nodes that
+				;  fit constraint string
+	 JRST	 FINI.1		;  No nodes match
+	DMOVE	P1,T1		; Save list pointer and count in a safe place
+	SUBTTL	PRTLIS	Print out the list of nodes
+
+	CAIN	P2,1		; Is the node count equal to one?
+	 TXO	 F,F.ODET	;  Yes, set the print in great detail flag
+
+	TXNE	F,F.SORT	; Are we sorting?
+	 PUSHJ	 P,SORTEM	;  Sort the node names
+
+	TXNE	F,F.DET		; Type out in detail??
+	 JRST	 FINI.6		;  Yes, go print out header
+
+	MOVE	P3,NODPLN	; Get number of nodes per line
+	JRST	FINI.3		; And enter the loop at the right point
+
+FINI.2:	SOJLE	P3,FINI.6	; Go type a <CRLF> and reset line counter
+	TXNN	F,F.DET		; Detailed format?
+	 PUSHJ	 P,.TTABC##	;  No, <TAB> will do
+FINI.3:	MOVE	T1,(P1)		; Get the next entry
+	TXNE	F,F.DET		; Detailed output??
+	 PUSHJ	 P,NODDET	;  Yes, print lotsa stuff
+	TXNE	F,F.DET		; Detailed output?
+	 JRST	 FINI.5		;  Yes, finish up this line elegantly
+	CAMN	T1,NAMXTR	; Is this the Executor Node?
+	 SKIPA	 T1,["*"]	;  Yes, precede it with a star
+	  MOVEI	  T1," "	;   No, use a space
+	PUSHJ	P,.TCHAR##	; Type it out
+	MOVE	T1,(P1)		; Get the next entry (again)
+	PUSHJ	P,TYPNNM	; Type the node name
+FINI.5:	AOJ	P1,		; Increment the pointer
+	SOJG	P2,FINI.2	; Loop till done
+
+FINI.1:	PUSHJ	P,TYPOUT	; Flush the tty buffer
+	EXIT	1,
+	JRST	NET
+
+FINI.6:	TXNE	F,F.DET		; Are we printing out in detail???
+	 JRST	 FINI.9		;  Yes, go print header
+	MOVE	P3,NODPLN	; Get number of nodes per line
+	PUSHJ	P,.TCRLF##	; Get a new line
+	JRST	FINI.3		; And jump back into the fray
+
+FINI.9:	TXNE	F,F.ODET	; Is this just for a single node??
+	 JRST	 FINI.3		;  Yes, no header then
+	MOVEI	T1,14
+	PUSHJ	P,.TCHAR##
+	PUSHJ	P,TYPOUT	; Flush the tty buffer to synchronize
+	MOVE	T1,[2,,T2]
+	MOVEI	T2,.TOSOP
+	SETO	T3,
+	TRMOP.	T1,
+	 SKIPA
+	JRST	.-2
+	MOVE	T1,SNCTTY	; Get arg for TRMOP.
+	TRMOP.	T1,		; Reset stop counter
+	 HALT	 .		;  ???
+	MOVEI	T1,HEADER	; Get addr of header text
+	PUSHJ	P,.TSTRG##	; Type it out
+	PUSHJ	P,.TCRLF##	; Type a crlf
+	MOVE	P3,TRMHIT	; Get height of the terminal
+	SUBI	P3,2		; Correct for header and blank line
+	JRST	FINI.3		; And keep on going
+
+HEADER:
+ASCIZ |Node	Number	Hops	Cost	Links	Delay	Phase		Circuit
+|
+	SUBTTL	LSTLNK	List links to this node
+
+LSTLNK:	MOVX	T1,DNL.NJ	; Get the link id for listing all links
+LSTL.2:	PUSHJ	P,LNKDET	; Print out link status in detail
+	 JRST	 LSTL.1		;  No more links, punt
+	JRST	LSTL.2		; And keep on typing
+
+LSTL.1:	JRST	FINI.1		; And finish up normally
+	SUBTTL	NODDET	Type out detailed information about a node
+
+	COMMENT	~
+
+KL1026(110) Reachable	Hops=1 Cost=1 Links=7 Delay=4382(ms) Phase III DTE-0-3
+
+
+	~
+
+	FO.SIZ==1B0		; Suppress field if zero
+
+	DEFINE	XX (BP,STR,RTN,FLAGS<0>)<
+	EXP	FLAGS+[BP
+	 XWD	[ASCIZ |STR|],RTN ] >
+
+NODFMT:	XX	<POINTR DNARG+.DNBNN,-1>,<>,.TSIXN##
+	XX	<POINTR DNARG+.DNBNM,-1>,<>,TYPNNM
+	XX	<POINTR DNARG+.DNBRC,DNB.RC>,< >,NODRCH
+	XX	<POINTR DNARG+.DNBRC,DNB.HP>,<	Hops=>,.TDECW##
+	XX	<POINTR DNARG+.DNBRC,DNB.CS>,< Cost=>,.TDECW##
+	XX	<POINTR DNARG+.DNBLD,DNB.DL>,< Links=>,.TDECW##
+	XX	<POINTR DNARG+.DNBLD,DNB.AL>,< Delay=>,.TDECW##
+	XX	<POINTR DNARG+.DNBRC,DNB.NT>,<(ms) Phase II>,NODPHA
+	XX	<POINTR	DNARG+.DNBOC+1>,< >,NODCIR
+	XX	<POINTR 0,44>,<>,.TCRLF##
+	NODFLN==.-NODFMT
+
+NODFPT:	XWD	-NODFLN,NODFMT
+
+NDQFMT:	XX	<POINTR DNARG+.DNBNN,-1>,<>,.TSIXN##
+	XX	<POINTR DNARG+.DNBNM,-1>,<	>,.TDECW##
+	XX	<POINTR DNARG+.DNBRC,DNB.HP>,<	>,.TDECW##
+	XX	<POINTR DNARG+.DNBRC,DNB.CS>,<	>,.TDECW##
+	XX	<POINTR DNARG+.DNBLD,DNB.DL>,<	>,.TDECW##,FO.SIZ
+	XX	<POINTR DNARG+.DNBLD,DNB.AL>,<	>,.TDECW##
+	XX	<POINTR DNARG+.DNBRC,DNB.NT>,<	Phase II>,NODPHA
+	XX	<POINTR	DNARG+.DNBOC+1>,<	>,NODCIR
+	XX	<POINTR 0,44>,<>,.TCRLF##
+	NDQFLN==.-NDQFMT
+
+NDQFPT:	XWD	-NDQFLN,NDQFMT
+
+NODDET:	MOVEM	T1,DNARG+.DNBNN	; Put node name into arg list
+	MOVEI	T1,CIRLEN	; Get length of circuit id buffer
+	MOVEM	T1,DNARG+.DNBOC	; Install it
+	MOVEI	T1,DNARG	; Get arg for DNET.
+	DNET.	T1,		; Read detailed info about the node
+	 ERROR(UDN,Undefined Node Name)
+
+	PUSHJ	P,.SAVE2##	; Save a P
+	MOVE	P1,NODFPT	; Get AOBJN pointer to format table
+	TXNN	F,F.ODET	; Are we just doing one node??
+	 MOVE	 P1,NDQFPT	;  No, use tabs
+FLOP:	MOVE	P2,(P1)		; Get addr of format block
+	HLRZ	T1,1(P2)	; Get address of text
+	PUSHJ	P,.TSTRG##	; Type it out
+	LDB	T1,0(P2)	; Get data from block
+	JUMPN	T1,FLOP.1	; Are we non-zero?
+	MOVX	T3,FO.SIZ	; No, get flag
+	TDNE	T3,(P1)		; Should we suppress zeros??
+	 JRST	 FLOP.2		; Yes, skip rest of field
+FLOP.1:	HRRZ	T2,1(P2)	; Get routine for printing
+	PUSHJ	P,(T2)		; Print out data
+FLOP.2:	AOBJN	P1,FLOP		; Loop till we have printed the whole thing
+	POPJ	P,
+
+NODRCH:	JUMPE	T1,NODR.1	; Is bit on?
+	MOVEI	T1,[ASCIZ |Reachable|] ; Bit is on, we are reachable
+	PJRST	.TSTRG##	; Type it out
+NODR.1:	POP	P,(P)		; Pop call off of stack
+	MOVEI	T1,[ASCIZ |Unreachable|] ; Bit is off, we are unreachable
+	PJRST	.TSTRG##	; Type it out
+
+NODPHA:	CAIN	T1,2		; Is it a phase II node??
+	 POPJ	 P,		;  Yes, leave it alone
+	MOVEI	T1,"I"		; No, gotta print one more I
+	PJRST	.TCHAR##	; ...
+
+NODCIR:	PUSHJ	P,.SAVE2##	; Save P1 and P2
+	MOVE	P1,DNARG+.DNBOC	; Get circuit id length back
+	MOVE	P2,DNARG+.DNBOC+1 ; Get circuit pointer back
+NODC.2:	SOJL	P1,.POPJ	; Return if no more to type out
+	ILDB	T1,P2		; Get a byte from the string
+	PUSHJ	P,.TCHAR##	; Type it out
+	JRST	NODC.2		; And keep on truckin
+
+;NODDET:	MOVEM	T1,DNARG+.DNBNN	; Put node name into arg list
+	MOVEI	T1,CIRLEN	; Get length of circuit id buffer
+	MOVEM	T1,DNARG+.DNBOC	; Install it
+	MOVEI	T1,DNARG	; Get arg for DNET.
+	DNET.	T1,		; Read detailed info about the node
+	 ERROR(UDN,Undefined Node Name)
+	MOVE	T1,DNARG+.DNBNN	; Get node name back
+	PUSHJ	P,TYPNNM	; Type it out
+	TXNN	F,F.ODET	; Do we want great detail
+	 JRST	 NODD.3		;  No, just print numbers in columns
+	MOVE	T1,DNARG+.DNBNM	; Get node number back
+	PUSHJ	P,TYPNNM	; Output it
+	MOVE	T1,DNARG+.DNBRC	; Get reachability info
+	TXNN	T1,DNB.RC	; Is the node reachable?
+	 JRST	 NOTRCH		;  No, skip all this crap
+	MOVEI	T1,[ASCIZ | Reachable	Hops=|] ; Get string
+	PUSHJ	P,.TSTRG##	; Type it out
+	LDB	T1,[POINTR DNARG+.DNBRC,DNB.HP] ; Get the hops
+	PUSHJ	P,.TDECW##	; Type it out
+	MOVEI	T1,[ASCIZ | Cost=|] ; Get string
+	PUSHJ	P,.TSTRG##	; Type it out
+	LDB	T1,[POINTR DNARG+.DNBRC,DNB.CS] ; Get the cost
+	PUSHJ	P,.TDECW##	; Type it out
+	MOVEI	T1,[ASCIZ | Links=|] ; Get string
+	PUSHJ	P,.TSTRG##	; Type it out
+	LDB	T1,[POINTR DNARG+.DNBLD,DNB.DL] ; Get active links
+	PUSHJ	P,.TDECW##	; Type it out
+	MOVEI	T1,[ASCIZ | Delay=|] ; Get string
+	PUSHJ	P,.TSTRG##	; Type it out
+	LDB	T1,[POINTR DNARG+.DNBLD,DNB.AL] ; Get delay
+	PUSHJ	P,.TDECW##	; Type it out
+	MOVEI	T1,[ASCIZ |(ms) Phase II|]
+	PUSHJ	P,.TSTRG##	; Type it out
+	LDB	T1,[POINTR DNARG+.DNBRC,DNB.NT] ; Get node type
+	CAIE	T1,3		; Is it a phase III ?
+	 JRST	 NODD.1		;  No, skip this
+	MOVX	T1,"I"		; Get the third I
+	PUSHJ	P,.TCHAR##	; Type it out
+NODD.1:	PUSHJ	P,.TSPAC##	; Type a space
+NODD.5:;	SKIPE	DNARG+.DNBOL	; Is it the executor node??
+;	 JRST	 NODD.2		;  No, print circuit id
+;	MOVEI	T1,[ASCIZ |Local|] ; Get keyword
+;	PUSHJ	P,.TSTRG##	; Type it out
+;	PJRST	.TCRLF##	; And return
+	PUSHJ	P,.SAVE2##	; Save P1 and P2
+	MOVE	P1,DNARG+.DNBOC	; Get circuit id length back
+	MOVE	P2,DNARG+.DNBOC+1 ; Get circuit pointer back
+NODD.2:	SOJL	P1,.TCRLF##	; Jump of no more to type out
+	ILDB	T1,P2		; Get a byte from the string
+	PUSHJ	P,.TCHAR##	; Type it out
+	JRST	NODD.2		; And keep on truckin
+
+;NODD.2:	LDB	T1,[POINTR DNARG+.DNBOL,DNB.DV] ; Get device type
+;	MOVEI	T1,DEVTAB(T1)	; Get address of string
+;	PUSHJ	P,.TSTRG##	; Type it out
+;	LDB	T1,[POINTR DNARG+.DNBOL,DNB.CN] ; Get controller number
+;	PUSHJ	P,.TDECW##	; Type it out
+;	MOVX	T1,"-"		; Get separator
+;	PUSHJ	P,.TCHAR##	; Type it out
+;	LDB	T1,[POINTR DNARG+.DNBOL,DNB.UN] ; Get the unit number
+;	PUSHJ	P,.TDECW##	; Type it out
+;	PUSHJ	P,.TCRLF##	; Type a <CRLF>
+;	POPJ	P,		; And return
+
+NOTRCH:	MOVEI	T1,[ASCIZ | Unreachable|] ; Get nasty message
+	PUSHJ	P,.TSTRG##	; type it out
+	PJRST	.TCRLF##	; And finish it up
+; Here when we will be printing a bunch of nodes in detail.  Just print a list
+; of numbers.
+
+NODD.3:	PUSHJ	P,.TTABC##	; Type a tab after the node name
+	MOVE	T1,DNARG+.DNBNM	; Get node number back
+	PUSHJ	P,.TDECW##	; Output it
+	MOVE	T1,DNARG+.DNBRC	; Get reachability info
+	TXNN	T1,DNB.RC	; Is the node reachable?
+	 JRST	 NOTRCH		;  No, skip all this crap
+	PUSHJ	P,.TTABC##	; Type a tab
+	LDB	T1,[POINTR DNARG+.DNBRC,DNB.HP] ; Get the hops
+	PUSHJ	P,.TDECW##	; Type it out
+	PUSHJ	P,.TTABC##	; Type a tab
+	LDB	T1,[POINTR DNARG+.DNBRC,DNB.CS] ; Get the cost
+	PUSHJ	P,.TDECW##	; Type it out
+	PUSHJ	P,.TTABC##	; Type a tab
+	LDB	T1,[POINTR DNARG+.DNBLD,DNB.DL] ; Get active links
+	PUSHJ	P,.TDECW##	; Type it out
+	PUSHJ	P,.TTABC##	; Type a tab
+	LDB	T1,[POINTR DNARG+.DNBLD,DNB.AL] ; Get delay
+	PUSHJ	P,.TDECW##	; Type it out
+	MOVEI	T1,[ASCIZ |	Phase II|]
+	PUSHJ	P,.TSTRG##	; Type it out
+	LDB	T1,[POINTR DNARG+.DNBRC,DNB.NT] ; Get node type
+	CAIE	T1,3		; Is it a phase III ?
+	 JRST	 NODD.4		;  No, skip this
+	MOVX	T1,"I"		; Get the third I
+	PUSHJ	P,.TCHAR##	; Type it out
+NODD.4:	PUSHJ	P,.TTABC##	; Type a space
+	JRST	NODD.5		; Go type out circuit
+	SUBTTL	LNKDET	Type out link info in detail
+
+; This routine will type out all the info about a given link id in detail.  It
+; takes one argument in T1, which is the link id.  If the bit DNL.NJ is set, it
+; will print info about the NEXT link.  On return T1 contains the link id that
+; was just printed.
+
+LNKDET:	MOVEM	T1,DNLINK+.DNFLG	; Install link id
+	MOVEI	T1,DNLINK		; Get arg for uuo
+	DNET.	T1,			; Read the info
+	 HALT	 .
+	SKIPN	DNLINK+.DNJOB		; Do we have a link??
+	 POPJ	 P,			;  No, we're done
+	HLRE	T1,DNLINK+.DNJOB	; Get job number
+	JUMPL	T1,LNKNRT		; Go type out stuff for a NRTSER link
+LNKD.1:	PUSH	P,T1			; Save job number for later
+	PUSHJ	P,.TDECW##		; Type it out
+	PUSHJ	P,.TSPAC##		; Type a tab
+	HRLZ	T1,0(P)			; Get job number in right place
+	HRRI	T1,.GTNM1		; Get first part of name
+	GETTAB	T1,			; Get the upper half of name
+	 MOVE	 T1,['SILLY ']		;  Get substitute
+	PUSHJ	P,.TSIXS		; Type out first part of name
+	HRLZ	T1,0(P)			; Get job number back
+	HRRI	T1,.GTNM2		; Get second part of name
+	GETTAB	T1,			; Get lower half of name
+	 MOVE	 T1,['PERSON']		;  Get substitute
+	PUSHJ	P,.TSIXS		; Type it out
+	PUSHJ	P,.TTABC##		; Type a tab
+	HRLZ	T1,0(P)			; Get job number
+	HRRI	T1,.GTPPN		; Get ppn
+	GETTAB	T1,			; from monitor
+	 SETO	 T1,			;  Strange default
+	PUSH	P,T1
+	PUSHJ	P,.ALINM		; Print out alignment spaces
+	MOVE	T1,(P)			; Restore PPN
+	PUSHJ	P,.TXWDW##		; Type it out as a ppn
+	POP	P,T1			; Restore ppn
+	PUSHJ	P,.TALIN		; Print out trailing spaces
+	MOVE	T1,0(P)			; Get job number
+	TRMNO.	T1,			;  Get controlling tty number
+	 SKIPA
+	JRST	NODET
+	MOVEI	T1,[ASCIZ |Det|]	; Get this indicator
+	PUSHJ	P,.TSTRG##		; And type it out
+	JRST	DETLAB			; Continue later
+
+NODET:	PUSH	P,T1			; Save tty number
+	MOVEI	T1,[ASCIZ |TTY|]	; Get default
+	SKIPE	NRTTTY			; Is this job on a NRTSER tty?
+	 MOVEI	 T1,[ASCIZ |NRTSER_|]	; Yes, get label
+	SETZM	NRTTTY			; Clear this for the next round
+	PUSHJ	P,.TSTRG##		; Type it out
+	POP	P,T1			; Get back tty number
+	TXZ	T1,.UXTRM		; Get rid of the UDX offset
+	PUSHJ	P,.TOCTW##		; Type it out
+DETLAB:	PUSHJ	P,.TTABC##		; Followed by a tab
+	HRLZ	T1,0(P)			; Get job number
+	HRRI	T1,.GTPRG		; Get program name
+	GETTAB	T1,			; Get from monitor
+	 SETZ	 T1,
+	PUSHJ	P,.TSIXS		; Type it out
+	PUSHJ	P,.TSPAC##		; ...
+
+	POP	P,T1			; Fix stack
+	HRRZ	T1,DNLINK+.DNCHN	; Get channel number
+	LSH	T1,^D30			; Allow two digit field for alignment
+	PUSHJ	P,.ALINM		; Type out alignment spaces
+	HRRZ	T1,DNLINK+.DNCHN	; Get channel number
+	PUSHJ	P,.TDECW##		; Type it out
+	PUSHJ	P,.TSPAC##		; Type a space
+	MOVE	T1,DNLINK+.DNNOD	; Get node name
+	PUSHJ	P,.TSIXS		; Type it out
+	PUSHJ	P,.TSPAC##		; Type out a space
+	HLRZ	T1,DNLINK+.DNOBJ	; Get dest object
+	PUSHJ	P,.TDECW##		; Type it out
+	PUSHJ	P,.TTABC##		; Type a tab
+	HRRZ	T1,DNLINK+.DNOBJ	; Get source object
+	PUSHJ	P,.TDECW##		; Type it out
+	PUSHJ	P,.TTABC##		; Type a tab
+	HRLZ	T1,DNLINK+.DNSTA	; Get link status
+	PUSHJ	P,.TSIXN##		; Type it out
+	PUSHJ	P,.TCRLF##		; Type a crlf
+LNKRET:	SKIPE	T1,DNLINK+.DNFLG
+	 AOS	 (P)
+	POPJ	P,
+
+LNKNRT:	MOVE	T1,DNLINK+.DNJOB	; Get link id
+	MOVEM	T1,DNTTY+.DNCHL		; Put it in DNET. arg block
+	MOVEI	T1,DNTTY		; Get arg for DNET.
+	DNET.	T1,			; Read tty number from monitor
+	 JRST	 LNKRET
+	MOVE	T1,DNTTY+.DNLIN		; Get line number
+	TXO	T1,.UXTRM		; Make it into a UDX
+	DEVTYP	T1,			; Get it's controlling job number
+	 HALT	 .
+	LDB	T1,[POINTR T1,TY.JOB]	; Get the job number
+	JUMPE	T1,LNKRET		; Ignore not logged in TTY's for now
+	SETOM	NRTTTY			; Set the "job is on a NRTSER tty" flag
+	JRST	LNKD.1			; And join the main stream
+	SUBTTL	TYPNNM	Type out a node name or number as appropriate
+
+TYPNNM:	TLNE	T1,770000	; Left justified??? (Ie: SIXBIT name)
+	 PJRST	 .TSIXN##	;  Yes, print out the entry in SIXBIT
+
+	PUSH	P,T1		; Save number for a moment
+	MOVEI	T1,"("		; Get left paren
+	PUSHJ	P,.TCHAR##	; Print it
+	POP	P,T1		; Get node number back
+	PUSHJ	P,.TDECW##	; Yes, print out node number
+	MOVEI	T1,")"		; Get right paren
+	PJRST	.TCHAR##	; Output it
+
+.TSIXS:	PUSHJ	P,.SAVE2##	; Save P1 & P2
+	MOVE	P1,T1		; Save sixbit thingy in P1
+	MOVX	P2,6		; Get count in P2
+TSIX.1:	ROT	P1,6		; Put first byte into place
+	MOVE	T1,P1		; Get the sixbit word
+	ANDI	T1,77		; Just get the char we are interested in
+	ADDI	T1," "		; Make it ascii
+	PUSHJ	P,.TCHAR##	; And type it out
+	SOJG	P2,TSIX.1	; Loop till done
+	POPJ	P,
+
+.ALINM:	PUSHJ	P,.SAVE1##	; Save some P's
+	MOVE	P1,T1		; Get number into safe place
+ALIOOP:	TLNE	P1,700000	; Do we have a digit
+	 POPJ	 P,		;  Yes, skip no more
+	PUSHJ	P,.TSPAC##	; No, type a space
+	LSH	P1,3		; Shift over by one octal digit
+	JRST	ALIOOP		; And keep on trying
+
+.TALIN:	PUSHJ	P,.SAVE1##	; Save some P's
+	MOVE	P1,T1		; Get number into safe place
+TLIOOP:	TRNE	P1,700000	; Do we have a digit
+	 POPJ	 P,		;  Yes, skip no more
+	PUSHJ	P,.TSPAC##	; No, type a space
+	LSH	P1,3		; Shift over by one octal digit
+	JRST	TLIOOP		; And keep on trying
+	SUBTTL	Typeout routines
+
+; Typeout initialization routine.  Call after calling .ISCAN
+
+TYPINI:	MOVEI	T1,TOSIZ/5+1	; Get number of words in tty buffer
+	PUSHJ	P,GETWDS	; Get some memory
+	MOVEM	T1,TOBUF	; Save the buffer pointer
+	PUSHJ	P,TYPSET	; Set up the buffer pointers
+	MOVEI	T1,TYPCHR	; Get routine to buffer characters
+	PJRST	.TYOCH##	; Tell SCAN about it
+
+; Type the character in T1.  May destroy T1
+
+TYPCHR:	IDPB	T1,TOPTR	; Install the byte
+	SOSLE	TOREM		; Do we need to empty the buffer???
+	 POPJ	 P,		;  No, punt
+
+; Flush the output buffer
+
+TYPOUT:	MOVE	T1,TOREM	; Get number of characters left
+	SUBI	T1,TOSIZ	; Get number of characters to print out
+	JUMPE	T1,.POPJ	; Return if nothing
+	SETZ	T1,		; Get a zero
+	IDPB	T1,TOPTR	; To tie off the buffer
+	OUTSTR	@TOBUF		; Dump the buffer
+TYPSET:	MOVEI	T1,TOSIZ	; Get size of buffer
+	MOVEM	T1,TOREM	; Install it
+	MOVX	T1,<POINT 7,>	; Get pointer to buffer
+	HRR	T1,TOBUF	; Get start of buffer
+	MOVEM	T1,TOPTR	; Install it
+	POPJ	P,		; And return
+	SUBTTL	GETBYT	Get a byte from the BIGBUF
+
+;GETBYT:	SOSGE	CURBYT		; Got enough bytes???
+;	 POPJ	 P,		;  Nope, die
+;	ILDB	CH,CURPOS	; Get the next byte
+.POPJ1:	AOS	(P)		; Prepare for
+.POPJ:	POPJ	P,		;  A skip return!
+	SUBTTL	REDXTR	Read info about the executor node
+
+REDXTR:	MOVX	T1,%CNST2	; Go check the
+	GETTAB	T1,		; DECNET feature test
+	 SETZ	 T1,		;  No gettab, no DECnet
+	TXNN	T1,ST%D36	; DECNET in this monitor?
+	 ERROR(MND,Monitor does not have DECnet)
+	MOVX	T2,<.DNRLI,,4>	; Read local node info
+	MOVEI	T1,T2		; Get arg for DNET.
+	DNET.	T1,		; Read info about the executor
+	 ERROR(CRE,Can't read executor information)
+	MOVEM	T2+.DNBNN,NAMXTR ; Store the node name
+	MOVEM	T2+.DNMXN,MAXNOD ; Store the largest node number
+
+	POPJ	P,		; And return
+	SUBTTL	REDLIS	Read a list of nodes (Known or Active)
+
+; REDLIS will read either all active nodes or all known nodes based upon the
+; setting of F.ACT.  It will return a pointer to a list of SIXBIT node names
+; in T1 and the length of the list in T2.  The list will also be compared
+; against the constraint string (if it exists), and only those nodes that
+; match will be returned.
+;
+; Call:	PUSHJ	P,REDLIS	; Takes no arguments
+;	 <Return +1>		;  No nodes were returned.  T2 will be zero
+;	<Return +2>		; Some nodes were returned.  T2 has the number
+
+
+REDLIS:	TXNE	F,F.STR		; Complement constraint string bit
+	TXNE	F,F.WILD	; An unwildcarded string???
+	 SKIPA			;  No to either
+	  JRST	  REDL.4	;   Yes, return list of one item
+
+	PUSHJ	P,.SAVE3##	; Save a P
+	MOVE	T1,MAXNOD	; Get maximum number of nodes
+	ADDI	T1,.DNBCT+1	; Count of nodes and function header
+	MOVE	P1,T1		; Save arg block size for later
+	PUSHJ	P,GETWDS	; Go get the memory
+	HRLI	P1,.DNLAN	; Get "List Active Nodes" function code
+	TXNN	F,F.ACT		; Do we want active nodes??
+	 HRLI	 P1,.DNLKN	;  No, list known nodes
+	MOVEM	P1,.DNBFL(T1)	; Put func code in the arg block
+	DNET.	T1,		; Get list of nodes
+	 ERROR	(CRL,Can't read list of nodes)
+	MOVE	T2,.DNBCT(T1)	; Get number of nodes returned in T2
+	ADDI	T1,.DNBCT+1	; Make T1 point to start of nodes
+	JUMPE	T2,.POPJ	; No nodes, quit now
+; Now we will compare each node against the constraint string, throwing out
+; those entries which don't match.
+
+	DMOVE	P1,T1		; P1/ list of nodes,  P2/ number of nodes
+	SKIPN	WLDSIZ		; Any wildcard string specified??
+	 JRST	 .POPJ1		;  No, give successful return
+	PUSH	P,P1		; Save node list pointer
+	MOVN	T1,P2		; Get negative number of nodes
+	MOVE	P2,P1		; Get copy of node list pointer
+	HRL	P1,T1		; Make AOBJN pointer
+
+REDL.3:	MOVE	T1,(P1)		; Get a node from the source list
+	PUSHJ	P,WLDSIX	; Does this name match???
+	 JRST	 REDL.2		;  No, go on to next entry
+	MOVE	T1,(P1)		; Get name back again
+	MOVEM	T1,(P2)		; Save name
+	AOJ	P2,		; Bump destination pointer
+REDL.2:	AOBJN	P1,REDL.3	; Jump if there are some nodes left
+
+	POP	P,P1		; Get back start of list
+	SUB	P2,P1		; Compute number of nodes left
+	MOVE	T1,P1		; Move pointer to node list into T1
+	SKIPE	T2,P2		; Move count of nodes into T2
+	 AOS	 (P)		;  Skip return if any nodes
+	POPJ	P,		; Non-skip if no nodes matched
+
+; Here if we got a constraint string with no wildcards.  We interpret this
+; as meaning that the user wants detailed info about that one node, and we
+; set up the flags accordingly.
+
+REDL.4:	TXO	F,F.DET		; Type out this one node in great detail
+	PUSHJ	P,.SAVE1##	; Save a P
+	MOVEI	T1,1		; Get a word for the node name
+	PUSHJ	P,GETWDS	; Get the memory
+	MOVE	P1,T1		; Save pointer
+	MOVE	T1,WLDPTR	; Get pointer to constraint string
+	MOVE	T2,WLDSIZ	; Get size of string
+	PUSHJ	P,CNVA26	; Convert it to SIXBIT
+	MOVEM	T1,(P1)		; Save result
+	MOVE	T1,P1		; Get list pointer into T1
+	MOVEI	T2,1		; Get number of nodes into T2
+	JRST	.POPJ1		; And return happily
+	SUBTTL	SORTEM	Sort routine
+
+; SORTEM will sort a list of SIXBIT items.  The list pointer should be in T1,
+; and the list length should be in T2.  The items will be sorted in ascending
+; or descending order depending upon the setting of F.SBKW.
+
+SORTEM:	PUSHJ	P,.SAVE4##	; Save some P's
+	DMOVE	P1,T1		; Get pointer and list length in safe place
+	PUSH	P,P1		; Save list pointer for later
+	MOVE	T1,[CAMLE T1,0(T2)] ; Current item .LE. leaf???
+	TXNE	F,F.SBKW	; Sort backwards???
+	 MOVE	 T1,[CAMG T1,0(T2)] ; Yes, reverse the comparison instruction
+	MOVEM	T1,SRTCMP	; Save the comparison instruction
+	MOVEI	T1,2		; Get number of words per node
+	PUSHJ	P,GETWDS	; Get some memory
+	SETZM	1(T1)		; Zero out pointers
+	MOVEM	T1,TREPTR	; Save first entry as top of tree
+	MOVE	T1,0(P1)	; Get first entry
+	AOJ	P1,		; Bump source pointer to skip first entry
+	TLC	T1,400000	; Invert sign bit to force unsigned compares
+	MOVEM	T1,@TREPTR	; Kludge up the first entry
+
+; Here for each item to be sorted
+
+INSLOP:	SOJLE	P2,SRTOUT	; Jump if no more nodes left
+	MOVE	T3,TREPTR	; Get top of sorting tree
+	MOVE	T1,(P1)		; Get next node in list
+	AOJ	P1,		; Increment the pointer
+	TLC	T1,400000	; Invert sign bit to force unsigned compares
+
+; Here when we have to look at the next leaf pointed to by T3
+
+SRTNXT:	MOVE	T2,T3		; Make next leaf = current leaf
+	SETZ	T4,		; Prepare for left hand maneuvers
+	XCT	SRTCMP		; Current .RELOP. leaf???
+	 MOVEI	 T4,1		;  No, - right hand maneuvers
+
+; Now its time to see if we reached the end of the branch
+
+	XCT	SRTXC1(T4)	; Get pointer to next leaf
+	JUMPN	T3,SRTNXT	; In use, keep looking
+
+; We reached the end, generate a new leaf
+
+	PUSH	P,T1
+	PUSH	P,T2
+	MOVEI	T1,2
+	PUSHJ	P,GETWDS
+	SETZM	1(T1)		; Zero out pointers
+	MOVE	T3,T1
+	POP	P,T2
+	POP	P,T1
+
+;	MOVE	T3,SRTWRD	; Get number of words available
+;	SUBI	T3,2		; Correct the count
+;	SKIPGE	T3		; Do we have enough???
+;	 HALT	 .		;  No, barf
+;	MOVEM	T3,SRTWRD	; Put back the count
+;	MOVEI	T3,2		; Get correction factor
+;	ADDB	T3,SRTPOS	; Get new addr & correct for it
+
+	XCT	SRTXC2(T4)	; Point to new leaf
+	MOVEM	T1,0(T3)	; Install name in new leaf
+	JRST	INSLOP		; And go get next item
+
+SRTXC1:	HLRZ	T3,1(T2)	; Get pointer to left hand leaf
+	HRRZ	T3,1(T2)	; Get pointer to right hand leaf
+
+SRTXC2:	HRLM	T3,1(T2)	; Point to new leaf
+	HRRM	T3,1(T2)	; Point to new leaf
+	SUBTTL	SRTOUT	Output sorted nodes
+
+SRTOUT:	MOVE	T2,TREPTR	; Get start of tree
+	POP	P,P1		; Restore start of node list
+
+; Here is where the recursion starts -- watch out
+
+SRTRCR:	HLRZ	T1,1(T2)	; Get the left hand - lesser nodes
+	SKIPN	T1		; Did we hit the end of the branch???
+	 JRST	 SRTOU1		;  Yes, output this leaf
+	HRLM	T2,(P)		; Save T2 from recursion
+	MOVE	T2,T1		; Get pointer to next branch
+	PUSHJ	P,SRTRCR	; Recurse away! Stripping the lefties!
+	HLR	T2,(P)		; Restore the left leaf pointer
+SRTOU1:	MOVE	T1,0(T2)	; Get the node name
+	TLC	T1,400000	; Restore the proper node name
+	MOVEM	T1,(P1)		; Put item back in node list
+	AOJ	P1,		; Increment the pointer
+
+	HRRZ	T1,1(T2)	; Get the right hand - lesser nodes
+	SKIPN	T1		; Did we hit the end of the branch???
+	 POPJ	 P,		;  Yes, pop up a level
+
+	HRLM	T2,(P)		; Save T2 from recursion
+	MOVE	T2,T1		; Get pointer to next branch
+	PUSHJ	P,SRTRCR	; Recurse away! Stripping the righties!
+	HLR	T2,(P)		; Restore the right leaf pointer
+	POPJ	P,		; And return
+	SUBTTL	WLDCMP	Do a Wildcard string comparison
+
+; Call:
+;	MOVX	AP,<non-wildcarded string pointer>
+;	MOVX	AL,<non-wildcarded string length>
+;	MOVX	BP,<wildcarded string pointer>
+;	MOVX	BL,<wildcarded string length>
+;	PUSHJ	P,WLDCMP
+;	 <+1 Strings don't match>
+;	<+2 Strings match>
+
+WLDCMP:	ADJSP	P,4		; Make room for recursive info
+	DMOVEM	AP,-3(P)	; Save AP & AL
+	DMOVEM	BP,-1(P)	; Save BP & BL
+WLDLOP:	SOJL	BL,CHKEND	; Jump if we reached end of wild string
+	ILDB	T1,BP		; Get a char from the wildcard string
+	CAIN	T1,"*"		; Is it a wildcard???
+	 JRST	 WLDRCR		;  Yes, then do our recursive thing
+	CAIN	T1,"?"		; Is it a place holder???
+	 JRST	 WLDSKP		;  Yes, skip one in the primary
+	SOJL	AL,RPOPJ	; If primary just ended, we have no match
+	ILDB	T2,AP		; Get a char from the non-wildcarded string
+	CAMN	T1,T2		; Do the characters match???
+	 JRST	 WLDLOP		;  Yes, keep looping
+	JRST	RPOPJ		; No, Give a non-skip return
+RPOPJ1:	 AOS	-4(P)		; Skip return
+RPOPJ:	DMOVE	AP,-3(P)	; Restore AP & AL
+	DMOVE	BP,-1(P)	; Restore BP & BL
+	ADJSP	P,-4		; Fix the stack
+	POPJ	P,		; And return
+
+; Here when we run out of wilcard string, if no more primary, we are happy
+CHKEND:	SOJL	AL,RPOPJ1	; Return happy if primary ended here also
+	JRST	RPOPJ		; Punt, primary too long
+
+; Here when we see a *, call ourself recursively until we run out of primary
+WLDRCR:	PUSHJ	P,WLDCMP	; Do the comparison
+	 SKIPA			; Skip if we lost
+	  JRST	  RPOPJ1	;   It compared, return happily
+	SOJL	AL,RPOPJ	; Jump if we ran out of primary
+	IBP	AP		; Advance the primary (non-wildcarded) pointer
+	JRST	WLDRCR		; And try again
+
+; Here when we see a ?, skip one in the primary and jump back into the loop
+WLDSKP:	SOJL	AL,RPOPJ	; Decrement the primary by one
+	IBP	AP		; Increment the pointer
+	JRST	WLDLOP		; And jump back into the fray
+	SUBTTL	CNV826	Convert 8 bit ASCII to SIXBIT
+
+CNVA26:	MOVE	T3,[POINT 6,T4]	; Get byte pointer to destination
+	SETZ	T4,		; Clear destination
+CNVLOP:	ILDB	CH,T1		; Get an ASCII byte
+	MOVEI	CH,-" "(CH)	; Make it SIXBIT
+	IDPB	CH,T3		; Deposit it
+	SOJG	T2,CNVLOP	; Jump till done
+	MOVE	T1,T4		; Get it where we want it
+	POPJ	P,
+
+REPEAT 0,<
+CNV826:	MOVE	T2,T1		; Get source string pointer
+	ILDB	T1,T2		; Get source string length
+	MOVEI	T4,6		; Get destination string length
+	MOVE	P1,[POINT 6,T3]	; Get destination string pointer
+	EXTEND	T1,[MOVSO -" "	; MOVe String Offset
+		    0]		; 0 is the fill
+	 HALT	 .
+	MOVE	T1,T3		; Get it where we want it
+	POPJ	P,
+>
+
+WLDSIX:	MOVE	T2,[POINT 7,ASCBUF] ; Get pointer to ASCII buffer
+	MOVE	AP,T2		; Get pointer to non-wildcarded string
+	PUSHJ	P,CNV62A	; Convert T1 to ASCIZ
+	MOVE	AL,T4		; Get number of chars in string
+	MOVE	BP,WLDPTR	; Get BP to wildcarded string
+	MOVE	BL,WLDSIZ	; Get size of wildcarded string
+	PJRST	WLDCMP		; Go do comparison
+
+; Call:	PUSHJ	P,CNV62A		;  Convert SIXBIT to ASCIZ
+;	T1/	SIXBIT word
+;	T2/	Byte pointer to ASCII buffer
+;
+
+CNV62A:	DMOVE	T2,T1		; Get pointer to ascii buffer
+	SETZB	T1,T4		; Zero out receiving buffer, and char count
+CNV6.1:	LSHC	T1,6		; Load a character into T1
+	JUMPE	T1,.POPJ	; Jump if we are done
+	ADDI	T1," "		; Convert to ASCII
+	IDPB	T1,T3		; Save it
+	SETZ	T1,		; Zapp T1 so we get a clean LSH
+	AOJA	T4,CNV6.1	; Increment number of bytes seen so far
+	SUBTTL	PRT8I	Print out an 8 bit node ID
+
+; Call:	MOVE	T1,[byte pointer] ;Pointer to standard DECnet node ID
+;	PUSHJ	P,PRT8I		; Print it out
+;	<Return +1>		; Always
+
+	REPEAT	0,<
+PRT8I:	PUSH	P,P1		; Preserve this
+	MOVE	P1,T1		; Save the byte pointer
+	ILDB	T2,P1		; Get the length byte
+PRTLOP:	ILDB	T1,P1		; Get the next byte
+	OUTCHR	T1		; Output it
+	SOJG	T2,PRTLOP	; Loop until done
+	MOVE	T1,P1		; Get back the byte pointer for later
+	POP	P,P1		; ...
+	POPJ	P,
+	> ; END OF REPEAT 0
+	SUBTTL	GETWDS	Allocate words of memory
+
+GETWDS:	ADD	T1,.JBFF	; Compute address of new .JBFF
+	MOVEI	T2,-1(T1)	; Get address of last loc needed
+	CAMLE	T2,.JBREL	; Any room left???
+	 JRST	 GETCOR		;  No, try for more
+	EXCH	T1,.JBFF	; Swap new with the old
+	POPJ	P,		; And return happily
+
+GETCOR:	CORE	T2,		; Try to get the memory
+	 ERROR	(NEM,Not enough memory)
+	EXCH	T1,.JBFF	; Swap new with the old
+	POPJ	P,
+	SUBTTL	WRNRTN and ERRDIE  Error handling routines
+
+WRNRTN:	PUSHJ	P,.PSH4T##	; Save all the important acs
+	MOVE	T3,@-4(P)	; Get the instruction after PUSHJ to us
+	LDB	T4,[POINT 9,T3,8] ; Get the opcode
+	CAIE	T4,JUMP_-^D27	; Is it a jump?
+	 HALT	 .		; No, die horribly
+	MOVE	T1,0(T3)	; Get first arg for .ERMSG
+	MOVE	T2,1(T3)	; Get second arg for .ERMSG
+	PUSHJ	P,.ERMSG##	; Call the processor
+	PUSHJ	P,.POP4T##	; Restore the world
+	POPJ	P,
+
+ERRDIE:	PUSHJ	P,.ERMSG##	; Issue the error message
+	PUSHJ	P,.CLRBF##	; Clear typeahead
+	JRST	FINI.1		; Go flush the buffers
+	SUBTTL	SCNLIN	Scan the command line, looking for switches and such
+
+SCNLIN:	MOVE	T1,[POINT 7,WLDSTR] ; Get pointer to wild card storage
+	MOVEM	T1,WLDPTR	; Save it
+	MOVEI	T1,WLDLEN	; Get length of wild string
+	MOVEM	T1,WLDSIZ	; Store it
+	MOVE	T1,QSCARG	; Get arg for .QSCAN
+	PUSHJ	P,.QSCAN##	; Init the scanner
+	 JRST	 SCNFIN		;  No more to come, punt
+SCNLOP:	PUSHJ	P,.TIAUC##	; Get one char, handling lower case, etc...
+SCNL.1:	JUMPLE	C,SCNFIN	; Return if done
+	CAIN	C,"/"		; Switch coming up???
+	 JRST	 SWTLOP		;  Yes, go handle it
+	CAIN	C," "		; Is it a space?
+	 JRST	 SCNLOP		;  Yes, ignore it
+	PUSHJ	P,CHKWLD	; Could it be part of the wild string??
+	 ERROR(ILC,Illegal character in command line)
+
+	TXOE	F,F.STR		; Have we been here before??
+	 ERROR(MOW,More than one wildcard string specified)
+	JRST	SCNI.1		; Jump into the fray
+
+SCNI.2:	PUSHJ	P,.TIAUC##	; Get the next character
+SCNI.1:	PUSHJ	P,CHKWLD	; Is it legal??
+	 JRST	 SCNL.1		;  No, give it back to the main loop
+SCNINP:	SOSL	WLDSIZ		; Is there any room???
+	 IDPB	 C,WLDPTR	;  Yes, stuff it in
+	JRST	SCNI.2		; And keep on looping
+
+CHKWLD:	PUSHJ	P,.TICAN##	; Is it alphanumeric??
+	 SKIPA			;  No, check for wild stuff
+	JRST	.POPJ1		; Yes, return happilt
+	CAIE	C,"*"		; Is it a * ???
+	 CAIN	 C,"?"		;  Or a ? ???
+	  TXOA	  F,F.WILD	;   Yes, skip and flag it
+	POPJ	P,		; No, no skip
+	JRST	.POPJ1		; And return happily
+
+SWTLOP:	PUSHJ	P,.KEYWD##	; Call the scanner
+	 ERROR(NSS,No switch specified)
+	JRST	SCNL.1		; Go back for more
+
+SCNFIN:	MOVEI	T1,WLDLEN	; Get current size of wild buffer
+	SUBM	T1,WLDSIZ	; Make it into the string size
+	MOVE	T1,[POINT 7,WLDSTR] ; Get a new byte pointer
+	MOVEM	T1,WLDPTR	; Install it
+
+	MOVE	T1,OSCARG	; Get arg for .OSCAN
+	PUSHJ	P,.OSCAN##	; Read BITCH.INI
+
+	IORX	F,F.DEFAULT	; Get the default flag settings
+	ANDCM	F,M.FLAG	; F now contains flags we should set
+	IORB	F,V.FLAG	; Or in the flags that were set already
+
+;	MOVX	T1,.NTACT	; Get the default
+;	TXNN	F,F.ACT		; /ACTIVE specified???
+;	 MOVX	 T1,.NTKNO	;  No, must be /KNOWN
+;	MOVEM	T1,NTARG+.NTSEL	; Install the value
+
+	SKIPL	T1,FLSORT	; /SORT specified???
+	 JRST	 SCNF.1		;  Yes, go set up flags
+	TXO	F,F.SORT	; No, heres the default
+	JRST	.POPJ		; and we're done
+
+SCNF.1:	CAIN	T1,SORTNO	; /NOSORT or /SORT:no???
+	 POPJ	 P,		;  Yup, we're all done
+	CAIN	T1,SORTBA	; /SORT:BACKWARDS ???
+	 TXO	 F,F.SBKW	;  Yes, set the flag
+	TXO	F,F.SORT	; Turn on the sorting flag in any case
+	POPJ	P,		; and return
+	SUBTTL	Tables for SCAN
+
+ISCARG:	XWD	ISCLEN,ISCBLK	; AC for call to .ISCAN
+
+ISCBLK:	IOWD	MONCLN,MONCMD	; Point to CCL names
+	XWD	0,'NET'		; Define NETxxx and no CCL entry
+	XWD	0,0		; No special I/O routines
+	XWD	0,0		; No ccl files
+	XWD	0,0		; No special prompt or monret routines
+	EXP	FS.IFI		; Indirect files illegal
+	ISCLEN==.-ISCBLK
+
+MONCMD:	SIXBIT	|NET|		; NET command
+	MONCLN==.-MONCMD
+
+OSCARG:	XWD	OSCLEN,OSCBLK	; AC for call to .OSCAN
+
+OSCBLK:	IOWD	SWTABL,SWTABN	; IOWD pointer to switch table
+	XWD	SWTABD,SWTABM	; Default table, processor
+	XWD	0,SWTABP	; Pointers for storing
+	EXP	0		; No help
+	SIXBIT	|NET|		; Option name is NET
+	OSCLEN==.-OSCBLK
+
+QSCARG:	XWD	QSCLEN,QSCBLK	; AC for call to .QSCAN
+
+QSCBLK:	IOWD	SWTABL,SWTABN	; IOWD pointer to switch table
+	XWD	SWTABD,SWTABM	; Default table, processor
+	XWD	0,SWTABP	; Pointers for storing
+	EXP	0		; No help
+	QSCLEN==.-QSCBLK
+
+	DEFINE	SWTCHS,<	; Define switch tables
+
+;	SS	LONG,<POINTR (V.FLAG,F.LONG)>,1,FS.OBV
+;	SS	SHORT,<POINTR (V.FLAG,F.LONG)>,0,FS.OBV
+	SS	ACTIVE,<POINTR (V.FLAG,F.ACT)>,1
+	SS	KNOWN,<POINTR (V.FLAG,F.ACT)>,0
+;	SS	NODNUM,<POINTR (V.FLAG,F.NNUM)>,1,FS.OBV
+	SS	NOSORT,FLSORT,SORTNO
+	SL	SORT,FLSORT,SORT,SORTFO
+	SN	DETAIL,<POINTR (V.FLAG,F.DET)>
+;	SS	LINES,NTARG+.NTENT,.NTLIN
+;	SS	CIRCUITS,NTARG+.NTENT,.NTCKT
+	SS	LINKS,<POINTR (V.FLAG,F.LINK)>,1,FS.OBV
+	>
+
+	KEYS(SORT,<FORWARD,BACKWARD,NOSORT>)
+
+	DOSCAN (SWTAB)		; Create the switch tables
+	SUBTTL	LOWSEG	Storage for NET
+
+	RELOC	0		; Put this in the lowseg
+
+; SCAN storage
+
+V.FLAG:	0			; Flag values
+M.FLAG:	0			; Flag mask
+FLSORT:	-1
+
+THARG:	2,,.+1			; AC for TRMOP.
+	EXP	.TOPSZ		; Height of terminal
+	EXP	-1		; For this terminal
+
+TWARG:	2,,.+1			; AC for TRMOP.
+	EXP	.TOWID		; Get terminal width
+	EXP	-1		; For my terminal
+
+SNCTTY:	3,,.+1			; AC for TRMOP.
+	EXP	.TOSTC+.TOSET	; Set number of lines in which to halt output
+	EXP	-1		; For this terminal
+	EXP	30		; ...
+
+DNARG:	.DNNDI,,7		; Return detailed node info
+	BLOCK	4
+	EXP	CIRLEN		; Length of circuit string
+	POINT	7,CIRBUF	; Pointer to where to put circuit id for node
+
+CIRBUF:	BLOCK	3		; Area for circuit id
+	CIRLEN==<.-CIRBUF>*5-1	; Number of chars in CIRBUF
+
+DNLINK:	.DNLLS,,15
+	BLOCK	15
+
+DNTTY:	.DNLLC,,3
+	BLOCK	2
+
+NRTTTY:	BLOCK	1		; -1 means we have NRTSER tty in LNKDET
+
+	REPEAT	0,<
+NTARG:	EXP	NTLEN		; .NTCNT - # of words in arg block
+	EXP	.NTNOD		; .NTENT - entity is nodes
+	EXP	0		; .NTEID - no specific node
+	EXP	.NTRET		; .NTFNC - return list of items
+	EXP	.NTACT		; .NTSEL - show known nodes
+	EXP	0		; .NTQUA - no X.25 qualifier
+	POINT	8,BIGBUF	; .NTBPT - pointer to big buffer
+	EXP	BIGSIZ		; .NTBYT - size of bugbuf
+	EXP	0		; .NTERR - return code
+	NTLEN==.-NTARG
+
+	BIGSIZ==^D512*3		; 512 nodes @ 3 bytes apiece
+BIGBUF:	BLOCK	BIGSIZ/4+1	; Main data buffer
+CURPOS:	BLOCK	1		; Current position within BIGBUF
+CURBYT:	BLOCK	1		; Number of bytes left within BIGBUF
+
+MAPARG:	EXP	MAPLEN
+	EXP	.NTNOD		; Mapping nodes
+	EXP	0		; No specific entity ID
+	EXP	.NTMAP		; Map node number to node name
+	EXP	0		; No class of entities
+	EXP	0
+	POINT	8,MAPBUF	; Pointer to mapbuffer
+	EXP	MAPSIZ		; Size of map buffer
+	EXP	0
+	MAPLEN==.-MAPARG
+
+	MAPSIZ==9		; 2 byte node number + 6 byte I field
+MAPBUF:	BLOCK	MAPSIZ/4+1	; Holds data for mappings
+
+REXARG:	EXP	REXLEN		; .NTCNT - # of words in arg block
+	EXP	0		; .NTENT
+	EXP	0		; .NTEID
+	EXP	.NTREX		; .NTFNC - return executor id
+	EXP	0		; .NTSEL
+	EXP	0		; .NTQUA
+	POINT	8,BIGBUF	; .NTBPT - pointer to big buffer
+	EXP	BIGSIZ		; .NTBYT - size of bugbuf
+	EXP	0		; .NTERR - return code
+	REXLEN==.-REXARG
+	> ; End of REPEAT 0
+
+STACK:	BLOCK	100		; Stack
+	STKLEN==.-STACK
+
+TREPTR:	BLOCK	1		; Pointer to binary sorting tree
+
+NAMXTR:	BLOCK	1		; Name of executor node
+NUMXTR:	BLOCK	1		; Number of executor node
+MAXNOD:	BLOCK	1		; Maximum number of nodes in network
+SRTCMP:	BLOCK	1		; Comparison instruction for sorter
+NODPLN:	BLOCK	1		; Number of nodes per line
+TRMHIT:	BLOCK	1		; Terminal height
+
+WLDSTR:	BLOCK	10		; Storage for wildcarded string
+WLDPTR:	BLOCK	1		; Bytepointer to wildcarded string
+WLDSIZ:	BLOCK	1		; Number of bytes in wildcarded string
+	WLDLEN==20
+
+ASCBUF:	BLOCK	2		; Holds ASCIIzed SIXBIT for WLDSIX
+
+TOBUF:	BLOCK	1
+TOREM:	BLOCK	1
+TOPTR:	BLOCK	1
+	SUBTTL	Literals
+
+	RELOC			; Put literals in the high seg
+	XLIST			; Don't list them
+	LIT			; Put literals right here
+	LIST			; Enable listing
+
+	END	NET		; End of NET

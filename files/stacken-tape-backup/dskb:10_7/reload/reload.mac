@@ -1,0 +1,63 @@
+	TITLE	RELOAD		;Proggie to use RECON.s
+	SUBTTL Tarl Neustaedter
+	SEARCH	DCN
+	XP $ONLY,I.LUO!I.GTT!I.CHG
+	$INIT	REL
+
+XP BTXLEN,^D16			;Max length the monitor will take for bootxt
+$LVAR	BOOTLN			;Length of string we are supllying.
+$BLOCK	BOOTXT,BTXLEN		;String
+
+START:	$SETUP
+	GETPPN	T1,		;Find out who we are
+	 NOOP			;grumble grumble - someone might jacct this.
+	CAMN	T1,[1,,2]	;are we [OPR]?
+	 JRST	START0		;Yes, proceed.
+	MOVE	T2,[1,,2]	;No, reload will not work until we are.
+	CHPPN.	T2,		;I hope this works
+	 $ERROR	NPR,<No privs to reload system>,,,[EXIT]
+	$WARN	CPO,<Changed PPN to [1,2] from >,.TPPNW##,T1
+START0:	TLINE.	[ASCIZ \End of line (and system) only with <CRLF>\]
+	TSTRG.	[ASCIZ \BOOTXT: \]
+	MOVEI	P2,<BTXLEN*5>-1	;Max number of characters
+	MOVE	P1,[POINT 7,BOOTXT] ;Byte pointer to save string
+	SETZ	P3,
+
+NEXTCH:	INCHWL	T1		;get a character
+	CAIL	T1," "		;Make sure not a control character
+	 JRST	GOODCH		;Good character , put it away
+	CAIN	T1,.CHLFD	;Line feed?
+	 JRST	ENDCH		;Yes, Ignore
+	CAIN	T1,.CHCRT	;Carriage return?
+	 JRST	GOODC		;yes, let the character through
+	$WARN	CCI,<Control characters are illegal>,.TCHAR##,T1
+ABORT:	CLRBFI			;clear typeahead
+	SETZM	BOOTXT		;Clean first word out
+	MOVE	T1,[BOOTXT,,BOOTXT+1]
+	BLT	T1,BOOTXT+BTXLEN-1 ;Clean out until end of string
+	JRST	START		;Start from scratch
+
+GOODC:	SETO	P3,		;Remember we came through here.
+GOODCH:	IDPB	T1,P1		;Save away this character
+	SOJG	P2,NEXTCH	;get another character if it will fit.
+	$WARN	BSL,<Boot string too long>,,,ABORT
+
+ENDCH:	AOJN	P3,[$WARN MEC,<Must end with [RETURN]>,,,ABORT]
+	SUBI	P2,<BTXLEN*5>-1	;Negative number of characters typed in
+	IDIV	P2,[-5]		;Make into positive number of words
+	ADDI	P2,2		;include partial word, and count word
+	MOVEM	P2,BOOTLN	;save for recon
+	MOVE	T1,[.RCBTX,,BOOTLN] ;BOOTLN is start of argument block
+	RECON.	T1,		;Change bootxt
+	 $ERROR	CSB,<Couldn't set BOOTXT, code: >,.TOCTW##,T1
+	MOVE	T1,[.RCNAR,,[EXP 2,0]] ;Set auto reload bit to zero
+	RECON.	T1,		;to ensure reload.
+	 $WARN	CCD,<Couldn't clear DF.NAR, code: >,.TOCTW##,T1
+	MOVE	T1,[.RCRLD,,0]	;do the reload function
+	OUTSTR	[ASCIZ \Ding Ding Ding
+\]
+	RECON.	T1,		;reload
+	 $ERROR	CRL,<Couldn't reload the system, code: >,.TOCTW##,T1
+	$INFORM	WOW,<How did you get here?????>
+
+	END	START

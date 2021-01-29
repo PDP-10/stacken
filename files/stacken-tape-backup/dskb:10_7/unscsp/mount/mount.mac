@@ -1,0 +1,1224 @@
+TITLE	MOUNT	MDA user interface program
+SUBTTL	P. Taylor/PJT/LWS  29-Feb-84
+
+;
+;
+;
+;        COPYRIGHT (c) 1975,1976,1977,1978,1979,1980,1981,1982,
+;			 1983,1984,1985,1986
+;                    DIGITAL EQUIPMENT CORPORATION
+;			 ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;     
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;     
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+
+
+
+	SEARCH	GLXMAC			;Get Galaxy symbols
+	PROLOG	(MOUNT)
+	SEARCH	ORNMAC,QSRMAC,MNTMAC
+
+
+	EXTERN	PARSER,P$HELP
+	PARSET				;Declare external Parser routines
+
+;Version Information
+
+	MOUVER==2			;MAJOR VERSION
+	MOUMIN==0			;MINOR VERSION
+	MOUEDT==:0100			;EDIT LEVEL
+	MOUWHO==0			;WHO LAST EDITED (0=DEC DEVELOPMENT)
+
+
+	VMOUNT==<VRSN.(MOU)>		;Get the version level
+
+
+	TWOSEG				;Make us sharable
+	RELOC	400000			;Code goes here
+
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1971,1986.
+ALL RIGHTS RESERVED.
+\;END OF COPYRIGHT MACRO
+SUBTTL	Table of contents
+
+SUBTTL	Revision History
+
+COMMENT \
+
+Edit	Comment
+
+0001	Initial version of MOUNT
+0002	Include new P$HELP facility
+0003	Initial bug fixes and remove /AFF and /SEP
+
+0004	Decouple /NOTIFY and /NOWAIT
+
+0005	Separate MOUNT parsing code so it may be used with
+	BATALC for preallocation parsing of control files.
+
+0006	Fix MOUNT/CHECK and ALLOCATE/CHECK
+
+0007	Clear JACCT and Show all users by default
+	Add MODIFY command not yet implemented message
+
+0010	Add support for M7: and M9: compatability.
+
+0011	Do not default WRITE-LOCKED for tapes
+
+0012	Add support for generic mount requests.
+
+0013	Add support for new DEALLOCATE/DISMOUNT switches /NOTIFY/NOWAIT/WAIT
+
+0014	Fix generic mounts from turning into magtape mounts unless generic MTA.
+
+0015	Remove feeble attempt to parse /VID or /REMARK switches that quotes
+	strings with single quotes. The old UMOUNT CUSP used to handle this
+	but we can't do it right. In addition, the break mask for an unquoted
+	string has been changed to allow only 0-9, -, A-Z and a-z. This is
+	consistant (except for the dash) with SCAN's string parsing logic.
+
+0016	DO not send a .SMALI block for TOPS10 (TOPS20 only)
+
+0017	Allow /UNLOAD switch on DISMOUNT or DEALLOCATE command for consistancy
+	with the old UMOUNT syntax.
+
+0020	Instead of bitching when the user types MOUNT or ALLOCATE with no
+	arguments, give a listing instead. This is consistant with the other
+	QUEUE class commands.
+
+0021	Change unlabeled label type to USER-EOT and remove BLP
+
+0022	Add UNLABELED and make it synonomous with NOLABELS.
+	Put BLP label type back in and make it synonomous with
+	BYPASS.
+
+0023	Don't clear JACCT on startup. It shouldn't be set.
+
+0024	Use job number for PID.
+
+0025	Complain if the user supplies a logical name on structure requests.
+
+0026	Make MOUNT easily link with GLXLIB. Now all code can be in the high
+	segment!!
+
+0027	Flush the IPCF queue during initialization.
+	Make /NOWAIT imply /NOTIFY
+	Add /NONOTIFY for bozo's who really do not want /NOTIFY on /NOWAIT
+
+0030	Do not insert '[' or ']' on the acks from MDA
+
+0031	Do not allow physical/generic volume set names in the ALLOCATE cmd.
+
+0032	Tell user there is no operator coverage
+
+0033	Improve error messages instead of ?FOO may not be mounted
+
+0034	Make CSSE happy and impliment /VID:xxx on DISMOUNT/DEALLOCATE
+
+0035	Look for separate help files for each command that invokes MOUNT.
+	Don't use P$HELP since requires lots of stack space that never gets
+	used. Remove /DRIVES and /STRUCTURE-ID switches since they were
+	never implemented. Decrease the stack size from 200 to 70.
+
+0036	Make DISMOUNT/DEALLOCATE /NOTIFY work
+	Also fix .MOUNT/WAIT so it does not send a garbage message
+
+0037	Make it so that generic device mounts are illegal in $STEP batch headers
+
+0040	Don't let OPRPAR rescan the command line. There are lots of major
+	OPRPAR/GLXSCN/GLXKBD problems.
+
+0041	Fix edit 37 so we are no so restrictive with generic mounts
+
+0042	Allow DISMOUNT xxx/UNLOAD
+
+0043	QUEUE. UUO block made MOUNT have a non-null low segment
+
+0044	P$WLDF requires a user to explicity type * for wildcarding job
+	names. That's a lose cuz you can't type CAN PRI /SEQ:54. Don't
+	do that.
+
+0045	Check to see if user logical name already exists. If so, issue a
+	warning, and clear the old definition.
+
+0046	Don't use a PFH. It will slow things down.
+
+0047	Lost edit 43 somewhere. Put it back
+
+0050	DISMOUNT/VID:xxx does not tell the OPR enough about the user.
+	Add code to dump out the volume set name and unit if we can
+	determine it.
+
+0051	Remove /SEQUENCE. GCO 1295
+
+0052	Don't do logical name checking if batch prescan.  GCO 1388
+
+0053	Add code to MNTPAR in MOUN25 and MOUN30 to support the
+	ENABLE/DISABLE queue functionality for disks and tapes.
+	NO SPR 21-SEP-83/CTK
+
+0054	Remove edit 53 because it broke logical names.
+	NO SPR 20-FEB-84/CTK
+
+0055	Add code to use a semi-unique ACK code for mount requests send
+	to QUASAR.
+	Requires QUASAR edit #1173
+	SPR 10-34182 4-Feb-84 /LWS
+
+0056	Make MOUNT /CHECK and MOUNT <CR><LF> work the way they should.
+	29-Feb-84 /LWS
+
+0057	Redo code on TTYRSC to handle line continuation.
+	SPR 10-34857 GCO 10091 13-Sep-84 /LWS
+
+** Version 2 edits start here **
+
+0100	Add support for SHOW QUEUE EVENTS.
+	GCO 10129 11-Dec-84 /LWS
+
+\ ;end revision history
+SUBTTL	Constants and assembly parameters
+
+	XP	PDLEN,^D70	;Push down list length
+	XP	TTYSIZ,<^D500/5>+1 ;[57] TTY buffer size (500 characters)
+
+;Interrupt channel assignments
+
+	XP	.ICIPC,1	;IPCF interrupt channel
+
+	LOC	137
+.JBVER:	EXP	VMOUNT		;Declare version number
+	RELOC
+
+;Entry vector definition
+
+ENTVEC:	JRST	BEGIN			;MAIN ENTRY POINT
+	JRST	BEGIN			;REENTRY POINT
+	EXP VMOUNT			;VERSION OF PROGRAM
+
+
+SUBTTL	Initialization
+
+BEGIN:	JFCL				;Ignore CCL start
+	RESET
+	MOVE	P,[IOWD PDLEN,PDL]	;Set up user stack
+	SETZM	DATORG			;Clear impure storage
+	MOVE	S1,[DATORG,,DATORG+1]	; Our first location thru
+	BLT	S1,DATEND-1		; Last location of storage
+
+	MOVE	S1,[IBBLK,,IB]		;Set up IB
+	BLT	S1,IB+IB.SZ-1
+	MOVE	S1,[PIBBLK,,PIB]	;Set up PIB
+	BLT	S1,PIB+PB.MNS-1
+TOPS10	<
+	MOVEI	S1,INTIPC		;IPCF interrupt
+	MOVEM	S1,IPCINT+.PSVNP
+>
+TOPS20	<
+	MOVE	S1,[1,,INTIPC]		;IPCF interrupt
+	MOVEM	S1,CHNTAB+1
+>
+
+	MOVEI	S1,IB.SZ
+	MOVEI	S2,IB
+	$CALL	I%INIT			;Get the library
+	$CALL	JOBPRM			;Read initial JOB parameters
+	PUSHJ	P,TTYRSC		;RESCAN THE INPUT BUFFER
+	SETOM	BATJOB##		;INDICATE NOT A BATCH JOB
+	SETZB	S1,S2			;Don't want timer interrupts for parser
+	$CALL	P$INIT			;Initialize parser routines
+	$CALL	I%ION			;Enable interrupts
+	PUSHJ	P,C%RECV		;Flush the IPCF queue
+	JUMPT	.-1			;Got one,,get another
+	MOVEI	S1,INI010		;Setup parser arg block
+	MOVEM	S1,PAR.TB+PARBLK	;Store Table address
+	MOVEI	S1,[ASCIZ//]
+	MOVEM	S1,PAR.PM+PARBLK	;Store null prompt
+	MOVEI	S1,CMDBLK
+	MOVEM	S1,PAR.CM+PARBLK	;Store address to return args
+	MOVEI	S1,TTYBUF		;POINT TO TTY BUFFER
+	MOVEM	S1,PAR.SR+PARBLK	;PARSE COMMAND FROM THERE
+	JRST	GETCMD			;Start processing commands
+
+SUBTTL	Parser and Command dispatch
+
+GETCMD:	MOVE	P,[IOWD	PDLEN,PDL]	;Reset stack
+	MOVEI	S1,CMD.SZ		;Clear initial arguments
+	MOVEI	S2,CMDBLK
+	$CALL	.ZCHNK
+	MOVEI	S1,COM.SZ-1
+	STORE	S1,.MSTYP+CMDBLK,MS.CNT	;Set initial size
+	MOVEI	S1,PAR.SZ		;Get size of parser block
+	MOVEI	S2,PARBLK		;Point to it
+	$CALL	PARSER			;Parse the command
+	JUMPT	GETCM1			;Onward if command parsed ok
+CMDERR:	MOVE	S1,PRT.FL(S2)		;Get the flags
+	MOVE	S2,PRT.EM(S2)		;Get the address of error text
+	TXNE	S1,P.CEOF		;End of file on RESCAN?
+	 MOVEI	S2,[ASCIZ/Invalid command terminator/]
+	 $ERR	(<^T/0(S2)/>)
+	JRST	GETCM2			;Check for next command
+
+GETCM1:	MOVEI	S1,COM.SZ+CMDBLK	;Point to first argument
+	$CALL	P$SETU			;Setup for second pass
+	$CALL	P$KEYW			;Get keyword value
+	JUMPF	[$ERR(Internal command keyword table error)]
+	$CALL	0(S1)			;Call the processor
+GETCM2:	PJRST	.EXIT			;Finish the prog
+
+ERROR::	PUSH	P,TF			;Save the calling args
+	PUSH	P,S1
+	PUSH	P,S2
+ERRO1:	MOVN	S1,JOBNUM		;Wait until output is finished
+	JOBSTS	S1,
+	 SETZ	S1,
+	TXNE	S1,JB.UOA		;Any output waiting?
+	 JRST	[MOVEI S1,1		;Yes..wait for completion
+		 $CALL I%SLP
+		 JRST  ERRO1]
+	$CALL	K%TPOS			;Get terminal position
+	SKIPE	S1			;At column 0?
+	$TEXT				;No..make it so
+	POP	P,S2
+	POP	P,S1			;Restore error argument
+	POP	P,TF
+	MOVE	TF,@TF
+	$TEXT	(,?^I/@TF/)		;Display the error
+.EXIT:	PJRST	I%EXIT			;Thats all folks
+
+
+SUBTTL	Initialization and Keyword dispatch tables
+
+INI010:	$INIT(KEY010)			;Parse initialization
+
+KEY010:	$KEYDSP(KEY020,<$ERRTXT(MOUNT must be invoked as a command)>)
+
+KEY020:	$STAB				;Main command keyword table
+	DSPTAB(ALL010##,ALLOC,<ALLOCATE>)
+	DSPTAB(CAN010,.CANCE,<CANCEL>)
+	DSPTAB(DEA010,.DEALL,<DEALLOCATE>)
+	DSPTAB(DIS010,.DISMO,<DISMOUNT>)
+	DSPTAB(MOU010##,MOUNT,<MO>)	;MO is OK for MOUNT
+	DSPTAB(MOD010,.MODIFY,<MODIFY>)
+	DSPTAB(MOU010##,MOUNT,<MOUNT>)
+	DSPTAB(SHO010,.SHOW,<SHOW>)
+	$ETAB
+
+WLDBRK:	777777,,777760			;Break on all control
+	767554,,001740			;Allow % * - 0-9 and ?
+	400000,,000760			;Allow A-Z
+	400000,,000760			;Allow LC A-Z
+
+SUBTTL	ALLOC and MOUNT
+
+ALLOC:	$CALL	M%GPAG			;Get a page to parse into
+	$CALL	.ALLOC##		;Parse the rest
+;**;[56] Change 1 line at ALLOC+2L. /LWS
+	TXNE	F,FL.CHK+FL.LST		;[56] Was /CHECK or implied /LIST specified?
+	PJRST	CHKALC			;Yes..check the allocation
+	$CALL	SNDQSR			;Request the ACK
+	$CALL	RCVQSR			;Recieve it
+	$RETT
+
+MOUNT:	$CALL	M%GPAG			;Get a page to parse into
+	PUSHJ	P,.MOUNT##		;Parse the rest
+	TXNE	F,FL.CHK+FL.LST		;[56] Was /CHECK or implied /LIST specified?
+	PJRST	CHKMNT			;Yes..go check the queues
+	$CALL	SNDQSR			;Send off the request
+	$CALL	RCVQSR			;Get the first ACK
+	 $RETIF				;Return if this fails
+	TXNE	F,FL.WAT		;Want to wait?
+	$CALL	RCVQSR			;Yes..hang around
+	 $RETIF				;Return if this fails
+	$RETT				;Otherwise, say win
+SUBTTL	CANCEL command
+
+;CANCEL command syntax tables
+
+
+CAN010:	$KEY(CAN030,CAN011,<$ALTER(CAN020),$ERRTXT(Request type must be specified)>)
+CAN011:	$STAB
+	KEYTAB(.OTBAT,<BATCH-REQUEST>)
+	KEYTAB(.OTCDP,<CARD-PUNCH-REQUEST>)
+	KEYTAB(.OTMNT,<MOUNT-REQUEST>)
+	KEYTAB(.OTPTP,<PAPER-TAPE-REQUEST>)
+	KEYTAB(.OTPLT,<PLOTTER-REQUEST>)
+	KEYTAB(.OTLPT,<PRINTER-REQUEST>)
+	$ETAB
+
+CAN020:	$SWITCH(,CAN021)
+CAN021:	$STAB
+	 DSPTAB(,HELPER,<HELP>)
+	$ETAB
+
+CAN030:	$NUMBER(CAN040,^D10,<Request number>,$ALTER(CAN031))
+CAN031:	$FIELD(CAN040,<Request name>,$BREAK(WLDBRK))
+
+CAN040:	$SWITCH(,CAN042,$ALTER(CAN050))
+CAN042:	$STAB
+	DSPTAB(CAN043,CN$JOB,<JOBNAME>)
+	DSPTAB(CAN045,CN$USE,<USER>)
+	$ETAB
+
+CAN043:	$FIELD(CAN040,<Request name>,$BREAK(WLDBRK))
+CAN045:	$USER(CAN040,$ALTER(CAN040))
+
+CAN050:	$CRLF(,$ERRTXT(Invalid CANCEL command))
+;CANCEL command
+
+.CANCE:	MOVEI	S1,PAKSIZ		;Clear message
+	MOVEI	S2,PACKET
+	$CALL	.ZCHNK
+	MOVE	S1,['CANCEL']
+	MOVEM	S1,CMDNAM##		;Save incase help was typed
+	$CALL	DOSWS##
+	MOVEI	P1,PACKET		;P1 contains message address
+	MOVEI	P2,KIL.RQ(P1)		;P2 points to request object
+	MOVEI	S1,.QOKIL		;Get kill message type
+	STORE	S1,.MSTYP(P1),MS.TYP	;Save in the message
+	MOVX	S1,MF.ACK		;Request an ACK
+	MOVEM	S1,.MSFLG(P1)
+	MOVE	S1,USRNUM		;Get default user
+	MOVEM	S1,.RDBOI(P2)		;Save in the message
+	SETOM	.RDBOM(P2)		;Set user mask
+	$CALL	P$KEYW			;Get the queue type
+	MOVEM	S1,KIL.OT(P1)		;Save requested object type
+	CAXE	S1,.OTMNT		;Is it a CANCEL MOUNT?
+	JRST	CANCE2			;No..don't store VSN
+	$CALL	P$FLD			;Yes..get VSN
+	 JUMPF	CANCE2			;Must be request number
+	ADD	S1,[POINT 7,ARG.DA]	;Point to source string
+	MOVEI	S2,.RDBVS(P2)		;Point to destination
+	HRLI	S2,(POINT 7)
+	$CALL	CPYSTR##
+	JRST	CANCE1			;Get confirmation
+CANCE2:	$CALL	P$NUM			;Get request number
+	 JUMPF	[$CALL	CN$JOB		;Failed..Must be jobname
+		 JRST	CANCE1]		;On to get confirmation
+	MOVEM	S1,.RDBRQ(P2)		;Save request number
+CANCE1:	$CALL	P$CFM			;Parse confirmation?
+	JUMPT	CANCE3			;Yes..finish up
+	$CALL	P$SWITCH		;Parse a switch?
+	$CALL	0(S1)			;Yes..call the processor
+	JRST	CANCE1			;Try confirmation again
+CANCE3:	MOVEI	S1,KIL.SZ+10		;Get size of kill message
+	STORE	S1,.MSTYP(P1),MS.CNT	;Store the count
+	MOVEI	S2,PACKET
+	$CALL	SNDQSR			;Send it off
+	$CALL	RCVQSR			;Recieve the list answer
+	$RETT
+
+
+CN$JOB:	$CALL	P$WLDF			;Parse wild JOBNAME
+	SKIPT
+	$ERR	(<Invalid request name>)
+	MOVEM	S1,.RDBJB(P2)
+	MOVEM	S2,.RDBJM(P2)
+	$RETT
+
+
+CN$USE:	$CALL	P$USER			;Get the user number
+	MOVEM	S1,.RDBOI(P2)		;Save it in the message
+	$RETT
+
+SUBTTL	DEALLOCATE and DISMOUNT commands
+
+;DEALLOCATE and DISMOUNT syntax tables
+
+
+DIS010:
+DEA010:	$SWITCH(,DEA011,$ALTER(DEA020))
+DEA011:	$STAB
+	 DSPTAB(,HELPER,<HELP>)
+	 DSPTAB(DEA010,DE$NNT,<NONOTIFY>)
+	 DSPTAB(DEA010,DE$NOT,<NOTIFY>)
+	 DSPTAB(DEA010,DE$NOW,<NOWAIT>)
+	 DSPTAB(DEA010,DE$REM,<REMOVE>)
+	 DSPTAB(DEA010,DE$REM,<UNLOAD>)
+	 DSPTAB(DIS011,DISVID,<VID>)		;Ala REMARK
+	 DSPTAB(DEA010,DE$WAI,<WAIT>)
+	$ETAB
+
+DIS011:	$QUOTE(DEA010,,$ALTER(DIS020))
+DIS020:	$FIELD(DEA010,,$BREAK(REMBRK))
+
+DISVID:	$CALL	P$QSTR			;Get quoted string
+	SKIPT				;Win !!!
+	$CALL	P$FLD			;Or simple field
+	PUSH	P,S1			;Save the string address
+	MOVEI	S1,-1(S2)		;Get the length in S1
+	JUMPLE	S1,.RETT		;Can't be null !!!
+	PUSHJ	P,M%GMEM		;Get some memory for it
+	HRLM	S1,VIDBLK		;Save the block length
+	MOVEM	S2,VIDADR		;Save the block address
+	POP	P,S2			;Restore the string address
+	MOVSI	S2,ARG.DA(S2)		;Get source,,0
+	HRR	S2,VIDADR		;Get source,,destination
+	ADD	S1,VIDADR		;Get end address
+	BLT	S2,-1(S1)		;Save the string
+	MOVEI	S2,.QUWTO		;SET
+	MOVEM	S2,OPRNOT		; UP
+	MOVEI	S2,.QBMSG		;  QUEUE.
+	HRRM	S2,VIDBLK		;   BLOCK
+	$RETT
+
+REMBRK:	777777,,777760			;Break on all control
+	777754,,001760			;Allow - and 0-9
+	400000,,000760			;Allow A-Z
+	400000,,000760			;Allow LC A-Z
+
+
+DEA020:	$FIELD(DEA030,<volume set name>,$BREAK(VSNBRK##))
+DEA030:	$TOKEN(DEA040,<:>,<$FLAGS(CM%SDH),$ALTER(DEA040)>)
+DEA040:	$SWITCH(,DEA041,$ALTER(DEA050))
+DEA041:	$STAB
+	 DSPTAB(DEA040,DE$NNT,<NONOTIFY>)
+	 DSPTAB(DEA040,DE$NOT,<NOTIFY>)
+	 DSPTAB(DEA040,DE$NOW,<NOWAIT>)
+	 DSPTAB(DEA040,DE$REM,<REMOVE>)
+	 DSPTAB(DEA040,DE$REM,<UNLOAD>)
+	 DSPTAB(DIS030,DISVID,<VID>)		;Ala REMARK
+	 DSPTAB(DEA040,DE$WAI,<WAIT>)
+	$ETAB
+
+DIS030:	$QUOTE(DEA040,,$ALTER(DIS040))
+DIS040:	$FIELD(DEA040,,$BREAK(REMBRK))
+
+DEA050:	$COMMA(DEA020,$ALTER(DEA060))
+
+DEA060:	$CRLF(,$ERRTXT(Invalid DEALLOCATE command))
+
+
+;DEALLOCATE and DISMOUNT commands
+
+.DEALL:	TDZA	F,F		;Clear all flags
+.DISMO:	MOVX	F,FL.MOU	;Use mount flag for dismount
+	TXO	F,FL.WAT	;Default to /WAIT
+	SETZM	VIDADR		;Clear the /VID text address
+	MOVE	S1,['DISMOU']	;Assume dismount
+	TXNN	F,FL.MOU
+	MOVE	S1,['DEALLO']
+	MOVEM	S1,CMDNAM##		;Save for /HELP
+	$CALL	DOSWS		;Get sticky switches
+	MOVEM	F,DEFSWS
+	SETZM	ACKCNT		;Clear count of expected ACKs
+DEAL10:	MOVE	F,DEFSWS	;Reclaim sticky switches
+	MOVEI	S1,PAKSIZ	;Clear packet for message
+	MOVEI	S2,PACKET
+	$CALL	.ZCHNK
+	MOVE	P1,S2		;P1 points to message
+	MOVEI	P2,.OHDRS(P1)	;P2 points to free word
+	MOVEI	S1,.QODVS	;Dismount message type
+	STORE	S1,.MSTYP(P1),MS.TYP
+	MOVX	S1,MF.ACK	;Request an ACK
+	MOVEM	S1,.MSFLG(P1)	;Set the message flag
+	$CALL	P$FLD		;Get the field
+	SKIPN	ARG.DA(S1)	;Null?
+	 $ERR	(<Device field must be specified>)
+	MOVEM	S1,VSNADR##	;Save address of argument
+	HRROI	S1,ARG.DA(S1)	;Point to argument
+	$CALL	S%SIXB		;Convert to sixbit
+	MOVEM	S2,VSNAME##	;Save Sixbit
+	SETZM	VSNDEV##	;No device name yet...
+	$CALL	P$TOK		;Get optional ":"
+	$CALL	DOSWS		;Get optional switches
+	TXNN	F,FL.MOU	;DEALLOCATING?
+	JRST	DEAL20		;YES, TALK TO QUASAR
+TOPS10<
+	MOVE	S2,VSNAME##	;Get sixbit volume-set-name
+	DEVNAM	S2,		;Get real device name
+	 JRST	DEAL20		;Treat as volume-set name if not device
+	MOVEM	S2,VSNDEV##	;Save actual device name
+	MOVE	S1,S2		;Put name in S1
+	MOVEI	S2,.RECDV	;Argument type is device
+	$CALL	ADDARG##	;Add the argument
+	MOVE	S1,VSNDEV##	;GET THE DRIVE NAME
+	DEVTYP	S1,		;Get device type
+	 $ERR	(<Unknown device type>)
+	LOAD	S2,S1,TY.DEV	;Get actual device type
+	CAIN	S2,.TYDSK	;Is it disk?
+	JRST	[MOVE   S1,VSNDEV##	 ;Get the device name
+		 MOVEM  S1,VIDCHR+.DCNAM ;Save it
+		 MOVE   S1,[.DCUID+1,,VIDCHR] ;Get DSKCHR parms
+		 DSKCHR S1,		 ;Get disk characteristics
+		  JRST  DEAL40		 ;Failed,,skip this
+		 MOVE   S1,VIDCHR+.DCUPN ;Get the unit its mounted on
+		 MOVEM  S1,VSNDEV##	 ;Save it
+		 JRST   DEAL40 ]	 ;Continue
+	MOVEI	S1,0		;No..Deassign it
+	MOVE	S2,VSNDEV##
+	REASSI	S1,
+	SKIPGE	S1		;Did we win?
+	 $ERR	(<^W/VSNDEV/ was not mounted>)
+	$TEXT	(,[^W/VSNDEV/ dismounted])
+	JRST	DEAL45		;Check for more to do
+> ;End TOPS10
+
+DEAL20:	MOVE	S1,VSNADR##	;Retrieve VSN text address
+	LOAD	S2,ARG.HD(S1),AR.LEN		;Get length of argument
+	$CALL	CPYARG##	;Copy the argument
+	MOVEI	S1,.RCTVS	;Set proper type
+	STORE	S1,ARG.HD(S2),AR.TYP
+DEAL40:	MOVE	S1,P2		;Get free address
+	SUB	S1,P1		;Compute length
+	STORE	S1,.MSTYP(P1),MS.CNT
+	SETZM	S2		;Clear message flags
+	TXNN	F,FL.MOU	;Dismount?
+	TXO	S2,MM.DLC	;No..Deallocate
+	TXZE	F,FL.RMV	;Removing?
+	TXO	S2,MM.REM	;Yes..set the message flag
+	TXNE	F,FL.WAT	;Are we waiting ???
+	TXO	S2,MM.WAT	;yes,,set it
+	TXNE	F,FL.NOT	;Wants notify ???
+	TXO	S2,MM.NOT	;Yes,,set it
+	MOVEM	S2,.OFLAG(P1)	;Store the flags
+	MOVEI	S2,PACKET
+	$CALL	SNDQSR		;Send off the request
+	AOS	ACKCNT		;Bump the count of expected ACKs
+DEAL45:	PUSHJ	P,NOTOPR	;Notify OPR for /VID if we have to
+	$CALL	P$COMMA		;Multiple fields?
+	JUMPT	DEAL10		;Yes..get the next
+	$CALL	P$CFM		;Get confirmation
+	JUMPF	[$ERR<Internal command syntax table error>]
+
+DEAL50:	TXNE	F,FL.WAT	;Want to wait ?
+	SOSGE	ACKCNT		;Yes - recieved all ACKS?
+	$RETT			;Yes..just return
+	$CALL	RCVQSR		;No..go recieve one
+	JRST	DEAL50		;Get the next
+
+NOTOPR:	SKIPN	VIDADR		;Was a /VID switch specified ??
+	 $RET			;No VID,,return
+	$SAVE	<VIDADR,VIDBLK>	;Save the text address and length
+	HLRZ	S1,VIDBLK	;Get the block length
+	ADDI	S1,^D20		;Add 20 words
+	PUSHJ	P,M%GMEM	;Allocate some more buffer space
+	HRLM	S1,VIDBLK	;Reset the block length
+	EXCH	S2,VIDADR	;Save new, get old text address
+	MOVE	S1,VIDADR	;Get the new text address
+	TLO	S1,(POINT 7,0)	;Gen a byte pointer to the buffer
+	MOVEM	S1,VIDPTR	;Save it
+	MOVE	S1,VSNADR##	;Get the volume set name address
+	$TEXT	(SAVBYT,<Volume set: ^T/ARG.DA(S1)/^A>)
+	SKIPE	VSNDEV##	;Any unit ???
+	$TEXT	(SAVBYT,<, on unit: ^W/VSNDEV/^A>)
+	MOVE	S1,VIDADR	;Get the VID text block address
+	$TEXT	(SAVBYT,<^M^J^T/(S2)/>)
+	MOVE	S1,[5,,OPRNOT] 	;Get QUEUE. UUO parms
+	QUEUE.	S1,		;Yes,,tell the operator
+	 JFCL			;Ignore the error
+	HLRZ	S1,VIDBLK	;Get the text buffer length
+	MOVE	S2,VIDADR	;And the buffer address
+	PUSHJ	P,M%RMEM	;Return the temp buffer
+	$RETT			;Return
+
+SAVBYT:	IDPB	S1,VIDPTR	;Save the byte
+	$RET			;Return
+
+
+; /NOWAIT switch processor
+;
+; /NOTIFY switch processor
+;
+DE$NOW:	TXZ	F,FL.WAT		;Don't wait,,imply /NOTIFY
+DE$NOT:	TXOA	F,FL.NOT		;Notify us
+DE$NNT:	TXZ	F,FL.NOT		;No Notify
+	$RETT				;Return
+
+; /REMOVE switch processor
+;
+DE$REM:	TXO	F,FL.RMV		;Set the flag
+	$RETT
+
+; /WAIT switch processor
+;
+DE$WAI:	TXO	F,FL.WAT		;Wait
+	$RETT				;Return
+SUBTTL	MODIFY command (Not yet implemented)
+
+MOD010:	$CTEXT
+
+.MODIF:	$ERR(MODIFY command not yet implemented)
+
+SUBTTL	SHOW command
+
+;SHOW command syntax tables
+
+SHO010:	$KEYDSP(SHO011,$ALTER(SHO020))
+SHO011:	$STAB
+	 DSPTAB(SHO050,.SHALL,<ALLOCATION>)
+	 DSPTAB(SHO030,.SHQUE,<QUEUES>)
+	$ETAB
+
+SHO020:	$SWITCH(,SHO021,$ERRTXT(Invalid SHOW parameter))
+SHO021:	$STAB
+	 DSPTAB(,HELPER,<HELP>)
+	$ETAB
+
+SHO030:	$NOISE(SHO031,<OF>)
+SHO031:	$KEY(SHO040,SHO032,<$DEFAULT(ALL),$ALTER(SHO040)>)
+SHO032:	$STAB
+	KEYTAB(LIQALL_-^D18,<ALL-REQUESTS>)
+	KEYTAB(LIQBAT_-^D18,<BATCH-REQUESTS>)
+	KEYTAB(LIQCDP_-^D18,<CARD-PUNCH-REQUESTS>)
+	KEYTAB(LIQEVT_-^D18,<EVENTS>)
+	KEYTAB(LIQMNT_-^D18,<MOUNT-REQUESTS>)
+	KEYTAB(LIQOUT_-^D18,<OUTPUT-REQUESTS>)
+	KEYTAB(LIQPTP_-^D18,<PAPER-TAPE-REQUESTS>)
+	KEYTAB(LIQPLT_-^D18,<PLOTTER-REQUESTS>)
+	KEYTAB(LIQLPT_-^D18,<PRINTER-REQUESTS>)
+TOPS20<	KEYTAB(LIQRET_-^D18,<RETRIEVAL-REQUESTS>) >
+	$ETAB
+
+SHO040:	$SWITCH(,SHO042,$ALTER(SHO050))
+SHO042:	$STAB
+	DSPTAB(SHO040,SQ$ALL,<ALL>)
+	DSPTAB(SHO040,SQ$BRI,<BRIEF>)
+	DSPTAB(SHO040,SQ$FUL,<FULL>)
+	DSPTAB(SHO044,SQ$USE,<USER>)
+	$ETAB
+
+SHO044:	$USER(SHO040,$ALTER(SHO040))
+
+SHO050:	$CRLF(,$ERRTXT(Invalid SHOW command))
+CHKALC:	$SAVE	<P1,P2>
+	MOVEI	S1,PAKSIZ		;Point to message
+	MOVEI	S2,PACKET
+	$CALL	.ZCHNK
+	MOVEI	P1,PACKET		;Point to message header
+	MOVEI	P2,.OHDRS(P1)		;Point to free word
+	MOVEI	S1,.QOLAC		;List allocation state
+	STORE	S1,.MSTYP(P1),AR.TYP	;Store message type
+	MOVE	S1,JOBNUM		;Get users job number
+	MOVEI	S2,.ORJNU		;Get block type
+	$CALL	ADDARG##		;Store the argument
+	MOVE	S1,P2			;Compute message length
+	SUB	S1,P1
+	STORE	S1,.MSTYP(P1),MS.CNT
+	MOVEI	S2,PACKET		;Point to the packet
+	$CALL	SNDQSR			;Request the ACK
+	$CALL	RCVQSR			;Recieve it
+	$RETT
+
+
+CHKMNT:	MOVE	S1,[LIQMNT_-^D18]	;Get mount queue type
+	$CALL	CHKQUE			;Build proper message
+	$CALL	SNDQSR			;Request the ACK
+	$CALL	RCVQSR			;Recieve it
+	$RETT
+
+CHKQUE:	$SAVE	<P1,P2>			;Preserve some AC's
+	MOVE	T1,S1			;Remember the type for a while
+	MOVEI	S1,PAKSIZ		;Clear message
+	MOVEI	S2,PACKET
+	$CALL	.ZCHNK
+	MOVEI	S1,.QOLIS		;Get list message type
+	STORE	S1,.MSTYP(S2),MS.TYP	;Save in the message
+	MOVE	S1,T1			;Reclaim queue type
+	MOVEI	P1,PACKET		;P1 contains message address
+	MOVEI	P2,.OHDRS(S2)		;P2 contains argument address
+	MOVE	S2,[2,,.LSQUE]		;Set argument type
+	MOVEM	S2,ARG.HD(P2)
+	HRLZM	S1,ARG.DA(P2)		;Store the queue type
+	INCR	.OARGC(P1)		;Bump message argument count
+	ADDI	P2,ARG.SZ		;Point to next free argument
+CHKQ10:	$CALL	P$CFM			;Parse confirmation?
+	JUMPT	CHKQ20			;Yes..finish up
+	$CALL	P$SWITCH		;Parse a switch?
+	JUMPF	CHKQ20			;No..proceed
+	$CALL	0(S1)			;Yes..call the processor
+	JRST	CHKQ10			;Try confirmation again
+;**;[56] Delete 2 lines and insert 1 at CHKQ20+0L. /LWS
+CHKQ20:	TXNN	F,FL.CHK		;[56] Was MOUNT /CHECK typed?
+	JRST	CHKQ30			;No...onward to show queues
+	MOVE	S2,[2,,.LSUSR]		;Yes..then default is 'our' queues
+	MOVEM	S2,ARG.HD(P2)
+	MOVE	S2,USRNUM		; Only ours
+	MOVEM	S2,ARG.DA(P2)
+	INCR	.OARGC(P1)		;Include argument in count
+	ADDI	P2,ARG.SZ		;Point past it
+CHKQ30:	SUBI	P2,PACKET		;Compute message length
+	STORE	P2,.MSTYP(P1),MS.CNT	;Store the count
+	MOVE	S1,P2			;Return S1 containing size
+	MOVEI	S2,PACKET		;	S2 Containing address
+	$RETT
+
+;SHOW Command
+
+.SHOW:	MOVE	S1,['SHOW  ']		;Set for /HELP
+	MOVEM	S1,CMDNAM##
+	$CALL	DOSWS##
+	$CALL	P$KEYW			;Get the command
+	PJRST	0(S1)			;Dispatch to processor
+
+;SHOW ALLOCATION command
+
+.SHALL:	$CALL	CHKALC			;Build Check allocation message
+	$RETT
+
+;SHOW QUEUE command
+
+.SHQUE:	$CALL	P$KEYW			;Get the queue type
+	SKIPT				;Queue type specified?
+	MOVE	S1,[LIQALL_-^D18]	;No..default to ALL
+	$CALL	CHKQUE			;Build proper message
+	$CALL	SNDQSR			;Request response
+	$CALL	RCVQSR			;Get the ACK
+	$RETT
+;SHOW QUEUE option processor routines
+
+;ACCEPTS	P1/ Address of message
+;		P2/ First free address in message
+
+
+SQ$ALL:	MOVE	S2,[2,,.LSUSR]		;Specify all users
+	MOVEM	S2,ARG.HD(P2)
+	SETZM	ARG.DA(P2)
+	INCR	.OARGC(P1)		;Include argument count
+	ADDI	P2,ARG.SZ		;Point past it
+	$RETT
+
+SQ$BRI:	MOVX	S1,LS.FST
+	IORM	S1,.OFLAG(P1)
+	$RETT
+
+SQ$FUL:	MOVX	S1,LS.ALL
+	IORM	S1,.OFLAG(P1)
+	$RETT
+
+SQ$USE:	$CALL	P$USER			;Parse the user
+	SKIPT				;Was user number parsed?
+	MOVE	S1,USRNUM		;No..default to my PPN
+	MOVE	S2,[2,,.LSUSR]		;Get the argument type
+	MOVEM	S2,ARG.HD(P2)		;Store it
+	MOVEM	S1,ARG.DA(P2)		;Store user number
+	INCR	.OARGC(P1)		;Bump argument count
+	ADDI	P2,ARG.SZ		;Point to next argument
+	$RETT
+
+;HELP option processor routine
+
+
+HELPER::MOVEI	S1,HELPFD		;POINT TO FD
+	MOVEM	S1,HLPFOB+FOB.FD	;STORE IN FOB FD WORD
+	MOVX	S1,INSVL.(7,77B35)	;7 BIT BYTES
+	MOVEM	S1,HLPFOB+FOB.CW	;STORE IN FOB CONTROL WORD
+	MOVX	S1,INSVL.(FDMSIZ,FD.LEN) ;GET LENGTH
+	MOVEM	S1,HELPFD+.FDLEN	;STORE IT
+	HRLZI	S1,'HLP'		;GET DEVICE
+	MOVEM	S1,HELPFD+.FDSTR	;STORE IT
+	MOVEM	S1,HELPFD+.FDEXT	;STORE AS THE EXTENSION TOO
+	MOVE	S1,CMDNAM##		;GET SIXBIT COMMAND NAME
+	MOVEM	S1,HELPFD+.FDNAM	;STORE AS HELP FILE NAME
+	MOVEI	S1,FOB.MZ		;GET FOB SIZE
+	MOVEI	S2,HLPFOB		;POINT TO FOB
+	$CALL	F%IOPN			;OPEN FILE
+	  JUMPF	HELP.E			;CAN'T
+	PUSH	P,S1			;SAVE IFN
+
+HELP.1:	MOVE	S1,(P)			;GET IFN
+	$CALL	F%IBYT			;GET A CHARACTER
+	  JUMPF	HELP.2			;CAN'T
+	MOVE	S1,S2			;MOVE IT
+	$CALL	K%BUFF			;PUT A CHARACTER
+	  JUMPF	HELP.2			;CAN'T
+	JRST	HELP.1			;LOOP UNTIL DONE
+
+HELP.2:	$CALL	K%FLSH			;FLUSH THE TTY BUFFERS
+	POP	P,S1			;GET IFN
+	$CALL	F%REL			;RELEASE IT
+	JRST	GETCM2			;NEVER RETURN TO CALLER ON /HELP
+
+HELP.E:	$TEXT	(,<% No help available; ^F/HELPFD/ ^E/[-1]/>)
+	JRST	GETCM2			;NEVER RETURN TO CALLER ON /HELP
+;LOGCHR	Default Text output routine
+
+LOGCHR:	PJRST	T%TTY			;Type the character
+
+;P$WLDF	- routine to parse Possibly wild SIXBIT field
+
+;RETURNS TRUE	S1/ Sixbit field
+;		S2/ Wild mask for field
+
+;	 FALSE	if field is not valid wild alphanumeric
+
+
+;Field may be:
+
+;	AAAAAA	Mask will be -1
+;	  *	mask will be 0
+;	AA?AAA	mask will be 0 for 6 bits at each ? or %
+
+P$WLDF:	$CALL	P$SIXF			;Get sixbit field
+	 $RETIF				;Return if FALSE
+	SKIPN	S1			;User type "*" maybe?
+	MOVSI	S1,'*  '		;No - make it look that like he did
+	SETOM	T2			;Initialize mask
+	MOVE	T3,[POINT 6,S1]		;Initialize name pointer
+	MOVE	T4,[POINT 6,S2]		;Initialize mask pointer
+PWLDF1:	TLNN	T3,(77B5)		;Finished last character?
+	$RETT				;Yes..return success
+	ILDB	T1,T3			;Get a source byte
+	JUMPE	T1,PWLDF4		;Update mask on null
+	CAIL	T1,'0'			;Alphanumeric?
+	CAILE	T1,'Z'
+	 JRST	PWLDF2			;No..check for wild
+	CAILE	T1,'9'
+	CAIL	T1,'A'
+	JUMPN	T2,PWLDF4		;Do next character
+PWLDF2:	CAIE	T1,'*'			;Full wild card?
+	JRST	PWLDF3			;No..check single
+	TDZ	T2,T2			;Yes..clear remaining mask
+	JRST	PWLDF4
+PWLDF3:	CAIE	T1,'?'			;Wild character?
+	CAIN	T1,'%'
+	 TRZA	T2,77			;Yes..Clear bits to indicate wild
+	$RETF				;Not alphanumeric
+
+PWLDF4:	TLNE	T4,(77B5)		;Update mask
+	IDPB	T2,T4
+	LSH	T2,-6			;Position mask
+	JRST	PWLDF1			;Do next character
+
+;SNDQSR - routine to send an IPCF message to QUASAR
+
+;ACCEPTS	S1/ Length of message
+;		S2/ Address of message
+
+SNDQSR:	MOVEM	S1,SAB.LN+SNDSAB	;Store the length
+	MOVEM	S2,SAB.MS+SNDSAB	;Store the address
+;**;[55] Insert 4 lines after SNDQSR+1L. /LWS
+	LOAD	S1,F,FL.NOT		;[55] Get /NOTIFY bit
+	STORE	S1,USRACK,ACK.NT	;[55] Put in our copy of ACK code
+	MOVE	S1,USRACK		;[55] Get ACK code
+	MOVEM	S1,.MSCOD(S2)		;[55] Put in message header
+	MOVX	S1,SP.QSR		;Get quasars index
+	TXO	S1,SI.FLG		;Set special index flag
+	MOVEM	S1,SAB.SI+SNDSAB	;Send by special index
+	SETZM	SAB.PD+SNDSAB		; Not by pid
+	MOVEI	S1,SAB.SZ		;Point to the message
+	MOVEI	S2,SNDSAB
+	$CALL	C%SEND			;Send it off
+	 JUMPF	[$FATAL (Could not send request to QUASAR - ^E/S1/)]
+	$RET				;Return true/false per C%SEND
+
+;RCVQSR - Recieves a message from QUASAR and processes its text arguments
+
+;**;[55] Rework RCVQSR. /LWS
+RCVQSR:	$SAVE	<P1>			;[55] Save an AC
+RCVQS0:	$CALL	C%BRCV			;[55] Get a message
+	MOVE	P1,S1			;[55] Save MDB address
+	LOAD	S2,MDB.SI(P1),SI.FLG	;[55] Message from a system pid?
+	JUMPE	S2,RCVWR1		;[55] Jump if not
+	LOAD	S2,MDB.SI(P1),SI.IDX	;[55] Get the system index
+	CAIE	S2,SP.QSR		;From QUASAR?
+	JRST	RCVWR2			;[55] No,,go complain
+	LOAD	P1,MDB.MS(P1),MD.ADR	;[55] Get message address
+	MOVE	S1,.MSCOD(P1)		;[55] Get ACK code
+	$CALL	CHKACK			;[55] Go check it out
+	JUMPF	RCVQSM			;[55] Don't want it if FALSE
+	MOVE	S1,P1			;[55] Get message address in S1
+	$CALL	INIBLK			;Initialize message parser
+	JUMPF	RCVQSF			;Flush the bumb message
+	LOAD	S2,.MSTYP(P1),MS.TYP	;Get message type
+	CAIE	S2,.OMACS		;List answer message?
+	JRST	RCVQS2			;No..check text
+RCVQS1:	$CALL	GETBLK			;Yes..get first argument
+	 JUMPF	RCVQSF			;Bad news..No text found
+	CAIE	S1,.CMTXT		;Is this a text argument?
+	JRST	RCVQS1			;No..find one to display
+	$TEXT	(,^T/@T2/^A)		;Yes..display the response
+	MOVE	S1,MSGADR		;Retrieve message address
+	MOVE	T1,.OFLAG(S1)		;Get its flags
+	TXNE	T1,WT.MOR		;More to come?
+	JRST	RCVQSM			;Yes..recieve the next message
+	$CALL	C%REL			;Release this message
+	$RETT				;Finished
+
+RCVQS2:	CAIE	S2,MT.TXT		;Text message type?
+	JRST	RCVQSF			;No..release the bumb message
+RCVQS3:	$CALL	GETBLK			;Get a block from message
+	 JUMPF	RCVQSF			;Bumb message
+	CAIE	S1,.CMTXT		;Is this a text arg?
+	JRST	RCVQS3			;No..find one
+	MOVE	S1,MSGADR		;Retrieve message address
+	MOVE	S1,.MSFLG(P1)		;[55] Get the flags
+	TXNE	S1,MF.FAT		;Fatal flag set?
+	JRST	RCVFAT			;Fatal message from QUASAR
+	TXNE	S1,MF.WRN		;Warning flag set?
+	JRST	RCVWRN			;Warning message from QUASAR
+	OUTSTR	0(T2)			;[55] Dump the text
+	TXZE	F,FL.MOR		;[55] Look for more ACKs?
+	JRST	RCVQSM			;[55] Yes,,go do it
+	$CALL	C%REL
+	$RETT
+
+	;Continued on next page
+	;Continued from previous page
+
+RCVQSF:	MOVEI	T2,[ASCIZ/Unrecognized QUASAR message/]
+RCVFAT:	SKIPA	S1,["?"]
+RCVWRN:	MOVEI	S1,"%"
+	$TEXT	(,<^7/S1/^T/@T2/>)
+	$CALL	C%REL			;Release the message
+	$RETF				;Return the failure
+
+RCVWR1:	$WARN(Message from unknown pid ignored) ;[55]
+	TRNA				;[55] Skip
+RCVWR2:	$WARN(Message from unkown system component ignored) ;[55]
+RCVQSM:	$CALL	C%REL			;Release the message
+	JRST	RCVQS0			;[55] Back to get another messaage
+
+;[55] CHKACK - routine to ACK from newly arrived message to see if
+;[55]		we should process the message or pitch it.
+
+;[55] ACCEPTS	S1/ ACK code to check
+
+;[55] RETURNS	FALSE	if message should be pitched
+;[55]		TRUE	if message should be processed
+;[55]			FL.MOR is set/cleared depending on
+;[55]			contents of ACK as compare to USRACK
+
+CHKACK:	TXZ	F,FL.MOR		;[55] Assume an exact match
+	CAMN	S1,USRACK		;[55] Is it?
+	$RETT				;[55] Yes,,'tis what we want to see
+	$SAVE	<T1>			;[55] No,,we'll have to check further
+	MOVE	T1,S1			;[55] Copy ACK code
+	LOAD	S1,T1,ACK.JB		;[55] Get job # field from msg ACK
+	LOAD	S2,USRACK,ACK.JB	;[55] Get same from original ACK
+	CAME	S1,S2			;[55] Match?
+	$RETF				;[55] No,,can't use it
+	LOAD	S1,T1,ACK.UT		;[55] Yes,,get UDT part of msg ACK
+	LOAD	S2,USRACK,ACK.UT	;[55] Get the same from USRACK
+	CAMLE	S1,S2			;[55] Possibly ACK from previous mount?
+	$RETF				;[55] No,,could be imposters
+	TXNN	T1,ACK.NT		;[55] Yes. /NOTIFY in previous mount?
+	$RETF				;[55] No,,don't process this ACK
+	TXO	F,FL.MOR		;[55] Yes,,process this ACK and more...
+	$RETT				;[55] Return TRUE!
+
+;INIBLK - routine to setup for message parsing routines
+
+;ACCEPTS	S1/ message address
+INIBLK:	MOVEM	S1,MSGADR		;Save address of the message
+	LOAD	S2,.MSTYP(S1),MS.CNT	;Get length of message
+	CAIL	S2,.OARGC		;Does it have any arguments?
+	SKIPN	S2,.OARGC(S1)
+	$RETF				;No..return the failure
+	MOVEM	S2,BLKCNT		;Yes..save the count
+	MOVEI	S2,.OHDRS+ARG.HD(S1)	;Point to the first argument
+	MOVEM	S2,BLKADR		;Save for GETBLK routine
+	$RETT
+
+
+;GETBLK - Routine to return next message argument
+
+;ACCEPTS	BLKCNT and BLKADR setup by INIBLK
+
+;RETURNS TRUE	S1/ Argument type
+;		T1/ Argument length
+;		T2/ Argument data address
+
+;	 FALSE	No more arguments
+
+GETBLK:	SOSGE	BLKCNT			;Any more arguments?
+	$RETF				;No..return false
+	MOVE	T2,BLKADR		;Yes..get address
+	LOAD	S1,ARG.HD(T2),AR.TYP	;Get block type
+	LOAD	T1,ARG.HD(T2),AR.LEN	;Get argument length
+	ADDM	T1,BLKADR		;Point to next argument
+	MOVEI	T2,ARG.DA(T2)		;Point at first data location
+	$RETT
+SUBTTL	Initialization routines
+
+;JOBPRM - Routine to read initial job parameters
+
+JOBPRM:	SETO	S1,			;Get information for my job
+	MOVEI	S2,JI.JNO		;Read my job number
+	$CALL	I%JINF
+	MOVEM	S2,JOBNUM
+;**;[55] Add code in JOBPRM for user ACK code. /LWS
+	STORE	S2,USRACK,ACK.JB	;[55] Store in ACK also
+	MOVEI	S2,JI.USR		;Read my user number (or PPN)
+	$CALL	I%JINF
+	MOVEM	S2,USRNUM
+	$CALL	I%NOW			;[55] Get UDT
+	STORE	S1,USRACK,ACK.UT	;[55] Store part we want in ACK code
+	$RETT
+; Macro to define a break character set
+;
+DEFINE	$BCS	(CHR),<
+	.XCREF
+	...BRK==0
+	IRP	CHR,<...BRK==...BRK!1B35_CHR>
+	EXP	...BRK
+	.CREF
+	>
+
+
+;**;[57] Redo code in TTYRSC to handle line continuation. /LWS
+; Rescan the command line that invoked us
+;
+TTYRSC:	MOVE	T1,[TTYBUF,,TTYBUF+1]	;SET UP BLT
+	SETZM	TTYBUF			;CLEAR THE FIRST WORD
+	BLT	T1,TTYBUF+TTYSIZ-1	;CLEAR THE BUFFER
+	MOVE	T2,[POINT 7,TTYBUF]	;SET UP BYTE POINTER
+	MOVEI	T3,<TTYSIZ*5>-1		;[57] SET BYTE COUNT W/ROOM FOR <LF>
+	RESCAN				;POINT TO THE START OF THE COMMAND
+
+TTYR.1:	INCHWL	T1			;GET A CHARACTER
+	CAIN	T1,.CHCRT		;<CR>?
+	JRST	TTYR.1			;YES - INGORE IT
+	CAIN	T1,"-"			;[57] NO, POSSIBLE LINE CONTINUATION?
+	JRST	TTYR.2			;[57] YES, GO PROCESS NEXT CHAR
+	PUSHJ	P,BRKCHR		;[57] NO, CHECK FOR BREAK CHAR
+	JUMPT	TTYR.4			;[57] IF SO, GO TERMINATE COMMAND
+	PUSHJ	P,PUTCHR		;[57] ELSE PUT CHAR IN BUFFER
+	JRST	TTYR.1			;[57] GET NEXT CHAR
+
+;Here on possible line continuation.
+
+TTYR.2:	INCHWL	T1			;[57] GET NEXT CHAR
+	CAIE	T1," "			;[57] EAT SPACES,
+	CAIN	T1,.CHTAB		;[57] TABS, AND
+	JRST	TTYR.2			;[57] CARRIAGE RETURNS.
+	CAIN	T1,.CHCRT		;[57]
+	JRST	TTYR.2			;[57]
+	PUSHJ	P,BRKCHR		;[57] REAL LINE CONTINUATION?
+	JUMPF	TTYR.3			;[57] IF NOT, GO PUT DASH IN BUFFER
+	OUTCHR	["#"]			;[57] IT IS, OUTPUT CONTINUATION PROMPT
+	JRST	TTYR.1			;[57] GO GET MORE INPUT
+
+;Here to put dash in buffer that wasn't start of line continuation
+
+TTYR.3:	MOVE	T4,T1			;[57] SAVE NON-BREAK CHAR
+	MOVEI	T1,"-"			;[57] GET DASH
+	PUSHJ	P,PUTCHR		;[57] PUT IT IN BUFFER
+	MOVE	T1,T4			;[57] GET NON-BREAK CHAR BACK
+	PUSHJ	P,PUTCHR		;[57] PUT IT IN BUFFER, TOO
+	JRST	TTYR.1			;[57] LOOP FOR MORE CHARS
+
+;Terminate command buffer with <LF> for parser.
+
+TTYR.4:	MOVEI	T1,.CHLFD		;[57] GET A LINE FEED
+	IDPB	T1,T2			;TERMINATE COMMAND
+	POPJ	P,			;RETURN
+
+;Put char in T1 into command buffer.
+
+PUTCHR:	IDPB	T1,T2			;[57] STORE CHAR
+	SOSL	T3			;[57] LAST CHAR ALREADY STORED?
+	POPJ	P,			;[57] NO, RETURN
+	OUTSTR	[ASCIZ\
+?MOUNT command too long.\]		;[57] TELL POOR GUY
+	CLRBFI				;[57] FLUSH REST OF INPUT (TYPEAHEAD TOO)
+	MONRT.				;[57] EXIT
+	JRST	.-1			;[57] PREVENT CONTINUES
+
+;[57] Routine to check if char in T1 is a break character
+
+BRKCHR:	MOVEI	T4,1			;[57] GET A BIT
+	LSH	T4,(T1)			;[57] POSITION IT
+	CAIE	T1,.CHDEL		;[57] <RUBOUT>?
+	TDNN	T4,[$BCS <3,7,12,13,14,22,24,25,27,32,33>] ;[57] A BREAK CHARACTER?
+	TDZA	TF,TF			;[57] NO
+	SETOM	TF			;[57] YES
+	POPJ	P,			;[57] RETURN
+SUBTTL	Interrupt routines
+
+
+;Interrupt service routines
+
+INTIPC:	$BGINT	1
+	$CALL	C%INTR			;Flag message recieved
+	$DEBRK
+
+
+INTCNC:	PJRST	I%EXIT			;Thats all folks
+
+TOPS20	<
+LEVTAB:	LEV1PC
+	LEV2PC
+	LEV3PC
+>
+SUBTTL	Initialization blocks
+
+;;;	.PSECT	DATA
+
+IBBLK:	$BUILD	(IB.SZ)			;Build initialization block
+	  $SET	(IB.PRG,,'MOUNT ')	;Program name
+	  $SET	(IB.OUT,,LOGCHR)	;Default text output routine
+	  $SET	(IB.FLG,IB.NPF,1)	;DON'T USE PFH
+	  $SET	(IB.FLG,IB.DPM,1)	;Use job number for a PID
+	  $SET	(IB.PIB,,PIB)		;Obtain a pid to use
+TOPS10 <  $SET	(IB.INT,,IPCINT)>	;Point to proper interrupt base
+TOPS20 <  $SET	(IB.INT,,<LEVTAB,,CHNTAB>)>
+	$EOB
+
+PIBBLK:	$BUILD	(PB.MNS)		;Pid initialization block
+	  $SET	(PB.HDR,PB.LEN,PB.MNS)	;Set block length
+	  $SET	(PB.FLG,IP.PSI,1)	;Assign pid to PSI
+TOPS10 <  $SET	(PB.INT,IP.CHN,0)>	;Declare offset
+TOPS20 <  $SET	(PB.INT,IP.CHN,1)>	;Declare channel 1
+	$EOB
+SUBTTL	Impure storage
+
+	XLIST			;Turn listing off
+	LIT			;Dump literals
+	LIST			;Turn listing on
+
+	RELOC	0
+
+DATORG:				;Start of impure storage to be cleared
+
+;Interrupt PC locations
+
+$DATA	IB,IB.SZ		;Initialization block
+$DATA	PIB,PB.MNS		;PID initialiation block
+
+TOPS10	<$DATA	IPCINT,4>	;IPCF Interrupts
+TOPS20	<$DATA	CHNTAB,^D36>	;Interrupt channel table
+
+$DATA	LEV1PC,1		;RETURN PC FOR INTERRUPT LEVEL 1
+$DATA	LEV2PC,1		;RETURN PC FOR INTERRUPT LEVEL 2
+$DATA	LEV3PC,1		;RETURN PC FOR INTERRUPT LEVEL 3
+
+$DATA	JOBNUM,1		;My Job number
+$DATA	USRNUM,1		;My user number
+$DATA	USRACK,1		;[55] ACK for messages
+
+$DATA	HLPFOB,FOB.MZ		;Help file FOB
+$DATA	HELPFD,FDMSIZ		;Help file FD
+$DATA	ACKCNT,1		;Number of ACKS expected
+$DATA	DEFSWS,1		;Default switches for parse
+
+$DATA	PDL,PDLEN		;Push down list
+$DATA	TTYBUF,TTYSIZ		;TTY buffer
+$DATA	PARBLK,PAR.SZ		;Parser argument block
+$DATA	CMDBLK,CMD.SZ		;Returned command arguments
+$DATA	SNDSAB,SAB.SZ		;SAB for IPCF
+$DATA	MSGADR,1		;Address of recieved message
+$DATA	BLKADR,1		;Address of current message block
+$DATA	BLKCNT,1		;Count of remaining message blocks
+$DATA	PACKET,PAKSIZ		;Storage for message
+$DATA	OPRNOT,3		;QUEUE. UUO BLOCK FOR /VID ** DON'T SEPARATE **
+$DATA	VIDBLK,1		;"       "    "
+$DATA	VIDADR,1		;"       "    "
+$DATA	VIDPTR,1		;"       "    "
+$DATA	VIDCHR,.DCUPN+1		;DSKCHR arg block
+;;;	.ENDPS	DATA
+DATEND:				;End of impure storage
+
+	END <3,,ENTVEC>

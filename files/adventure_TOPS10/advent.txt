@@ -1,0 +1,169 @@
+			350-point Adventure Maps
+			------------------------
+
+Following is a set of 10 maps giving the rooms and their conections for
+the 350-point version of Adventure. I do not guarantee that these maps
+are complete and correct; if you find mistakes, please email me at
+	wkt@csadfa.cs.adfa.oz.au.
+
+Description of Maps
+-------------------
+
+Each map has a set of rooms, and arrowed lines joining them. Each room has
+a short room description, the program's internal room number, and a set of
+arrows showing how to get to other rooms. Arrows either end pointing to
+another room (in a box), the name of another room (unboxed), or the room
+number.
+
+The default arrow directions are n,s,e,w as shown below; arrows may have other
+direction labels which are defined below:
+
+
+	N		n	up		( These are the words
+	^		s	down		  you can enter to move.)
+	|		e	building
+    W<-- -->E	 or 	w	grate
+	|		nw	xyzzy
+	V		ne	plugh
+	S		sw 	canyon
+			se 
+
+? means that there is a connection between these rooms, but I do not
+know what to type to pass through it.
+
+Notes
+-----
+
+Some rooms are initially unconnected; you must perform an action to connect
+them. The final connection is shown on the maps, with no indication as to
+what action to perform.
+
+The connectivity between the `Maze of Twisty Little Passages, All Different'
+is given below as a table. I have not done a similar table for MOTLP,AA.
+
+
+Quick Room Reference
+--------------------
+
+Here is a by-number description of the rooms in Adventure, with the objects
+therein. Some rooms not given form part of the MOTLP,AD & MOTLP,AA mazes, 
+others hold descriptions like `you've broken you're neck', and are not
+true rooms.
+
+
+Room#	Description			Objects
+
+  1: Road end
+  2: Hill
+  3: Building				Keys Lamp Bottle Food
+  4: Valley
+  5: Forest with valley on side
+  6: Forest with valley & road
+  7: Slit in streambed
+  8: Outside grate
+  9: Below grate
+ 10: Cobble crawl			Cage
+ 11: Debris room			Rod
+ 12: Sloping E/W canyon
+ 13: Bird chamber			Bird
+ 14: Top of small pit
+ 15: Hall of mists
+ 17: Eastbank fissure
+ 18: Gold room				Gold nugget
+ 19: Hall of Mt. King
+ 23: West 2pit room
+ 24: East pit
+ 25: West pit
+ 27: Westside fissure			Diamonds
+ 28: Low N/S passage			Silver bars
+ 29: Southside chamber			Jewelry
+ 30: Westside chamber			Coins
+ 33: Y2
+ 34: Rock jumble
+ 35: Window on pit
+ 36: Dirty broken passage
+ 37: Brink of clean pit
+ 38: Pit with stream
+ 39: Dusty rocks
+ 41: Westend hall of mists
+ 60: Eastend long hall
+ 61: Westend long hall
+ 62: High N/S passage
+ 63: Dead end
+ 64 Complex junction
+ 65: Bedquilt
+ 66: Swiss cheese
+ 67: East 2pit room
+ 68: Slab room
+ 69: N/S canyon above room
+ 70: N/S canyon above sizable passage
+ 71: Three canyons junction
+ 72: Low room
+ 73: Deadend crawl
+ 74: E/W canyon above tight canyon
+ 75: Wide place in tight canyon
+ 77: Tall E/W canyon with tight crawl
+ 78: Mass of boulders
+ 88: Narrow corridor
+ 91: Steep incline above large room
+ 92: Giant room				Eggs
+ 94: Immense N/S passage
+ 95: Cavern with waterfall		Trident
+ 96: Soft room				Pillow
+ 97: Oriental room			Vase
+ 98: Misty cavern
+ 99: Alcove
+100: Plover's room			Emerald
+101: Dark room				Tablet?
+102: Arched hall
+103: Clam room				Clam/pearl
+104: Ragged corridor
+105: Cul de sac
+106: Anteroom				Magazines
+108: Witt's end
+109: Mirror canyon
+110: West window on pit
+111: Top of stalactite
+113: Reservoir
+115: N/E end of repository
+116: S/W end of repository
+117: S/W of chasm
+118: Sloping corridor
+120: Dragon room			Rug
+122: N/E of chasm
+123: Long E/W corridor
+124: Fork in path
+125: Warm walls junction
+126: Breath-taking view
+127: Chamber of boulders		Spices
+128: Limestone passage
+129: Front of barren room
+130: Bear cave				Chain
+
+
+Unlocated treasures: Axe, Carpet/moss, Treasure chest, Pyramid
+
+	(axe is dropped by dwarf, batteries in Vending machine in MOTLP,AD)
+
+
+The Maze of Twisty Little Passages, All Different
+-------------------------------------------------
+
+
+Room  North South East  West  Up   Down     Description
+
+107 -  139   131   137   138  135  West End  Maze of Twisty Little Passages
+137 -  136   132   139   112  134            Little Twisty Maze of Passages
+139 -  134   138   132   133  137            Maze of Little Twisty Passages
+132 -  133   134   138   135                 Little Maze of Twisty Passages
+138 -  135   136   131   134  133   107      Maze of Little Twisting Passages
+131 -  138   139   112   107                 Maze of Twisting Little Passages
+112 -  132   Vend  133   137  139   138      Little Maze of Twisting Passages
+133 -  137   112   136   132  107            Twisting Maze of Little Passages
+135 -  107   133   134   136  112            Twisty Little Maze of Passages
+136 -  112   135   107   131                 Twisty Maze of Little Passages
+134 -  131   137   135   139  138            Twisting Little Maze of Passages
+
+* Vend is the vending machine, where you can get new batteries, if you
+have any coins.
+

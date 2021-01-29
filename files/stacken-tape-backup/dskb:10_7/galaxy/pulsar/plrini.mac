@@ -1,0 +1,991 @@
+	TITLE	PLRINI - Initialization Module
+	SUBTTL	Author: Dave Cornelius/DPM 3-Aug-83
+;
+;
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1975,1976,1977,1978,1979,
+;1980,1981,1982,1983,1984,1985,1986,1987.  ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+
+	SEARCH	GLXMAC
+	SEARCH	ORNMAC		;For the WTO definitions
+	SEARCH	PLRMAC
+	SEARCH	QSRMAC
+	PROLOG	(PLRINI)
+
+	GLOB	<G$REEL>
+
+; This module contains all of the code to support the SET TAPE INITIALIZE
+; OPR command.  This code is the replacement for the VOLINI program.  It
+; allows the operator to generate labeled tapes ; without running any special
+; program.  The operator may label one tape, or a batch of tapes  with
+; incremental volume identifiers.
+
+; The entry point symbols in this module are of the  form  V$xxxx, to signify
+; that the routine is resposible for  writing of VOLUME labels.
+	SUBTTL	External references
+
+;This is an incomplete list of external references
+; which are made only from within $TEXTs or $WTOs
+
+	EXTERN	G$DENS		;Table of density strings
+	EXTERN	G$LTYP		;Table of label type strings
+	SUBTTL	V$IMSG - Decode and dispatch the initialize message
+
+;This routine is called from the operator dispatch code
+; when a SET TAPE INITIALIZE command is given
+;The only argument is the message, whose addrs is passed in M
+;The routine has no T/F value, but the operator
+; may get bitched at if the message is internally bad
+; or there are problems with the tapes.
+; The routine sets up the TCB runnable at the labeler loop code
+
+V$IMSG::
+	$SAVE	<P1,P2>
+	SETZM	P2			;Indicate normal initialization
+	MOVX	S1,.DVINI		;Make sure the set tap msg is
+	PUSHJ	P,O$FNDB##		; an INITIALIZE msg
+	SKIPT				;Ie, does it contain a .DVINI block?
+	 JSP	S1,O$CERR##		;It doesn't, give up
+	MOVX	S1,.TAPDV		;Block type to find
+	PUSHJ	P,O$FNDB##		;Search the message for it
+	SKIPT				;Wins?
+	JSP	S1,O$CERR##		;No, quit
+	HRLI	S1,(POINT 7,)		;Aim at the ASCII
+	$CALL	S%SIXB			;Convert to SIXBIT
+	DEVNAM	S2,			;Expand the drive name
+	 JSP	S1,O$CERR##		;Can't, so give up
+	MOVE	P1,S2			;Save it permanently
+	MOVX	S1,.SIABO		;Get /ABORT block type
+	PUSHJ	P,O$FNDB##		;Is this /ABORT ???
+	JUMPT	ABOINI			;Yes,,abort it !!!!
+	MOVE	S1,P1			;Get device name in S1
+	PUSHJ	P,G$FTCB##		;Find the tape's data block
+	JUMPF	IMSG.0			;Not there,,skip this
+	MOVE	S1,TCB.WS(B)		;Get its wait state
+	CAXE	S1,TW.OFL		;Is it offline ???
+	CAXN	S1,TW.IGN		;Is it idle ???
+	JRST	IMSG.3			;Yes,,forge ahead !!
+	CAXE	S1,TW.MNT		;Switching reels ???
+	JRST	IMSG.1			;No,,thats an error
+	MOVE	P2,B			;Save the current TCB address
+	MOVE	T1,TCB.DV(B)		;Get the device name
+	SETZB	T2,T3			;No job or ppn
+	MOVEM	P2,TCB.DV(P2)		;Make sure we don't use the old TCB
+	PUSHJ	P,G$MTCB##		;Create a new TCB to do the work
+	MOVE	S1,TCB.IO(P2)		;Get the DDB file status bits
+	MOVEM	S1,TCB.IO(B)		;Save them in the new TCB
+	HRLI	S1,TCB.FB(P2)		;Get the FILOP. block address
+	HRRI	S1,TCB.FB(B)		;Where to put it...
+	BLT	S1,TCB.FB+FLPLEN-1(B)	;Copy to the new TCB
+	MOVEI	S1,TCB.IB(B)		;Get input buffer address
+	ADD	S1,[IOWD BFRSIZ+1,0]	;Gen an input CCW
+	MOVEM	S1,TCB.IC(B)		;Gen in input command list
+	MOVEI	S1,TCB.WB(B)		;Get output buffer address
+	ADD	S1,[IOWD BFRSIZ+1,0]	;Gen an output CCW
+	MOVEM	S1,TCB.OC(B)		;Gen an output command list
+	JRST	IMSG.3			;Continue onward
+
+IMSG.0:	MOVE	S1,P1			;Get back the device name
+	PUSHJ	P,T$CKAV##		;Is it in use?
+	JUMPT	IMSG.2			;No, use it!
+IMSG.1:	MOVEM	P1,ABOOBJ+OBJ.UN	;KLUDGE
+	$ACK	(<Unavailable for initialization>,,ABOOBJ,.MSCOD(M))
+	MOVE	S1,P1			;Get the drive name again
+	PJRST	V$MDFN			;Tell MDA we're all done!
+
+IMSG.2:	MOVE	T1,P1			;Get back device name
+	SETZB	T2,T3			;No job number or owner
+	PUSHJ	P,G$MTCB##		;Make one up
+	MOVX	S1,TW.IGN		;Make wait state ignore
+	MOVEM	S1,TCB.WS(B)		;   before we get started
+
+;Here when the useable TCB is set up.
+
+IMSG.3:	MOVX	S1,.SILBT		;Get the desired label type
+	PUSHJ	P,O$FNDB##		;Find that block
+	SKIPF				;Find it?
+	SKIPA	S1,0(S1)		;Yes--Get the label type code
+	MOVEI	S1,DEFLBT		;No--Set use the system default
+	STORE	S1,TCB.IL(B),TV.LBT	;Save desired label type
+
+	;CONTINUED ON THE NEXT PAGE
+	;CONTINUED FROM THE PREVIOUS PAGE
+
+;Get the density
+	MOVX	S1,.SIDEN		;Block type - density code
+	PUSHJ	P,O$FNDB##		;Find it
+	SKIPT				;Got it?
+	TDZA	S1,S1			;No, Use default for this drive
+	MOVE	S1,0(S1)		;Yes, get it
+	STORE	S1,TCB.IL(B),TV.DEN	;Save it
+
+;Clean up any garbage
+	MOVX	S1,TV.OVR		;Get bits to clear
+	ANDCAM	S1,TCB.IL(B)		;Zap everything
+	SETZM	TCB.IR(B)		;CLEAR REQUEST-ID
+	SETZM	TCB.II(B)		;CLEAR INCREMENT
+	SETZM	TCB.OI(B)		;No PPN of owner yet
+	SETZM	TCB.IP(B)		;No initial protection
+	SETZM	TCB.IV(B)		;No volid
+	MOVX	S1,TV.HLD		;Get the 'hold when done' bit
+	IORM	S1,TCB.IL(B)		;Default to /TAPE-DISPOSITION:KEEP
+	MOVEI	S1,1			;Get a count of 1
+	STORE	S1,TCB.IL(B),TV.CNT	;Save it
+	LOAD	S1,TCB.IL(B),TV.LBT	;GET LABEL TYPE
+	CAIE	S1,LT.SL		;ANSI?
+	CAIN	S1,LT.SUL		;ANSI WITH USER LABELS?
+	SETOM	TCB.IP(B)		;YES--PROTECTION MIGHT NEED FIXUP LATER
+
+;Now look at each block in the message
+	LOAD	T1,.OARGC(M)		;Get the number of blocks
+	MOVEI	T2,.OHDRS(M)		;Aim at the first block
+INILOP:	LOAD	S1,ARG.HD(T2),AR.TYP	;Get this block type
+	MOVE	S2,[XWD -INITLN,INITAB]	;Get the transalation table pointer
+INIL.1:	HLRZ	TF,0(S2)		;Get next known arg type
+	CAIE	TF,0(S1)		;Is this it?
+	AOBJN	S2,INIL.1		;No, try the next
+	SKIPL	S2			;Found one?
+	JSP	S1,O$CERR##		;No, we're messed up!
+	MOVEI	S1,ARG.DA(T2)		;Aim at the data
+	HRRZ	S2,0(S2)		;Get the dispatch adrs
+	PUSHJ	P,0(S2)			;Process this block
+	SKIPT				;Good?
+	 JSP	S1,O$CERR##		;No, quit
+	LOAD	S1,ARG.HD(T2),AR.LEN	;Get block length
+	ADDI	T2,0(S1)		;Aim at next block
+	SOJG	T1,INILOP		;Try 'em all
+
+;Fix up any inconsistencies
+	MOVX	S1,TV.NEW		;GET /NEW-VOLUME BIT
+	TDNN	S1,TCB.IL(B)		;REINITIALIZING AN OLD TAPE?
+	SKIPE	TCB.IV(B)		;NO--WAS A REELID SPECIFIED?
+	JRST	INIL.2			;SKIP LABEL AND REELID CHECK
+	LOAD	S1,TCB.IL(B),TV.LBT	;GET LABEL TYPE
+	CAIE	S1,.TFLNL		;NOLABELS?
+	CAIN	S1,.TFLNV		;USER-EOT?
+	JRST	INIL.2			;YES--REELID NOT NECESSARY
+	$ACK	(<Volume Id required for labeled tapes>,,TCB.OB(B),.MSCOD(M))
+	PJRST	V$MDFI			;INFORM QUASAR WE'RE DONE
+
+INIL.2:	MOVEI	S2,1			;ASSUME A DEFAULT INCREMENT
+	SKIPN	S1,TCB.II(B)		;GET THE INCREMENT IF THERE IS ONE
+	MOVEM	S2,TCB.II(B)		;SET DEFAULT
+	MOVE	S2,TCB.IL(B)		;GET FLAGS, ETC.
+	LOAD	S1,S2,TV.CNT		;GET VOLUME COUNT
+	TXNE	S2,TV.NEW		;RE-INITIALIZING OLD TAPES?
+	HLRZ	S1,TCB.VP(B)		;GET NUMBER OF REELS TO PROCESS
+	STORE	S1,S2,TV.CNT		;RESET COUNT
+	TXNE	S2,TV.NEW		;/NEW-VOLUME PROCESSING?
+	TXO	S2,TV.HLD		;YES--ALWAYS TURN ON HOLD
+	CAILE	S1,1			;UNLESS MORE THAN ONE TAPE
+	TXZ	S2,TV.HLD		;THEN ZAP HOLD BIT
+	MOVEM	S2,TCB.IL(B)		;UPDATE FLAGS, ETC.
+
+	SKIPN	TCB.OI(B)		;HAVE AN OWNER PPN?
+	SETZM	TCB.IP(B)		;NO--CLEAR PROTECTION
+	SKIPGE	S1,TCB.IP(B)		;GET PROTECTION CODE
+	TXNE	S2,TV.NEW		;/NEW-VOLUME PROCESSING?
+	SKIPA				;YES--USE PROTECTION (MIGHT BE -1)
+	MOVE	S1,G$PSTP##		;USE STANDARD FILE PROTECTION CODE
+	MOVEM	S1,TCB.IP(B)		;SET IT
+
+INIL.3:	LOAD	S2,TCB.CH(B),TC.TYP	;Get the device type
+	CAIN	S2,%DTAP		;DECtape?
+	SKIPA	S1,[D$IDTA##]		;Yes
+	MOVEI	S1,V$LABEL		;Start address for TCB
+	JUMPE	P2,G$NPRC##		;Normal initialization,,start'er up !!
+	MOVE	S1,P2			;Vol switch,,setup new TCB with
+	PUSHJ	P,G$NPRC##		;  old TCB address first on the stack
+	EXCH	P,TCB.AC+P(B)		;Get process stack
+	PUSH	P,[V$VSWR]		;Routine to run when done
+	PUSH	P,[V$LABEL]		;Routine to run to start
+	EXCH	P,TCB.AC+P(B)		;Reset stack pointers
+	$RETT				;Return
+
+V$VSWR:	POP	P,S1			;Get the address of the real TCB
+	MOVE	P1,B			;Save the old TCB address
+	PUSHJ	P,G$FTCB##		;I know we have it,,but check anyway
+	SKIPT				;Must be there !!!
+	PUSHJ	P,S..WNF##		;No,,deep trouble !!!
+	MOVE	S1,TCB.DV(P1)		;Get the device name back
+	MOVEM	S1,TCB.DV(B)		;Make the real TCB the new one
+	MOVE	P,TCB.AC+P(B)		;Get the real TCB stack pointer
+	MOVE	S1,P1			;Get the old TCB address
+	PUSHJ	P,G$DTCB##		;Delete the worker !!!
+	MOVE	S1,G$LIST##		;Get the TCB list id
+	MOVE	S2,B			;Get the real TCB address
+	PUSHJ	P,L%APOS		;Position to the real entry
+	PUSHJ	P,L%RENT		;Remember where it is
+	MOVSI	TF,TCB.AC(B)		;Swap TCB contexts
+	BLT	TF,P			; to the new TCB
+	MOVE	TF,TCB.AC(B)		;Restore TF
+	PJRST	G$NJOB##		;Back to the scheduler !!!
+	SUBTTL	V$TABLE - Tables for block decoding in the message
+
+;These tables tell what to do for each particular block type
+; in the incoming message
+
+INITAB:	XWD	.TAPDV,ININOP		;Skip the drive name block
+	XWD	.DVINI,ININOP		;Bypass .DVINI block
+	XWD	.SILBT,ININOP		;Already got label type
+	XWD	.SIDEN,ININOP		;Already have (or defaulted) density
+	XWD	.VOLID,V$VOLID		;Volume identifier
+	XWD	.SISVI,V$SVOLID		;Starting volume id
+	XWD	.SIOWN,V$OWN		;Owner identifier
+	XWD	.SIPRO,V$PROT		;Protection
+	XWD	.SIUNL,V$UNL		;Unload when done
+	XWD	.SIHLD,V$HOLD		;Keep tape up when done
+	XWD	.SIOVR,V$OVR		;Override protection/expiration
+	XWD	.SINOV,V$NOV		;Check expiration
+	XWD	.SIINC,V$INCR		;Increment for multiple initializations
+	XWD	.SICTR,V$CNT		;# of tapes to do
+	XWD	.SIERA,V$ERA		;ERASE THE TAPE
+	XWD	.SINEW,V$NEW		;NEW VOLUME (RE-INITIALIZE OLD TAPE)
+	XWD	.SILST,V$LST		;LIST OF REELIDS
+	XWD	.ORREQ,V$REQ		;REQUEST-ID (/NEW ONLY)
+	INITLN==.-INITAB
+
+	SUBTTL	V$BLOCK - Block processing routines
+
+ININOP:	$RETT				;Win, but do nothing
+
+V$INCR:	MOVE	S2,(S1)			;GET INCREMENT
+	MOVEM	S2,TCB.II(B)		;SAVE IT
+	$RETT				;RETURN
+
+V$CNT:	MOVE	S2,[POINTR TCB.IL(B),TV.CNT] ;Where to store the # vols to do
+	MOVE	S1,0(S1)		;GET VOLUME COUNT
+V$STOR:	DPB	S1,S2			;Stash the data
+	$RETT
+
+V$OWN:	LOAD	S2,TCB.IL(B),TV.LBT	;GET LABEL TYPE
+	CAIE	S2,LT.SL		;ANSI?
+	CAIN	S2,LT.SUL		;ANSI WITH USER LABELS?
+	SKIPA	S1,(S1)			;YES--GET OWNER PPN
+	MOVEI	S1,0			;OTHERWISE SET TO ZERO (IGNORE IT)
+	MOVEM	S1,TCB.OI(B)		;SAVE IT AWAY
+	$RETT				;AND RETURN
+
+V$PROT:	LOAD	S2,TCB.IL(B),TV.LBT	;GET LABEL TYPE
+	CAIE	S2,LT.SL		;ANSI?
+	CAIN	S2,LT.SUL		;ANSI WITH USER LABELS?
+	SKIPA	S1,(S1)			;YES--GET PROTECTION CODE
+	MOVEI	S1,0			;OTHERWISE SET TO ZERO (IGNORE IT)
+	CAILE	S1,777			;MAKE SURE IT'S LEGAL
+	MOVNI	S1,1			;DEFAULT CUZ OPERATOR IS STUPID
+	MOVEM	S1,TCB.IP(B)		;STORE IT AWAY
+	$RETT				;AND RETURN
+
+V$NOV:	SKIPA	S2,[POINTR TCB.IL(B),TV.OVR] ;Clear the override bit
+V$UNL:	MOVE	S2,[POINTR TCB.IL(B),TV.HLD] ;Bit to clear
+V$ZERO:	SETZ	S1,			;Store a 0
+	PJRST	V$STOR
+
+V$ERA:	SKIPA	S2,[POINTR TCB.IL(B),TV.ERA] ;ERASE BIT
+V$NEW:	MOVE	S2,[POINTR TCB.IL(B),TV.NEW] ;NEW BIT
+	JRST	V$ONE			;GO STORE A 1
+V$OVR:	SKIPA	S2,[POINTR TCB.IL(B),TV.OVR] ;Set the override bit
+V$HOLD:	MOVE	S2,[POINTR TCB.IL(B),TV.HLD] ;Bit to set
+V$ONE:	MOVEI	S1,1			;Get a one
+	PJRST	V$STOR			;Store it
+
+V$VOLID:
+	HRLI	S1,(POINT 7,)		;Point to the ASCII text
+	$CALL	S%SIXB			;Convert volid to sixbit
+	STORE	S2,TCB.IV(B)		;Save the volid
+	$RETT
+
+V$SVOLID:
+	MOVE	S2,0(S1)		;Get the starting number
+	CAXLE	S2,^D999999		;Will it fit?
+	JSP	S1,O$CERR##		;No, too bad
+	$TEXT	(<-1,,G$BLOK>,<^D/S2/>)	;Convert to ASCII
+	MOVEI	S1,G$BLOK##		;Aim at the ASCII
+	PJRST	V$VOLID			;And make that our volid
+
+
+V$LST:	LOAD	S1,ARG.HD(T2),AR.LEN	;GET BLOCK LENGTH
+	SUBI	S1,ARG.DA		;MINUS NUMBER OF OVERHEAD WORDS
+	$CALL	M%GMEM			;GET THIS MUCH CORE
+	HRL	S2,S1			;MAKE IT LEN,,ADDR
+	MOVEM	S2,TCB.VP(B)		;SAVE FOR LATER
+	MOVNS	S1			;GET -WORD COUNT
+	HRL	S2,S1			;MAKE AN AOBJN POINTER TO LIST
+	MOVEM	S2,TCB.VC(B)		;SAVE AS POINTER TO CURRENT REELID
+	MOVSI	S1,ARG.DA(T2)		;POINT TO THE FIRST DATA WORD
+	HRR	S1,TCB.VP(B)		;MAKE A BLT POINTER
+	HLRZ	S2,TCB.VP(B)		;GET NUMBER OF WORDS TO BLT
+	ADD	S2,TCB.VP(B)		;COMPUTE END OF BLOCK
+	TLZ	S2,-1			;NO JUNK
+	BLT	S1,-1(S2)		;COPY LIST OF REELIDS
+	$RETT				;AND RETURN
+
+V$REQ:	MOVE	S1,(S1)			;GET REQUEST-ID
+	MOVEM	S1,TCB.IR(B)		;SAVE FOR ACK TO QUASAR
+	$RETT				;RETURN
+	SUBTTL	ABOINI - Routine to abort the tape initialization
+
+	;CALL:	P1/ The sixbit drive name
+	;
+	;RET:	True always
+
+ABOINI:	MOVEM	P1,ABOOBJ+OBJ.UN	;Save the device name
+	MOVE	S1,P1			;Get device name in S1
+	PUSHJ	P,G$FTCB##		;Find the tape's data block
+	JUMPF	ABOI.2			;Not there,,just return
+	MOVX	S1,TS.INI		;Get the initialization bit
+	TDNN	S1,TCB.ST(B)		;Initializing this tape ???
+	JRST	ABOI.2			;No,,nak the operator
+	ANDCAM	S1,TCB.ST(B)		;Yes,,clear initializing state
+	MOVE	P1,TCB.AC+P(B)		;Get the process stack
+
+ABOI.1:	POP	P1,S1			;Pop off an entry
+	CAIE	S1,T$RELE##		;   at a time till we get
+	CAIN	S1,V$VSWR		;   where we want to be
+	SKIPA				;   so that we can continue
+	JRST	ABOI.1			;   the process as if it completed
+	PUSH	P1,S1			;Put the completion address back
+	MOVEM	P1,TCB.AC+P(B)		;And reset the process stack pointer
+	PUSHJ	P,G$STRN##		;Mark the process as runnable
+	$ACK	(Tape initialization aborted,,ABOOBJ,.MSCOD(M))
+	$RETT				;Tell the operator and return
+
+ABOI.2:	$ACK	(Tape not being initialized,,ABOOBJ,.MSCOD(M))
+	$RETT				;Nak the operator and return
+
+ABOOBJ:	$BUILD	OBJ.SZ
+	 $SET	(OBJ.TY,,.OTMNT)
+	$EOB
+
+	SUBTTL	V$MDFI - Tell MDA initialization is done
+
+;This routine sends a message to MDA indicating that initialization
+; is complete on a certain drive, and that such a drive may be used
+; for normal operation.
+;Call -
+;	B/	TCB adrs (for V$MDFI entry)
+;	S1/	SIXBIT drive name (for V$MDFN entry)
+;Returns
+;	A message to MDA, and TRUE (always)
+
+V$MDFI::MOVE	S1,TCB.DV(B)		;Get the drive name
+	MOVE	S2,TCB.IR(B)		;GET THE REQUEST-ID (IF ANY)
+
+V$MDFN:	MOVEM	S1,DEVNAM+ARG.DA	;STORE DRIVE NAME
+	MOVE	S1,MDFMSG+.MSFLG	;GET MESSAGE FLAG WORD
+	TLZE	S2,400000		;ERROR SOMEWHERE?
+	TXOA	S1,AK.NAK		;LITE THE NAK BIT
+	TXZ	S1,AK.NAK		;ELSE CLEAR IT
+	MOVEM	S1,MDFMSG+.MSFLG	;UPDATE FLAGS
+	MOVEM	S2,REQID+ARG.DA		;STORE REQUEST-ID
+	DMOVE	S1,[EXP MDFLEN,MDFMSG]	;AIM AT THE MESSAGE
+	PJRST	G$SMDA##		;SEND ANSWER TO MDA
+
+MDFMSG:	$BUILD	.OHDRS			;Build the header
+	$SET	(.MSTYP,MS.TYP,.QOIDN)	;Message type - Initialize done
+	$SET	(.MSTYP,MS.CNT,MDFLEN)	;Length of the message
+	$SET	(.OARGC,,2)		;NUMBER OF ARGUMENTS
+	$EOB
+
+DEVNAM:	XWD	2,.RECDV		;LEN,,BLOCK TYPE
+	EXP	0			;DEVICE NAME
+
+REQID:	XWD	2,.ORREQ		;LEN,,BLOCK TYPE
+	EXP	0			;REQUEST-ID
+
+MDFLEN==.-MDFMSG			;LENGTH OF MESSAGE
+	SUBTTL	V$LABEL - TCB level routine to write labels
+
+;This routine does the actual work of initializing
+; the labels on one or more tapes.
+;The TCB is set up with all the requisite information in the
+; initialization portion of the TCB
+;For each tape, Any existing labels are checked for expiration,
+; and perhaps overwritten, unless the operator has
+; specified no expiration checking.  If this is the case, the
+; tape is never read.  This allows the operator to initialize
+; a 'virgin' tape, ie one which has a very long record
+; on it, which the DX10/20 can't handle.
+
+V$LABEL:
+	$SAVE	<P1>
+	LOAD	P1,TCB.IL(B),TV.CNT	;Get # of tapes to do
+	PUSHJ	P,L$CLEF##		;Clear out all errors (start fresh)
+	PUSHJ	P,T$OPEN##		;Set up the drive for I/O
+	JUMPF	VLAB.3			;Can't, so quit
+	MOVX	S1,TS.INI		;Get the initialization bit
+	IORM	S1,TCB.ST(B)		;Lite so the world knows
+	MOVX	S1,TI.OAV		;Get AVR open bit
+	IORM	S1,TCB.IO(B)		;Lite so we flush label DDB when done
+	MOVX	S1,TV.NEW		;GET /NEW-VOLUME BIT
+	TDNN	S1,TCB.IL(B)		;SPECIAL INITIALIZATION?
+	JRST	VLAB.1			;NO
+	PUSHJ	P,V$NEWV		;GET FIRST /NEW-VOLUME IF NECESSARY
+VLAB.1:	PUSHJ	P,T$CLRS##		;Clear any I/O errors as well
+	MOVX	S1,TS.FFF		;GOING TO WRITE FIRST FILE ON REEL
+	IORM	S1,TCB.ST(B)		;SET BIT
+	PUSHJ	P,LABEL1		;Do this tape
+	JUMPF	VLAB.2			;Real trouble, quit
+	PUSHJ	P,V$TOPR		;Tell OPR about this volume
+	SOJLE	P1,VLAB.2		;Any more tapes to do?
+	PUSHJ	P,V$NEXT		;Get the next tape up
+	JUMPT	VLAB.1			;If OPR put up another...go init it
+
+;Here to send ack to MDA saying all done with initialize
+VLAB.2:	MOVEI	S1,'UNL'		;Get unload command
+	LOAD	S2,TCB.IL(B),TV.HLD	;Want to keep tape up when done?
+	SKIPN	S2			;Should we unload?
+	PUSHJ	P,T$POS##		;Yes, throw it off
+
+VLAB.3:	MOVX	S2,TV.NEW		;GET /NEW-VOLUME BIT
+	TDNN	S2,TCB.IL(B)		;SPECIAL TYPE OF INITIALIZATION?
+	JRST	VLAB.4			;NO
+	SKIPL	TCB.IR(B)		;DID AN ERROR OCCUR?
+	PUSHJ	P,V$FIRS		;NO--GET FIRST REEL BACK ON THE DRIVE
+	HLRZ	S1,TCB.VP(B)		;GET WORD COUNT
+	HRRZ	S2,TCB.VP(B)		;GET ADDR
+	$CALL	M%RMEM			;RELEASE CORE
+	SETZM	TCB.VP(B)		;CLEAR POINTER
+
+VLAB.4:	MOVX	S1,TS.INI		;Get the initialization bit
+	ANDCAM	S1,TCB.ST(B)		;Finished with initialization
+	PJRST	V$MDFI			;Inform MDA of completion
+	SUBTTL	LABEL1 - Initialize the labels on one tape
+
+;This routine will write the labels on one reel, after
+; perhaps checking for expiration.
+
+LABEL1:
+LABE.1:	MOVEI	S1,'REW'		;Rewind command
+	PUSHJ	P,T$POS##		;Get to BOT
+	PUSHJ	P,T$WRCK##		;Is there a write ring?
+	JUMPE	S2,LABE.3		;Yes, continue
+	DMOVE	S1,[EXP	RNGTYP,RNGTXT]	;Aim at type, text fields
+LABE.2:	PUSHJ	P,V$TAPE		;Get a new tape
+	JUMPF	.POPJ			;Don't want to continue, so quit
+	JRST	LABE.1			;Try this tape!
+
+LABE.3:	MOVE	S1,TCB.IL(B)		;GET INITALIZATION FLAGS
+	TXNN	S1,TV.NEW		;USER WANTS TO RE-INIT AN OLD TAPE?
+	TXNN	S1,TV.OVR		;OPR WANTS TO OVERRIDE EXPIRATION DATE?
+	SKIPA
+	JRST	LABE.6			;GO WRITE LABELS
+	PUSHJ	P,L$RVOL##		;READ VOL RECORDS
+	JUMPF	[DMOVE	S1,[EXP CCETYP,NTPTXT]
+		JRST	LABE.2 ]	;Try again
+	MOVX	S1,TV.NEW		;GET /NEW-VOLUME BIT
+	TDNN	S1,TCB.IL(B)		;USER WANTS TO RE-INIT AN OLD TAPE?
+	JRST	LABE.4			;NO
+	JMPUNL	LT,LAB3A		;NO REELID STUFF IF UNLABELED
+	MOVE	T1,[CPTRI ^D5,0(BUF)]	;VOLID STORE IN CP 5-10
+	MOVE	T2,[POINT 8,TCB.VL(B)]	;COPY TO HERE
+	HRRZI	T3,6			;SIX CHARACTERS
+	HRL	T3,L$CVTT##(LT)		;GET CONVERSION ROUTINE ADDR
+	PUSHJ	P,L$STST##		;COPY TEXT
+	CAIE	LT,LT.SL		;ANSI?
+	CAIN	LT,LT.SUL		;ANSI WITH USER LABELS?
+	SKIPA	S1,TCB.OI(B)		;GET OWNER PPN
+LAB3A:	MOVEI	S1,0			;CLEAR OUT OWNER PPN
+	MOVEM	S1,TCB.VO(B)		;DEFAULT THE ONE ON THE TAPE
+	PUSHJ	P,L$RUVL##		;READ UVL1 RECORD FOR PROT AND PPN
+	PUSHJ	P,NEWCHK		;PERFORM NEW-VOLUME CHECKS
+	JUMPF	LABE.2			;GIVE UP ON FAILURE AND TRY ANOTHER
+
+LABE.4:	MOVX	S1,TV.OVR		;GET /OVERRIDE BIT
+	TDNE	S1,TCB.IL(B)		;OPR WANTS TO OVERRIDE EXPIRATION DATE?
+	JRST	LABE.5			;YES
+	PUSHJ	P,L$HDEX##		;ELSE CHECK THE DATE
+	JUMPF	[DMOVE	S1,[EXP FNETYP,NTPTXT]
+		JRST	LABE.2 ]	;Throw out tape, try again
+
+LABE.5:	MOVEI	S1,'REW'		;Get the rewind command
+	PUSHJ	P,T$POS##		;Back to load point
+	MOVX	S1,TV.ERA		;GET ERASE BIT
+	TDNN	S1,TCB.IL(B)		;WANT TO ZAP THE TAPE?
+	JRST	LABE.6			;NO
+	MOVEI	S1,'DSE'		;GET CODE
+	PUSHJ	P,T$POS##		;DO DATA SECURITY ERASE
+	SKIPT				;DID IT WORK?
+	PUSHJ	P,ERACHK		;MAYBE WE HAVE TO TELL THE OPERATOR
+	MOVEI	S1,'REW'		;NOW REWIND THE TAPE
+	PUSHJ	P,T$POS##		; BACK TO THE LOAD POINT
+
+LABE.6:	MOVEI	BUF,TCB.WB(B)		;GET OUTPUT BUFFER ADDRESS
+	LOAD	LT,TCB.IL(B),TV.LBT	;Get the desired label type back
+	LOAD	S1,TCB.IL(B),TV.DEN	;Get requested density
+	STORE	S1,TCB.PS(B),TP.DEN	;Save it where it counts
+	PUSHJ	P,I$SDEN##		;Set it
+	JUMPF	ILLDEN			;Can't, complain
+	MOVX	S1,TS.FFF		;FLAG FIRST FILE ON TAPE
+	IORM	S1,TCB.ST(B)		;TO FAKE OUT WRTLBL
+	PUSHJ	P,@LBLINI(LT)		;Initialize these particular labels
+	SKIPT				;Did it work?
+	PUSHJ	P,ERRINI		;No, complain to OPR
+	PUSHJ	P,I$GDEN##		;READ THE REAL DENSITY BACK
+	$RETT				;And then win
+
+	;CONTINUED ON THE NEXT PAGE
+
+NEWCHK:	JMPUNL	LT,.RETT		;NOTHING TO CHECK IF UNLABELED
+	MOVEI	S1,TCB.VL(B)		;POINT TO REELID STORAGE
+	PUSHJ	P,O$CN86##		;CONVERT TO SIXBIT
+	CAME	S2,TCB.IV(B)		;THE SAME?
+	JRST	NEWCE1			;NO--TRY ANOTHER TAPE
+	CAIE	LT,LT.SL		;ANSI?
+	CAIN	LT,LT.SUL		;ANSI WITH USER LABELS?
+	SKIPA	S1,TCB.VO(B)		;YES--GET VOLUME OWNER (FROM TAPE)
+	$RETT				;NOTHING ELSE TO CHECK
+	MOVE	S2,TCB.OI(B)		;GET PROSPECTIVE NEW OWNER
+	PUSHJ	P,I$OWN##		;SEE IF THEY'RE THE SAME
+	JUMPF	NEWCE2			;NO--GET ANOTHER TAPE
+	$RETT				;LOOKS LIKE A GOOD TAPE
+
+NEWCE1:	MOVEM	S2,G$REEL##		;SAVE IN A SAFE PLACE
+	DMOVE	S1,[EXP VIDTYP,VIDTXT]	;POINT TO TYPE AND TEXT BLOCKS
+	$RETF				;TRY ANOTHER TAPE
+
+NEWCE2:	DMOVE	S1,[EXP	PPNTYP,PPNTXT]	;POINT TO TYPE AND TEXT BLOCKS
+	$RETF				;TRY ANOTHER TAPE
+
+
+VIDTYP:	ASCIZ	|Volume-id mismatch during tape reinitialization|
+VIDTXT:	ITEXT	(<Tape ^W/G$REEL/ mounted when expecting ^W/TCB.IV(B)/
+Please try another tape>)
+
+PPNTYP:	ASCIZ	|PPN mismatch during tape reinitialization|
+PPNTXT:	ITEXT	(<Tape owned by ^U/TCB.VO(B)/ when expecting ^U/TCB.OI(B)/
+Please try another tape>)
+; Check erase failures
+ERACHK:	MOVE	S1,TCB.IL(B)		;GET INITIALIZATION FLAGS
+	TXZN	S1,TV.NOE		;DOES OPR ALREADY KNOW THIS?
+	POPJ	P,			;YES--JUST RETURN
+	MOVEM	S1,TCB.IL(B)		;UPDATE FLAGS
+	MOVX	S1,TV.NEW		;GET /NEW-VOLUME
+	TDNN	S1,TCB.IL(B)		;WHO REQUESTED THIS?
+	SKIPA	S1,[ERATX2]		;THE OPERATOR ON SET TAPE INIT COMMAND
+	MOVEI	S1,ERATX3		;THE USER ON MOUNT COMMAND
+	$WTO	(<^T/ERATX1/>,<^T/(S1)/>,TCB.OB(B),$WTFLG(WT.SJI))
+	POPJ	P,			;RETURN
+
+ERATX1:	ASCIZ	|Hardware does not support data security erase|
+ERATX2:	ASCIZ	|Function requested by the operator|
+ERATX3:	ASCIZ	|Function requested by user|
+	;CONTINUED FROM THE PREVIOUS PAGE
+
+RNGTYP:	ASCIZ	/Write ring required for Initialization/
+
+RNGTXT:	ITEXT	(<Please add a write-ring and re-mount this tape>)
+
+CCETYP:	ASCIZ	/Can't check existing labels for expiration/
+
+NEWTYP:	ASCIZ	/Wrong tape for reinitialization/
+
+FNETYP:	ASCIZ	/File has not yet expired/
+
+NTPTXT:	ITEXT	(<Please try another tape>)
+	SUBTTL	V$FILE - Write a dummy file on the tape
+
+
+; Called by PLRLBP when performing a data security erase
+V$FILE::MOVX	S1,TS.INI		;GET TAPE INITIALIZING BIT
+	ANDCAM	S1,TCB.ST(B)		;MAKE SURE IT'S OFF
+	PJRST	@LBLINI(LT)		;DISPATCH AND RETURN (S1 := ADDR
+					;OF ERROR TEXT ON FALSE RETURN)
+
+;These routines return adrs of string S1 if FALSE
+LBLINI:	ILLLBL				;BYPASS is illegal
+	WRTLBL				;ANSI
+	WRTLBL				;ANSI
+	WRTLBL				;IBM
+	WRTLBL				;IBM
+	UNLABL				;LTM
+	UNLABL				;NON-STANDARD
+	UNLABL				;NO LABELS
+	ILLLBL				;COBOL ASCII
+	ILLLBL				;COBOL SIXBIT
+	UNLABL				;NO-LABELS, USER EOV
+	MAXLBL==.-LBLINI
+	SUBTTL	UNLABL - Initialize an 'unlabeled' tape
+
+;This routine will write the 'labels' on an unlabeled tape.
+;All this amounts to is writing some garbage piece of data
+; at the required density, and writing a couple of tape marks
+
+UNLABL:	MOVE	T1,BNKWD##		;GET A WORD OF BLANKS
+	MOVEM	T1,(BUF)		;STORE IT
+	MOVSI	T1,(BUF)		;START OF BUFFER
+	HRRI	T1,1(BUF)		;MAKE A BLT POINTER
+	BLT	T1,BFRSIZ-1(BUF)	;INIT BUFFER TO ALL SPACES
+	MOVE	T1,UNLPTR		;Aim at unlabeled text
+	MOVE	T2,[POINT 8,0(BUF)]	;Aim at the output buffer
+	MOVEI	T3,UNLLEN		;Length of string
+	PUSHJ	P,L$STST##		;Store that string
+	PUSHJ	P,T$WRRC##		;Write the data
+	PUSHJ	P,T$WRTM##		;Write one tape mark
+	PUSHJ	P,T$WRTM##		;Write a second one
+	MOVEI	S1,'BBL'		;BACKSPACE OVER
+	PUSHJ	P,T$POS##		; THE TAPE MARK
+	$RETT				;All done!
+
+UNLPTR:	POINT	7,[ASCIZ/Unlabeled Tape/]	;The text itself
+	UNLLEN==^D14			;# of chars
+	SUBTTL	WRTLBL - Initialize ANSI and EBCDIC labels
+
+;This routine is responsible for writing ANSI VOL1, UVL1, HDR1, HDR2
+; <TM>,  <TM>, EOF1, EOF2, <TM>, <TM>
+; on the tape.
+;Returns T/F,
+;	F/	S1/	adrs of error text
+
+WRTLBL:	MOVX	S1,TS.INI		;GET INITIALIZING BIT
+	TDNN	S1,TCB.ST(B)		;CALLED BY PLRINI OR PLRLBP?
+	JRST	WRTL.1			;PLRLBP
+
+;Set up the VOL1 and UVL1 paramters
+	LOAD	S1,TCB.OI(B)		;Get initial owner ID
+	STORE	S1,TCB.OW(B)		;Save in real area of TCB
+	LOAD	S1,TCB.IP(B)		;Get initial protection
+	STORE	S1,TCB.PT(B),TP.PRT	;Save as real protection code
+	MOVE	S1,TCB.IV(B)		;Get this volume id
+	MOVEI	S2,TCB.VL(B)		;Where to put the result
+	PUSHJ	P,O$CN68##		;Convert to 8-bit ASCII
+	MOVE	S1,TCB.IV(B)		;Get the volid again
+	MOVEI	S2,TCB.FV(B)		;Aim at 'first' volid space
+	PUSHJ	P,O$CN68##		;Setup first volid in set name
+
+; Write VOL1 labels
+WRTL.1:	MOVE	S1,TCB.ST(B)		;GET STATUS WORD
+	MOVE	S2,S1			;COPY IT
+	TXZ	S1,TS.FFF		;CLEAR FIRST FILE ON REEL FLAG
+	MOVEM	S1,TCB.ST(B)		;UPDATE
+	TXNN	S2,TS.FFF		;FIRST FILE?
+	JRST	WRTL.2			;NO
+	PUSHJ	P,L$WVOL##		;Write the VOL1, UVL1
+	JUMPF	[MOVEI	S1,[ASCIZ/Error writing VOL1 label group/]
+		$RETF]			;Can't, so tell the bad news
+
+;Set up the HDR1 parameters
+WRTL.2:	DMOVE	S1,[ASCII/DUMMY.FILE/]	;Get the funny file name
+	DMOVEM	S1,TCB.FN(B)		;Set the first part
+	DMOVE	S1,[ASCII/       /]	;Seven spaces
+	DMOVEM	S1,TCB.FN+2(B)		;Save second part of filename
+	MOVX	S1,TS.INI		;GET INITIALIZING BIT
+	TDNN	S1,TCB.ST(B)		;WHO WERE WE CALLED BY?
+	JRST	WRTL.3			;PLRLBP
+	MOVEI	S1,1			;Get a one
+	STORE	S1,TCB.SN(B)		;Save as first section of file
+	STORE	S1,TCB.PS(B),TP.POS	;And indicate first file on tape
+	STORE	S1,TCB.GV(B),TG.GEN	;Generation is 1
+
+WRTL.3:	ZERO	TCB.EX(B),TE.CRE!TE.EXP	;NO CREATION OR EXPIRATION DATE
+	MOVEI	S2,0			;GET A ZERO
+	STORE	S2,TCB.GV(B),TG.VER	;Version is 0
+	STORE	S2,TCB.BC(B)		;Block count is 0
+
+;Set up the HDR2 parameters
+	MOVX	TF,.TRFUN		;Undefined record format
+	STORE	TF,TCB.RF(B),TF.RFM	;Save for output
+	STORE	S1,TCB.LN(B),TL.REC	;Set 1 as record length
+	STORE	S1,TCB.LN(B),TL.BLK	;And as block length, too
+	ZERO	TCB.PR(B)		;No protection for this dummy file
+	ZERO	TCB.PT(B),TP.PRT	;Clear volume protection, too
+	PUSHJ	P,L$WHDR##		;Write the headers (HDR1 & HDR2)
+	JUMPF	[MOVEI	S1,[ASCIZ/Error writing dummy file HDR labels/]
+		$RETF]			;Can't, so complain
+	MOVE	T1,BNKWD##		;GET A WORD OF BLANKS
+	MOVEM	T1,(BUF)		;STORE IT
+	MOVSI	T1,(BUF)		;START OF BUFFER
+	HRRI	T1,1(BUF)		;MAKE A BLT POINTER
+	BLT	T1,BFRSIZ-1(BUF)	;INIT BUFFER TO ALL SPACES
+	MOVE	T1,LBLPTR		;POINT TO "LABELED TAPE"
+	MOVE	T2,[POINT 8,0(BUF)]	;AIM AT THE OUTPUT BUFFER
+	MOVEI	T3,LBLLEN		;GET LENGTH OF STRIGN
+	PUSHJ	P,L$STST##		;STORE THE STRING
+	PUSHJ	P,T$WRRC##		;WRITE THE RECORD OUT
+	PUSHJ	P,T$CLOS##		;CLOSE THE FILE (WRITING 2 TAPE MARKS)
+	PUSHJ	P,L$WEOF##		;WRITE EOF LABELS
+	MOVEI	S1,[ASCIZ/Can't write dummy file trailer labels/]
+	$RET				;Return T/F from that
+
+LBLPTR:	POINT	7,[ASCIZ |Labeled tape|]
+LBLLEN==^D12
+	SUBTTL	Error dropouts for label initialization
+
+;These routines inform the operator that something has gone
+; wrong in the label init code, and return false
+
+ILLLBL:	MOVEI	S1,[ASCIZ/Illegal label type/]
+	$RETF
+
+ILLDEN:	MOVEI	S1,[ASCIZ/Illegal density specified/]
+
+ERRINI:	$WTO	(<Error during volume initialization>,<^T/0(S1)/>,TCB.OB(B),$WTFLG(WT.SJI))
+	$RETF
+	SUBTTL	V$NEWV - Routine to get the next "new" volume
+
+
+; This routine is used only for /NEW-VOLUME processing.  In this
+; case, QUASAR generates the SET TAPE INITIALIZE message and
+; provides a list of reelids.  This list comes from the user's
+; MOUNT /REELID:(reel1,reel2,...)/NEW-VOLUME command.  This mechanism
+; is used to tell MDA to re-initialize existing tapes already
+; owned by the user.
+
+V$NEWV:	SETZM	TCB.IV(B)		;ASSUME NO MORE
+	SKIPL	S1,TCB.VC(B)		;GET AOBJN POINTER TO CURRENT REELID
+	$RETF				;ALL DONE!
+	MOVE	S2,(S1)			;GET A REELID
+	MOVEM	S2,TCB.IV(B)		;SET IT UP FOR LBLINI
+	AOBJN	S1,.+1			;ADVANCE POINTER
+	MOVEM	S1,TCB.VC(B)		;UPDATE FOR NEXT TIME
+	$RETT				;RETURN
+	SUBTTL	V$FIRST - Routine to get the first volume mounted again
+
+
+; This routine is required for /NEW-VOLUME processing.  Before telling
+; QUASAR we're done, we have to get the first reel mounted again so the
+; world doesn't fall apart.
+; Call:	MOVE	B, TCB address
+;	PUSHJ	P,V$NEXT
+;
+; TRUE return:	First volume back on the drive
+; FALSE return:	The operator is very unsocialble
+;
+V$FIRS:	LOAD	S1,TCB.IL(B),TV.CNT	;GET COUNT OF REELS INITIALIZED
+	SOJLE	S1,.POPJ		;RETURN IF MORE THAN ONE
+	SKIPN	S1,TCB.VP(B)		;HAVE A LIST OF REELIDS?
+	STOPCD	(NFR,HALT,,<No first reel for reinitialization>)
+	MOVE	S1,(S1)			;GET FIRST REELID
+	MOVEM	S1,TCB.IV(B)		;SAVE IT AWAY
+	MOVEI	S1,FIRTX1		;POINT TO TYPE TEXT
+	MOVEI	S2,FIRTX2		;POINT TO MAIN TEXT
+	PUSHJ	P,V$TAPE		;GET THE TAPE MOUNTED
+	JUMPT	.POPJ			;RETURN IF ALL IS WELL
+	POPJ	P,			;RETURN
+
+
+FIRTX1:	ASCIZ	|Please load first tape again|
+FIRTX2:	ITEXT	(<The reelid is ^W/TCB.IV(B)/; it will be identified with request-id ^D/TCB.IR(B)/>)
+	SUBTTL	V$NEXT - Routine to get next volume mounted
+
+;This routine will generate the next volume identifier to be initialized
+; and ask the operator to put the next scratch tape up.
+;Call -
+;	B/	Adrs of OPEN TCB
+;Returns -
+;	T/	Next volume is up
+;	F/	OPR decided to quit
+
+V$NEXT:	MOVX	S2,TV.NEW		;GET /NEW-VOLUME BIT
+	TDNE	S2,TCB.IL(B)		;SPECIAL TYPE OF INITIALIZATION?
+	JRST	NEXT.1			;YES
+	PUSHJ	P,V$NVID		;GENERATE A NEW REELID
+	JUMPF	.POPJ			;CAN'T
+	MOVEI	S1,NXTTXT		;GET TYPE TEXT
+	HLRZ	S2,LBLITX(LT)		;GET ADDR OF NORMAL-INIT ITEXT BLOCK
+	PJRST	V$TAPE			;GET THE NEXT TAPE
+
+NEXT.1:	PUSHJ	P,V$NEWV		;GET NEXT REELID REQUESTED BY USER
+	JUMPF	.POPJ			;NO MORE TO DO
+	MOVEI	S1,NXTTXT		;GET TYPE TEXT
+	HRRZ	S2,LBLITX(LT)		;GET ADDR OF RE-INIT ITEXT BLOCK
+	PJRST	V$TAPE			;GET THE NEXT TAPE
+
+NXTTXT:	ASCIZ	|Please load the next tape|
+; Normal-initialization ANSI tape message
+NXTNI1:
+
+; Normal-initialization Non-ANSI tape message
+NXTNI2:	ITEXT	(<It will be initialized as ^T/@LBLTAB(LT)/ tape.  The
+volume-id will be ^W/TCB.IV(B)/.>)
+
+; Normal-initialization unlabeled tape message
+NXTNI3:	ITEXT	(<It will be initialized as ^T/@LBLTAB(LT)/ tape.>)
+
+; New-volume ANSI tape message
+NXTNV1:	ITEXT	(<It will be reinitialized as ^T/@LBLTAB(LT)/ tape.  The
+volume-id will be ^W/TCB.IV(B)/.>)
+
+; New-volume non-ANSI tape message
+NXTNV2:	ITEXT	(<It will be reinitialized as ^T/@LBLTAB(LT)/ tape.  Make
+sure volume ^W/TCB.IV(B)/ is mounted.  It is impossible for the
+tape labeler to verrify owner information using these type
+of labels.>)
+
+; New-volume unlabeled tape message
+NXTNV3:	ITEXT	(<It will be reinitialized as ^T/@LBLTAB(LT)/ tape.  Make
+sure volume ^W/TCB.IV(B)/ is mounted.  It is impossible for the
+tape labeler to verrify volume-id or owner information using
+these type of labels.>)
+
+
+LBLTAB:	[ASCIZ	|an unlabeled|]
+	[ASCIZ	|an ANSI|]
+	[ASCIZ	|an ANSI|]
+	[ASCIZ	|an IBM|]
+	[ASCIZ	|an IBM|]
+	[ASCIZ	|an unlabeled|]
+	[ASCIZ	|an unlabeled|]
+	[ASCIZ	|an unlabeled|]
+	[ASCIZ	|an ASCII-COBOL|]
+	[ASCIZ	|a sixbit-COBOL|]
+	[ASCIZ	|an unlabeled|]
+
+LBLITX:	NXTNI3,,NXTNV3
+	NXTNI1,,NXTNV1
+	NXTNI1,,NXTNV1
+	NXTNI2,,NXTNV2
+	NXTNI2,,NXTNV2
+	NXTNI3,,NXTNV3
+	NXTNI3,,NXTNV3
+	NXTNI3,,NXTNV3
+	NXTNI2,,NXTNV2
+	NXTNI2,,NXTNV2
+	NXTNI3,,NXTNV3
+	SUBTTL	V$TAPE - Get a new tape mounted
+
+;This routine is run if for some reason, the current tape
+; is no longer useful.  For example: Volume initialized, write protected, etc
+; This routine will arrange with the operator to get the next tape mounted
+;Call -
+;	S1/	Adrs of ASCIZ type field of WTO
+;	S1/	Adrs of ITEXT for text field of WTO
+;		The ITEXT must not use the Ts as arguments
+;		The Ps should be used, instead
+
+V$TAPE:	PUSH	P,S1			;Save type
+	PUSH	P,S2			;Save text
+	MOVEI	S1,'UNL'		;Get unload command
+	PUSHJ	P,T$POS##		;Done with this tape
+	POP	P,S2			;Get back type
+	POP	P,S1			;Get back text
+	PUSHJ	P,O$NTAP##		;GET A NEW TAPE
+	JUMPT	.POPJ			;RETURN IF ALL IS WELL
+	MOVSI	S1,400000		;MUST FLAG THE ERROR
+	IORM	S1,TCB.IR(B)		;SO QUASAR WON'T SELF DESTRUCT
+	POPJ	P,			;AND RETURN
+	SUBTTL	V$NVID - Generate next incremental volume id
+
+;This routine will generate the volume id of the next volume
+; in the incremental sequence
+; Basically, it adds the increment to the trailing number
+; on the volume id.
+;If the trailing number on the volume id overflows,
+; this routine returns false.
+
+V$NVID:
+	JMPUNL	LT,.RETT		;If unlabeled, no problem
+	$SAVE	<P1,P2,P3>		;Save some regs
+	STKVAR	<PRFIXN,NUMN,FSTDIG>	;PRFXIN - # of chars in prefix
+					;NUMN   - # of chars in the trailing number
+					;FSTDIG - byte ptr to first digit
+	SETZM	PRFIXN			;No chars in prefix
+	SETZM	NUMN			;No chars in number
+	MOVE	P1,[POINT 6,TCB.IV(B)]	;Aim at the exsisting volid
+	MOVEI	P2,6			;Examine at most 6 chars
+	SETZ	P3,			;Clear number accumulator
+
+NVID.1:	ILDB	S1,P1			;Get next char of volid
+	CAIL	S1,'0'			;Is it a decimal digit?
+	CAILE	S1,'9'			;Is it?
+	JRST	NVID.2			;No, check it out
+	SKIPN	NUMN			;Is this the first digit in the number?
+	MOVEM	P1,FSTDIG		;Yes, save byte pointer to this digit
+	AOS	NUMN			;Count this digit
+	IMULI	P3,^D10			;Shift old stuff over
+	ADDI	P3,-'0'(S1)		;Add in this digit
+	SOJG	P2,NVID.1		;Try the next one
+	JRST	NVID.3			;Looked at all six, quit
+
+NVID.2:	JUMPE	S1,[SKIPN NUMN		;If end of volid, have we seen a number?
+		    JRST  NVID.E	;No, that's an error
+		    JRST  NVID.3]	;Yes, do the increment
+	AOS	S2,NUMN			;A non-numeric, Count it, include old length
+	ADDM	S2,PRFIXN		;All those chars are now part of prefix
+	SETZB	P3,NUMN			;No chars in number, no number
+	SOJG	P2,NVID.1		;Do the next
+	JRST	NVID.E			;Last char in volid, error
+
+NVID.3:	MOVE	S1,TCB.II(B)		;GET THE AMOUNT TO MOVE
+	ADD	S1,P3			;Step to next volid
+	MOVE	P2,[XWD -6,-5]		;Aim at range checker
+	CAML	S1,MAXNXT+6(P2)		;Is this one in range?
+	AOBJN	P2,.-1			;No, try the next
+	JUMPGE	P2,NVID.E		;Way too big, quit
+	MOVEI	P2,6(P2)		;Make neg counter into # digits
+	CAMGE	P2,NUMN			;Is this number longer?
+	MOVE	P2,NUMN			;Shorter, use the old length
+	MOVE	S2,P2			;Copy it for a sec
+	ADD	S2,PRFIXN		;Include the prefix length
+	CAILE	S2,6			;Still legal volid?
+	JRST	NVID.E			;No, quit
+
+NVID.4:	IDIV	S1,MAXNXT-1(P2)		;Get leftmost digit
+	ADDI	S1,'0'			;Make it SIXBIT
+	DPB	S1,FSTDIG		;Stash it
+	IBP	FSTDIG			;Aim at next
+	MOVE	S1,S2			;Use remainder for next calculation
+	SOJG	P2,NVID.4		;Do 'em all
+	$RETT
+
+NVID.E:	$WTO	(<Incremental volume id overflow>,<Initialization aborted, last volume id is ^W6/TCB.IV(B)/>,TCB.OB(B),$WTFLG(WT.SJI))
+	$RETF
+
+MAXNXT:	^D1
+	^D10
+	^D100
+	^D1000
+	^D10000
+	^D100000
+	^D1000000
+	SUBTTL	V$TOPR - Tell OPR about volume just initialized
+
+; This routine will inform the OPR whenever a volume has been intialized.
+; All it does is a WTO which contains alot of demographic information about
+; the volume, for instance, its volid, density, label type, owner, etc.
+;
+; Call -
+;	B/	TCB adrs
+;
+; Returns -
+;	(a message to the OPR)
+;	TRUE (always)
+
+V$TOPR:	PUSHJ	P,G$TXTI##		;INIT THE TEXT BUFFER
+	LOAD	S1,TCB.PS(B),TP.DEN	;GET DENSITY INDEX
+	MOVEI	S2,UNLTXT		;ASSUME AN UNLABELED TAPE
+	JMPUNL	LT,TOPR.1		;JUMP IF UNLABELED
+	MOVEI	S2,LBLTXT		;MUST BE LABELED
+
+TOPR.1:	$TEXT	(G$TYPE##,<^I/(S2)/^A>)	;WRITE FIRST LINE OUT
+	LOAD	S1,TCB.PS(B),TP.DEN	;GET DENSITY INDEX
+	$TEXT	(G$TYPE##,<^I/DENTXT/>)	;TYPE DENSITY
+	SKIPE	TCB.OI(B)		;HAVE AN OWNER?
+	$TEXT	(G$TYPE##,<^I/OWNTXT/>)	;YES--TYPE OWNER AND PROTECTION INFO
+	MOVX	S1,TV.NEW		;GET /NEW-VOLUME BIT
+	TDNE	S1,TCB.IL(B)		;RE-INITIALIZING AN OLD TAPE?
+	SKIPA	S1,[[ASCIZ |reinitialized|]]
+	MOVEI	S1,[ASCIZ |initialized|]
+	MOVEI	S2,G$TXTB##		;POINT TO TEXT BUFFER
+	$WTO	(<Volume ^T/(S1)/>,<^T/(S2)/>,TCB.OB(B),$WTFLG(WT.SJI))
+	$RETT
+
+UNLTXT:	ITEXT	(<Unlabeled tape>)
+LBLTXT:	ITEXT	(<Volume Id:^W/TCB.IV(B)/, Label type:^T/@G$LTYP(LT)/>)
+OWNTXT:	ITEXT	(<Owner:^U/TCB.OI(B)/, Protection:^O3R0/TCB.IP(B)/>)
+DENTXT:	ITEXT	(<, Density:^T/@G$DENS(S1)/>)
+	END

@@ -1,0 +1,1690 @@
+UNIVER	BATMAC	- GALAXY-10 Batch controller parameter file
+SUBTTL	C.D.O'Toole, D.P.Mastrovito /CDO/DPM 27-Jul-87
+
+
+;
+;
+;	      COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION
+;     1974,1975,1976,1977,1978,1979,1980,1981,1982,1983,1984,1986,1987.
+;			ALL RIGHTS RESERVED.
+;
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+
+
+	.DIRECTIVE .NOBIN		;DON'T GENERATE A .REL FILE
+	SALL				;FOR CLEAN LISTINGS
+
+	SEARCH	GLXMAC			;GALAXY SYMBOLS
+	SEARCH	QSRMAC			;QUASAR SYMBOLS
+	SEARCH	ORNMAC			;ORION SYMBOLS
+
+TOPS10 <
+	EXTERN	PARSER,P$HELP
+	PARSET				;Declare external Parser routines
+>
+	BATVER==105			;MAJOR VERSION
+	BATMIN==0			;MINOR VERSION
+	BATWHO==0			;WHO LAST PATCHED
+	BATEDT==5027			;EDIT LEVEL
+
+	%%.BAT==:<VRSN.(BAT)>		;ASSEMBLE VERSION NUMBER
+
+TOPS10	<IF1,<PRINTX [Assembling GALAXY-10 BATMAC]>>
+TOPS20	<IF1,<PRINTX [Assembling GALAXY-20 BATMAC]>>
+SUBTTL	Table of contents
+
+
+;               TABLE OF CONTENTS FOR BATMAC
+;
+;
+;                        SECTION                                   PAGE
+;    1. Table of contents.........................................   2
+;    2. Revision History..........................................   3
+;    3. Assembly parameters.......................................  20
+;    4. Accumulator definitions...................................  22
+;    5. Batch stream flags........................................  23
+;    6. Miscellaneous bits and OPDEFs.............................  26
+;    7. Miscellaneous Macros......................................  27
+;    8. Stream data base..........................................  28
+;    9. Clock request queue data definitions......................  31
+;   10. MODIFY symbols............................................  32
+;   11. MSGBLD macro - Build error message table..................  33
+;   12. Define Mount-Parser error codes and values................  34
+;   13. End.......................................................  35
+SUBTTL	Revision History
+
+	COMMENT	\
+
+EDIT 1000  This was the version sent to In-House Q/A April 1974
+
+EDIT 1001  Correct mixup in the channel allocator if the CTL file is not
+		artifically preserved and DISPOSE:PRESERVE is set
+
+EDIT 1002  Have BACKTO give the correct error if the label was not
+		found BEFORE the initiating BACKTO command
+
+EDIT 1003  Allow BACKTO and restart labels to skip over %FIN::
+
+EDIT 1004  Allow NEXT command to select a job after the
+		KSYS timer has expired
+
+EDIT 1005  Fix interaction of SILENCE & REVIVE commands with
+		DIALOGUE mode & QUOTES (")
+
+EDIT 1006  Correct random little annoyances discovered by Q/A
+
+EDIT 1007  On a line with only the label (e.g. FOO::<CR/LF>),
+		the <CR/LF> is NOT to be sent to the subjob.  However,
+		FOO::*<CR/LF> gives a blank line to the subjob.
+		Same for IF (cond)<CR/LF>
+
+EDIT 1010  Reformat WHAT line for the operators
+
+EDIT 1011  Accept TELL, KILL, REQUEUE, etc...  when a job is STOPped
+
+EDIT 1012  More of EDIT 1005, still a problem with SILENCE & REVIVE
+
+EDIT 1013  Reformat DIALOGUE mode output for the operator
+
+EDIT 1014  Include .MESSAGE for the Mini-Batch Standard
+		It is the same as PLEASE <message><altmode><CR/LF>
+
+EDIT 1015  Give more information when the user can't use the specified LOG file
+
+EDIT 1016  General cleanup of code and elimination of
+		subroutines no longer needed
+
+EDIT 1017  Make more efficient use of old PTY channels.
+		Big help when MJOB .GT. 5
+
+EDIT 1020  Correct problem with REQUEUE labels
+
+EDIT 1021  This was the version sent to Field Test June 1974
+EDIT 1022  A leading tab was changed into a blank, shouldn't do that
+
+EDIT 1023  Include /NAME:"<name>" on the LOGIN line
+
+EDIT 1024  LOGIN error code 1 is the same as a warning message.
+		Treat it as such.
+
+EDIT 1025  Plug a hole in the SFD code
+
+EDIT 1026  Can only force /RESTART:YES on Checkpoint
+
+EDIT 1027  Post-job disposal of the CTL file wasn't done if the job
+		was cancelled because of LOGIN
+
+EDIT 1030  Provide some additional information in the CURRENT command output
+
+EDIT 1031  Some more general cleanup
+
+EDIT 1032  Routines that save and restore the CTL file position were being
+		thrown off by "^" in strange places
+
+EDIT 1033  Include BTNxxx for all error messages the user receives
+
+EDIT 1034  Using "1H+" for Fortran overprinting would start at the time
+		stamp, not at column 17
+
+EDIT 1035  Implement several suggestions
+
+EDIT 1036  QTS was called from one place, remove lots of code and
+		change all references to QTS0 to QTS
+
+EDIT 1037  A timing problem was introduced by EDIT 1024, correct it.
+
+EDIT 1040  Implement more suggestions
+
+EDIT 1041  This was the version released to the Field November 1974
+Edits made to version 12 by Software Support that are also in version 100
+
+EDIT 1051  GETSTS returns the status in the right half, Teach this to GETCTL. (SPR 15846)
+
+EDIT 1054  Suppress trailing blanks on lines destined for the monitor command decoder.
+		This should avoid any problems associated with card input.
+
+EDIT 1055  With edit 477 of LOGIN, LOGMAX is now enforced. Invent error code
+		5 to mean requeue this job, shutdown Batch for NJNINT minutes.
+		(SPR 16184)
+
+
+
+
+Edits made during the development of version 13 that are also in version 100
+
+
+EDIT 1060  Separate old and new LOG files with a Form-Feed.
+		Do this to more easily recognize when a LOG file is used more than once
+		(SPR  several suggestions)
+
+EDIT 1061  Invent a new reserved label %TERR::.  Control is passed to this label
+		if TIME LIMIT EXCEEDED is detected.  It follows the same rules of
+		precedence as %ERR:: with respect to %FIN::.  The %EXTRA time
+		is given but the CLOSE/DUMP is not sent, allowing REENTER to be used for
+		program cleanup for intelligent jobs.
+
+EDIT 1063  De-implement the following:
+	    (maintained for 1 versions worth of compatability)
+		The FORCE Command (use NEXT)
+		The old style $ processing for CDRSTK (who?)
+
+EDIT 1064  The correct path wouldn't be sent to LOGIN if there were no
+		SFD levels.  Send it if the P,Pn's are different.
+
+EDIT 1070  Plug a security hole.
+EDIT 2000  Begin conversion of MPB BATCON (v12) to the GALAXY-10 system
+
+	     Major changes (aside from queueing protocol) include:
+
+		Remove FTOPR options for a separate BATOPR
+		Remove all code for LOGSWS conditionals, LOGIN v.57 is required
+		De-implement edit 1017
+		Redefine AC usage to conform with QUASAR's
+		Change ATOKJB to talk to LOGOUT v.100
+		CORE/MCORE parameters are P internally but K for the operators.
+		Remove WHKSYS conditionals, Work is done by QUASAR
+		At the request of our operators, the default value of PROMPT is 5 min.
+		Remove all the BATCON assembly parameters that are now
+		   defined in the GALGEN dialogue.
+
+	     This was the version sent with GALAXY-10 Field Test,  June 1975
+
+EDIT 2001  Report the P,Pn of the user requesting the cancellation of a job (ABO.DI)
+
+EDIT 2002  Can get a job from QUASAR with EQ.RDE set, turn them around.
+
+EDIT 2003  Quotes (") output from LOGOUT should be typed to the operator.
+
+EDIT 2004  Fix all the code dealing with core limit enforcment.
+		INPCOR, the default value of /CORE, is used to conditionally
+		assemble the enforcement code.  If defined = 0, code is not assembled
+		since NO was answered to the GALGEN question concerning core enforcment.
+
+EDIT 2005  Take advantage of the new routine in CSPQSR.  Call CSPPSI to enable
+		terminal input interrupts, avoid lots of SKPINL's.
+	   General code cleanup.
+
+EDIT 2006  Become version 101
+
+EDIT 2007  .EQPAT is optional, Check for it.
+
+EDIT 2010  Convert to TOPS20 style LOGIN, File handling, etc...
+
+EDIT 2011  Fix all the bugs caused by edit 2010
+
+EDIT 2012  The TOPS10 code got broken by edits 2010 & 2011, fix that.
+
+EDIT 2013  Implement the new values for /OUTPUT, they are:
+		/OUTPUT:NOLOG	Don't print the LOG
+		/OUTPUT:LOG	Print it (default)
+		/OUTPUT:ERROR	Print it if an unhandled error occurred
+EDIT 2014  Some Code Cleanup and Bug Fixes, Specifically:
+		Use the PROLOGUE macro to get SBSMAC Symbols.
+		Calling sequence to CSPINI has changed.
+		6.03 Monitor uses 1B2 of the OPEN of a PTY to indicate
+			that jobs on that PTY are Batch.
+		A bug in the TOPS20 code that PMAP'ed away my addressing space
+			is corrected (a real cute one).
+		Another TOPS20 bug that left the Log file JFN hanging around.
+		The CHECKPOINT/REQUEUE messages have changed.
+		Remove the old MPB restriction of 5 character labels
+			for CHKPNT and /TAG.
+
+EDIT 2015  On the -20, before logging a job out delete any spooled
+		input files created by SPRINT for it.
+
+EDIT 2050  Become version 102.
+	   Begin to eliminate TOPS10 UUOs on TOPS20.
+
+EDIT 2051  More of Edit 2050.
+
+EDIT 2052  Add ROUTE operator command, tell QUASAR of operators request.
+
+EDIT 2053  Removed
+
+EDIT 2054  Start converting to the version 2 database format.
+
+EDIT 2055  Convert to TOPS20 release 2 JSYSes.
+
+EDIT 2056  Do some cleanup work on operator output.
+
+EDIT 2057  Rework LOG file logic to do "in-his-behalf" FILOP on the -10.
+
+EDIT 2060  Include jobname, user id, and sequence number on
+	   all messages to the operator.  Fix a problem on the -20
+	   where the LOGIN command was not always sent correctly.
+
+EDIT 2061  Remove angle brackets around user name on "cancelled" message
+	    on the -20.  Fix some minor problems.
+
+EDIT 2062  Spooled card-reader files were not getting deleted on 20 due
+		to a recently introduced bug in DELSPL.
+
+EDIT 2063  Fix a timing problem on -20 which caused BATCON
+		to not realize a job had really logged out.
+
+;;First field-test release of GALAXY release 2, Jan, 1977
+
+EDIT 2064  Fix a bad symbol reference in -10 version when core
+		enforcement is turned on (%NSMXM). QAR #3.
+
+EDIT 2065  Make log files work on device NUL on the -20.
+		Don't CHKAC them and don't send to LPTSPL.
+
+EDIT 2066  Fix a bug caused by edit 2052 which let BATCON start
+		processing jobs before a START command was typed.
+		(qar #9).
+
+EDIT 2067  Edit 2066 caused some additional problems.  Try again.
+
+EDIT 2070	FIX KJOB TIMEOUT FOR -20 RELEASE 3
+
+
+EDIT 4000  Make this version 104, April 1977.
+		Insert changes for new FP/FD.
+
+EDIT 4001  Fix some problems in edit 4000.
+
+EDIT 4002	CONVERT CSPMEM AND CSPQSR TO GLXLIB ROUTINES
+
+EDIT 4003	USE GLXFIL FOR THE CONTROL FILE
+		AND REPLACE RUNTIM UUO WITH GETJI JSYS
+
+EDIT 4004	MAKE ONE SEGMENT AND REMOVE (S) FROM SABBLK(ERROR)
+		FIX REPOSI AND EXAMINE CODE
+EDIT 4005	ADD SOME PTY CODE FOR TOPS-20 AND CHANGE AC NAMES
+		COMPLETE PTY CONVERSION OFF COMPATIBILITY PACKAGE
+EDIT 4006	MAKE SURE CODE FOR -20 STILL WORKS ON THE -10
+
+EDIT 4007	CORRECT LONG LINES AND LOG FILE ERROR RECOVERY(RLJFN)
+
+EDIT 4010	CORRECT -20 PLACING JOB IN MONITOR MODE
+
+EDIT 4011	CONVERT DATA BASE TO .JQ??? FROM Q.???
+
+EDIT 4012	CREATE BATMAC AS BATCONS UNIVERSAL FILE
+
+EDIT 4013	ADD NEW QUASAR MESSAGES FOR -10
+EDIT 4014	ADD LOG FILE ERROR RECOVERY CODE TO QUEUE UP LOG FILE
+		FOR USER FROM TEMP FILE CREATED BY BATCON
+EDIT 4015	ADD NEW CHECKPOINT REQUEUE DEFINITIONS
+
+EDIT 4016	PUT IN WTO ROUTINE TO ORION
+EDIT 4017	ADD NEW ACTION PROCESSING BY LINKED LIST
+EDIT 4020	ADD WTOR SUPPORT TO BATCON
+
+EDIT 4021	REMOVE OPERATOR INTERFACE
+EDIT 4022	ADD NEW CANCJB CODE AND OPTIONS
+
+EDIT 4023	SET UP WTO FOR EACH STREAM AND MAIN PROCESS
+
+EDIT 4024	ADD JOBMSG CODE INLINE NOT CONDITIONAL ASSEMBLY
+		AND CONVERT A,B,C,D TO T1-T4
+
+EDIT 4025	ELIMINATE JOBMSG WORD...ORION AND OPR WILL DECIDE
+
+EDIT 4026	SET SPOOL BITS IN RELEASE FOR CREATED LOG FILES.
+		(ERROR LOGS OR QUASAR CREATED)
+EDIT 4027	CONVERT TO NEW WTO MESSAGE USING WTO.TY
+
+EDIT 4030	ADD NEW ITEXT ERRTAB PROCESSING
+
+EDIT 4031	ADD JOB NUMBER TO WTO MESSAGES
+
+EDIT 4032	FIX FD LENGTH FOR THE CREATED LOG FILE ON OPEN ERROR AND
+		NOTIFY OPERATOR ON FAILURE THAT JOB WILL BE CANCELED.
+EDIT 4033	CORRECT LABEL INFO IN STATUS MESSAGE
+EDIT 4034	CORRECT GETJI INFO ON THE -20
+EDIT 4035	Fix Formating at CLOS.5 as well as L$CRL2 for 2 L$CRLF
+EDIT 4036	INSTALL EDIT  3002 AS WELL AS -20
+		UPDATE FOR NEW LOGIN LINES AND SUPPORT FOR MORE JOBS ON THE
+		-20
+EDIT 4037	ADD $WTO MESSAGES FOR SETUP MESSAGE
+EDIT 4040	FIX CHECKPOINT STATUS MESSAGES FOR LOGGING IN JOBS 
+		AS WELL AS CANCELED AND REQUEUED JOBS
+EDIT 4041	FIX ?FULL FOR -20 AND SPEED UP PROCESSING OF OPR/USER REQUESTS
+EDIT 4042	FIX OPERATOR MESSAGES
+EDIT 4043	FIX -20 INTERRUPTS BY CHANGING INTERRUPT LEVELS
+EDIT 4044	FIX INMONM ERROR WHEN -20 EXEC SUBCOMMANDS FAIL ALSO
+ 		FIX SOME SHOW-CONTROL-FILE MESSAGES
+EDIT 4045	FIX -20 IOWAIT CODE
+EDIT 4046	ADD CODE FOR ^R DISPLAYING OF JOB MESSAGE DATA
+EDIT 4047	FIX MONITOR LEVEL PROBLEM ON -20
+EDIT 4050	FIX STOP LOGIC
+EDIT 4051	FIX SECURITY BUG FOUND BY LNEFF 2077
+EDIT 4052	ADD SUPPORT FOR /BATLOG AND /OPRINT SWITCHES AND
+		SET THE APPROPRIATE VALUES ON THE -20 FOR STREAM INFO IN
+		THE MONITOR
+EDIT 4053	ADD SUPPORT FOR .QOSTU STATUS UPDATE MESSAGE AND THE RESPONSE
+		TO SETUP CODES FOR NO PTYS AND SYSTEM FULL
+EDIT 4054	ADD NEW HEADER LINES TO LOG FILE FOR BATLOG(WRITE-LOG) AND
+		OPERATOR-INTERVENTION (ASSISTANCE)
+EDIT 4055	FIX ABORTJ BUG AND CLEANUP ATOKJB
+EDIT 4056	ADD JOB NUMBER TO STATUS MESSAGE
+EDIT 4057	MODIFY IOWAIT ON -20 TO GET STATUS EACH TIME 
+EDIT 4060	MODIFY HONORJ TO ONLY GET STATUS IF ENTER THROUGH HONO.0
+EDIT 4061	Add SPR 20-10487 for timing problem originally edit 2070
+EDIT 4062	Save all Labels identified with BLABL in .JLABL for use in
+		Status
+EDIT 4063	Fix extra CRLF on BEGIN message also check EQ.PRV in File
+		Open Routines to allow standard open not in behalf.
+EDIT 4064	Convert to new GLXLIB and New I%JINF Routines for runtime and
+		Program Name. Also use $STOP with ITEXT
+EDIT 4065	CHECK LOGIN ERROR FOR INVALID ACCOUNT ON -20 OTHERWISE
+		ASSUME NO JOBS SLOTS AND REQUEUE
+EDIT 4066	ADD DELETE SPOOL FILES IN .EQSIS FOR THE -20
+EDIT 4067	READ INPUT FROM PTY BEFORE ATOKJB
+EDIT 4070	SET ACCOUNT OF USER ON LOG FILE FOR -20 
+		HAVE JOBSTS VERIFY IF PTY HUNGRY THAT CHARACTERS HAVE BEEN READ
+		USE EQ.IAS TO VERIFY ACCOUNT IN LOGIN FAILURES
+EDIT 4071	OUTPUT PLEASE RESPONSE TEXT AND CLEAN UP IF JOB KILLED
+EDIT 4072	FIX DELSPL ON -20 TO DELETE ALL FILES SPR 20-11329 EDIT 3001
+EDIT 4073	ALLOW RESTART FOR JOB THAT USER MODIFIED AFTER SYSTEM CRASH TO
+		BE RESTARTABLE.
+		REMOVE EDIT 4061 SINCE 4070 BETTER SOLUTION
+EDIT 4074	USE MINIMUM SIZE FOR MEMORY ALLOCATION.
+		CONSOLIDATE MESSAGE TO QUASAR ROUTINES
+EDIT 4075	CHECK FOR ERROR AFTER SETTING TIMER ON -20 LOGIN. REQUEUE
+		THE JOB
+EDIT 4076	Release Message Page (C%REL) for Operator Messages
+EDIT 4077	ADD -20 STRUCTURE ACCOUNTING
+EDIT 4100	CHANGE CASING ON BTN MESSAGES
+EDIT 4101	FIX STATUS FOR JOB BEING SETUP
+EDIT 4102	Convert Types and Messages to Upper and Lower Case and Add 
+		Copyright Statement. Also Change Use of ENDERR to END.
+EDIT 4103	Send Status Update on Restarted Jobs after they start. This will
+		Give Quasar the Job number
+EDIT 4104	Remove MONLVL and use INMO.1 TO MAKE -10
+		WORK RIGHT
+EDIT 4105	Always set Delete bit for Spool log Files. 
+EDIT 4106	Change JOBSTS for the -20 to do 1 GETJI
+EDIT 4107	Setup Jobs Location on the -20
+EDIT 4110	Add New LOGIN Switches on the -10
+EDIT 4111	FIX OUTPUT:NOLOG PROBLEM IN LOG FILE AND SEND MESSAGES TO 
+		LOCATION OF THE JOB
+EDIT 4112	CORRECT DELSPL PROBLEM AND USE ONLY THE RIGHT HALF OF THE USER
+		NUMBER
+EDIT 4113	Change -10 DUMP to DCORE
+EDIT 4114	Correct JOBSTS problem on -20 again. This time the monitor
+		has the fix.
+EDIT 4115	Turn on Stream Number set for the -20 when setting the Batch
+		Stream Number
+EDIT 4116	CHANGE JOBS.3 SO WE CAN COUNT THE HUNGRY ERROR STATES
+EDIT 4117	Change CANCEL to ABORT
+EDIT 4120	Remove F%FCHN and use relative Stream number for the channel
+EDIT 4121	Add code back at JOBS.3 to clear hungry in certain cases
+		Add ERJMP after a SETJB
+EDIT 4122	Change the L$OUTP and L$CHKP to return back instead of 
+		just aborting.
+		This prevents the SNDCHK code from having the main stack
+		as streams stack. This can cause too many text levels.
+		Fix QAR when -20 logout happens quickly and there is no 
+		more output to wait for.
+EDIT 4123	Have -10 DCORE add extension .DMP to avoid deletion.
+EDIT 4124	Use -1 as ack code for CANUSR so that ORION will log and not
+		generate an error
+EDIT 4125	Fix a bug in NEWJOB so that the AC's checking the /UNIQUE
+		switch value dont self destruct.
+EDIT 4126	Send a ^C on the -10 on user login failure to clean up Job
+		slot
+EDIT 4127	Correct Batch Bug in LOGIN when log file Opened during
+		LOGIN
+
+EDIT 4130	TOPS-20 only. The SOUT JSYS now has an error return to
+		indicate a  PTY's buffer is full. Teach BATCON. Routines
+		affected: PTYSND (BATCON).
+
+EDIT 4131	TOPS-20 only. Can't trust the status returned by interrupts
+		regarding PTY hungry. JSYSs don't lie. Use them instead.
+		Routines affected: JOBSTS (BATCON).
+
+EDIT 4132	TOPS-20 only. Forgot to do a GETER JSYS before checking error
+		code. Routines affected: PTYSND (BATCON).
+
+EDIT 4133	TOPS-20 only. More of edit 4132. Routines affected: PTYSND
+		(BATCON).
+		*** BATCON 104(4133) released with TOPS20 v4 ***
+
+EDIT 4134	Make BATCON version number global to include the sum
+		of edits in all modules (BATLOG).  Also change FTUUOS
+		to TOPS10 and FTJSYS to TOPS20 conditionals.
+
+EDIT 4135	TOPS10 only. Remove the DCORE command forced on a job
+		when an unexpected error has occured. The DUMP program
+		is no longer supported. Routines affected: CHKCLS (BATCON).
+Edit	Module	Explanation
+----	------	-----------
+
+4500	ALL	Begin major structural re-organization of BATCON and general
+		code cleanup.
+
+4501	BATCON	Convert to Full SCNSER controlled PTYs on TOPS-10.
+
+4502	BATCTL	Create new module 'BATCTL' that contains all control file
+		logic. This includes line parsing and label searching as
+		well as the routines to OPEN, CLOSE, and delete the file
+		at the end of the stream.
+
+4503	BATPTY	Create new module 'BATPTY' that contains all PTY logic.
+
+4504	ALL	Lots of bug fixes to insure that BATCON still performs as it
+		did before the re-organization.
+
+4506	BATPTY	Make P$TERM turn off TTY DEFER since it doesn't do anything
+		for us and could be the cause of random PTY I/O problems.
+
+4507	BATCTL	Add additional checks for control file lines without "*" or
+		the monitor prompt at the begining. These lines were being
+		ignored when they shouldn't have been.
+
+4510	BATCTL	Better checking for ambiguous commands required when a
+		abreviated Batch command would conflict with a monitor
+		command.
+
+4511	BATCON	Fix bug that caused NOERROR not to work.
+
+4512	BATCTL	Any command that takes a label for an argument forgot to
+		check for a reserved label being specified.
+
+4513	BATCTL	Fix a bug that caused BATCON to report 'Found %FIN while
+		searching for %FIN'.
+
+4514	BATCTL	Control character translation broken. Forgot about character
+		codes ^O33 to ^O37.
+
+4515	BATCTL	Time stamps not aligned when vertical motion characters
+		encountered as first characters in a line and the job is
+		in monitor mode.
+4516	BATCON	Add new code to support Batch/MDA interface. Teach BATCON
+		about message types that request control file prescanning
+		by BATCON. Start to invent the concept of a job step (new
+		to BATCON) and a step header processor.
+Edit	Module	Explanation
+----	------	-----------
+
+4517	BATCTL	Add support for the job step header parsing. This requires
+		the same command syntax (ALLOCATE and MOUNT commands) that
+		the timesharing user currently has. The Galaxy parser
+		'OPRPAR' and the ALLOCATE/MOUNT parser subroutines 'MNTPAR'
+		must now be loaded with BATCON. "$" is a new special
+		character to indicate a line is part of the step header.
+		The step header commands are $STEP, $ALLOCATE, $MOUNT, and
+		$ENDPROLOGUE.
+
+4520	BATCTL	Change all occurances of $ENDPROLOGUE step header command
+		to $ENDHDR.
+
+4521	BATLOG	During step header processing, write a log file showing what
+		occurred. Use the /BATLOG bits to determine how to write the
+		file.
+
+4522	BATLOG	If two jobs are in the Batch queue, one running and the other
+		being prescanned, the prescanned job cannot write the same
+		log file as the running job. In all prescan cases, write a
+		temporary log file in the spooled area. If no errors are
+		detected, delete the temporary file, otherwise, print it
+		and delete it.
+
+4523	BATCON	If errors are detected during a prescan, cancel the Batch job.
+
+4524	BATCON	Clean up log file and error recovery routines during step
+		header processing.
+
+4525	BATCTL	%FIN sometimes get skipped over (even when searching for %FIN).
+		Routines calling LABSRC (to search for labels) should also
+		set/clear FR.FIN to indicate whether or not %FIN may be
+		skipped over during a search.
+
+4526	ALL	Move BATCON version number and edit history (this text) into
+		BATMAC. Also remove references to individual module edit levels.
+		This is the way QUASAR and its components are aranged.
+
+4527	BATCTL	Fix bug that caused ^^ to be translated into control-^ when
+		^ is what the user really wanted.
+
+4530	ALL	Re-define flags in AC 'F' as 36 bit quantities and change
+		all FR.??? flags to FL.???. This allows TX?? macros to be used.
+		Do the same for the flags in AC 'J'.
+
+4531	BATCTL	Fix a bug that allowed non-alphabetic characters to be passed
+		to the monitor if a control file line did not begin with a
+		recognized special character.
+Edit	Module	Explanation
+----	------	-----------
+
+4532	BATCON	B$XFER assumed that a carriage return always preceeded a line
+		feed when copying characters to the PTY. Not so.
+
+4533	BATCON	Don't write a log file or cancel a job during a step header
+		prescan. Instead, allow the job to run and let it die a rapid
+		and rabid death. This treatment has two redeaming features;
+		(1) the user will be charged for some of BATCON's overhead by
+		virtue of the fact that a job logged in and (2) it is possible
+		to get more informative error messages out of QUASAR when
+		ALLOCATE/MOUNT commands are issued at monitor level.
+
+4534	BATCTL	Be more defensive about multiple $STEP cards in a single step
+		or no $STEP card seen.
+
+4535	BATCTL	More problems with lines that begin with non-special characters.
+		Add new routine RNDMOD to handle these type of lines.
+
+4536	BATCON	QUASAR not getting initial checkpoint message before step header
+		processing. Move call to SNDCHK from C$STRT to JOBINI.
+
+4537	BATCTL	ALLOCATE/MOUNT messages always has the "nothing in message" bit
+		set if there is really something there. Change SKIPE to a SKIPN.
+
+4540	BATLOG	Fix a security bug.
+
+4541	BATCTL	When checking for an possible Batch command in MONMOD, send
+		process the line at MONCMD if the test fails. Don't send it
+		at user level.
+
+4542	BATPTY	BATCON waits forever in P$NXTC loop looking for a character.
+		Check to see if the job is ready for input and if so, give up.
+
+4543	BATCON	No error processing occurs during step header scan after job
+		logs in. Abort job if an error occurs.
+
+4544	BATMAC	Remove flags RL.JNA and RL.FCI since no longer needed.
+	BATCON	Add a new flag, FL.CTP, to indicate a carriage return has
+		been sent to a PTY. Up until now, FL.CFP was timeshared
+		between output to and input from a PTY with marginal results.
+
+4545	BATCON	Check the existance of the MDA PID on startup and ignore
+	BATCTL	ALLOCATE/MOUNT commands in a step header. Indicate in the
+		log file that the line was ignored.
+
+4546	BATCON	Fix lots of bugs relating to error trapping (especially during
+		the LOGIN sequence. Re-work the code at ANALYS so it could
+		be more easily understood.
+
+4547	BATCTL	C$DISP forgot to clear .JCOPN(R) after releasing the channel
+		causing a GLXLIB stopcode when C$CLOS tried to do the same.
+Edit	Module	Explanation
+----	------	-----------
+
+4550	ALL	Fix up some typos and undefineds under TOPS-20 conditionals.
+
+4551	BATCTL	Don't HALT if too many ALLOCATE/MOUNT requests cause a page
+		overflow. Issue error message instead. Also put some code under
+		assembly conditionals.
+
+4552	BATCTL	Fix a bug involving error trapping and a control file with
+		out a special character in column one.
+
+4553	ALL	Fixes to lots of code so it will run under TOPS-20.
+
+4554	BATCON	If a JOBSTS UUO or GETJI JSYS fails, don't stopcode. Instead
+		assume the job has gone away and terminate the stream.
+
+4555	BATCON	Rework TOPS-20 PTY interrupt code.
+
+4556	BATCON	Attempt to recognize PTY echo and not check ERROR or OPERATOR
+	BATPTY	characters.
+
+4557	BATMAC	More of edit 4555
+	BATCON
+
+4560	BATMAC	Enhance changes made in edit 4556 to check for a PTY being
+	BATCON	set to a no echo state. This will allow error trapping when
+		programs set no echo to input passwords. BATCON won't be fooled
+		into thinking the error message coming back is just program
+		echo.
+
+4561	BATPTY	For TOPS-20, clear any links to a PTY and clear it's output
+		buffer during PTY initialization (SPR #20-13083).
+
+4562	BATCTL	.IF(ERROR) broken (note the absence of a space between the
+		IF and the (ERROR)).
+
+4563	BATCON	Little anoying buggers
+	BATCTL
+
+4564	BATCON	Take advantage of the new TOPS-10 LOGIN switches (/BATINT
+		and /BATSTR) to set the operator intervention and WTO/WTOR
+		privs. This will eliminate most of the TOPS-10 code in LOGSET.
+		These switches are required for Galaxy 4.1 and later versions
+		of QUASAR and ORION.
+
+4565	BATMAC	Handle log file output errors gracefully instead of stopcoding
+	BATCON	when $TEXT nests too many levels. Instead, set a flag when the
+	BATLOG	error occurs and handle it at top level.
+
+4566	ALL	WTO and log file message clean up.
+Edit	Module	Explanation
+----	------	-----------
+
+4567	BATCON	Clean up end of stream code
+	BATLOG
+
+4570	BATCON	If the control file could not be OPENed while servicing a
+	BATCTL	prescan request from QUASAR, the prescan stream exited without
+		telling QUASAR.
+
+4571	BATCON	Fix time limit exceeded checking and associated bugs.
+
+4572	BATCTL	Clean up junk in PLEASE command sent to the operator.
+
+4573	BATCON	Add missing POPJ at SEND.1 - 1.
+
+4574	BATMAC	Add word .JLPTR (log file data) and fix NEWLOG to generate
+	BATLOG	random log file names correctly.
+
+4575	BATPTY	P$STOP looped forever if two attempts to ^C a job failed.
+		Delete lots of code and do it like the good ole MPB BATCON
+		did. It seemed to work OK then. No reason why it shouldn't now.
+
+4576	BATCON	Use new feature IB.DET to detach from FRCLIN.
+
+4577	BATMAC	Clean up LOGIN/BATCON error code handling. Do other small
+	BATCON	fixes too. Delete IB.DET (GLXLIB defaults to detach). Clean
+	BATCON	up MDA page handling a bit.
+
+4600	BATMAC	Add a fairness count when processing control file searches.
+	BATCON	A maximum of CTLFCT control file lines will be processed
+	BATCTL	before rescheduling the stream.
+
+4601	BATCON	I%SLP will now allow TOPS-10 jobs to specify certain HIBER
+		UUO wake up bits. Use I%SLP and remove system dependant code
+		in TSLEEP.
+
+4602	BATMAC	Add support for step header processing of modify requests
+	BATCTL	so that in-house sites that require accounting info on a
+		per stream basis can have a $ACCOUNT card in a step header.
+		*** Note *** This is unsupported code is under FTMODIFY
+		feature test switch that MUST be turned off before customer
+		ship.
+
+4603	BATCON	In LOGINJ, call P$TERM after sending control-C to wake up the
+		PTY. Otherwise, some TTY characteristics might not get set
+		correctly.
+
+4604	ALL	Clean up a few log file error messages. Make $WTO/$WTOR/$WTOJ
+		text messages more consistant.
+Edit	Module	Explanation
+----	------	-----------
+
+4605	BATMAC	Clean up MDA and MODIFY interface. Plug remaining holes in the
+	BATCON	BATCON/QUASAR MDA dialogue that caused some messages to get lost
+	BATCTL	and jobs never to be processed.
+
+4606	ALL	Use standarg Galaxy object blocks. Remove all references to
+		.JQTYP, .JQSTR and .JQNOD.
+
+4607	BATMAC	Invent new flag 'RL.FKJ' (fast KJOB without QUASAR/ORION help).
+	BATCON	If QUASAR or ORION croaks, BATCON will kill off the streams, but
+	BATPTY	we must be careful not to attempt to talk to anyone since this
+		could cause a GLXLIB stopcode or BATCON to loop. Upon setting
+		this bit (by calling B$FKJB with AC 'R' setup, the job will
+		be killed on the next pass and the stream database cleaned up.
+
+4610	BATCON	Prevent BPN stopcodes in the shutdown code by doing a HRRZ
+		instead of a MOVE to pick up the stream relocation. Flags
+		are in the left half word, remember?
+
+4611	BATCTL	Prevent IFN stopcodes by making C$DISP check the control file
+		opened flag instead of blindly trying to release a non-existant
+		IFN.
+
+4612	BATCON	Add a new entry point (via the .REENTER command) to set G$KILL
+		and force an orderly shutdown the the batch world.
+
+4613	BATMAC	Remove redundant words in the stream data base. No need for
+	BATCON	.JCOPN/.JCCHN or .JLOPN/.JLCHN since a GLXLIB IFN is a non-
+	BATCTL	zero quantity. Create new locations .JCIFN and .JLIFN.
+	BATLOG
+
+4614	BATCON	Fix lots of problems with dialogue and single quote mode.
+	BATPTY
+
+4615	BATCTL	Process $ALLOCATE commands only on step header scans. This
+		avoids unnecessary BATCON/IPCF/QUASAR overhead and the
+		strange results produced by generic device requests.
+
+4616	BATMAC	Generate checkpoints without being prompted by QUASAR.
+	BATCON	Checkpoint interval is defined by CKTIME. This eliminates
+	BATCTL	about half of the IPCF traffic and reduces redundant
+		messages for stupid streams that do .CHKPNT commands on
+		every other line.
+
+4617	BATCTL	Fix confusion when user doesn't have proper line identification
+		and job in user mode and BATCON can't deceide what to do with
+		command line.
+
+4620	BATCTL	When ?TIME LIMIT EXCEEDED happens, don't loop searching for
+		%TERR when %FIN is encountered. Just proceed from %FIN.
+Edit	Module	Explanation
+----	------	-----------
+
+4621	BATPTY	Use symbolic references to the full SCNSER PTY bit in OPEN
+		UUOs.
+
+4622	BATCON	Fix MSGTXT to skip null acks.
+		Fix CANJBN to really cancel a job if aborted by the operator.
+
+4623	BATCTL	When .IF (ERROR) or .IF (NOERROR) is followed by a null line
+		(just spaces or CRLF) don't send it to the job.
+
+4624	BATCTL	Finish up the unsupported modify code for changing account
+	BATCON	strings.
+
+4625	BATCON	Clean up use of the SAB. If not debugging, send stopcodes to
+		ORION and use GLXPFH. If debugging, don't send stopcodes to
+		ORION and don't use GLXPFH. This saves some overhead.
+
+4626	BATCON	Make the SAB global to BATUSR can reference it. Don't rely on
+	BATCTL	it always being set up. Also a few other locations global for
+	BATPTY	BATUSR. Re-order some code to fix quotes mode operation. Add
+	BATUSR	a missing POPJ and comma in log file header code example. By
+		the way, BATUSR is a new module born sometime between edits
+		4621 and 4623. Its purpose is to contain user (customer) exit
+		routines so that BATCON and friends don't need to be modified
+		heavily by customers to implement local hacks.
+
+4627	BATMAC	Make the operator interface more friendly and useful. Previous
+	BATCON	attempts to do this have resulted in eratic and devistating
+	BATCTL	behavior (e.g. STOP and CONTINUE commands). The new interface
+	BATLOG	is smaller, understandable and reduces the overhead of calling
+	BATPTY	GLXLIB's linked-list and memory managers. In addition it now
+		provides a generalized mechanism for carrying on dialogue
+		between BATCON and the operator (it even validates the
+		responses!), and the means to correctly parse messages from
+		ORION. In addition, the operator messages are more informative
+		and information is never typed more than once. All known
+		IPCF/Operator/QUASAR bugs have been fixed. Fortunately for
+		BATCON (not for me), a complete rewrite of the interface was
+		necessary.
+
+4630	BATMAC	Program around OPRPAR's stupidity in handling parse pages.
+	BATCON	Fix problems with streams wanting to talk to the operator and
+		no intervention is set. Shuffle lots of code around so that
+		related subroutines will usually live near each other.
+
+4631	BATCON	Make CLRSTR release all extra core inuse by stream. Things like
+		the MDA and MODIFY pages were ignored and BATCON could grow.
+
+4632	BATMAC	We no longer need to remember whether or not a stream is set
+	BATCON	for no operator intervention now that ORION handles it right.
+		Remove all references to the FL.NOP bit.
+Edit	Module	Explanation
+----	------	-----------
+
+4633	BATMAC	Allow /DISPOSE:RENAME to work correctly for control files
+	BATCON	and log files. Include in the log file header, the original
+	BATCTL	filename and extension if file has been renamed.
+	BATLOG
+
+4634	BATCON	Begin job at %FIN if job has been restarted and the user
+	BATPTY	said /RESTART:NO. Turn off XOFF/XON processing so stream
+		won't hang when some one puts ^S in their CTL file. When
+		a SOUT to a PTY fails, use updated byte pointer and byte
+		count for the retry. If the output isn't IOX33, tell the
+		operator and cancel the job. Don't stopcode.
+
+4635	BATCON	Delete log file if /BATLOG:SPOOL and /OUTPUT:ERROR are set
+		and the job does not end in error.
+
+4636	ALL	Cleanup lots of little things and begin process of making
+		work under TOPS-20.
+
+4637	BATCON	Wait one scheduler pass after doing a LGOUT JSYS because the
+		-20 is pretty slow killing jobs.
+
+4640	BATCON	Use GETLIM macro to get /CORE and /TIME values.
+	BATPTY	Clear PTY buffer in P$OBUF since the -20 won't do it for us.
+
+4641	BATCON	Cancel message code (ABORT command) didn't always handle
+		/ERROR, /NOERROR or /PURGE switches correctly.
+
+4642	BATLOG	Correct logic error in the log file deletion code.
+
+4643	BATCON	More of edit 4637.
+
+4644	BATCTL	Undo edit 4615 since there was a better fix in QUASAR.
+
+4645	BATCON	When processing unhandled errors, issue the .DUMP command
+		before the .CLOSE command. More information will be avail-
+		able in the batch dump that way. Clear message flags at end
+		processing "ABORT BATCH-STREAM nnn/ERROR" commands so that
+		subsequent commands may be given.
+	BATLOG	Don't call L$IOER from L$CHKP or we'll get into a loop. Let
+		the code at HONORJ catch the error as it was intended to do.
+	BATPTY	Check for SILENCEd log file after storing PTY output in the
+		WTO buffer, since the two have nothing to do with each other.
+
+4646	BATCON	Don't set IPCF quotas in the PIB twice.
+		Kill off pending WTOR messages if a job gets canceled.
+Edit	Module	Explanation
+----	------	-----------
+
+4647	BATCON	Store zero for a job number in release message to QUASAR
+		when a batch jobs fails before it's logged in. By doing
+		this, log files won't get deleted when they should be
+		preserved. Don't send MDA allocation messages more than once.
+	BATCTL	Strip off generation number from TOPS-20 filespecs so that
+		users can submit jobs and edit the CTL files before the job
+		starts to run.
+
+4650	BATCON	Only ask for MDA's PID on TOPS10.
+		Also, at OPER.1 save the ITN as the ACK code for RESPON:
+
+4651	BATCON	Allow blank lines in step headers.
+		Advance to next line prior to searching for %TERR, since
+		the current line caused the error and it would get time
+		stamped and marked as 'IGNORE' during the search.
+	BATCTL	Complain if $STEP lines don't have an argument.
+		Don't process a label line twice when C$STRT finds the starting
+		label and it's the first line in the file.
+
+4652	BATCON	Make operator ABORT work correctly. ^C the PTY and inform QUASAR
+		of correct stream status if ABORT/ERROR.
+
+4653	BATMAC	Invent clock request queue so we can time any event. Use it
+	BATCON	on the -20 to put a stream to sleep so it has time to LOGOUT.
+
+4654	BATMAC	Add REQTIM to requeue message to specify wakeup time. If
+	BATCON	REQTIM = 0, then HOLD job, else REQTIM = minutes until
+	BATCTL	job restart. Ignore GETJI JSYS failures and continue checking
+		PTY input ready/output available status. Check for legal
+		labels before starting jobs at a tag.
+
+4655	BATMAC	Fix age old batch bug that where a stream would do a .CHKPNT
+	BATCON	and continue running even though QUASAR had croaked. Request
+	BATCTL	an ACK from the stream requested checkpoint message and don't
+		let it continue until we get the ACK.
+
+4656	BATCON	Fix bug in DELSPL that caused BATCON to attempt deleting the
+		wrong spooled files.
+
+4657	BATCTL	Allow .NOOPERATOR commands when job is in error.
+Edit	Module	Explanation
+----	------	-----------
+
+4660	BATMAC	Move .JBSTS data from stream to JSTBLK in BATCON.
+	BATCON	Avoid confustion between ACK codes when doing checkpointing.
+		Clean up a few messages at documentation's request.
+	BATCTL	Remove stopcode following call to P$INIT. It can't fail.
+		Fix tag searching at begining of job. Have .BACKTO processor
+		C$ZPOS instead of rewinding the CTL file itself. Fix up the
+		CTL filespec before genreating the log file header.
+
+4661	BATMAC	Remove entry .JWADR from the stream data base.
+	BATCON	Remove routine WTOPAG since it's no longer used.
+
+4662	ALL	Update copyrights.
+		Invent routines to translate time to ASCIZ text.
+		Clean up time limit exceeded messages to OPR and log files.
+		Tell OPR if CTL file EOF and searching for %TERR.
+		Tell OPR when stop request queued cuz the -20 is slow.
+		Enhance the modify code to include more options.
+		Add routine U$FIRE to allow customers to copy EQ stuff.
+
+4663	BATCON	Standardize all WTOR messages so BATCON looks like all other
+	BATCTL	spoolers. Make sure that WTO/WTOR 'type text' is pretty.
+	BATLOG	Check for job going away and turn on code at B$GONE.
+	BATPTY	Include the CTL and LOG file specs in WTO at JOBPRC.
+
+4664	BATCON	Make sure WTO buffer gets terminated at B$WTO and B$WTOR.
+	BATCTL	Always include the JIB in WTORs in messages from B$OPER.
+		Change WTO and LOG text at B$GONE and LABEOF for documentation
+		people. More hacks to the -20 LOGOUT timer stuff.
+		If the monitor supports MDA, wait until the PID get created.
+
+4665	ALL	Remove references to FL.ERR since it is obsolete.
+	BATCON	User redefines KJOB command. We can't kill jobs. Used forced
+		KJOB command.
+	BATPTY	Correct error checking code if output to PTY fails.
+
+4666	BATCON	Cause status update after operator response since it may
+		change. GCO 1275
+
+4667	BATMAC	Add location .JLECD to stream data base for log file error
+	BATLOG	code. Make log file output error message more explicite.
+		GCO 1276
+Edit	Module	Explanation
+----	------	-----------
+
+4670	BATCTL	Don't list skipped lines during .BACKTO command processing.
+		GCO 1277
+
+4671	BATCON	If a user requested a KJOB and it fails, the time limit will
+		be reset. Don't go searching for %TERR. GCO 1318
+
+4672	BATPTY	Clear MIC status before attempting to stop a job. GCO 1304
+
+4673	BATMAC	Remove old clock queue crock and implement a new general
+	BATCON	purpose clock queue facility that will allow clock requests
+		to be satisfied either when a specified event occurs or when
+		a timer expires.  In addition, while pending events and/or
+		timer requests are outstanding, PTY output will be eaten and
+		logged.  This may be suppressed if desired.  GCO 1354
+
+4674	BATMAC	Delete obsolete flags.  Shrink the stream data base.
+	BATCON	Add global scratch byte pointer and count.
+	BATCTL	Flush spaces before batch cmds.  Fix EOL testing, /DISP:REN.
+	BATLOG	NEWLOG doesn't always generate unique filenames.  GCO 1355
+
+4675	BATCON	Don't send illegal account strings to LOGIN.  GCO 131
+
+4676	BATCTL	Forgot that abbreviations for batch commands cannot be less
+		than 2 characters long.  GCO 1382
+
+4677	BATPTY	Set proper TTY parameters on the -20.  GCO 1385
+
+4700	BATCON	Don't process status updates while ACKs outstanding.  GCO 1390
+
+4701	BATCON	Don't clobber T1 which has good info before doing SETJB.
+		GCO 4.2.1424
+
+4702	BATCTL	Allow .REQUEUE with no label.  GCO 1445
+
+4703	BATMAC	Correct definition of WTOSIZ to use full page.  GCO 1446
+
+4704	BATCTL	Have user requeue set requeue time instead of hold.  GCO 1447
+
+4705	BATCON	Processlines containing both a label and a command
+		correctly.
+		SPR # 10-33993	29-JUL-83/CTK
+
+4706	BATCON	Delete unneeded and unexecuted instructions in B$WPUT.
+		SPR 10-33100  20-OCT-83 /LWS
+
+4707	BATMAC	Define new word in .JXXXX area, .JLLBL, "last label encountered".
+	BATCON	Fix problem that piggybacking "label to search for" and "last
+	BATCTL	label encountered" in .JLABL causes. Namely, wrong batch status
+		info and possibly wrong DUMP info.
+		SPR 10-34144 8-Nov-83 /LWS
+
+4710	BATCON	Fix problem of operator messages interfering with
+	BATLOG	user output, especially when user output contains
+		possible error characters. Also fix minor bug in L$COPY.
+		SPR 10-34158 12-Nov-83 /LWS
+
+4711	BATCON	Don't give batch job to B$GONE until JL.ULI and JL.UJA are
+		both off. This lets someone who puts ".K" in their control
+		file see LOGOUT text.
+		SPR 10-34336 28-Nov-83 /LWS
+
+4712	BATCON	Fix problem where G$SACT was decremented when it shouldn't
+		when no PTY's were available to fire up a stream.
+		Symptom was BATCON would stop processing jobs because
+		G$SACT may get to zero.
+		SPR 10-34928 GCO 10117 8-Nov-84 /LWS
+
+4713	BATCON	Fix another no available PTY problem. BATCON would send
+		an erroneous checkpoint message after it had already
+		sent a %RSUNA response to setup. QUASAR would say
+		hey, Specified request is not yours.
+		SPR 10-34931 GCO 10118 8-Nov-84 /LWS
+
+4714	BATCTL	Fix CRLF with no line identifier to send both the
+		carriage return and line feed to the PTY.
+		SPR 10-34901 GCO 10222 30-May-85 /DPM
+
+5000	BATMAC	Make all modules reference %%.BAT (now globaly defined)
+	BATCON	so version skews between modules will be detected by
+	BATCTL	LINK.  Add support for KSYS processing.  This involves
+	BATLOG	the use of extended channels and special stream numbers
+	BATPTY	above INPMAX.  Write KSYS log files and queue them up
+	BATUSR	/DISPOSE:DELETE if errors logging the job out.  Otherwise
+		the log file will be deleted.
+
+5001	BATMAC	Send informative text in release message to QUASAR.
+	BATCTL	Implement .ABORT <optional text> command to allow
+	BATCON	a user to croak off his own job.  Likewise, the
+		.STATUS command will do all but kill the job.
+
+5002	BATMAC	Change definition of IPCSIZ from XP IPCSIZ,^D25
+		to XP IPCSIZ,^D25. This is because INFO changes
+		in QSRMAC created a new symbol IPCSIZ. It's easier
+		to change here.
+		GCO 10083 27-Aug-84 /LWS
+
+5003	BATCON	Ensure that KSYS log files always go to the correct
+	BATLOG	queue structure by GETTABing the value each time it's
+		needed.
+		GCO 10097  21-Sep-84  /DPM
+
+5004	BATPTY	Prevent occasional job hangs while trying to read
+		error codes during a LOGIN sequence which do not
+		contain digits between paranthesis.
+		GCO 10098  21-Sep-84  /DPM
+
+5005	BATMAC	Use continuation lines for LOGIN command so echoing looks
+	BATCON	pretty.
+	BATPTY	GCO 10137  15-Jan-85 /DPM
+
+5006	BATCTL	Recognize K, KJ, and KJO as legal abbreviations to the
+		KJOB command.
+		GCO 10162  12-Mar-85  /DPM
+
+5007	BATCON	If limit word OPTN is non-zero, pass that quantity to
+		LOGIN as an argument to the option switch.
+		GCO 10172  21-Mar-85  /DPM
+
+5010	BATCTL	If JOBSTS bit JL.UHI (user is HIBERing for input) is on,
+	BATCON	allow non-monitor input to be passed to the job.
+		GCO 10282  09-Sep-85  /RCB
+
+5011	Update copyright statement. 12-SEP-85 /LEO
+
+5012	BATCTL	Fix problem in 5010.
+		GCO 10289  17-Sep-85  /RCB
+
+5013	BATLOG	Put user's account string on the LOG file, not BATCON's.
+		GCO 10313  28-Oct-85  /DPM
+
+5014	BATCON	Fix off-by-one bug in line width computation which
+	BATPTY	caused a messy log file when the PTY echo wrapped a
+		LOGIN line.
+		GCO 10318   1-Nov-85  /DPM
+
+5015	BATCON	Fix incorrect GETTAB of spooled file PPN.
+		GCO 10333   4-Dec-85  /DPM
+
+5016	BATMAC	Increase IPCSIZ by 10 words to account for longer /REASON
+	BATCON	text.  Properly truncate overly long messages in B$IMSG
+		to compensate for operators who like to write novels.
+		GCO 10389  31-Mar-86  /DPM
+
+5017	BATCON	Change C$RPOS to return FALSE if a positioning error occurs,
+	BATCTL	and have EXAM.3 set up to abort the job in stream context.
+		Can't call B$ABORT from POSERR since we're not running in
+		stream context when processing IPCF.
+		GCO 10417  SPR 10-35517  17-Jun-86  /JAD
+
+5020	BATCON	Change $STOP to STOPCD.  Update copyright years.
+	BATPTY	GCO 10468  21-Nov-86  /BAH
+	BATUSR
+	BATCTL
+	BATLOG
+	BATMAC
+
+5021	BATCON	Don't permit batch streams to proceed past LOGIN for
+		non-restartable jobs until QUASAR ACKs the checkpoint 
+		message which records the start of job.  Prevents all
+		kinds of user confusion on a crash.
+		GCO 10503  20-Apr-87  /TL
+
+5022	BATCON	Set FL.CHK after setting BA.JOB so checkpoint/requeue
+		info gets written on disk so log files aren't superseded
+		after a /RESTART:YES job with /BATLOG:SUPER restarts
+		after a system crash.
+		GCO 10512  9-Jun-87  /JAD
+
+5023	BATMAC	Teach BATCON to do the right things depending on what
+	BATCON	type of object processor (%ONCE, %STCMD, %DEMND) it is.
+		GCO 10517  28-Jun-87 /LWS
+
+5024	BATCON	If debugging, set it so BATCON doesn't logout when idle
+		or shutdown. (depending on %OPTYP)
+		GCO 10531  13-Jul-87 /LWS
+
+5025	BATMAC	Merge MNTMAC into BATMAC and MNTPAR into BATCTL, since the
+	BATCTL	MOUNT program is going away now that its functions have
+		been moved into QUEUE.
+		GCO 10541  27-Jul-87 /JJF
+
+5026	BATMAC	Change SOPTYP args to new style.
+		GCO 10548   3-Aug-87 /LWS
+
+5027	BATCTL	Remove "RELOC 0" from before the MOUNT parser's private
+		low-seg storage, since all of BATCON runs in the low seg.
+		Fixes problem of BATCON dying when processing STEP headers.
+		GCO 10559  27-Aug-87 /JJF
+\
+SUBTTL	Assembly parameters
+
+
+; System dependant parameters
+;
+	SYSPRM	DEFMJB,INPMAX,^D9	;MAXIMUM NUMBER OF JOBS
+	SYSPRM	KSYMAX,^D10,0		;MAXIMUM NUMBER OF KSYS STREAMS
+	SYSPRM	MONCHR,".","@"		;MONITOR PROMPT CHARACTER
+	SYSPRM	PTYBLK,23,30		;PTY BUFFER SIZE IN WORDS
+	SYSPRM	(MAXPRO,00777,777777)	;Maximum file protection
+
+
+; System independant parameters
+;
+	ND	FTMODIFY,0		;UNSUPPORTED IN-HOUSE MODIFY CODE
+	ND	IZTIME,^D60		;INACTIVE SLEEP TIME IN SECONDS
+	ND	AZTIME,^D15		;ACTIVE SLEEP TIME IN SECONDS
+	ND	CKTIME,^D60		;CHECKPOINT EVERY 60 SECONDS
+	ND	KJTIME,^D60		;TIME TO KILL A JOB
+	ND	HLTIME,^D30		;TIME TO HALT A JOB
+	ND	SNDMAX,^D511		;IPCF SEND QUOTA TO SET
+	ND	RCVMAX,^D511		;IPCF RECEIVE QUOTA TO SET
+	ND	TPSIZE,100		;SIZE OF THE TOP LEVEL PDL
+	ND	.JPSIZ,100		;SIZE OF THE JOB PDL
+	ND	%EXTRA,^D10		;PERCENTAGE OF EXTRA TIME GIVEN A JOB
+	ND	CTLSIZ,^D300		;CHARACTERS IN SCANNER TEXT BUFFERS
+	ND	KEYSIZ,^D14		;MAXIMUM CHARACTERS IN KEYWORD BUFFER
+	ND	WTOSIZ,<<PAGSIZ-^D30>*5> ;MAXIMUM CHARACTERS IN A WTO/WTOR
+	ND	RSPSIZ,^D80		;MAXIMUM CHARACTERS IN OPR RESPONSE
+	XP	IPCSIZ,^D35		;MAXIMUM IPCF MESSAGE SIZE IN DATA BASE
+	ND	IPCLVL,1		;IPCF PRIORITY INTERRUPT LEVEL
+	ND	PTYLVL,1		;PTY PRIORITY INTERRUPT LEVEL
+	ND	CTLFCT,^D500		;CONTROL FILE FAIRNESS COUNT
+	ND	CLKMAX,JOBMAX+5		;NUMBER OF CLOCK REQUESTS
+	ND	REQTIM,5		;REQUEUE TIME
+
+;MOUNT-parser parameters
+
+	XP	CMDLEN,^D200/5		;Room for 200 characters in command line
+	XP	CMD.SZ,^D512		;Size of command  argument block
+	XP	PAKSIZ,^D100		;Size of message packet
+
+
+; Parameters not easily changed
+;
+	PSCSTR==DEFMJB+1		;PRESCAN STREAM NUMBER
+	KSYSTR==PSCSTR+1		;STARTING KSYS STREAM NUMBER
+	JOBMAX==KSYSTR+KSYMAX+1		;MAXIMUM NUMBER OF PROCESSES
+	STPCHR=="$"			;STEP PROMPT CHARACTER
+
+;MOUNT-parser constants
+
+	ACK.NT==400000,,0		; Mask for /NOTIFY
+	ACK.JB==377400,,0		; Mask for job number
+	ACK.UT==377,,777777		; Mask for UDT bits
+
+
+; TOPS-10 dependant parameters
+;
+TOPS10	<				;TOPS-10 ONLY
+	SOPTYP	(BATCON,OPTYP%)		;OBJECT PROCESSOR TYPE
+>					;END OF TOPS-10 CONDITIONAL
+
+
+; TOPS-20 dependant parameters
+;
+TOPS20	<				;TOPS-20 ONLY
+	ND	IPCCHN,0		;IPCF INTERRUPT CHANNEL
+	ND	PTYCHN,1		;PTY INTERRUPT CHANNEL (FIRST OF TWO)
+	INTMSK==1B<IPCCHN>!1B<PTYCHN>!1B<PTYCHN+1> ;INTERRUPT CHANNEL MASK
+	.BFADR==0			;BUFFER RING ADDRESS
+	.BFPTR==1			;BYTE POINTER
+	.BFCTR==2			;BYTE COUNT
+
+>					;END OF TOPS-20 CONDITIONAL
+; Consistancy check for assembly parameters
+;
+	IFLE	DEFMJB,<		;VALUE MUST BE POSITIVE
+		PRINTX % DEFMJB less than 1, 1 assumed
+		DEFMJB==1		;SET TO 1
+	>				;END OF IFLE DEFMJB CONDITIONAL
+
+
+TOPS10	<				;TOPS-10 ONLY
+>					;END OF TOPS-10 CONDITIONAL
+
+
+TOPS20	<				;TOPS-20 ONLY
+	IFG	<DEFMJB-^D9>,<		;DEFMJB CANNPT BE GREATER THAN 9
+		PRINTX % DEFMJB greater than 9, 9 assumed
+		DEFMJB==^D9		;SET TO 9
+	>				;END OF IFG <DEFMJB-^D9> CONDITIONAL
+>					;END OF TOPS-20 CONDITIONAL
+
+
+	IFL	<%EXTRA-^D10>!<^D100-%EXTRA>,< ;MUST BE BETWEEN 10% AND 100%
+		PRINTX Bad value for percentage of extra time, 10% assumed
+		%EXTRA==^D10
+	>				;END OF IFL CONDITIONAL
+SUBTTL	Accumulator definitions
+
+
+; *** Note ***
+; The order of these ACs cannot easily be changed. See the context switching
+; code in the job scheduler.
+;
+	F==13				;MISCELLANEOUS STREAM FLAGS
+	J==14				;JOB STATUS
+	S==15				;STREAM INDEX
+	R==16				;RELOCATION INDEX FOR STREAM
+					; LH = FLAGS
+					; RH = BASE ADDRESS OF STREAM DATA
+	P==17				;PUSH DOWN LIST POINTER
+					; USED FOR BOTH BATCON TOPLEVEL AND
+					; INDIVIDUAL STREAMS
+SUBTTL	Batch stream flags
+
+
+; Flags for batch streams
+;
+	RL.ACT==1B0			;STREAM IS ACTIVE (MUST BE SIGN BIT)
+	RL.ACK==1B1			;WAITING FOR AN ACK
+	RL.OPR==1B2			;WAITING FOR OPERATOR RESPONSE
+	RL.JIE==1B3			;JOB IN ERROR
+	RL.KJB==1B4			;AUTO KJOB LINE SENT
+	RL.NSC==1B5			;DON'T SCHEDULE STREAM
+	RL.MSP==1B6			;MESSAGE READY TO PROCESS
+	RL.LGI==1B7			;JOB LOGGING IN NOW
+	RL.QTS==1B8			;QUOTES SEEN
+	RL.DIA==1B9			;DIALOGUE MODE
+	RL.STP==1B10			;STOPPED BY THE OPERATOR
+	RL.NLG==1B11			;NO LOG FILE AVAILABLE
+	RL.MIP==1B12			;OPERATOR MESSAGE BEING PROCESSED
+	RL.FLS==1B13			;REQUEST TO FLUSH JOB
+	RL.DRT==1B14			;DELAY RESPONSE BUFFER TYPEOUT
+	RL.FKJ==1B15			;KILL JOB FAST WITHOUT QUASAR/OPR HELP
+	RL.REQ==1B16			;JOB BEING REQUEUED
+	RL.SHT==1B17			;SHUTDOWN STREAM AT EOJ
+
+
+; Initial flags
+;
+	RL.INI==RL.ACT!RL.LGI		;JOB ACTIVE, LOGGING IN
+; Flags in AC 'F'
+;
+	FL.RCL==1B0			;RE-EAT COMMAND LINE
+	FL.NER==1B1			;NOERROR IS IN EFFECT
+	FL.SUP==1B2			;SUPRESS EOL CHARACTERS
+	FL.SIL==1B3			;SILENCE IS IN EFFECT
+	FL.TLE==1B4			;TIME LIMIT EXCEEDED
+	FL.%XT==1B5			;EXTRA TIME GIVEN
+	FL.CFP==1B6			;CARRIAGE RETURN READ FROM A PTY
+	FL.CTP==1B7			;CARRIAGE RETURN SENT TO A PTY
+	FL.SPL==1B8			;SPECIAL PROCESSING FOR MESSAGE
+	FL.LSL==1B9			;LIST SKIPPED LINES IN LABEL SEARCHES
+	FL.FIN==1B10			;LABEL SEARCH CAN PASS A %FIN
+	FL.UHE==1B11			;UNHANDLED ERROR OCCURED
+	FL.LFE==1B12			;LOG FILE ERROR ON OPEN
+	FL.CHK==1B13			;SEND CHECKPOINT DATA AND UPDATE
+	FL.SCC==1B14			;SENT ^C TO STOP THE JOB
+	FL.ECH==1B15			;LINE IS PTY ECHO
+	FL.NUL==1B16			;LOG FILE DEVICE IS NUL:
+	FL.EOJ==1B17			;END OF JOB PROCESSING DONE
+	FL.UKJ==1B18			;USER REQUESTED KJOB
+	FL.PST==1B19			;PRESCAN STREAM
+	FL.KST==1B20			;KSYS STREAM
+	FL.TXT==1B21			;COPY .JWTOP TO REL.TX FOR RELEASE MSG
+
+; Initial flag settings
+;
+	FL.INI==0			;NO FLAGS
+
+;Flags for MOUNT parser...
+
+	  FL.TAP==1B0	;Tape request
+	  FL.DSK==1B1	;Disk request
+	  FL.WRT==1B2	;Write enable
+	  FL.WLK==1B3	;Write lock
+	  FL.EXC==1B4	;Exclusive/sharable access
+	  FL.SCR==1B5	;Scratch volume set
+	  FL.NEW==1B6	;New volume set
+	  FL.WAT==1B7	;Wait for operation to complete
+	  FL.NOT==1B8	;Notify on completion
+	  FL.PAS==1B9	;Active/passive search list
+	  FL.BYP==1B10	;Bypass label processing
+	  FL.MOU==1B11	;This is a mount request
+	  FL.REM==1B12	;A remark has been sent with the request
+	  FL.NOC==1B13	;Creates are not OK as part of DSK:
+	  FL.LAB==1B14	;User typed some sort of /LABELS switch
+	  FL.RMV==1B15	;[REM] /REMOVE was typed
+	  FL.CHK==1B16	;/CHECK was typed
+	  FL.TRK==1B17	;/TRACK: was specified
+	  FL.GDV==1B18	;Generic device specified
+	  FL.QTA==1B19	;/QUOTA was specified
+	  FL.MOR==1B20	;[55] Look for more ACK messages
+	  FL.LST==1B21	;[56] MOUNT <CR><LF> was typed (maybe MOUNT /LIST someday)
+
+SUBTTL	Miscellaneous bits and OPDEFs
+
+
+; Job status bits
+; ** Note **
+; These bits are identical to the TOPS-10 JOBSTS UUO bits
+;
+	JL.UJA==1B0			;JOB NUMBER ASSIGNED
+	JL.ULI==1B1			;JOB LOGGED IN
+	JL.UML==1B2			;JOB AT MONITOR LEVEL
+	JL.UOA==1B3			;OUTPUT IS AVAILABLE
+	JL.UDI==1B4			;JOB CAN DO INPUT
+	JL.UJC==1B5			;JACCT IS SET
+	JL.UNE==1B11			;NO ECHO IS SET
+	JL.UHI==1B15			;JOB IS HIBERING FOR INPUT
+	JL.UJN==777B35			;JOB NUMBER
+
+
+; Checkpoint/Requeue bits
+;
+	BA.JOB==1B0			;SEEN THE JOB FLAG
+	BA.ORQ==1B1			;JOB REUEUED BY OPERATOR
+	BA.URQ==1B2			;USER REQUEUED THE JOB
+	BA.CHK==1B3			;CHECKPOINT JOB BY USER
+
+
+; Message processing bits
+;
+	B.DEFR==400000			;FLAG TO PROCESS BY STREAM
+	B.STCN==200000			;STOP AND CONTINUE OPERATOR MESSAGE
+
+
+; Opdef the BATCON LUUOs
+;
+	OPDEF	IDENT.	[1B8]		;IDENTIFY A LINE IN A LOG FILE
+	OPDEF	IDHDR.	[2B8]		;IDENTIFY A LINE IN A LOG FILE HEADER
+
+	SUBTTL Miscellaneous Macros
+
+; Macro to support the IDENT. UUO
+;
+DEFINE	$IDENT	(STAMP,TEXT),<IDENT. [ITEXT ( 'STAMP	'TEXT)]>
+
+
+; Macro to support the IDHDR. UUO
+;
+DEFINE	$IDHDR	(STAMP,TEXT),<IDHDR. [ITEXT ( 'STAMP	'TEXT)]>
+TOPS10	<
+DEFINE	TXT(ARG) <POINT 7,[ASCIZ@ARG@]>
+
+
+TOPS10	<
+
+;DEFINE A MACRO TO HANDLE FATAL COMMAND ERRORS
+
+DEFINE	$ERR(TXT),<
+	LSTOF.
+	JSP	TF,ERROR		;;Display the error
+	CAI	[ITEXT	(<TXT>)]		;;Error text is built here
+	LSTON.>
+
+DEFINE	$DATA (NAME,SIZE<1>) <
+ NAME:	BLOCK SIZE
+	 ..LOC==.>
+
+DEFINE	$GDATA	(NAME,SIZE),<
+	$DATA	(<NAME>,<SIZE>)
+	INTERN	NAME
+>;END $GDATA
+
+>;END TOPS10
+SUBTTL	Stream data base
+
+
+
+	 PHASE	0
+
+; Queue entry data
+;
+.JQITN:! BLOCK	1			;INTERNAL TASK NAME
+.JQJBB:! BLOCK	JIBSIZ			;JOB INFORMATION BLOCK
+.JQLIM:! BLOCK	EQLMSZ			;LIMIT BLOCK
+.JQACT:! BLOCK	10			;ACCOUNT STRING
+
+TOPS10	<				;TOPS-10 ONLY
+.JQPPN:! BLOCK	1			;PPN
+.JQPAT:! BLOCK	6			;PATH
+>					;END OF TOPS-10 CONDITIONAL
+
+TOPS20	<				;TOPS-20 ONLY
+.JQNAM:! BLOCK	10			;USER NAME
+.JQCON:! BLOCK	12			;CONNECTED DIRECTORY
+.JQSIS:! BLOCK	1			;SPOOLED INPUT SET (FROM SPRINT)
+>					;END OF TOPS-20 CONDITIONAL
+
+.JQCFP:! BLOCK	FPXSIZ			;CONTROL FILE PARAMETER BLOCK (FP)
+.JQCFD:! BLOCK	FDXSIZ			;CONTROL FILE DESCRIPTOR BLOCK (FD)
+.JQLFP:! BLOCK	FPXSIZ			;LOG FILE PARAMETER BLOCK (FP)
+.JQLFD:! BLOCK	FDXSIZ			;LOG FILE DESCRIPTOR BLOCK (FD)
+.JQOBJ:! BLOCK	OBJ.SZ			;OBJECT BLOCK
+.JQLOC:! BLOCK	1			;LOCATION FOR OUTPUT
+; Job processor data
+;
+.JREGS:! BLOCK	20			;JOB PROCESSOR ACS
+.JPLST:! BLOCK	.JPSIZ			;JOB PROCESSOR PDL
+.JBSPS:! BLOCK	1			;STEP PROLOGUE SCAN ONLY
+.JBECD:! BLOCK	1			;ERROR CODE FROM PTY
+.JBECH:! BLOCK	1			;ERROR CHARACTER
+.JBOCH:! BLOCK	1			;OPERATOR CHARACTER
+.JBJNO:! BLOCK 	1			;JOB NUMBER
+.JBRTM:! BLOCK	1			;RUNTIME (FOR BACKTO COMMAND)
+.JBCHK:! BLOCK	1			;JOB CHECKPOINT FLAG
+.JBCRQ:! BLOCK	EQCKSZ			;CHECKPOINT/REQUEUE INFORMATION
+.JBRQF:! BLOCK	1			;REQUEUE FLAGS
+.JBRBP:! BLOCK	1			;RESPONSE BYTE POINTER
+.JBRSP:! BLOCK	PTYBLK-3		;RESPONSE BUFFER
+.JBSPW:! BLOCK	1			;STATUS POINTER WORD
+.JBCLK:! BLOCK	1			;CLOCK QUEUE EVENT CODE,,ENTRY ID
+
+
+; Control file data
+;
+.JCFOB:! BLOCK	FOB.SZ			;FILE OPEN BLOCK
+.JCIFN:! BLOCK	1			;IFN FILE OPENED ON
+.JCPOS:! BLOCK	1			;CHECKPOINTED POSITION IN FILE
+
+
+; Log file data
+;
+.JLFOB:! BLOCK	FOB.SZ			;FILE OPEN BLOCK
+.JLFAB:! BLOCK	3			;FILE ATTRIBUTE BLOCK
+.JLIFN:! BLOCK	1			;IFN FILE OPENED ON
+.JLECD:! BLOCK	1			;OUTPUT ERROR CODE FROM GLXLIB
+.JLTIM:! BLOCK	1			;TIME STAMP NEEDED IN LOG FILE
+.JLHDR:! BLOCK	1			;HEADER PAGE NUMBER (CORE)
+
+
+; Operator/QUASAR interface data
+;
+.JOVAL:! BLOCK	1			;VALID MESSAGE FLAG
+.JOFLG:! BLOCK	1			;FLAG WORD
+.JOACK:! BLOCK	1			;ACK CODE FOR WTOR MESSAGES
+.JONAM:! BLOCK	1			;ADDRESS OF ASCIZ MESSAGE NAME
+.JOPRC:! BLOCK	1			;MESSAGE PROCESSOR
+.JOMSG:! BLOCK	IPCSIZ			;MESSAGE STORAGE
+.JOTYP:! BLOCK	1			;WTO TYPE TEXT ADDRESS
+.JOTXT:! BLOCK	1			;WTO MAIN TEXT ADDRESS
+.JOTBL:! BLOCK	1			;TABLE OF OPR RESPONSES
+.JORSP:! BLOCK	<RSPSIZ/5>+1		;OPR RESPONSE TEXT
+; PTY data
+;
+.JPTTY:! BLOCK	1			;PTY TERMINAL UDX OR DESIGNATOR
+.JPTYI:! BLOCK	PTYBLK			;PTY INPUT BUFFER RING
+.JPTYO:! BLOCK	PTYBLK			;PTY OUTPUT BUFFER RING
+.JPINP:! BLOCK	3			;PTY INPUT BUFFER RING HEADER
+.JPOUT:! BLOCK	3			;PTY OUTPUT BUFFER RING HEADER
+.JPCHN:! BLOCK	1			;PTY I/O CHANNEL OR JFN
+.JPEOL:! BLOCK	1			;EOL SENT TO PTY
+
+
+; WTO/WTOR data
+;
+.JWTOP:! BLOCK	<CTLSIZ/5>+1		;TO OPERATOR BUFFER
+.JWFOP:! BLOCK	<CTLSIZ/5>+1		;FROM OPERATOR BUFFER
+.JWPTR:! BLOCK	1			;BYTE POINTER FOR WTO/WTOR OPERATIONS
+.JWCNT:! BLOCK	1			;BYTE COUNT FOR WTO/WTOR OPERATIONS
+
+
+; Scanner data
+;
+.JSCTL:! BLOCK	<CTLSIZ/5>+1		;CONTROL FILE LINE BUFFER
+.JSCTB:! BLOCK	1			;CONTROL FILE LINE BYTE POINTER
+.JSCTC:! BLOCK	1			;CONTROL FILE LINE BYTE COUNT
+.JSCNM:! BLOCK	<KEYSIZ/5>+1		;COMMAND NAME STRING POINTER
+.JSCDP:! BLOCK	1			;COMMAND DISPATCH ADDRESS
+.JSCFL:! BLOCK	1			;FLAG WORD
+.JSKEY:! BLOCK	<KEYSIZ/5>+1		;KEYWORD BUFFER
+.JSPAR:! BLOCK	PAR.SZ			;PARSER BLOCK
+.JSCMD:! BLOCK	1			;ADDRESS OF COMMAND BLOCK
+.JSSTP:! BLOCK	1			;STEP FLAG
+.JSSPP:! BLOCK	1			;STEP PROCESSING PENDING
+
+
+; Label data
+;
+.JLABL:! BLOCK	1			;LABEL BEING SEARCHED FOR
+.JLLBL:! BLOCK	1			;[4707] LAST LABEL ENCOUNTERED
+.JLSTP:! BLOCK	1			;CURRENT $STEP LABEL
+
+
+; MDA and modify data
+;
+.JMDAP:! BLOCK	1			;MDA ALLOCATE/MOUNT REQUEST PAGE
+.JMDAT:! BLOCK	1			;TEMPORARY PAGE FOR MNTPAR
+.JMDAF:! BLOCK	1			;FREE POINTER INTO .JMDAP(R)
+.JMODP:! BLOCK	1			;MODIFY REQUEST PAGE
+.JMODC:! BLOCK	1			;COUNT OF MODIFYS IN REQUEST
+
+
+.JSIZE:!				;STREAM DATA BASE SIZE IN WORDS
+	 DEPHASE			;END OF THE STREAM DATA BASE
+	 RELOC 0			;SAVE SPACE
+
+.JPAGS==1+<<.JSIZE-1>/PAGSIZ>		;STREAM DATA BASE SIZE IN PAGES
+SUBTTL	Clock request queue data definitions
+
+
+; Clock queue entries
+;
+	 ...LOC==.
+	 PHASE	0
+.CQEID:! BLOCK	1	;ENTRY ID
+.CQTIM:! BLOCK	1	;TIME IN SECONDS
+.CQEVN:! BLOCK	1	;PENDING EVENTS
+   CQ.NSC==1B0		   ;DON'T SCHEDULE STREAM
+   CQ.EVN==777B17	   ;PENDING EVENT
+      .CQMIN==0		      ;LOWEST LEGAL EVENT TYPE
+      .CQHNG==0		      ;HUNG TIMER ONLY
+      .CQLGI==1		      ;LOGIN
+      .CQLGO==2		      ;LOGOUT
+      .CQHLT==3		      ;HALTED (^C'ED)
+      .CQMAX==3		      ;HIGHEST LEGAL EVENT TYPE
+   CQ.TIM==777777B35	   ;SLEEP TIME IN SECONDS
+.CQCTX:! BLOCK	1	;CONTEXT
+.CQADR:! BLOCK	1	;DISPATCH ADDRESS
+.CQLEN:!		;LENGTH OF A CLOCK QUEUE ENTRY
+	DEPHASE
+	RELOC	...LOC
+SUBTTL	MODIFY symbols
+
+
+; The MODIFY code requires minor changes in QMANGR and QUASAR in order
+; to work fully. The QMANGR changes are:
+; At MOD.1A+6, add
+;		REPEAT 10,<
+;			SETO	T1,	;INDICATE NO CHANGE IN ACCOUNT STRING
+;			PUSHJ	P,GRPSTO ;STORE /ACCOUNT
+;		> ;END REPEAT 10
+;
+; The QUASAR changes are in a dispatch table in QSRSCH:
+; At INPMTB+10, add
+;		MOVEM	P3,.EQACT+0(AP)	;STORE ACCOUNT STRING WORD 0
+;		MOVEM	P3,.EQACT+1(AP)	;STORE ACCOUNT STRING WORD 1
+;		MOVEM	P3,.EQACT+2(AP)	;STORE ACCOUNT STRING WORD 2
+;		MOVEM	P3,.EQACT+3(AP)	;STORE ACCOUNT STRING WORD 3
+;		MOVEM	P3,.EQACT+4(AP)	;STORE ACCOUNT STRING WORD 4
+;		MOVEM	P3,.EQACT+5(AP)	;STORE ACCOUNT STRING WORD 5
+;		MOVEM	P3,.EQACT+6(AP)	;STORE ACCOUNT STRING WORD 6
+;		MOVEM	P3,.EQACT+7(AP)	;STORE ACCOUNT STRING WORD 7
+; Major modify
+;
+	.MMAFT==MOD.FG+MOD.GE+0		;/AFTER
+	.MMPRI==MOD.FG+MOD.GE+1		;/PRIORITY
+	.MMXXX==MOD.FG+MOD.GE+2		;SPARE WORD
+	.MMPRO==MOD.FG+MOD.GE+3		;/PROTECTION
+	.MMUNT==MOD.FG+MOD.GE+4		;/UNIT OR /LOWER OR /UPPER
+	.MMPRC==MOD.FG+MOD.GE+5		;/PROCESSING (node)
+	.MMCST==MOD.FG+MOD.GE+6		;CUSTOMER DEFINED ATTRIBUTES
+	.MMMAX==.MMCST			;HIGHEST TYPE IN THIS GROUP
+NMAJPM==.MMMAX-MOD.FG-MOD.GE+1		;NUMBER OF MAJOR MODIFY TYPES
+
+
+; Queue modify
+;
+	.MQCOR==.MMMAX+MOD.GE+0		;/CORE
+	.MQTIM==.MMMAX+MOD.GE+1		;/TIME
+	.MQPGS==.MMMAX+MOD.GE+2		;/PAGES
+	.MQCDS==.MMMAX+MOD.GE+3		;/CARDS
+	.MQFET==.MMMAX+MOD.GE+4		;/FEET
+	.MQTPL==.MMMAX+MOD.GE+5		;/TPLOT
+	.MQDEP==.MMMAX+MOD.GE+6		;/DEPENDANCY
+	.MQUNI==.MMMAX+MOD.GE+7		;/UNIQUE
+	.MQRST==.MMMAX+MOD.GE+10	;/RESTART
+	.MQOUT==.MMMAX+MOD.GE+11	;/OUTPUT
+	.MQDST==.MMMAX+MOD.GE+12	;/DESTINATION (NODE)
+	.MQACT==.MMMAX+MOD.GE+13	;/ACCOUNT
+	.MQAST==.MMMAX+MOD.GE+23	;/ASSISTANCE
+	.MQBLG==.MMMAX+MOD.GE+24	;/BATLOG
+	.MQBEG==.MMMAX+MOD.GE+25	;/BEGIN
+	.MQMAX==.MQBEG			;HIGHEST NUMBER IN THIS GROUP
+NINPPM==.MQMAX-MOD.FG-MOD.GE+1		;NUMBER OF QUEUE MODIFY TYPES
+SUBTTL	MSGBLD macro - Build error message table
+
+
+DEFINE	MSGBLD,<
+	XLIST
+	X	(E.NSTR,<No free batch streams - job requeued>)
+	X	(E.STRA,<Stream already started>)
+	X	(E.NJOB,<No job slots available - job requeued>)
+
+	LIST
+	SALL
+>
+
+	DEFINE	X(A,B),<
+	XLIST
+	A==$$			;ASSIGN VALUE TO SYMBOL
+	$$==$$+1		;INCREMENT COUNTER
+	LIST
+	SALL
+	>;END X
+
+	$$==0			;SET TO 0
+	MSGBLD			;ASSIGN THE VALUES
+	MSGTSZ==$$		;COUNT OF MESSAGES
+SUBTTL	Define Mount-Parser error codes and values
+
+;Define subroutine error return mechanism
+
+DEFINE	$RETER(CODE) <
+	PJRST	[MOVEI	S1,CODE
+		 $RETF]>
+
+;Define the errors
+
+DEFINE ERRS <
+
+	XX	(IDN,Invalid device type)
+	XX	(NSD,No such device)
+	XX	(UND,Unknown device type)
+	XX	(USD,Unsupported device type)
+	XX	(EZD,Ersatz device type)
+	XX	(PLD,Pathological device type)
+	XX	(ASN,Ambiguous structure name)
+	XX	(ISN,Invalid structure name)
+	XX	(GDN,Generic device name)
+
+> ;End ERRS definition
+
+
+DEFINE	XX(CODE,TEXT) <
+	ZZ==ZZ+1
+	ER$'CODE==ZZ>
+
+	ZZ==0		;Initialize error variable
+	ERRS		;Equate the error codes
+
+
+SUBTTL	End
+
+
+	END

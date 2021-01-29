@@ -1,0 +1,159 @@
+- THE LIFE GAME -
+
+This is a solitaire game. (for one player).
+It can be played on a checkered board, a piece of paper or a computer.
+The fascinating thing with the game is that you can never predict
+how the pattern changes.
+
+The game was invented by J.H. Conway and was published in M. Gardner's
+"Mathematical Games" in Scientific American oct. 1970. It also appeared
+in nov.-70, jan-apr 1971, & jan 1972 issues of Sci. Am.
+ 
+ Hope you enjoy it !
+************************************************************************
+- THE LIFE GAME -
+
+Rules:  
+------
+First you make a pattern with a few marks (called cells).
+Then you change the pattern like this:
+
+1. (BIRTHS): Each empty square surrounded by three cells
+   [ all 8 directions are counted ] is filled by a new cell.
+   These new cells do NOT affect any other births or deaths yet.
+   The newborn cells affect births and deaths in the next generation.
+
+   When you've found all births, continue with
+
+2. (DEATHS): All cells surrounded by none or only one cell dies from lonliness,
+   and all cells surrounded by four or more dies from crowding. (Cells
+   surrounded by 2 or 3 survives). A dying cell affects births and deaths,
+   so don't remove any dying cells until you've found them all.
+
+3. When all dying cells are removed, the newborn become adult.
+   Now you can begin from 1. with another generation.
+
+
+************************************************************************
+COMMAND     PARAMETERS           EXPLANATION
+-------     ----------           -----------
+I nsert     <X Y> (<CR><X Y>...) end with <esc> when finished
+D elete     <X Y> (<CR><X Y>...) end with <esc> when finished
+             C                   cancels latest I or D item
+E rase      <X Y>                deletes connected cells also
+T ransfer   <X Y  TO  X Y>       transfer connected cells also
+M ove       <+-X   +-Y>          moves all cells in given direction
+ADD         <name>               add a saved population
+WALk         V,B,>,<,C,space     fast & easy "footprint" editor
+NEW         <name>               create a new population
+OLD         <name>               gets a saved population
+REName      <name>               give the population a new name
+AGE         <number>             change the age to <number>
+SCRatch                          delete all cells
+SAVe                             save the population on a file
+KILl        <name>               removes a population from the file
+CATalog                          lists the saved populations
+CHAracters  <CR><2 characters>   alter characters in population display
+RUN         <CR> or <n><CR>      run population <n> generations. [n<100]
+GO                               run forever
+ -In the first group: use only the first command character.
+In the second group: only UPPER CASE letters in commands are nessecary.
+************************************************************************
+For convenience, there are 3 more commands:
+APPend		(equal to ADD)
+NAMe		(equal to REName)
+BYE		(to finish session, instead of control-C).
+	
+The Erase and Transfer commands affects a whole group of cells,
+which are adjacent to each other.  By simply giving the coordinates
+for one of them, you delete or move all of them.
+	
+The SAVe command saves a copy of the population pattern on a file.
+After that, you can use:
+	
+OLD      to get it back later
+ADD      to add it to another poulation pattern later
+KILl     to wipe it out from the file
+CATalog  to see if it's there and its age.
+	
+The NEW command is equal to  AGE 0  +  SCRatch  +  REName.
+	
+When choosing characters in the display (either in the beginning, or later
+with the CHAracters command), the following combinations are recommended:
+   cell :	*	*	O	<space>
+no cell :    <space>	-    <space>	   O
+************************************************************************
+- HOW TO RUN THE POPULATION -
+	
+1. Using the RUN command.
+-------------------------
+The RUN command will run the population one generation.
+If you want more than one generation, just press <CR> again,
+and you'll get another, as long as you wish.
+Or, type RUN n  to get n generations. (max for n is 100).
+Instead of RUN n, RUN n... as above you can type n <CR>, n<CR>..
+Note that these 'tricks' only works after a RUN command.
+ Examples:
+	
+:> RUN	<CR>			:> RUN 3	<CR>
+:>	<CR>			:> 5		<CR>
+:> 	<CR>			:> 		<CR>
+:> 2	<CR>			:> RUN		<CR>
+
+2. Using the GO command.
+------------------------
+If you want LIFE to RUN forever, use the GO command.
+It is recommended to have the population SAVed before, because you
+won't get back to :> mode again. (Unless all cells die out, or
+something similar occurs; thus saving costly CPU time.)
+************************************************************************
+- HOW TO EDIT A POPULATION -
+	
+1. Using Insert & Delete commands.
+----------------------------------
+Type I or D folowed by two numbers. If you want to insert or delete more
+than one cell, you type <CR> after the coordinates, otherwise <esc>.
+After typing <CR>, you will see + or - instead of :> as usual.
+Now you can type one of these three alternatives:
+a)  <X Y>			-to insert or delete cell in (X,Y)
+b)   I or D  (and then <X Y>)	-to change insert-delete mode
+c)   C				-to cancel the latest item.
+	
+When you're finished, type <esc> instead of <CR>, and you'll get back to :>
+	
+Example 1				Example 2
+:> I 5 5	<CR>			:> D		<CR>
++  6 5		<CR>			-  I 5 5	<CR>
++  7 5		<CR>			+  6 5		<CR>
++D 6 5		<CR>			+  7 5		<CR>
+- C		<CR>			+  8 5		<CR>
+-I 8 5		<esc>			+ <esc>
+:>  [now you have 4 cells]		:>     [same result]
+	
+************************************************************************
+- HOW TO EDIT A POPULATION -
+	
+2. Using the WALK command.
+--------------------------
+The WALk command provides very fast and easy editing, especially with large
+population patterns. It is definitely recommended in all cases. Do like this:
+a)  type WALK [ or just WAL ].  Press Return.
+     (the cursor will now be placed in the middle of the screen.)
+b)  type one of:
+	<  [or ,]	- move cursor to the left
+	>  [or .]	- move cursor to the right
+	V		- move cursor down
+	B		- move cursor up
+	C		- insert a cell at cursor
+     <space>		- delete cell at cursor
+        Repeat b) as long as you wish. Don't use <CR>.
+c)  finish with <CR>.
+In this way you can "walk" around and change the population pattern.
+EXAMPLE:
+:> WAL   [CR]
+C>C>CVC<C<C<CV<C<BCBCBC<CVC<C      [CR]
+:> 
+[warning: Avoid using control-C, because the terminal is in TTY NO ECHO mode.]
+************************************************************************
+
+Program written 1978 by Per Lindberg, Royal Institute of Technology, K3

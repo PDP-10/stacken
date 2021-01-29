@@ -1,0 +1,40 @@
+! TOPS-10 UUO definition file
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+! OR COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE.
+!
+! COPYRIGHT  (C)  DIGITAL  EQUIPMENT  CORPORATION 1986.
+! ALL RIGHTS RESERVED.
+!
+! Written by Doug Rayner
+!
+! Edit History:
+!
+! Facility EXT 
+!
+! new_version (1, 0)
+!
+! Edit (%O'1', '12-Apr-84', 'Sandy Clemens'
+!  %( Add the TOPS-10 sources for the RMS extensions needed by DAPLIB-10
+!     for DIL V2.  The sources which are the same as the TOPS-20 sources
+!     are not included in the library.  Just use the 20 sources which are
+!     in the library.  The names of the 10 sources are the same as the 20
+!     sources, except that the 10-specific files have the 10-*** extensions.
+!   )%
+! 
+! Edit (%O'5', '5-Oct-84', 'Sandy Clemens')
+!  %( Add new format of COPYRIGHT notice.  FILES:  ALL )%
+! 
+BUILTIN
+
+	UUO;
+
+MACRO
+
+	PISAV$_UUO(a) = UUO(1,PISAV$(a)) %,
+	PIINI$_UUO(a) = UUO(1,PIINI$(a)) %,
+	PISYS$_UUO(a) = UUO(1,PISYS$(a)) %,
+	HIBER_UUO (a) = UUO(1,HIBER (a)) %,
+	GETLIN_UUO(a) = UUO(0,GETLIN(a)) %,
+	NSP$_UUO  (a) = UUO(1,NSP$  (a)) %,
+	DNET$_UUO (a) = UUO(1,DNET$ (a)) %;

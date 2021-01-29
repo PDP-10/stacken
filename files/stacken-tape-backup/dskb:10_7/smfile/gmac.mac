@@ -1,0 +1,1880 @@
+UNIVER	GMAC  --  Parameter File For GLXLIB
+SUBTTL	Larry Samberg, C.D. O'Toole, Irwin L. Goverman /LSS/CDO/ILG 19 Jan 78
+
+;Copyright (C) 1977, 1978,
+;	Digital Equipment Corporation, Maynard, Ma.
+
+	SEARCH	GALCNF			;SO WE CAN BE SYSTEM DEPENDENT
+	SEARCH	MACTEN			;SEARCH MACRO DEFINITIONS
+IFN FTUUOS,<
+    IF1,<PRINTX Building a GALAXY-10 library>
+	SEARCH	UUOSYM>			;SEARCH PROPER
+IFN FTJSYS,<
+    IF1,<PRINTX Building a GALAXY-20 library>
+	SEARCH	MONSYM>			;UNIVERSAL FOR SYSTEM SYMBOLS
+
+	SALL				;SUPRESS MACRO EXPANSIONS
+
+	%%.GLX==5			;MAJOR CHANGE NUMBER OF GMAC
+
+
+	GLXVER==1			;MAJOR VERSION NUMBER
+	GLXMIN==0			;MINOR VERSION NUMBER
+	GLXWHO==0			;LAST EDITOR
+	GLXEDT==27			;EDIT NUMBER
+
+	GLXVRS==<VRSN.(GLX)>
+
+
+;THIS FILE CONTAINS SYMBOL AND MACRO DEFINITIONS WHICH ARE COMMON TO
+;	ALL PROGRAMS DEVELOPED BY THE DECSYSTEM-10/20 SUBSYSTEMS
+;	GROUP.  THESE PROGRAMS INCLUDE AT PRESENT:
+;
+;		1)ALL GALAXY COMPONENTS
+;		2)TPS-20
+;
+;THIS FILE ALSO ACTS AS THE ADMINISTRATION MODULE FOR OTHER COMMON
+;	SUBSYSTEMS MODULES AS THEY ARE DEVELOPED.
+
+	XP FTUUOS,FTUUOS		;GLOBAL-IZE SYSTEM SWITCHES
+	XP FTJSYS,FTJSYS		;GOTTEN FROM GALCNF
+SUBTTL Table of Contents
+
+;               TABLE OF CONTENTS FOR GMAC
+;
+;
+;                        SECTION                                   PAGE
+;    1. Table of Contents.........................................   2
+;    2. Revision History..........................................   3
+;    3. Accumulator Definitions...................................   4
+;    4. PROLOG - Uniform assembly set up..........................   5
+;    5. SYSPRM - Set system dependent parameters..................   6
+;    6. MIN and MAX - Find minimum or maximum of vector of values.   6
+;    7. JUMPx, SKIPx - Test contents of TF........................   7
+;    8. $RETT,$RETF,$RETE - Uniform return mechanisms.............   8
+;    9. SAVE - Save unreserved ACs................................   9
+;   10. LIBVEC - Library run-time system entry vector.............  10
+;   11. $DATA,$GDATA - Runtime System Data Area control...........  11
+;   12. Data structure access macros..............................  12
+;   13. $BUILD,$SET,$EOB - Build pre-formed data blocks...........  14
+;   14. $STOP - Cause a STOP CODE to occur........................  15
+;   15. $TEXT - Interface to the T%TEXT routine...................  16
+;   16. GALAXY system error codes.................................  26
+;   17. Canonical File Information................................  27
+;   18. Scanning and Command Module Symbols.......................  28
+;   19. THE MESSAGE HEADER........................................  31
+;   20. OBJ - Object Descriptor...................................  32
+;   21. OBJCTS MACRO..............................................  33
+;   22. FD - File Descriptor......................................  34
+;   23. FOB - Parameter block passed to F%IOPN and F%OOPN.........  36
+;   24. FRB - Parameter block passed to F%REN for renames.........  37
+;   25. IB  - Initialization Block for GALAXY programs............  38
+;   26. SAB - Send Argument Block passed to C%SEND................  39
+;   27. MDB - Message Descriptor Block returned by C%RECV.........  40
+;   28. Global constants ands values..............................  41
+;   29. System Independent IPCF Codes and Constants...............  42
+;   30. $BGINT,$DEBRK - Interrupt context switching...............  43
+;   31. Program internal parameters of interest...................  44
+SUBTTL	Revision History
+
+
+COMMENT	\
+
+Edit	Module	Explanation
+1	GMAC		Create GMAC from SBSMAC 1(3)
+2	GMAC		ADD SAB -- SEND ARGUMENT BLOCK (FOR C%SEND)
+			ADD MDB -- MESSAGE DECRIPTOR BLOCK (FOR C%RECV)
+3	GMAC,COM	ADD $RETE -- Failure return mechanism
+4	GMAC,TXT	ADD $TEXT and its support macros and code
+5	GMAC,COM	ADD New PROLOG and $STOP macros and support code
+6	GLX*.MAC	Change to new T/F calling convention
+7	GMAC		Move more of QSRMAC to GMAC
+10	GMAC		Add FI.SIZ to the CFI macro definition
+11	GMAC,GLXFIL	Add symbols for byte pointer constituents.
+12	GLX*		Convert to new OTS format
+13	GLX*		Make the library into a shareable segment
+14	GLX*		Add new version number qualifier
+15	GMAC		Add new data structure building macros
+16	GMAC,ORNMAC	Move message header and object block to GMAC
+17	GLXINI		Save entry vector across the GET
+20	INI,INT,MAC	Move more of GLXINI to GLXINT
+21	MAC,TXT,SCN	Add new module GLXSCN, Make some changes to GLXTXT
+			  to support it.
+22	MAC,SCN		Add symbols to support GLXSCN
+23	MAC,IPC		Major change 5. Add more recovery options to send failures
+24	MAC		Add new object type for TERMINAL and JOB
+25	MAC,SCN,KBD	Add new bit to S%CMD block to specify string rather
+			than JFN. Add support for bit in SCN and KBD
+26	GMAC		Update table of contents.
+27	MAC,INT,COM	ADD ROUTINE TO SETUP WTO MESSAGE	I%IWTO
+			ADD ROUTINE TO SEND WTO MESSAGE		I%SWTO
+			ADD ROUTINE TO SEND TO ORION		I%SOPR
+			ADD ROUTINE TO PUT TEXT IN MESSAGE	I%WTO
+			MODIFY STOPCODE PROCESSOR TO ISSUE WTO ALSO
+
+\   ;End of Revision History
+SUBTTL	Accumulator Definitions
+
+;THE FOLLOWING ACCUMULATOR DEFINITIONS ARE STANDARD THROUGHOUT THE
+;	SUB-SYSTEMS GROUP AND MAY NOT BE CHANGED.  THE ACCUMULATORS DEFINED ARE:
+
+	TF==0			;TRUE/FALSE REGISTER, NEVER REFERENCED DIRECTLY
+				; USED BY $RETx AND JUMPT,JUMPF, SKIPT,SKIPF
+
+	S1==1			;S1 & S2 ARE ARGUMENTS TO ROUTINES
+	S2==2			;AND ARE OTHERWISE SCRATCH
+
+	T1==3			;T1 - T4 ARE TEMPORARY REGS
+	T2==4
+	T3==5
+	T4==6
+
+	P1==7			;P1 - P4 ARE PRESERVED REGS
+	P2==10
+	P3==11
+	P4==12
+
+	P==17			;PUSHDOWN POINTER
+
+;THERE ARE COMMON ROUTINES IN THE GLXCOM MODULE TO SAVE/RESTORE THE
+;	"T" REGS AND THE "P" REGS AS WELL AS OTHER USEFUL THINGS, THE READER
+;	IS DIRECTED TO THAT MODULE.
+
+;AC'S 13,14,15, & 16 ARE AVAILABLE TO THE COMPONENT AND MAY BE USED
+;	TO ANY END.  COMMON CO-ROUTINES .SV13, .SV14, ETC... ARE INCLUDED
+;	IN GLXCOM AND THE APPROPRIATE SAVE MACRO IS DEFINED HERE.
+SUBTTL PROLOG - Uniform assembly set up
+
+;The PROLOG macro is used to uniformly search all the right UNV files
+;	and setup the listing format and STOP CODE controls.
+
+; The call is :		PROLOG(xxxxxx,OTSCOD)
+;	where the 'xxxxxx' represents the module name,
+;	and OTSCOD (optional) indicates that this module is part
+;	of the GALAXY object time system.  If present, this code
+;	should be the module name with the "GLX" taken off, for instance
+;	PROLOG(GLXIPC,IPC) would be the prolog for module "GLXIPC".
+
+	DEFINE 	PROLOG(MODULE,OTSCOD)<
+	  SALL
+	  XLIST
+	  INTERN %%.GLX			;;LET LINK CHECK FOR SKEW
+	  SEARCH MACTEN			;;LOAD SYSTEM MACROS (TXnn, etc.)
+	  IFN FTJSYS,<SEARCH MONSYM>	;;LOAD O.S. SYMBOLS
+	  IFN FTUUOS,<SEARCH UUOSYM>	;; FOR PROPER OPERATING SYSTEM
+	  IFB <OTSCOD>,<.REQUEST GLXINI
+			IF2,<IFNDEF I%INIT,<EXTERN I%INIT>>
+			DEFINE $DATA(NAM,SIZ<1>)<
+			  NAM:	BLOCK	SIZ
+			>
+			IF2,<	DEFINE CDO(A),<
+				  IFNB <A>,<IFNDEF A,<  A=ZZ
+						  	SUPPRESS A>>
+				  ZZ==ZZ+1 >
+				ZZ==VORG
+				.XCREF
+			  	LIBVEC
+				.CREF
+			     >>
+	  IFNB <OTSCOD>,<
+			TWOSEG
+			RELOC CORG
+			DEFINE ASSGN.<
+			  .ASSIGN OTSCOD'%D, DLOC, ..TLOC
+			>
+			IF2, < DEFINE CDO(A)<
+				IFNB <A>,<IFNDEF A,< EXTERN A
+						     SUPPRESS A>>
+				>
+				.XCREF
+				LIBVEC
+				.CREF
+				>
+			>
+	  %%.MOD==SIXBIT /MODULE/	;;MAKE MODULE NAME AVAILABLE
+	  LIST				;;TURN LISTINGS BACK ON
+> ;END OF PROLOG DEFINITION
+SUBTTL	SYSPRM - Set system dependent parameters
+
+;THE SYSPRM MACRO IS USED TO DEFINE A SYMBOL WHOSE VALUE IS DIFFERENT
+;	DEPENDING ON THE OPERATING SYSTEM WHICH THE PROGRAM IS
+;	BEING ASSEMBLED FOR.
+;
+;	THE CALL IS:
+;
+;	  SYSPRM   'SUBSYSTEM-NAME' , 'TOPS10 VALUE' , 'TOPS20 VALUE'
+
+
+DEFINE	SYSPRM(SYMBOL,UUOS,JSYS),<
+	IFNB <UUOS>,<IFN FTUUOS,<SYMBOL==UUOS>>
+	IFNB <JSYS>,<IFN FTJSYS,<SYMBOL==JSYS>>
+>  ;END DEFINE SYSPRM
+
+
+
+
+SUBTTL	MIN and MAX - Find minimum or maximum of vector of values
+
+;THE MIN AND MAX MACROS FIND THE MIN OR MAX OF THE ITEMS IN THE FIRST
+;	ARGUMENT LIST.  THE SYMBOL NAMED BY THE SECOND ARGUMENT WILL BE
+;	DEFINED AS THE MIN OR MAX OF THE LIST.  IF THE SECOND ARGUMENT
+;	IS MISSING, "MINSIZ" OR "MAXSIZ" IS DEFINED.
+
+DEFINE	MAX(A,B),<
+	IFB <B>,<MAXSIZ==0
+		IRP A,<IFG <A-MAXSIZ>,<MAXSIZ==A>>>
+	IFNB <B>,<B==0
+		IRP A,<IFG <A-B>,<B==A>>>
+>  ;END OF DEFINE MAX
+
+DEFINE	MIN(A,B),<
+	IFB <B>,<MINSIZ==377777,,777777
+		IRP A,<IFG <MINSIZ-A>,<MINSIZ==A>>>
+	IFNB <B>,<B==377777,,777777
+		IRP A,<IFG <B-A>,<B==A>>>
+>  ;END OF DEFINE MIN
+SUBTTL JUMPx, SKIPx - Test contents of TF
+
+;All subroutines which follow GALAXY conventions return a "success/failure"
+; value in the register TF.  This is done by returning via one of 
+; the return instructions, $RETE, $RETT  or $RETF (See next page).
+;The value of TRUE or FALSE which a routine returns can be tested with one
+;of the following instructions, which alter program flow according to
+; the value currently in TF.
+
+; Jump to location specified if TF contains TRUE
+
+	OPDEF	JUMPT [JUMPL  TF,]
+
+; Jump to location specified if TF contains FALSE
+
+	OPDEF	JUMPF [JUMPE  TF,]
+
+; Skip the next instruction if TF contains TRUE
+
+	OPDEF	SKIPT [SKIPL  TF]
+
+; Skip the next instruction if TF contains FALSE
+
+	OPDEF 	SKIPF [SKIPE  TF]
+SUBTTL $RETT,$RETF,$RETE - Uniform return mechanisms
+
+; 	All routines which follow GALAXY conventions should return
+;  via one of the return instructions. These instructions set the contents
+;  of the true/false register, TF and then return via POPJ P,.
+
+;	If a routine wishes to merely pass on the value of the TF register
+;  to its caller, it can just return via POPJ P,.
+
+
+
+; $RETE is the instruction used to return FALSE from a routine and also
+; set a specific error code in the first status register, S1.  The argument
+; provided to the instruction is a 3 letter GLXLIB canonical error code.
+; The effect of the $RETE instruction is to place the value of the
+; GLXLIB error code into S1, place FALSE into TF and return via POPJ.
+
+	DEFINE $RETE(CODE)<
+	  JSP	TF,.RETE		;;GO TO SUPPORT CODE
+		XLIST			
+	  JUMP	ER'CODE'$		;;NO-OP AND CODE
+		LIST			
+	> ;END OF $RETE DEFINITION
+
+
+
+;$RETT is the instruction used to place a value of TRUE into the TF register
+;  and return from the routine.  This instruction is used when a routine 
+;  wishes to indicate to its caller that it is returning successfully.
+
+	DEFINE	$RETT<
+	  JRST	.RETT			;;GO TO SUPPORT CODE
+		> ;END OF $RETT DEFINITION
+
+
+;$RETF is the instruction used to place a value of FALSE into the TF register
+;  and return from the routine.  This instruction is used when a routine
+;  wishes to indicate to its caller that is returning unsuccessfully.
+
+	DEFINE 	$RETF<
+	  JRST	.RETF			;;GO TO SUPPORT CODE
+		> ;END OF $RETF DEFINITION
+SUBTTL	SAVE - Save unreserved ACs
+
+;THE SAVE MACRO IS USED TO CALL THE CORRECT CO-ROUTINE IN SBSCOM TO
+;	SAVE/RESTORE THE SPECIFIED ACCUMULATOR.  THIS OPERATION IS
+;	THE SAME AS THE STANDARD ".SAVE1" TYPE CALL.
+
+DEFINE	SAVE(AC),<.SAVE.(\AC)>
+
+DEFINE	.SAVE.(AC),<	    PUSHJ P,.SV'AC>
+SUBTTL LIBVEC - Library run-time system entry vector
+
+; Each entry in this macro represents a routine or variable that must
+; be made available to the OTS itself or to programs using the OTS.
+
+; For OTS programs, each entry is declared EXTERNAL if it does not appear
+; in the module itself.  For non-OTS code, the symbols are defined as offsets
+; in the Library Dispatch vector as absolute symbols.  This vector
+; lives in GLXOTS
+
+; Each modules entry points are grouped together. In order to allow for
+;	the addition of new routines for each module, there are blank places
+;	held open.  When a new routine is added, remove one of the blank
+;	occurrences of "CDO".  This will keep the vector straight and allow
+;	the running of older programs without their re-compilation.
+
+	DEFINE LIBVEC <
+
+	  XLIST
+
+	CDO	     			;;GLXCOM
+	CDO	.ZPAGA
+	CDO	.ZPAGN
+	CDO	.ZCHNK
+	CDO	.SAVE1
+	CDO	.SAVE2
+	CDO	.SAVE3
+	CDO	.SAVE4
+	CDO	.SAVET
+	CDO	.SV13
+	CDO	.SV14
+	CDO	.SV15
+	CDO	.SV16
+	CDO	.RETT
+	CDO	.RETF
+	CDO	.RETE
+	CDO	.AOS
+	CDO	.SOS
+	CDO	.ZERO
+	CDO	.POPJ
+	CDO	.STOP
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+
+	CDO				;;GLXIPC
+	CDO	C%RPRM
+	CDO	C%INTR
+	CDO	C%SEND
+	CDO	C%RECV
+	CDO	C%BRCV
+	CDO	C%REL
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+
+	CDO	      			;;GLXFIL
+	CDO	F%IOPN
+	CDO	F%AOPN
+	CDO	F%OOPN
+	CDO	F%IBYT
+	CDO	F%OBYT
+	CDO	F%IBUF
+	CDO	F%OBUF
+	CDO	F%REL
+	CDO	F%DREL
+	CDO	F%RREL
+	CDO	F%REW
+	CDO	F%POS
+	CDO	F%CHKP
+	CDO	F%INFO
+	CDO	F%FD
+	CDO	F%REN
+	CDO	F%DEL
+	CDO	F%FCHN
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+
+	CDO	      			;;GLXMEM
+	CDO	M%ACQP
+	CDO	M%RELP
+	CDO	M%IPSN
+	CDO	M%NXPG
+	CDO	M%IPRC
+	CDO	M%IPRM
+	CDO	M%AQNP
+	CDO	M%RLNP
+	CDO	M%CLNC
+	CDO	M%FPGS
+	CDO	M%GMEM
+	CDO	M%RMEM
+	CDO	AVBPGS
+	CDO	PAGSTA
+	CDO	SWPSTA
+	CDO	PAGTBL
+	CDO	INMEMF
+	CDO	CEND
+	CDO	M%GPAG
+	CDO	M%RPAG
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+
+	CDO	      			;;GLXTXT
+	CDO	T%TEXT
+	CDO	T%TTY
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+
+	CDO	      			;;GLXLNK
+	CDO	L%CLST
+	CDO	L%DLST
+	CDO	L%CENT
+	CDO	L%CBFR
+	CDO	L%DENT
+	CDO	L%NEXT
+	CDO	L%FIRS
+	CDO	L%LAST
+	CDO	L%PREV
+	CDO	L%PREM
+	CDO	L%CURR
+	CDO	L%RENT
+	CDO	L%SIZE
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+
+	CDO	I%INI1			;;GLXINT
+	CDO	I%NOW
+	CDO	I%EXIT
+	CDO	I%ION
+	CDO	I%IOFF
+	CDO	I%SLP
+	CDO	I%INT1
+	CDO	I%INT2
+	CDO	I%INT3
+	CDO	I%IWTO
+	CDO	I%SWTO
+	CDO	I%WTO
+	CDO	I%SOPR
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+
+	CDO				;;GLXSCN
+	CDO
+	CDO
+	CDO
+	CDO	S%CMND
+	CDO	S%TBLK
+	CDO	S%SCMP
+	CDO	S%ERR
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	
+
+	CDO	K%RCOC			;;GLXKBD
+	CDO	K%WCOC
+	CDO	K%SUET
+	CDO	K%STYP
+	CDO	K%TXTI
+	CDO
+	CDO
+	CDO
+	CDO
+	CDO
+	  LIST
+  > ;END OF LIBVEC DEFINITION
+SUBTTL $DATA,$GDATA - Runtime System Data Area control
+
+;This macro is used to define impure storage areas.  The actual
+;areas are created at run-time by the memory manager.  The first argument
+; is the name of the word(s) to be allocated. This name may be referenced
+; as any other labelled location.  The second argument is the number of
+; words to allocate.  If omitted, this defaults to 1.
+
+;In order to facilitate debugging of new library routines, the $DATA and
+;	$GDATA macros produce BLOCK pseudo-op type locations when used
+;	in a module whose PROLOG indicates it is not part of the library.
+; 	This means that a new library module may be loaded with a test program
+;	as a non-library piece of code while it is being debugged.
+
+	DEFINE $DATA(NAM,SIZ)<
+	IF1,< IFNDEF	..TLOC,<..TLOC==0
+				..DCTR==0
+				>
+	NAM=..TLOC
+	IFB <SIZ>,<	..TLOC==..TLOC+1>
+	IFNB <SIZ>,<	..TLOC==..TLOC+SIZ>
+	..DCTR==..DCTR+1
+	> ;END OF IF1
+	IF2,<	..DCTR==..DCTR-1
+		IFE ..DCTR,<	ASSGN.>
+		NAM=DLOC##-<..TLOC-NAM>
+	    >;END OF IF2
+	> ;END OF $DATA DEFINITION
+
+
+; $GDATA is exactly like $DATA, except that the location defined
+;	is GLOBAL, that is, available to other programs.
+
+	DEFINE $GDATA(NAM,SIZ)<
+	  INTERN NAM
+	  $DATA(NAM,<SIZ>)
+	> ;END OF $GDATA DEFINITION
+SUBTTL	Data structure access macros
+
+DEFINE	PG2ADR(AC),<LSH AC,^D9>
+
+DEFINE	ADR2PG(AC),<LSH AC,-^D9>
+
+DEFINE	LOAD(A,B,C),<.LDST.(A,B,C,HRRZ,HLRZ,LDB,MOVE)>
+
+DEFINE	STORE(A,B,C),<.LDST.(A,B,C,HRRM,HRLM,DPB,MOVEM)>
+
+DEFINE	INCR(A,B),<.INDR.(A,B,AOS)>
+
+DEFINE	DECR(A,B),<.INDR.(A,B,SOS)>
+DEFINE	.LDST.(A,B,C,D,E,F,G),<
+	IFNB	<C>,<..T==0
+		IFE	C-777777,<..T==1
+			D	A,B>
+		IFE	C-777777000000,<..T==1
+			E	A,B>
+		IFE	C-777777777777,<..T==1
+			G	A,B>
+		IFE	..T,<F	A,[POINTR(B,C)]>>
+	IFB	<C>,<G	A,B>
+>  ;END OF DEFINE .LDST.
+
+DEFINE	.INDR.(A,B,C),<
+	IFNB	<B>,<..T==0
+		IFE	B-777777,<..T==1
+			C	A>
+		IFE	B-777777777777,<..T==1
+			C	A>
+		IFE	..T,<PUSHJ  P,.'C
+				  XLIST
+			     JUMP  [POINTR(A,B)]
+				  LIST
+			   >>
+	IFB	<B>,<C	A>
+>  ;END OF DEFINE .INDR.
+
+DEFINE	ZERO(A,B),<
+	IFNB	<B>,<..T==0
+		IFE	B-777777,<..T==1
+			HLLZS	A>
+		IFE	B-777777000000,<..T==1
+			HRRZS	A>
+		IFE	B-777777777777,<..T==1
+			SETZM	A>
+		IFE	..T,<PUSHJ  P,.ZERO
+			   	XLIST
+			     JUMP  [POINTR(A,B)]
+			  	LIST
+			>>
+	IFB	<B>,<SETZM	A>
+>  ;END OF DEFINE ZERO
+SUBTTL $BUILD,$SET,$EOB - Build pre-formed data blocks
+
+;Many components have a need to build simple and complex blocks which
+;	contain pre-formatted data, such as FOBs,IBs and other blocks
+;	which are made up of several words, each containing from 1 to several
+;	fields.  Since data structures change, these blocks should not be
+;	just created using EXP or whatever.  These macros will take values
+;	and install them in the right field and word of a structure.
+
+; Start off a structure, argument is the size of the structure.
+
+	DEFINE $BUILD(SIZE)<
+	  IFDEF ..BSIZ,<PRINTX ?Missing $EOB after a $BUILD>
+	  ..BSIZ==0			;;START COUNTER
+	  ..BLOC==.			;;REMEMBER OUR STARTING ADDRESS
+	  REPEAT SIZE,<			;;FOR EACH WORD IN THE BLOCK
+		BLD0.(\..BSIZ,0)	;;ZERO OUT IT'S ACCUMULATOR
+		..BSIZ==..BSIZ+1>	;;AND STEP TO NEXT
+	>;END OF $BUILD DEFINITION
+
+; For each value installed somewhere in the structure, set it into the block
+; 	Arguments are word offset,field in word (optional) and value to set.
+
+	DEFINE $SET(WORD,FIELD,VALUE),<
+	  IFNDEF ..BSIZ,<PRINTX ?$SET without previous $BUILD>
+	  IFGE <<<WORD>&777777>-..BSIZ>,<
+		PRINTX ?WORD offset greater than $BUILD size parameter>
+	  SET0.(\<WORD>,FIELD,<VALUE>)
+	> ;END OF $SET DEFINITION
+
+; After all values are declared, the block must be closed to do its actual
+;	creation.
+
+	DEFINE $EOB,<
+	  IFNDEF ..BSIZ,<PRINTX ?$EOB without previous $BUILD>
+	  IFN <.-..BLOC>,<PRINTX ?Address change between $BUILD and $EOB>
+	  XLIST				;;DON'T SHOW THE BLOCK
+	  ..T==0
+	  REPEAT ..BSIZ,<
+	    BLD0.(\..T,1)		;;STORE EACH WORD
+	    ..T==..T+1 >
+	  PURGE ..BSIZ,..T,..BLOC	;;REMOVE SYMBOLS
+	  LIST
+	>; END OF $EOB DEFINITION
+
+	DEFINE BLD0.(N,WHAT),<
+	  IFE WHAT,<..T'N==0>
+	  IFN WHAT,<EXP ..T'N
+		    PURGE ..T'N>
+	> ;END OF BLD0. DEFINITION
+
+	DEFINE SET0.(WORD,FIELD,VALUE),<
+	  IFB <FIELD>,<..T'WORD==..T'WORD+<VALUE>>
+	  IFNB <FIELD>,<..T'WORD==..T'WORD+<INSVL.(VALUE,FIELD)>>
+	>;END OF SET0. DEFINITION
+SUBTTL	$STOP - Cause a STOP CODE to occur
+
+; The $STOP macro generates a call to the .STOP routine in GLXCOM,
+;	which processes the information imbedded in the $STOP parameter
+;	area.  Modules using the $STOP macro should begin with a PROLOG
+;	to set up the module name symbol %%.MOD or should define this
+;	symbol separately.
+
+
+;For each $STOP there is a unique label made, using the 3 letter
+;	code provided.  The label is 'S..xxx' where the xxx is the 3 letter
+;	code.  This label is declared global, to insure unique STOP
+;	CODE names.
+
+;The macro call is:
+;	$STOP(CODE,STRING)
+
+;WHERE	CODE = A UNIQUE 3 CHARACTER INDICATION OF THE STOP CODE
+;  AND
+;STRING IS AN EXPANDED STRING ASSOCIATED WITH THE ERROR CONDITION
+; I.E.:	$STOP(NFP,No free pages)
+;	WILL EXPAND TO:   PUSHJ	P,.STOP
+;			  JUMP	 [XWD 'NFP',[ASCIZ \No free pages\]
+;				  EXP %%.MOD ]
+
+
+
+DEFINE	$STOP(CODE,STRING),<
+S..'CODE::	PUSHJ	P,.STOP
+		XLIST
+		JUMP [XWD ''CODE'',[ASCIZ \STRING\]
+		  IFDEF %%.MOD,<
+			EXP %%.MOD]>
+		  IFNDEF %%.MOD,<
+			SIXBIT /NONAME/]>
+		 LIST
+>  ;END OF DEFINE $STOP
+SUBTTL $TEXT - Interface to the T%TEXT routine
+
+; The $TEXT macro is used to do all formatted ASCII output involving
+;	strings and/or variables.  The macro takes two arguments.
+;	The first argument is the address of a routine to call when T%TEXT
+;	actually has a single right justified 7 bit ASCII character to output
+;	from its arguments.  The specified routine will be called with the
+;	character in S1 and should return TRUE or FALSE in S1.  A value of
+;	FALSE will cause a STOP CODE to occur.
+;	If the first argument is null, i.e. left blank, then a default
+;	routine will be called, specified at initialization.
+;	If the first argument is <-1,,ADDR>, it is a IDPB style byte pointer
+;	for GLXTXT to store bytes into.
+
+;	The second argument is a text string containing characters to output
+;	and imbedded argument specifiers for substitutable parameters to be
+;	merged with constant data. 
+
+;	If no specifier precedes a string in the second argument, it is
+;	assumed to be straight string data to be passed to the output routine
+;	directly.  On the other hand, substitutable parameters are described
+;	by:	^<QUALIFIER>[OPT. SPACING]/<ADDRESS-OF-VARIABLE>[OPTIONAL <,MASK>]/
+;	Where the qualifier is one of the recognized single letter argument
+;	types (See next page), and the address and optional mask are two 
+;	36 bit quantities, such as might be passed to LOAD/STORE. These 
+;	addresses can contain indexing and/or indirection ,may point to
+;	the accumulators or the stack.
+
+;	Each $TEXT instruction normally ends in a "free" carriage return
+;	line feed sequence. That is, each $TEXT instruction produces one
+;	line of output.  However, through use of the qualifiers 0,A,M,J,K and L,
+;	output can be formatted to produce multiple lines via a single $TEXT
+;	or one line via multiple $TEXTS. ^0 gives a null (0) terminator in place of CRLF.
+
+; NOTE:	The $TEXT macro is a pseudo-instruction, and as such, it may be skipped
+;	over to avoid its execution. Also, all accumulators are guaranteed
+;	preserved .
+
+;	Example:
+;	   $TEXT(PUTCHR,<This is your PPN: ^P/MYPPN/ for today.>)
+;		1. Prints (using the routine PUTCHR for output) the string,
+;		    "This is your PPN: "
+;		2. Prints the contents of location MYPPN as a TOPS-10 PPN.
+;		3. Prints the string " for today."
+;		4. Prints a <CRLF> to produce the end of the line.
+;	Example:
+;	   $TEXT(<-1,,LINBUF>,<File ^D/FB%STS(P1),FBS%FN/ is named ^F/@S1/^A>)
+;		1. Prints the string "File ", depositing chars into the user buffer LINBUF
+;		2. Prints the "loaded" contents of FB%STS(P1),FBS%FN as
+;		    a decimal number
+;		3. Prints the string " is named "
+;		4. Prints the contents of the FD pointed to by AC S1 as
+;		    a file specification.
+;		5. Does not produce a <CRLF> sequence, since the ^A qualifier
+;		    specifies that we supress it.
+;	Optionally, any output field may be right or left justified or
+;	centered.  The information used to do this appears between the
+;	qualifier symbol and the slash which starts the address of the
+;	field to be output.  The justification information consists of
+;	three parts, two of which are optional.  The first piece of the
+;	justification information is the width of the field. This is given
+;	in Radix 10. and can be any number greater than zero.  The second
+;	piece is a one letter code telling the Text processor which type
+;	of justification to use. This can be "L" for left justification,
+;	"R" for right justification or "C" for centering.  If this field
+;	is omitted, the default is right justification for numeric items
+;	(I.E. ^O and ^D), and left justification for all other types.
+;	The third, optional, part is a single character which will be the
+;	character used to do any padding necessary for the justification.
+;	If the character is given, the justification code must be given also.
+;	If the padding character is omitted, it defaults to blanks.
+
+;	Example:
+;	  $TEXT(PUTCHR,<^D10L*/S1/  ^F30/@FILSPC/  ^T40C/FOO(S2)>)
+;		1. Prints the decimal number in S1, in a field of 10. characters.
+;		   The number will be left justified, the remainder of the
+;		   field will be filled with the character "*".
+;		2. After printing one space, the file specification pointed
+;		   to by location FILSPC will be printed in a 30 character
+;		   field.  The justification defaults to left justification,
+;		   and the fill character is a space.
+;		3. After printing another space, the ASCIZ string starting
+;		   at location FOO(S2) will be printed in a 40 character
+;		   field. The resulting output will be centered in the field
+;		   and filled with blanks as necessary.
+;
+;	NOTE: If output overflows a field, then no justification is done.
+;
+; The actual $TEXT macro
+
+DEFINE $TEXT(ROUTINE,STRING,%L1)<
+
+	PUSHJ	P,T%TEXT		;;CALL THE OUTPUT ROUTINE
+	XLIST				;;DONT LIST THIS MESS
+	.XCREF				;;OR CREF IT
+	JRST	%L1			;;SKIP OVER THE ARGUMENTS
+IFNB <ROUTINE>,<
+	EXP	<ROUTINE>		;;ADDR OF ROUTINE OR -1,,ADDR FOR POINTER
+>
+IFB <ROUTINE>,<
+	EXP	0			;;DEFAULT THE OUTPUT ROUTINE
+>
+	FTEXT.(<STRING>)		;;PARSE THE STRING
+	IFN EFLG,<ETEXT.($TEXT,<STRING>)> ;;IF ANY ERRORS, DESCRIBE THEM
+%L1:					;;PLACE LABEL
+	.CREF				;;TURN CREF BACK ON
+	LIST				;;AND LISTING
+> ;END OF $TEXT DEFINTION
+; Define legal qualifers for argument types
+;
+; The first argument is the qualifier, the second is a flag telling
+; the macro that this qualifer takes no arguments.
+
+; Remember to add new qualifiers to the end, in order to keep older
+; programs working.
+
+	DEFINE TQUALS,<
+	XLIST
+	X(T,TXT.A)			;;ASCIZ STRING
+	X(O,TXT.A)			;;UNSIGNED OCTAL NUMBER
+	X(D,TXT.A)			;;DECIMAL NUMBER
+	X(F,TXT.A)			;;FILE SPECIFICATION
+	X(7,TXT.A)			;;ONE RIGHT JUSTIFIED 7 BIT CHARACTER
+	X(6,TXT.A)			;;ONE RIGHT JUSTIFIED 6 BIT CHARACTER
+	X(W,TXT.A)			;;SIXBIT WORD
+	X(5,TXT.A)			;;ASCIZ, ONLY 1 WORD
+	X(P,TXT.A)			;;PPN OR DIRECTORY NUMBER
+	X(U,TXT.A)			;;PPN OR USER NUMBER
+	X(H,TXT.A)			;;UDT TO BE TYPED AS DD-MON-YY HH:MM:SS
+	X(C,TXT.A)			;;TIME FROM UDT TO BE TYPED AS HH:MM:SS
+	X(E,TXT.A)			;;TYPE OUT STRING FOR ERxxx$ ERROR CODE
+	X(I,TXT.A)			;;POINTER TO ITEXT (INDIRECT  TEXT) BLOCK
+	X(M,TXT.NA)			;;TYPE ^M (CARRIAGE RETURN)
+	X(J,TXT.NA)			;;TYPE ^J (LINE-FEED)
+	X(L,TXT.NA)			;;TYPE ^L (FORM FEED)
+	X(K,TXT.NA)			;;TYPE ^K (VERTICAL TAB)
+	X(A,TXT.NA)			;;(APPEND) SUPRESS FREE CARRIAGE RET.-LINE FEED
+	X(0,TXT.NA)			;;NULL CHAR INSTEAD OF CR-LF AT END
+	X(3,TXT.A)			;;INTERNAL STRING (DO NOT USE AS QUALIFIER)
+	X(V,TXT.A)			;;PROGRAM VERSION NUMBER
+	X(2,TXT.NA)			;;INTERNAL UP-ARROW (DO NOT USE AS QUALIFIER)
+	X(Q,TXT.A)			;;BYTE POINTER TO ASCIZ STRING
+	X(B,TXT.A)			;;OBJECT BLOCK
+	X(1,TXT.A)			;;OBJECT TYPE
+	X(N,TXT.A)			;;TYPE A NODE NAME/NUMBER
+	LIST
+> ;END OF TQUALS DEFINITION
+
+	DEFINE	X(A,ARG)<TXTF.'A==<ZZ>B8+ARG
+			ZZ==ZZ+1>
+
+	TXT.A==0B0			;FLAG THAT SAYS TAKES ARGUMENTS
+	TXT.NA==1B0			;FLAG THAT SAYS DOESNT TAKE ARGS
+	TXT.P==1B1			;FLAG THAT SAYS TWO WORD BLOCK NEEDED
+	TXT.S==1B2			;FLAG THAT SAYS WANTS SPACING
+	  TXT.SC==177B6			;MASK TO GET CHARACTER FOR SPACING
+	  TXT.SS==3B17			;MASK TO GET SIDE FOR SPACING
+	    TXT.SL==1			;CODE TO SPACE LEFT
+	    TXT.SR==2			;CODE TO SPACE RIGHT
+	    TXT.SM==3			;CODE TO SPACE MIDDLE (CENTER)
+	  TXT.SP==777777		;MASK TO GET POSITIONS FOR SPACING
+	TXT.M==77B8			;MASK TO QUALIFIER PART
+
+; CREATE THE TXTF SYMBOLS
+	ZZ==1
+	TQUALS
+
+;  Definitions of Macros used by $TEXT
+
+; CLEAR THE TEXT GATHERING MECHANISM
+
+	DEFINE CTEXT.	<
+	DEFINE XTEXT.(OPCODE,NEW)<
+	OPCODE	<<NEW>>>>
+
+; ADD TEXT OR DEFINE IT
+
+	DEFINE	ATEXT.(OLD)<
+	DEFINE	XTEXT.(OPCODE,NEW)<
+	OPCODE	<OLD,<NEW>>>>
+
+; MACRO TO STRIP OFF ONE PAIR OF BRACKETS
+
+	DEFINE	TEXT.(A),<TXT1. (A)>
+
+
+; MACRO TO CREATE THE TWO WORD BLOCK NEEDED FOR LOAD/STORE PAIRS
+
+	DEFINE PTEXT.(A,B)<
+	   OPC A
+	   POINTR(0,B)
+	> ;END OF PTEXT. DEFINITION
+
+
+;; CONTINUED ON NEXT PAGE
+; DUMP ACCUMULATED TEXT INTO WHERE ITS GOING TO BE USED
+
+	DEFINE DTEXT.(TYPE)<
+	IFN TFLG,<
+DEFINE TXT1.(A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,ZZ,A1,B1,C1,D1,E1)<
+TYPE+[ASCIZ\A'B'C'D'E'F'G'H'I'J'K'L'M'N'O'P'Q'R'S'T'U'V'W'X'Y'ZZ'A1'B1'C1'D1'E1\]
+>>
+IFE TFLG,<
+DEFINE TXT1.(A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,ZZ,A1,B1,C1,D1,E1)<
+	IFE ZFLG,<
+	OPDEF OPC [TYPE]
+OPC A'B'C'D'E'F'G'H'I'J'K'L'M'N'O'P'Q'R'S'T'U'V'W'X'Y'ZZ'A1'B1'C1'D1'E1
+	>
+	IFN ZFLG,<
+	OPDEF OPC [ZFLG+TYPE]
+PTEXT.(A'B'C'D'E'F'G'H'I'J'K'L'M'N'O'P'Q'R'S'T'U'V'W'X'Y'ZZ'A1'B1'C1'D1'E1)
+	>
+>>
+
+IFE TYPE&TXT.NA,<
+	  .CREF
+	XTEXT. TEXT.
+	  .XCREF
+		>
+IFN TYPE&TXT.NA,<
+	EXP TYPE
+		>
+
+IFN TYPE&TXT.S,<
+	IFE SCHAR,<SCHAR==" ">
+	IFE SSIDE,< IFE TXTF.D-<TYPE&TXT.M>,< SSIDE==TXT.SR>>
+	IFE SSIDE,< IFE TXTF.O-<TYPE&TXT.M>,< SSIDE==TXT.SR>>
+	IFE SSIDE,< SSIDE==TXT.SL>
+	EXP <<INSVL.(SCHAR,TXT.SC)>+<INSVL.(SSIDE,TXT.SS)>+<INSVL.(SWIDTH,TXT.SP)>>
+	SSIDE==0
+	SWIDTH==0
+	SCHAR==0
+>
+	CTEXT.
+	TFLG==0
+	ZFLG==0
+	PURGE OPC
+	> ;END OF DTEXT. DEFINITION
+;  DO ERROR PROCESSING IF AN ERROR IS DETECTED DURING ASSEMBLY
+
+	DEFINE ETEXT.(NAME,STRING)<
+IF1,<
+	IFN EFLG&1,<PRINTX ?Uknown qualifier in NAME call of STRING
+		     PRINTX
+>
+	IFN EFLG&2,<PRINTX ?Bad spacing specification in NAME call of STRING
+		     PRINTX
+>
+	IFN EFLG&4,<PRINTX ?Premature end of text in NAME call of STRING
+		     PRINTX
+>
+	IFN EFLG&10,<PRINTX ?Bad address in NAME call of STRING
+		     PRINTX
+>
+	IFN EFLG&20,<PRINTX ?Variable address too long in NAME call of STRING
+		     PRINTX
+>
+	IFN EFLG&40,<PRINTX ?Spacing on I qualifier in NAME call of STRING
+		     PRINTX
+>
+> ;END OF IF1
+> ;END OF ETEXT. DEFINITION
+
+
+
+; ALLOW A T%TEXT ARGUMENT BLOCK TO BE BUILT OUTSIDE OF THE $TEXT
+;  CALL. THIS IS USED FOR THE "I" QUALIFIER, WHERE THE ADDRESS
+;  SPECIFIED IS THAT OF A T%TEXT ARGUMENT BLOCK, BUILT BY THIS MACRO.
+; THIS ALLOWS MORE COMPLEX STRINGS THAN ^T TYPE STRINGS TO BE INCLUDED
+; IN $TEXT INSTRUCTIONS.
+
+; THE SINGLE ARGUMENT IS A $TEXT TYPE STRING, ENCLOSED IN A <> PAIR.
+
+	DEFINE	ITEXT(STRING)<
+	XLIST				;;TURN OFF LISTINGS
+	.XCREF				;;AND KEEP OUT OF CREF
+	FTEXT.(<STRING>)		;;PARSE THE ARGUMENT STRING
+	IFN EFLG,< ETEXT.(ITEXT,<STRING>)> ;IF ERROR, DESCRIBE IT
+	EXP	0			;;STORE NULL WORD AS TERMINATOR
+	.CREF				;;TURN CREFFING BACK ON
+	LIST				;;AND LISTING
+  > ;END OF ITEXT DEFINITION
+; THE ACTUAL PARSE MACRO USED TO BREAK UP THE STRING
+;	NOTE: THE MACRO IS MADE AS SMALL AS POSSIBLE TO CONSERVE SPACE AND
+;	      MAKE IT FASTER.
+
+DEFINE FTEXT.($A),<
+	TFLG==0	;;NOT ACCUMULATING TEXT
+	AFLG==0	;;NOT ACCUMULATING ARGUMENT ADDRESS
+	SFLG==0	;;NOT LOOKING FOR QUALIFIER
+	IFLG==0	;;CLEAR SLASH/INGORE FLAG
+	ZFLG==0	;;CLEAR TWO PART ADDRESS FLAG
+	EFLG==0
+	SCHAR==0;;CLEAR CHARACTER
+	SWIDTH==0;;AND SPACING
+	SSIDE==0;;AND THE SIDE TO SPACE ON
+	CTEXT.
+
+IRPC $A,<	;;MAIN LOOP, REPEAT FOR EACH CHARACTER
+    IFN SFLG,<	;;IS QUALIFER EXPECTED?
+	FTEX1.(<$A>)	;;YES, CALL QUALIFER PARSER
+>		;;END OF IFN SFLG
+IFE SFLG+AFLG+IFLG,<	;;IF NO QUALIFER,OR ADDRESS OR IGNORING	
+IFIDN <$A>,<^>,<	;;LOOK FOR QUALIFIER
+IFN TFLG,<DTEXT.(TXTF.3)>;;FOUND IT, DUMP ANY TEXT SO FAR
+SFLG==1	;;AND LOOK FOR QUALIFER NEXT TIME
+>	;;END OF IFIDN FOR CARET
+IFE SFLG,<	;;UNLESS JUST FOUND QUALIFIER,
+IFE ^D29-TFLG,<;;CHECK FOR TEXT OVERFLOW
+DTEXT.(TXTF.3);;SO WE DONT LOSE IT
+>	;;END OF IFE
+TFLG==TFLG+1	;;COUNT ADDED CHARACTER
+XTEXT. ATEXT.,<$A>	;;ADD THE CHARACTER
+>	;;END OF IFE SFLG
+>	;;END OF IFE SFLG+AFLG+IFLG
+IFE SFLG+IFLG+TFLG,<	;;IF NOT QUAL. NEXT, IGNORE OR DOING TEXT
+FTEX2.(<$A>)	;;PROCESS ADDRESS BUILDING
+>	;;END OF IFE SFLG+IFLG+TFLG
+IFN IFLG,<;;IGNORE FLAG LIT, SEE WHY
+FTEX3.(<$A>)	;;IN SLASH PROCESSOR
+>	;;END OF IFN IFLG
+>;;END OF IRPC
+IFN TFLG,<DTEXT.(TXTF.3)>;;AT THE END, DUMP ANY LEFT OVER TEXT
+IFN AFLG+SFLG+IFLG,<EFLG==EFLG!4>;;MAKE SURE WE WERE NOT LEFT HANGING
+	> ;END FTEXT. DEFINTION
+; THESE "SUBROUTINE" MACROS ARE USED TO PROCESS INFREQUENT OCCURENCES
+;	IN THE STRING PASSED TO THE FTEXT. MACRO.  PUTTING THEM HERE,
+;	RATHER THAN IN THE MAIN FTEXT. MACRO MAKES ASSEMBLY FASTER.
+
+DEFINE FTEX1.($A)<			;;PROCESS QUALIFIER SYMBOL
+        SFLG==0				;;CLEAR QUALIFER EXPECTED
+	STYP==0				;;CLEAR QUALIFER
+	IFIDN <$A><^>,<STYP==TXTF.2>	;;FAKE THE ^^ QUALIFER TO BE 2
+	IFE STYP,<IFDEF TXTF.'$A,<STYP==TXTF.'$A>>;;IF LEGAL SET TYPE
+	IFE STYP,<EFLG==EFLG!1>		;;ELSE SET "ILLEGAL QUALIFER"
+	IFN STYP&TXT.NA,<		;;IF THIS QUALIFER HAS NO ARGUMENTS
+	     DTEXT.(STYP)		;;THEN DUMP THE QUALIFER NUMBER AND FLAGS NOW
+	     IFLG==3			;;AND SET TO IGNORE REST OF PASS
+			>	 	;;END OF IFN STYP&TXT.NA
+	IFE STYP&TXT.NA,<		;;IF THERE IS AN ARGUMENT,
+	    IFLG==1			;;IGNORE THIS PASS, GET SLASH NEXT TIME
+	    AFLG==1			;;AND START ACCUMULATING ADDRESS OF ARG
+	    SWIDTH==0			;;CLEAR SPACING WIDTH
+			>	 	;;END OF IFE STYP&TXT.NA
+	ZFLG==0				;;IN ANY CASE, CLEAR 2-PART ADDR FLAG
+ >;END OF FTEX1. DEFINITION
+
+
+
+DEFINE FTEX2.($A)<			;;PROCESS ARG ADDRESS
+	IFIDN <$A></>,<			;;ARE WE AT END?
+	    AFLG==0			;;YES, SO CLEAR ACCUMULATING ADDRESS FLAG
+	    IFLG==3			;;IGNORE THE SLASH
+	    DTEXT.(STYP)		;;AND DUMP THE WHOLE ^X/FOO/ THING
+		  >          		;;END OF IFIDN
+	IFN AFLG,<			;;OTHER WISE, JUST ACCUMULATE ADDRESS
+	    XTEXT. ATEXT.,<$A>
+	    AFLG==AFLG+1		;;TRACK LETTERS IN ADDRESS
+	    IFE AFLG-^D31,<EFLG==EFLG!20> ;;IF TOO LONG, COMPLAIN
+	    IFIDN <$A><,>,<		;;DO WE HAVE A COMMA? (2 PART ADDR)
+		IFN ZFLG,<EFLG==EFLG!10> ;;DONT ALLOW TWICE
+		ZFLG==TXT.P
+			  >		;;END OF IFIDN ,COMMA
+		  >			;;END OF IFN AFLG
+ > ;END OF FTEX2. DEFINTION
+
+
+DEFINE FTEX3.($A)<			;;PROCESS SPECIAL SLASH REQUEST
+
+	IFE IFLG-3, <			;;VALUE OF 3 SAYS JUST TURN IT OFF
+	    IFLG==0			;; GIVES A WAY TO FLUSH THE PASS
+		    >			;;END IFE IFLG-3
+	IFE IFLG-2,<			;;VALUE=2 MEANS 
+	    IFLG==0			;;TURN IT OFF
+	    IFDIF<$A></>,<FTEX4.(<$A>)>	;;CHECK FOR SLASH, IF NOT THERE CHECK IT
+		  >			;;END OF IFE IFLG-2
+	IFE IFLG-1,<			;;VALUE=2 MEANS, IGNORE THIS PASS BUT
+	    IFLG==2			;;ON NEXT, CHECK FOR SLASH
+		  >	 		;;END OF IFE IFLG-2
+ >;END OF FTEX3. DEFINITION
+
+
+DEFINE FTEX4.($A)<			;;PROCESS SPACING SPECIFICATIONS
+    EFLG==EFLG!2			;;ASSUME AN ERROR
+     IFE SSIDE,<			;;IF HAVE NOT SEEN SIDE YET,
+    IFLE "0"-"$A",<			;;IF NUMERIC
+	IFGE "9"-"$A",<SWIDTH==SWIDTH*^D10+^D'$A ;;ACCUMULATE SPACING
+		   IFE STYP-TXTF.I<EFLG==EFLG!40> ;;DON'T ALLOW ON INDIRECT
+		   STYP==STYP!TXT.S	;;INDICATE SPACING WANTED
+		   EFLG==EFLG&<^-2>	;;CLEAR ERROR FLAG
+		 >			;;END OF IFGE 9
+		  >			;;END OF IGLE 0
+	>				;;END OF IFE SSIDE
+    IFIDN <$A><R>,< 			;;IF ITS AN R,
+	   IFN SWIDTH,<			;;AND WE HAVE SEEN A WIDTH
+		SSIDE==TXT.SR		;;SET TO THE RIGHT
+		EFLG==EFLG&<^-2>	;;CLEAR ERROR FLAG
+		       >		;;END OF IFN SWIDTH
+		    >			;;END OF IFIDN R
+    IFIDN <$A><L>,< 			;;IF ITS AN L,
+	   IFN SWIDTH,<			;;AND WE HAVE SEEN A WIDTH
+		SSIDE==TXT.SL		;;SET TO THE LEFT
+		EFLG==EFLG&<^-2>	;;CLEAR ERROR FLAG
+		       >		;;END OF IFN SWIDTH
+		    >			;;END OF IFIDN L
+    IFIDN <$A><C>,< 			;;IF ITS AN C,
+	   IFN SWIDTH,<			;;AND WE HAVE SEEN A WIDTH
+		SSIDE==TXT.SM		;;SET TO THE MIDDLE
+		EFLG==EFLG&<^-2>	;;CLEAR ERROR FLAG
+		       >		;;END OF IFN SWIDTH
+		    >			;;END OF IFIDN C
+    IFN SWIDTH, <			;;IF WE HAVE A WIDTH,
+	IFN SSIDE,<			;;AND A SIDE,
+	 IFN EFLG&2,<			;;AND NOTHING THIS PASS,
+	   IFE SCHAR,< SCHAR=="$A"	;;BUT NOT A CHAR, SET IT UP NOW
+			EFLG==EFLG&<^-2>;;CLEAR ERROR
+		     >			;;END OF IFE SCHAR
+		  >			;;END OF IFN EFLG
+		  >			;;END OF IFN SSIDE
+		 >			;;END OF IFN SWIDTH
+    IFE EFLG&2,< IFLG==2>		;;IF NO ERRORS, STILL LOOK FOR SLASH
+  > ;END OF FTEX4. DEFINITION
+SUBTTL GALAXY system error codes
+
+DEFINE ERRORS,<
+	ERR	EOF,<End Of File>
+	ERR	IFP,<Illegal file position>
+	ERR	FDE,<File Data Error>
+	ERR	FND,<File is not on disk>
+	ERR	NSD,<No such device>
+	ERR	FCF,<File checkpoint failed>
+	ERR	SLE,<A System Limit Was Exceeded>
+	ERR	IFS,<Illegal File Specification>
+	ERR	FNF,<File Not Found>
+	ERR	PRT,<Protection Violation>
+	ERR	DNA,<Device Was Not Available>
+	ERR	NCE,<No "current" entry in list>
+	ERR	NMA,<No IPCF message is available>
+	ERR	FDS,<Files are on different structures>
+	ERR	FAE,<File already exists>
+	ERR	USE,<Unexpected System Error>
+	ERR	NSP,<No Such Pid>
+	ERR	BOL,<Beginning of list reached>
+	ERR	EOL,<End of list reached>
+	ERR	RQF,<Receiver's quota full>
+	ERR	SQF,<Sender's quota full>
+	ERR	NRE,<No Remembered Entry>
+>  ;END DEFINE ERRORS
+
+;GENERATE THE ERROR SYMBOLS
+
+	ER%%%==1			;DON'T USE ERROR CODE 0
+DEFINE ERR(A,B),<
+	ER'A'$==ER%%%
+	ER%%%==ER%%%+1
+>  ;END DEFINE ERR
+
+	ERRORS
+SUBTTL Canonical File Information
+
+;In order to bring the number of feature test switches needed to the
+;absolute minimum, the GLXFIL (file handler) module makes information
+;about open files available through the F%INFO routine call.  The
+;particular piece of information desired is designated by providing
+;a canonical descriptor for that piece of information.
+
+;These FI.xxx symbols, defined here, are the F%INFO descriptors
+
+	DEFINE CFI<
+	
+	  XLIST
+
+	X CRE	;;UDT FORMAT CREATION DATE/TIME OF FILE
+	X GEN	;;VERSION/GENERATION NUMBER OF FILE
+	X PRT	;;PROTECTION OF THE FILE
+	X CLS	;;CLASS OF FILE (TOPS-20) ONLY
+	X AUT	;;AUTHOR OF THE FILE
+	X USW	;;USER SETTABLE WORD
+	X SPL	;;SPOOL WORD (TOPS-10) 
+	X SIZ   ;;SIZE OF FILE, IN BYTES
+	X MOD	;;DATA MODE
+
+	  LIST
+
+	> ;END OF CFI DEFINITION
+
+;CREATE THE SYMBOLS
+
+	FI.%%%==0
+
+	DEFINE X(A)<
+	FI.'A==FI.%%%
+	FI.%%%==FI.%%%+1
+	>
+
+	CFI
+SUBTTL Scanning and Command Module Symbols
+
+; The following TOPS-20 symbols are defined when building a TOPS-10 library
+;	so that the emulation routines provided for scanning and command
+;	parsing can use the same symbols on both systems.
+
+IFN FTUUOS,<				;ALREADY DEFINED ON THE -20
+
+; RDTTY flags and argument offsets
+
+	.RDCWB==0			;COUNT OF WORDS FOLLOWING
+	.RDFLG==1			;FLAG BITS
+	  RD%BRK==1B0			;  BREAK ON ^Z OR ESC
+	  RD%TOP==1B1			;  BREAK ON TOPS-10 BREAK SET
+	  RD%PUN==1B2			;  BREAK ON PUNCTUATION
+	  RD%BEL==1B3			;  BREAK ON EOL
+	  RD%CRF==1B4			;  EAT CARRIAGE RETURNS
+	  RD%RND==1B5			;  RETURN IF EDITED TO BEGINNING
+	  RD%JFN==1B6			;  IFN RATHER THAN STRING PTR
+	  RD%RIE==1B7			;  NON-BLOCKING, I.E. RETURN IF EMPTY
+	  RD%BBG==1B8			;  PTR TO DEST BUFFER IS IN .RDBFP
+	  RD%RAI==1B10			;  CONVERT LOWER TO UPPER CASE
+	  RD%SUI==1B11			;  SUPRESS ^U (RUBOUT LINE) HANDLING
+
+	  RD%BTM==1B12			;  INPUT ENDED ON A BREAK
+	  RD%BFE==1B13			;  USER DELETED TO BEGINNING
+	  RD%BLR==1B14			;  BACKUP LIMIT REACHED
+
+	  RD%NEC==1B35			;  NO ECHO ON ANYTHING (TOPS-10)
+
+	.RDIOJ==2			;INPUT AND OUTPUT IFNS OR STRING POINTER
+	.RDDBP==3			;DESTINATION BYTE POINTER
+	.RDDBC==4			;NUMBER OF BYTES LEFT AFTER POINTER
+	.RDBFP==5			;BEGINNING BYTE POINTER
+	.RDRTY==6			;RE-TYPE PROMPT POINTER
+	.RDBRK==7			;LOCATION OF 4 WORD BREAK SET TABLE
+	.RDBKL==10			;REAL (ARBITRARY) BACKUP LIMIT
+	  .RDSIZ==.RDBKL+1		;SIZE OF ARGUMENT BLOCK
+
+;	TERMINAL TYPE CODES
+
+	ND	.TT33,0
+	ND	.TT35,1
+	ND	.TT37,2
+	ND	.TTEXE,3
+	ND	.TTV05,10
+	ND	.TTV50,11
+	ND	.TTL30,12
+	ND	.TTL36,14
+	ND	.TTV52,15
+
+
+;; STILL UNDER FTUUOS CONDITIONAL
+; COMMAND SCANNING (S%CMND) INTERFACE
+
+;FORMAT OF COMND STATE BLOCK:
+
+	.CMFLG==:0			;USER FLAGS,,REPARSE DISPATCH ADDRESS
+	.CMIOJ==:1			;INJFN,,OUTJFN
+	.CMRTY==:2			;^R BUFFER POINTER
+	.CMBFP==:3			;PTR TO TOP OF BUFFER
+	.CMPTR==:4			;PTR TO NEXT INPUT TO BE PARSED
+	.CMCNT==:5			;COUNT OF SPACE LEFT IN BUFFER AFTER PTR
+	.CMINC==:6			;COUNT OF CHARACTERS FOLLOWING PTR
+	.CMABP==:7			;ATOM BUFFER POINTER
+	.CMABC==:10			;ATOM BUFFER SIZE
+	.CMGJB==:11			;ADR OF GTJFN ARG BLOCK
+	 CM%GJB==:777777		;ADR OF GTJFN ARG BLOCK
+
+;FUNCTION DESCRIPTOR BLOCK
+
+	.CMFNP==:0			;FUNCTION AND POINTER
+	   CM%FNC==:777B8		;FUNCTION CODE
+	   CM%FFL==:777B17		;FUNCTION-SPECIFIC FLAGS
+	   CM%LST==:777777		;LIST POINTER
+	.CMDAT==:1			;DATA FOR FUNCTION
+	.CMHLP==:2			;HELP TEXT POINTER
+	.CMDEF==:3			;DEFAULT STRING POINTER
+
+; FUNCTION CODES
+;Note: The following function code symbols must agree with analogous
+;definitions found in MONSYM.
+
+	.CMKEY==0			;KEYWORD
+	.CMNUM==1			;NUMBER
+	.CMNOI==2			;NOISE WORD
+	.CMSWI==3			;SWITCH
+	.CMIFI==4			;INPUT FILE
+	.CMOFI==5			;OUTPUT FILE
+	.CMFIL==6			;GENERAL FILESPEC
+	.CMFLD==7			;ARBITRARY FIELD
+	.CMCFM==10			;CONFIRM
+	.CMDIR==11			;DIRECTORY NAME (PPN)
+	.CMUSR==12			;USER NAME (PPN)
+	.CMCMA==13			;COMMA
+	.CMINI==14			;INITIALIZE COMMAND
+					;.CMFLT IS NOT PROVIDED
+	.CMDEV==16			;DEVICE NAME
+	.CMTXT==17			;TEXT
+					;.CMTAD IS NOT PROVIDED
+	.CMQST==21			;QUOTED STRING
+	.CMUQS==22			;UNQUOTED STRING
+	.CMTOK==23			;TOKEN
+	.CMNUX==24			;NUMBER DELIMITED BY NON-DIGIT
+	.CMACT==25			;ACCOUNT
+	.CMNOD==26			;NODE
+
+
+; COMMAND REPLY
+	CR.FLG==0			;OFFSET TO FLAG WORD
+	CR.RES==1			;OFFSET TO RESULT WORD
+	CR.FNB==2			;OFFSET TO FUNCTION BLOCK ADDRESS
+	  CR.SIZ==CR.FNB+1		;SIZE OF COMMAND REPLY BLOCK
+
+;; STILL UNDER FTUUOS CONDITIONAL
+;FLAGS
+
+CM%ESC==:1B0				;ESC SEEN
+CM%NOP==:1B1				;NO PARSE
+CM%EOC==:1B2				;END OF COMMAND SEEN
+CM%RPT==:1B3				;REPEAT PARSE NEEDED
+CM%SWT==:1B4				;SWITCH TERMINATED WITH ":"
+CM%PFE==:1B5				;PREVIOUS FIELD ENDED WITH ESC
+CM%RAI==:1B6				;RAISE INPUT
+CM%XIF==:1B7				;NO INDIRECT FILES
+
+CM%WKF==:1B8				;WAKEUP AFTER EACH FIELD
+CM%NJF==:1B13			;.CMIOJ CONTAINS A BYTE POINTER, NOT A JFN
+CM%PO==:1B14			;PARSE ONLY FLAG
+CM%HPP==:1B15				;HELP PTR PRESENT
+CM%DPP==:1B16				;DEFAULT PTR PRESENT
+CM%SDH==:1B17				;SUPPRESS DEFAULT HELP MESSAGE
+
+;FLAGS FOR CMSWI FUNCTION
+
+CM%VRQ==:1B0				;VALUE REQUIRED
+
+;FLAGS IN KEYWORD TABLE (FIRST WORD OF STRING IF B0-6 = 0)
+
+CM%INV==:1B35				;INVISIBLE
+CM%NOR==:1B34				;NO-RECOGNIZE (PLACE HOLDER)
+CM%ABR==:1B33				;ABBREVIATION
+CM%FW==:1B7				;FLAG WORD (ALWAYS SET)
+
+
+; STRING COMPARE (S%SCMP) FLAGS
+
+	SC%LSS==1B0			;TEST STRING LESS THAN BASE STRING
+	SC%SUB==1B1			;TEST STRING SUBSET OF BASE STRING
+	SC%GTR==1B2			;TEST STRING GREATER THAN BASE STRING
+					;(IF NONE, EXACT MATCH IS RESULT)
+
+; TABLE LOOK UP (S%TBLK) FLAGS
+
+	TL%NOM==1B0			;NO MATCH
+	TL%AMB==1B1			;AMBIGUOUS
+	TL%ABR==1B2			;UNIQUE ABBREVIATION
+	TL%EXM==1B3			;EXACT MATCH
+
+ > ;END OF FTUUOS
+SUBTTL	THE MESSAGE HEADER
+
+;Among GALAXY programs, there is a common message header format
+;	so that communication and error checking is easier.  There are
+;	also some common function codes (currently only TEXT) which are
+;	defined across program lines.   The specific data (if any) associated
+;	with each message type follows the standard header. Note also
+;	that MESSAGE LENGTH includes the header itself.
+
+;	!=======================================================!
+;	!      Message Length       !       Message Type        !
+;	!-------------------------------------------------------!
+;	!ACK!NOM!FAT!WRN!MOR!       !       Sixbit Suffix       !
+;	!-------------------------------------------------------!
+;	!                 Acknowledgement code                  !
+;	!=======================================================!
+
+	PHASE	0
+
+.MSTYP:!	BLOCK	1
+	MS.CNT==-1,,0			;MESSAGE LENGTH
+	MS.TYP==0,,-1			;MESSAGE TYPE
+	  MT.OFF==700000		;OFFSET TO THE COMMON CODES
+	  MT.TXT==700000		;TEXT MESSAGE
+.MSFLG:!BLOCK	1			;FLAGS WORD
+	MF.ACK==1B0			;ACKNOWLEDGEMENT REQUESTED
+	MF.NOM==1B1			;NO MESSAGE, JUST AN ACK
+	MF.FAT==1B2			;FATAL MESSAGE
+	MF.WRN==1B3			;WARNING MESSAGE
+	MF.MOR==1B4			;MORE MESSAGE FOLLOWS
+	MF.SUF==777777			;SUFFIX FOR TEXT MESSAGE
+.MSCOD:!BLOCK	1			;USER SUPPLIED CODE USED FOR ACK'ING
+MSHSIZ:!				;LENGTH OF MESSAGE
+.MSDAT:!BLOCK	0			;START OF MESSAGE CONTENTS
+	DEPHASE
+SUBTTL	OBJ - Object Descriptor
+
+; Various programs must use a device/object designator which fully
+; describes a an entity as to its type,unit number and node.  The canonical
+; object descriptor is used for this purpose
+
+
+;	The object/device designator:
+
+;	!=======================================================!
+;	!              Object type descriptor code              !
+;	!-------------------------------------------------------!
+;	!   Low Bound unit number   !  High Bound unit number   !
+;	!-------------------------------------------------------!
+;	!                  Node name in SIXBIT                  !
+;	!=======================================================!
+
+
+		PHASE	0
+
+OBJ.TY:!	BLOCK	1		;OBJECT TYPE CODE WORD
+	.OTRDR==1			;TYPE	READER
+	.OTNCU==2			;TYPE	NETWORK CONTROLLER
+	.OTLPT==3			;TYPE	PRINTER
+	.OTBAT==4			;TYPE	BATCH CONTROLLER
+	.OTCDP==5			;TYPE	CARD PUNCH
+	.OTPTP==6			;TYPE	PAPER TAPE PUNCH
+	.OTPLT==7			;TYPE	PLOTTER
+	.OTTRM==10			;TYPE	TERMINAL
+	.OTJOB==11			;TYPE	JOB (T/S)
+OBJ.UN:!	BLOCK	1		;UNIT NUMBER WORD
+	OU.HRG==-1,,0			;MASK FOR HIGH RANGE OF UNIT
+	OU.LRG==0,,-1			;MASK FOR LOW RANGE OF UNIT
+					;HRG=0 MEANS ONLY ONE ITEM
+					;HRG=-1MEANS UP TO HIGHEST EXISTING
+OBJ.ND:!	BLOCK	1		;NODE NAME, KEPT IN SIXBIT
+OBJ.SZ:!				;SIZE OF THE OBJECT DESIGNATOR
+
+		DEPHASE
+SUBTTL	OBJCTS MACRO
+
+;THIS MACRO ASSOCIATES ALL LEGAL OBJECT CODES (SEE OBJECT DESCRIPTOR
+; DEFINITION) WITH A TEXT STRING FOR THE OBJECT TYPE
+
+
+	DEFINE OBJCTS,<
+	XLIST
+	X(.OTRDR,Reader)
+	X(.OTNCU,NETCON)
+	X(.OTLPT,Printer)
+	X(.OTBAT,Batch-stream)
+	X(.OTCDP,Card-punch)
+	X(.OTPTP,Papertape-punch)
+	X(.OTPLT,Plotter)
+	X(.OTJOB,Job)
+	X(.OTTRM,Terminal)
+	LIST
+> ;END OF OBJCTS DEFINITION
+SUBTTL	FD - File Descriptor
+
+; The FD (File Descriptor) is the data structure used to pass a system
+;	dependent file description to subroutines or as part of a larger
+;	message or data structure.
+
+
+	PHASE	0
+
+.FDLEN:! BLOCK	1			;LENGTH WORD
+	FD.LEN==0,,-1			;MASK TO LENGTH FIELD
+.FDFIL:!				;FIRST WORD OF FILESPECIFICATION
+
+	DEPHASE
+
+IFN FTUUOS,<	;FILE DESCRIPTOR FOR TOPS10
+
+;	!=======================================================!
+;	!             STRUCTURE CONTAINING THE FILE             !
+;	!-------------------------------------------------------!
+;	!                       FILE NAME                       !
+;	!-------------------------------------------------------!
+;	!                       EXTENSION                       !
+;	!-------------------------------------------------------!
+;	!                        [P,PN]                         !
+;	!=======================================================!
+;	!                                                       !
+;	!                 SFD PATH FOR THE FILE                 !
+;	!               THESE WORDS ARE OPTIONAL                !
+;	!             AND CAN BE OF LENGTH  0 TO 5              !
+;	!                                                       !
+;	!=======================================================!
+
+	PHASE	.FDFIL
+
+.FDSTR:! BLOCK	1		;STRUCTURE CONTAINING THE FILE
+.FDNAM:! BLOCK	1		;THE FILE NAME
+.FDEXT:! BLOCK	1		;THE EXTENSION
+.FDPPN:! BLOCK	1		;THE OWNER OF THE FILE
+FDMSIZ:!			;MINUMUM SIZE OF A FILE DESCRIPTOR
+
+.FDPAT:! BLOCK	5		;PATH (OPTIONAL AND FROM 0 TO 5 WORDS)
+FDXSIZ:!			;MAXIMUM FD AREA SIZE
+
+	DEPHASE
+
+>  ;END OF IFN FTUUOS
+
+					;CONTINUED ON FOLLOWING PAGE
+IFN FTJSYS,<		;FILE DESCRIPTOR FOR TOPS20
+
+;	!=======================================================!
+;	/                                                       /
+;	/                                                       /
+;	/   THE FILE DESCRIPTOR ON TOPS20 IS AN ASCIZ STRING    /
+;	/      OF VARIABLE LENGTH AND READY TO BE GTJFN'ED      /
+;	/                                                       /
+;	/                                                       /
+;	!=======================================================!
+
+	PHASE	.FDFIL
+
+.FDSTG:! BLOCK	1		;ASCIZ STRING FOR GTJFN/OPENF SEQUENCE
+FDMSIZ:!			;MINIMUM SIZE OF A FILE DESCRIPTOR
+FDXSIZ==^D300/^D5		;RESERVE ROOM FOR 300 CHARACTERS
+
+	DEPHASE
+
+>  ;END OF IFN FTJSYS
+SUBTTL FOB - Parameter block passed to F%IOPN and F%OOPN
+
+; THE FOLLOWING IS A DESCRIPTION OF THE BLOCK USED AS A PARAMETER
+; PASSING AREA TO THE TWO FILE OPEN ROUTINES IN GLXFIL.
+
+;	!=======================================================!
+;	!      ADDRESS OF FD TO USE FOR FILE SPECIFICATION      !
+;	!-------------------------------------------------------!
+;	!				      !LSN!NFO!BYTE SIZE!
+;	!-------------------------------------------------------!
+;	!       FIRST HALF OF USER ID FOR "IN BEHALF OF"        !
+;	!-------------------------------------------------------!
+;	!          CONNECTED  DIRECTORY (TOPS-20 ONLY)          !
+;	!=======================================================!
+
+		PHASE	0
+
+FOB.FD:! BLOCK	1			;POINTER TO FD AREA
+FOB.CW:! BLOCK	1			;CONTROL WORD
+	   FB.LSN==1B28			;LINE SEQUENCE NUMBERS APPEAR (IGNORE)
+	   FB.NFO==1B29			;NEW FILE ONLY (NON-SUPERSEDING)
+	   FB.BSZ==77B35		;BYTE SIZE OF THE FILE
+
+FOB.MZ:!				;MINIMUM SIZE OF A FOB
+
+FOB.US:! BLOCK	1			;(OPTIONAL) USER ID FOR "IN BEHALF" OPERATIONS
+FOB.CD:! BLOCK	1			;(OPTIONAL) CONNECTED DIRECTORY (TOPS20)
+
+FOB.SZ:!				;SIZE OF AN FOB
+
+		DEPHASE
+SUBTTL FRB - Parameter block passed to F%REN for renames
+
+; THE FOLLOWING BLOCK IS SET UP BY THE CALLER OF F%REN IN GLXFIL.
+; THE BLOCK PROVIDES THE SOURCE AND DESTINATION OF THE RENAME, AS
+; WELL AS NEEDED PROTECTION INFORMATION.
+
+;	!=======================================================!
+;	!     POINTER TO FD DESCRIBING SOURCE OF THE RENAME     !
+;	!-------------------------------------------------------!
+;	!  POINTER TO FD DESCRIBING DESTINATION OF THE RENAME   !
+;	!-------------------------------------------------------!
+;	!           USER ID FOR AN "IN BEHALF" RENAME           !
+;	!-------------------------------------------------------!
+;	!CONNECTED DIRECTORY FOR AN "IN BEHALF" RENAME (TOPS-20)!
+;	!=======================================================!
+
+
+			PHASE 0
+
+FRB.SF:! BLOCK	1			;POINTER TO FD OF SOURCE FILE
+FRB.DF:! BLOCK	1			;POINTER TO FD OF DESTINATION FILE
+
+FRB.MZ:!				;MINIMUM SIZE OF AN FRB
+
+FRB.US:! BLOCK	1			;(OPTIONAL) USER ID FOR IN BEHALF
+FRB.CD:! BLOCK	1			;(OPTIONAL) CONNECTED DIRECTORY (TOPS20)
+
+FRB.SZ:!				;SIZE OF AN FRB
+
+			DEPHASE
+SUBTTL IB  - Initialization Block for GALAXY programs
+
+;All programs which make use of the GALAXY library or runtime system
+;	must go through an initialization call to insure that the
+;	modules are in a determinant state, and also to set up the
+;	profile that this program wants.  This initialization is
+;	carried out using a communications area, the Initialization
+;	Block, from which parameters are read and information filled in.
+;	
+;	The initialization call to I%INIT is made with S1 containing the
+;	size of the IB and S2 containing its address.
+
+;	Initialization Block (IB):
+
+;	!=======================================================!
+;	!               Name of Program in SIXBIT               !
+;	!-------------------------------------------------------!
+;	!    Address of output routine for defaulted $TEXTs     !
+;	!-------------------------------------------------------!
+;	!PSI!JWP!SAS!SPB!RSE!  Int Chn   !  Special PID index   !
+;	!-------------------------------------------------------!
+;	!    Max. number of PIDs    ! Send quota  !Receive quota!
+;	!-------------------------------------------------------!
+;	!              Filled in with assigned PID              !
+;	!-------------------------------------------------------!
+;	!	         Program's version number      	        !
+;	!-------------------------------------------------------!
+;	!       Base of program's interrupt vector(s)           !
+;	!=======================================================!
+
+		PHASE	0
+
+IB.PRG:!	BLOCK	1		;NAME OF PROGRAM, IN SIXBIT
+IB.OUT:!	BLOCK	1		;ADDRESS OF ROUTINE TO CALL FROM 
+					;OUTPUT ROUTINE IF $TEXT SPECIFIES NONE
+IB.IPC:!	BLOCK	1		;IPCF CONTROL WORD
+	IP.PSI==1B0			;SET IF PROGRAM WILL USE PSI TO
+					;   NOTIFY THAT IPCF PACKET IS READY
+	IP.JWP==1B1			;SET IF PROGRAM WISHES ITS PID TO BE
+					;   PRESERVED UNTIL LOGOUT
+	IP.SAS==1B2			;SET TO SUPRESS SEARCH FOR ALTERNATE
+					;   (PRIVATE) COMPONENTS LIKE QUASAR,ORION
+	IP.SPB==1B3			;SET IF CALLER IS PRIVELEGED AND WISHES
+					;   TO SEE IF SENDER SET IP.CFP
+	IP.RSE==1B4			;SET IF CALLER WANTS FAILURE RETURN ON SEND ERRORS 
+					; THAT DEAL WITH TRANSIENT CONDITIONS
+	IP.CHN==77B17			;CHANNEL OR OFFSET TO CONNECT IPCF
+					; TO PSI ON IF IP.PSI IS LIT
+	IP.SPI==777			;SET IF CALLER WISHES TO BECOME
+					;   A SYSTEM-WIDE COMPONENT. FILLED
+					;   IN WITH A SP.xxx SYMBOL
+IB.IPP:!	BLOCK	1		;IPCF PARAMETERS TO SET
+	IP.MNP==-1,,0			;MAXIMUM NUMBER OF PIDS JOB WILL HAVE
+	IP.SQT==777B26			;IPCF SEND QUOTA
+	IP.RQT==777B35			;IPCF RECEIVE QUOTA
+IB.PID:!	BLOCK	1		;FILLED IN WITH PID ASSIGNED TO THE JOB
+IB.VER:!	BLOCK	1		;VERSION NUMBER OF PROGRAM
+IB.INT:!	BLOCK	1		;BASE OF INTERRUPT VECTOR(S)
+IB.TTY:!	BLOCK	1		;TERMINAL SCANNING CHARACTERISTICS
+	IT.OCT==1B0			;  OPEN COMMAND TERMINAL
+
+
+IB.SZ:!					;SIZE OF THE IB
+
+		DEPHASE
+SUBTTL	SAB - Send Argument Block passed to C%SEND
+
+;This block describes the IPCF message being sent
+
+
+;	!=======================================================!
+;	!                    DESTINATION PID                    !
+;	!-------------------------------------------------------!
+;	!                   LENGTH OF MESSAGE                   !
+;	!-------------------------------------------------------!
+;	!                  ADDRESS OF MESSAGE                   !
+;	!-------------------------------------------------------!
+;	!FLG!                SYSTEM PID INDEX                   !
+;	!=======================================================!
+
+	PHASE 0
+
+
+SAB.PD:!	BLOCK	1		;PID TO SEND MESSAGE TO
+SAB.LN:!	BLOCK	1		;LENGTH OF MESSAGE TO SEND
+					; THIS FIELD DEFINES IF THE MESSAGE IS 
+					; TO BE SENT AS A PAGE OR A PACKET
+					; A LENGTH OF EXACTLY 1000 WILL
+					; CAUSE A PAGE-MODE SEND OF THE
+					; THE PAGE POINTED TO BY SAB.MS
+					; OTHERWISE THE MESSAGE WILL BE
+					; SENT AS A PACKET IF POSSIBLE OR
+					; COPIED TO A NEW PAGE IF NECESSARY
+SAB.MS:!	BLOCK	1		;STARTING ADDRESS OF MESSAGE
+					; IF SAB.LN CONTAINS 1000, AN ERROR
+					; WILL OCCUR IF THIS IS NOT THE
+					; FIRST ADDRESS OF A PAGE
+
+SAB.SI:!	BLOCK	1		;INFORMATION ON SPECIAL SYSTEM PID
+	SI.FLG==1B0			;SET IF SI.IDX IS TO BE USED
+	SI.IDX==0,,-1			;SENDER'S INDEX IN SYSTEM PID TABLE
+					;NOTE, SETTING SP.FLG AND FILLING IN A
+					;VALID INDEX IS SUFFICIENT TO IDENTIFY
+					;THE DESTINATION OF A SEND. IN THIS CASE,
+					;THE DESTINATION PID NEED NOT BE FILLED IN
+
+SAB.SZ:!				;LENGTH OF THE SAB
+
+	DEPHASE
+SUBTTL	MDB - Message Descriptor Block returned by C%RECV
+
+;This block describes the IPCF message received by C%RECV or C%BRCV
+
+;	!=======================================================!
+;	!                         FLAGS                         !
+;	!-------------------------------------------------------!
+;	!                     SENDER'S PID                      !
+;	!-------------------------------------------------------!
+;	!                    RECEIVER'S PID                     !
+;	!-------------------------------------------------------!
+;	!     LENGTH OF MESSAGE     !    ADDRESS OF MESSAGE     !
+;	!-------------------------------------------------------!
+;	!             SENDER'S LOGGED-IN DIRECTORY              !
+;	!-------------------------------------------------------!
+;	!                  SENDER'S PRIVILEGES                  !
+;	!-------------------------------------------------------!
+;	!             SENDER'S CONNECTED DIRECTORY              !
+;	!-------------------------------------------------------!
+;	!FLG!                SYSTEM PID INDEX                   !
+;	!=======================================================!
+
+	PHASE	0
+
+MDB.FG:!	BLOCK	1		;MESSAGE FLAGS (SEE UUOSYM.MAC)
+MDB.SP:!	BLOCK	1		;SENDER'S PID
+MDB.RP:!	BLOCK	1		;RECEIVER'S PID
+MDB.MS:!	BLOCK	1		;MESSAGE INFORMATION
+	MD.CNT==-1,,0			;WORD COUNT OF MESSAGE
+	MD.ADR==0,,-1			;ADDRESS OF MESSAGE
+MDB.SD:!	BLOCK	1		;SENDER'S LOGGED IN DIRECTORY
+MDB.PV:!	BLOCK	1		;SENDER'S PRIVILEGES
+	MD.PWH==1B0			;PROCESS HAS WHEEL PRIVILEGES
+	MD.POP==1B1			;PROCESS HAS OPERATOR PRIV.
+	MD.PMT==1B2			;PROCESS HAS MAINTENANCE PRIV.
+	MD.PJB==0,,-1			;JOB NUMBER OF SENDER
+MDB.CD:!	BLOCK	1		;SENDER'S CONNECTED DIRECTORY
+MDB.SI:!	BLOCK	1		;SENDER'S SPECIAL SYSTEM PID TABLE INFO
+	SI.FLG==1B0			;SET IF SI.IDX IS TO BE USED
+	SI.IDX==0,,-1			;SENDER'S INDEX IN SYSTEM PID TABLE
+
+MDB.SZ:!				;MDB LENGTH
+
+DEPHASE
+SUBTTL Global constants ands values
+
+; DEFINE UNIVERSAL LEFT HALF, RIGHT HALF AND WORD MASKS
+;
+	LHMASK==777777,,0
+	RHMASK==^-LHMASK
+	FWMASK== LHMASK!RHMASK
+
+; BYTE POINTER PARTS
+
+	BP.POS==77B5			;POSITION (BITS TO THE RIGHT)
+	BP.SIZ==77B11			;SIZE OF BYTE
+	BP.ADR==Z -1			;ADDRESS PORTION
+
+
+; DEFINE UNIVERSAL TRUE AND FALSE CONSTANTS
+
+	FALSE==0
+	TRUE=-1
+
+; MEMORY CONSTANTS
+
+	PAGSIZ==^D512			;SIZE OF ONE PAGE
+	MEMSIZ==^D512			;PAGES IN THE ADDRESS SPACE
+
+; DEBUGGING CONSTANTS
+
+	SYSPRM	DDTADR,.JBDDT,770000	;LOCATION CONTAINING START OF DDT
+	SYSPRM	DEBUGW,.JBOPS,135	;SPECIAL "DEBUGGING" WORD
+SUBTTL System Independent IPCF Codes and Constants
+
+;The constants and codes presented here are used to prevent
+;too many feature test switches in the various modules.  When the two
+;operating systems present two different codes for the same error
+;situation, or two different indices for the same type of entry in a table,
+;we can use SYSPRM to make up a canonical code for use by the GALAXY system.
+;This makes for more readable code and lessens the  chance of error.
+
+;IPCF error messages
+
+	SYSPRM	IPE.SQ,IPCRS%,IPCFX6	;SENDER'S QUOTA EXHAUSTED
+	SYSPRM	IPE.RQ,IPCRR%,IPCFX7	;RECEIVER'S QUOTA EXHAUSTED
+	SYSPRM	IPE.SF,IPCRY%,IPCFX8	;SYSTEM FREE SPACE EXHAUSTED
+	SYSPRM	IPE.DU,IPCDU%,IPCFX4	;DESTINATION PID IS UNKNOWN
+	SYSPRM	IPE.DD,IPCDD%,IPCFX5	;DESTINAION PID IS DISABLED
+	SYSPRM	IPE.WM,IPCPR%,IPCF16	;RECEPTION IN THE WRONG MODE
+	SYSPRM	IPE.NR,IPCUP%,777777	;NO ROOM IN CORE (TOPS-10 ONLY)
+	SYSPRM	IPE.NM,IPCNP%,IPCFX2	;NO MESSAGE IS AVAILABLE
+
+;IPCF codes
+
+	SYSPRM	IP.CFV,IP.CFV,IP%CFV	;PAGE MODE BIT
+	SYSPRM	IP.CFC,IP.CFC,IP%CFC	;FROM SYSTEM INFO OR IPCC
+	SYSPRM	IP.CFE,IP.CFE,IP%CFE	;ERROR INDICATOR'S IN DESCRIPTOR
+	SYSPRM	IP.CFM,IP.CFM,IP%CFM	;A RETURNED MESSAGE
+	SYSPRM	IP.CFP,IP.CFP,IP%CFP	;PRIVILEGED SEND
+	SYSPRM	IP.TTL,IP.CFT,IP%TTL	;TRUNCATE IF TOO LONG
+	SYSPRM	IP.CFB,IP.CFB,IP%CFB	;DO NOT BLOCK ON RECEIVE
+
+;Special System PID table indices
+
+	SYSPRM	SP.QSR,.IPCPQ,.SPQSR	;QUASAR'S INDEX
+	SYSPRM	SP.OPR,.IPCPO,.SPOPR	;ORION'S INDEX
+	SYSPRM	SP.INF,.IPCPI,.SPINF	;SYSTEM INFO'S INDEX
+	SYSPRM	SP.MDA,.IPCPM,.SPMDA	;MOUNTABLE DEVICE ALLOCATOR'S INDEX
+	SYSPRM	SP.IPC,.IPCPS,777777	;SYSTEM IPCC'S INDEX
+SUBTTL $BGINT,$DEBRK - Interrupt context switching
+
+;At the beginning of each interrupt level routine, the first instruction
+; is a $BGINT, with the address field indicating which priority level
+; this interrupt is on.  When the interrupt is over, the $DEBRK instruction
+; is used, which resumes non-interrupt level context and dismisses the
+; interrupt.  Interrupt context gives all ACs and a new Stack for use.
+
+;Establish interrupt level context
+
+	DEFINE $BGINT(LVL)<
+	  IFG LVL-INT.LV,<PRINTX ?Level LVL interrupts not supported>
+	  .BGINT.(\LVL)
+	> ;END OF $BGINT DEFINITION
+
+	DEFINE .BGINT.(A)<JSR @I%INT'A> ;CALL RIGHT LEVEL ROUTINE
+
+
+;Return to normal (non-interrupt) level
+
+	DEFINE $DEBRK<
+	  POPJ	P,			;WILL INVOKE RIGHT ROUTINE
+	> ;END OF $DEBRK DEFINITION
+SUBTTL Program internal parameters of interest
+
+; IN ORDER THAT CALLERS OF GLXLIB PROGRAMS CAN MAKE THE MOST EFFICIENT
+;    USE OF THEM, SEVERAL PARAMETERS WHICH ARE REALLY INTERNAL TO THE
+;    SEPARATE COMPONENTS ARE DECLARED HERE, SO THAT THEY ARE ACCESSIBLE.
+;
+; VALUES DECLARED HERE ARE "READ-ONLY" AND SHOULD NOT BE CHANGED
+;    WITHOUT CONSULTING THE LISTING OF THE ACTUAL GLXLIB COMPONENT.
+
+; PARAMETERS USED BY:	GLXFIL
+
+	SYSPRM	SZ.IFN,20,20		;NUMBER OF FILES OPEN SIMULTANEOUSLY
+	SYSPRM	SZ.BUF,406,400		;SIZE OF BUFFER AREA
+	SYSPRM	SZ.OBF,200,400		;MAXIMUM WORDS XFERRED ON F%?BUF CALL
+	SYSPRM	.PRIIN,377776,.PRIIN	;PRIMARY INPUT JFN
+	SYSPRM	.PRIOU,377777,.PRIOU	;PRIMARY OUTPUT JFN
+
+; PARAMETERS USED BY:	GLXIPC
+
+	ND	SZ.PAK,^D50		;MAXIMUM SIZE OF A SHORT PACKET
+	ND	SZ.PID,^D30		;MAXIMUM NUMBER OF SYSTEM PIDS
+	ND	RT.SLP,^D3		;TIME TO SLEEP (SECS) BETWEEN RETRIES
+	ND	RT.SFL,^D5		;RETRIES ON A SEND FAILURE
+	ND	RT.SCL,^D60		;RETRIES ON A SYSTEM-COMPONENT TIME-OUT
+
+; PARAMETERS USED BY:	GLXMEM
+
+	ND	DDCNT,5			;PAGES ADDED TO FREE POOL BEFORE
+					;DUMPING DICTIONARY
+	ND	DCT.MN,2		;MINIMUM SIZE OF ENTRIES IN DICTIONARY
+	ND	DCT.MX,^D50		;MAXIMUM SIZE OF ENTRY IN DICT
+	ND	IPCPAD,1		;MINIMUM NUMBER OF PAGES THAT MUST BE FREE
+					;BEFORE M%NXPG WILL RETURN ONE
+	PT.FLG==777		;FLAG FIELD OF PAGE TABLE ENTRY
+	  PT.USE==1B35		;INDICATES PAGE IS IN USE
+	  PT.WRK==1B34		;PAGE IS IN WORKING SET (I.E. IN CORE)
+	  PT.ADR==1B33		;PAGE IS ADDRESSABLE (I.E. EXISTS)
+	  PT.INI==1B32		;PART OF INITIAL IMAGE (I.E. CODE, ETC.)
+
+; PARAMETERS USED BY:	GLXOTS & GLXINI
+
+	ND	DORG,600000	;ADDRESS TO BUILD DATA PAGES AT
+	ND	CORG,400000	;ADDRESS TO START OTS AT
+	ND	VORG,400010	;ADDRESS OTS DISPATCH VECTOR STARTS AT
+	IFN FTUUOS,<	OTSNAM==SIXBIT /GLXLIB/>	;LIBRARY NAME
+	IFN FTJSYS,< DEFINE OTSNAM,< [ASCIZ \GLXLIB.EXE\]>>
+
+; PARAMETERS USED BY:	GLXINT
+
+	SYSPRM	INT.LV,1,1	;MAXIMUM NUMBER OF INTERRUPT LEVELS
+	ND	IPL.SZ,^D30	;INTERRUPT STACK DEPTH
+	END

@@ -1,0 +1,1272 @@
+Job  Who  Where What  #P State Runtime     Reads   Writes    User
+1  [OPR]  D111 NEBULA 66 HB    00:00.02       73        1  SYSJOB
+2  [OPR]   CTY SYSANS 23 RN+   01:34.24    16904      171  OPERATOR
+3  [OPR]  D111 FILDAE 18 SL    00:00.70      116        2  SYSJOB
+4  [OPR]  D111 ACTDAE 58 HS V  01:13.00     8877    12471  SYSJOB
+5  [OPR]  D111 DAEMON 20 HS+   00:19.46      154     7891  SYSJOB
+6  [OPR]  D111 QUASAR 68 HS V  00:27.68      422        3  SYSJOB
+7  [OPR]  D111 MIC    20 HS    00:33.42       73        2  SYSJOB
+8  [OPR]  D111 PULSAR 106 HB   00:00.04      229        1  SYSJOB
+9  [OPR]  D111 ORION  54 HS V  00:37.30      415      100  SYSJOB
+10 [OPR]  D111 NML    31 HB V  02:51.34      561        1  SYSJOB
+11 [OPR]  D111 CATLOG 187 HB   00:00.34      230        8  SYSJOB
+
+
+
+
+
+
+
+
+
+
+
+
+This is topsy 10-Sep-2003 21:41:06 UP:97:38:57
+VM(MAX=5436,USED=564) PGR.USER=10.0 PFC:NIW=99 IW=83656
+Job  Who  Where What     Virtual          Physical       PGR   State Runtime
+1  [OPR]  D111 NEBULA 23+40(512)       23+40+3(512)      751.87 HB   00:00.02
+2  [OPR]   CTY SYSANS 22+218(0)        22+0+3(0)         0.00  RN+   01:34.26
+3  [OPR]  D111 FILDAE 15+0(512)        15+0+3(512)       0.00  SL    00:00.70
+4  [OPR]  D111 ACTDAE 175+40(512)      15+40+3(512)      0.38  HS V  01:13.00
+5  [OPR]  D111 DAEMON 17+218(512)      17+0+3(512)       0.00  HS+   00:19.46
+6  [OPR]  D111 QUASAR 114+40(512)      25+40+3(512)      22.91 HS V  00:27.68
+7  [OPR]  D111 MIC    2+15(512)        2+15+3(512)       0.00  HS    00:33.42
+8  [OPR]  D111 PULSAR 63+40(512)       63+40+3(512)      0.00  HB    00:00.04
+9  [OPR]  D111 ORION  106+40(512)      11+40+3(512)      5.36  HS V  00:37.30
+10 [OPR]  D111 NML    34+135(512)      9+19+3(512)       0.38  HB V  02:51.34
+11 [OPR]  D111 CATLOG 144+40(512)      144+40+3(512)     43.95 HB    00:00.34
+
+
+
+
+
+
+
+
+
+
+This is topsy 10-Sep-2003 21:41:07 UP:97:38:57
+VM(MAX=5436,USED=564) PGR.USER=10.0 PFC:NIW=99 IW=83656
+Job  Who  Where What     Virtual          Physical       PGR   State Runtime
+1  [OPR]  D111 NEBULA 23+40(512)       23+40+3(512)      751.87 HB   00:00.02
+2  [OPR]   CTY SYSANS 22+218(0)        22+0+3(0)         0.00  RN+   01:34.30
+3  [OPR]  D111 FILDAE 15+0(512)        15+0+3(512)       0.00  SL    00:00.70
+4  [OPR]  D111 ACTDAE 175+40(512)      15+40+3(512)      0.38  HS V  01:13.00
+5  [OPR]  D111 DAEMON 17+218(512)      17+0+3(512)       0.00  HS+   00:19.46
+6  [OPR]  D111 QUASAR 114+40(512)      25+40+3(512)      22.91 HS V  00:27.68
+7  [OPR]  D111 MIC    2+15(512)        2+15+3(512)       0.00  HS    00:33.42
+8  [OPR]  D111 PULSAR 63+40(512)       63+40+3(512)      0.00  HB    00:00.04
+9  [OPR]  D111 ORION  106+40(512)      11+40+3(512)      5.36  RN V  00:37.30
+10 [OPR]  D111 NML    34+135(512)      9+19+3(512)       0.38  HB V  02:51.34
+11 [OPR]  D111 CATLOG 144+40(512)      144+40+3(512)     43.95 HB    00:00.34
+
+
+
+
+
+
+
+
+
+
+This is topsy 10-Sep-2003 21:41:08 UP:97:38:59
+VM(MAX=5436,USED=564) PGR.USER=10.0 PFC:NIW=99 IW=83656
+Job  Who  Where What     Virtual          Physical       PGR   State Runtime
+1  [OPR]  D111 NEBULA 23+40(512)       23+40+3(512)      751.87 HB   00:00.02
+2  [OPR]   CTY SYSANS 22+218(0)        22+0+3(0)         0.00  RN+   01:34.32
+3  [OPR]  D111 FILDAE 15+0(512)        15+0+3(512)       0.00  SL    00:00.70
+4  [OPR]  D111 ACTDAE 175+40(512)      15+40+3(512)      0.38  HS V  01:13.00
+5  [OPR]  D111 DAEMON 17+218(512)      17+0+3(512)       0.00  HS+   00:19.46
+6  [OPR]  D111 QUASAR 114+40(512)      25+40+3(512)      22.91 HS V  00:27.68
+7  [OPR]  D111 MIC    2+15(512)        2+15+3(512)       0.00  HS    00:33.42
+8  [OPR]  D111 PULSAR 63+40(512)       63+40+3(512)      0.00  HB    00:00.04
+9  [OPR]  D111 ORION  106+40(512)      11+40+3(512)      5.36  HS V  00:37.30
+10 [OPR]  D111 NML    34+135(512)      9+19+3(512)       0.38  HB V  02:51.34
+11 [OPR]  D111 CATLOG 144+40(512)      144+40+3(512)     43.95 HB    00:00.34
+
+
+
+
+
+
+
+
+
+
+This is topsy 10-Sep-2003 21:41:09 UP:97:39:00
+VM(MAX=5436,USED=564) PGR.USER=10.0 PFC:NIW=99 IW=83656
+Job  Who  Where What     Virtual          Physical       PGR   State Runtime
+1  [OPR]  D111 NEBULA 23+40(512)       23+40+3(512)      751.87 HB   00:00.02
+2  [OPR]   CTY SYSANS 22+218(0)        22+0+3(0)         0.00  RN+   01:34.32
+3  [OPR]  D111 FILDAE 15+0(512)        15+0+3(512)       0.00  SL    00:00.70
+4  [OPR]  D111 ACTDAE 175+40(512)      15+40+3(512)      0.38  HS V  01:13.00
+5  [OPR]  D111 DAEMON 17+218(512)      17+0+3(512)       0.00  HS+   00:19.46
+6  [OPR]  D111 QUASAR 114+40(512)      25+40+3(512)      22.91 HS V  00:27.68
+7  [OPR]  D111 MIC    2+15(512)        2+15+3(512)       0.00  HS    00:33.42
+8  [OPR]  D111 PULSAR 63+40(512)       63+40+3(512)      0.00  HB    00:00.04
+9  [OPR]  D111 ORION  106+40(512)      11+40+3(512)      5.36  HS V  00:37.30
+10 [OPR]  D111 NML    34+135(512)      9+19+3(512)       0.38  HB V  02:51.34
+11 [OPR]  D111 CATLOG 144+40(512)      144+40+3(512)     43.95 HB    00:00.34
+
+
+
+
+
+
+
+
+
+
+Job  Who  Where What  #P State Runtime     Reads   Writes    User
+1  [OPR]  D111 NEBULA 66 HB    00:00.02       73        1  SYSJOB
+2  [OPR]   CTY SYSANS 25 RN+   01:34.32    16904      179  OPERATOR
+3  [OPR]  D111 FILDAE 18 SL    00:00.70      116        2  SYSJOB
+4  [OPR]  D111 ACTDAE 58 HS V  01:13.00     8877    12471  SYSJOB
+5  [OPR]  D111 DAEMON 20 HS+   00:19.46      154     7891  SYSJOB
+6  [OPR]  D111 QUASAR 68 HS V  00:27.68      422        3  SYSJOB
+7  [OPR]  D111 MIC    20 HS    00:33.42       73        2  SYSJOB
+8  [OPR]  D111 PULSAR 106 HB   00:00.04      229        1  SYSJOB
+9  [OPR]  D111 ORION  54 HS V  00:37.30      415      100  SYSJOB
+10 [OPR]  D111 NML    31 HB V  02:51.34      561        1  SYSJOB
+11 [OPR]  D111 CATLOG 187 HB   00:00.34      230        8  SYSJOB
+
+
+
+
+
+
+
+
+
+
+
+
+Job  Who  Where What  #P State Runtime     Reads   Writes    User
+1  [OPR]  D111 NEBULA 66 HB    00:00.02       73        1  SYSJOB
+2  [OPR]   CTY SYSANS 25 RN+   01:34.34    16904      180  OPERATOR
+3  [OPR]  D111 FILDAE 18 SL    00:00.70      116        2  SYSJOB
+4  [OPR]  D111 ACTDAE 58 HS V  01:13.00     8877    12471  SYSJOB
+5  [OPR]  D111 DAEMON 20 HS+   00:19.46      154     7891  SYSJOB
+6  [OPR]  D111 QUASAR 68 HS V  00:27.68      422        3  SYSJOB
+7  [OPR]  D111 MIC    20 HS    00:33.42       73        2  SYSJOB
+8  [OPR]  D111 PULSAR 106 HB   00:00.04      229        1  SYSJOB
+9  [OPR]  D111 ORION  54 HS V  00:37.30      415      100  SYSJOB
+10 [OPR]  D111 NML    31 HB V  02:51.34      561        1  SYSJOB
+11 [OPR]  D111 CATLOG 187 HB   00:00.34      230        8  SYSJOB
+
+
+
+
+
+
+
+
+
+
+
+
+Job  Who  Where What  #P State Runtime     Reads   Writes    User
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Job  Who  Where What  #P State Runtime     Reads   Writes    User
+1  [OPR]  D111 NEBULA 66 HB    00:00.02       73        1  SYSJOB
+2  [OPR]   CTY SYSANS 25 RN+   01:34.38    16904      181  OPERATOR
+3  [OPR]  D111 FILDAE 18 SL    00:00.70      116        2  SYSJOB
+4  [OPR]  D111 ACTDAE 58 HS V  01:13.00     8877    12471  SYSJOB
+5  [OPR]  D111 DAEMON 20 HS+   00:19.46      154     7891  SYSJOB
+6  [OPR]  D111 QUASAR 68 HS V  00:27.68      422        3  SYSJOB
+7  [OPR]  D111 MIC    20 HS    00:33.42       73        2  SYSJOB
+8  [OPR]  D111 PULSAR 106 HB   00:00.04      229        1  SYSJOB
+9  [OPR]  D111 ORION  54 HS V  00:37.30      415      100  SYSJOB
+10 [OPR]  D111 NML    31 HB V  02:51.36      561        1  SYSJOB
+11 [OPR]  D111 CATLOG 187 HB   00:00.34      230        8  SYSJOB
+
+
+
+
+
+
+
+
+
+
+
+
+Job  Who  Where What  #P State Runtime     Reads   Writes    User
+1  [OPR]  D111 NEBULA 66 HB    00:00.02       73        1  SYSJOB
+2  [OPR]   CTY SYSANS 25 RN+   01:34.40    16904      183  OPERATOR
+3  [OPR]  D111 FILDAE 18 SL    00:00.70      116        2  SYSJOB
+4  [OPR]  D111 ACTDAE 58 HS V  01:13.00     8877    12471  SYSJOB
+5  [OPR]  D111 DAEMON 20 HS+   00:19.46      154     7891  SYSJOB
+6  [OPR]  D111 QUASAR 68 HS V  00:27.68      422        3  SYSJOB
+7  [OPR]  D111 MIC    20 HS    00:33.42       73        2  SYSJOB
+8  [OPR]  D111 PULSAR 106 HB   00:00.04      229        1  SYSJOB
+9  [OPR]  D111 ORION  54 HS V  00:37.30      415      100  SYSJOB
+10 [OPR]  D111 NML    31 HB V  02:51.36      561        1  SYSJOB
+11 [OPR]  D111 CATLOG 187 HB   00:00.34      230        8  SYSJOB
+
+
+
+
+
+
+
+
+
+
+
+                                                       Type H for Help
+Job  Who  Where What  #P State Runtime     Reads   Writes    User
+1  [OPR]  D111 NEBULA 66 HB    00:00.02       73        1  SYSJOB
+2  [OPR]   CTY SYSANS 25 RN+   01:34.42    16904      184  OPERATOR
+3  [OPR]  D111 FILDAE 18 SL    00:00.70      116        2  SYSJOB
+4  [OPR]  D111 ACTDAE 58 HS V  01:13.00     8877    12471  SYSJOB
+5  [OPR]  D111 DAEMON 20 HS+   00:19.46      154     7891  SYSJOB
+6  [OPR]  D111 QUASAR 68 HS V  00:27.68      422        3  SYSJOB
+7  [OPR]  D111 MIC    20 HS    00:33.42       73        2  SYSJOB
+8  [OPR]  D111 PULSAR 106 HB   00:00.04      229        1  SYSJOB
+9  [OPR]  D111 ORION  54 HS V  00:37.30      415      100  SYSJOB
+10 [OPR]  D111 NML    31 HB V  02:51.36      561        1  SYSJOB
+11 [OPR]  D111 CATLOG 187 HB   00:00.34      230        8  SYSJOB
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:41:20 UP:97:39:11
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:41:21 UP:97:39:11
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:41:22 UP:97:39:13
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:41:22 UP:97:39:13
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:41:24 UP:97:39:14
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:41:24 UP:97:39:14
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:41:25 UP:97:39:15
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:41:25 UP:97:39:16
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:41:26 UP:97:39:17
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:41:26 UP:97:39:17
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ANF Topology for topsy 10-Sep-2003 21:41:27 UP:97:39:18
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ANF Topology for topsy 10-Sep-2003 21:41:27 UP:97:39:18
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ANF Topology for topsy 10-Sep-2003 21:41:29 UP:97:39:20
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ANF Topology for topsy 10-Sep-2003 21:41:29 UP:97:39:20
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ANF Topology for topsy 10-Sep-2003 21:41:31 UP:97:39:22
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ANF Topology for topsy 10-Sep-2003 21:41:32 UP:97:39:22
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ANF Topology for topsy 10-Sep-2003 21:41:32 UP:97:39:23
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ANF Topology for topsy 10-Sep-2003 21:41:34 UP:97:39:24
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+LAT Status on topsy 10-Sep-2003 21:41:36 UP:97:39:27
+Server      Received     Xmitted  Re-Xmitted   Seq error     Ill msg    Ill slot
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+LAT Status on topsy 10-Sep-2003 21:41:36 UP:97:39:27
+Server      Received     Xmitted  Re-Xmitted   Seq error     Ill msg    Ill slot
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+This is topsy 10-Sep-2003 21:41:44 UP:97:39:35
+
+To choose a display, type the corresponding character without return
+--------------------------------------------------------------------
+A  Autoroll all jobs            \  Network statistics
+F  File system statistics       H  List this text
+J  Jobs in multiple columns     K  List the OMOUNT queues
+M  Virtual memory data          N  Normal status (some of everything)
+Q  Displays GALAXY queues,      S  Toggle system/job statistics
+   follow with:                 T  Network topology
+    <RET>    All queues         Z  Scheduler statistics
+    LPT<RET> Line Printer
+    PTP<RET> Paper Tape Punch   PLT<RET> Plot
+    CDP<RET> Card Punch         INP<RET> Input queues
+To control the display, type
+----------------------------
+n+ Scroll n lines forward       n- Scroll n lines backwards
+I  Incremental statistics       L  Log into DSK:SYSDPY.LOG
+O  Do not display <OPR>-jobs    R  Refresh screen immediately
+V  Toggle cpu and core          nW Update every "n" decimal seconds
+#  Toggle pty number or con-    %  Toggle runtime/%:age of CPU
+   trolling job                 <SP> Update screen immediately
+<ESC> Freeze until next char ^N List only active jobs (in run-queue)
+A repeated I,O,V,^N or % -command restores the previous setting.
+This is topsy 10-Sep-2003 21:41:46 UP:97:39:36
+
+To choose a display, type the corresponding character without return
+--------------------------------------------------------------------
+A  Autoroll all jobs            \  Network statistics
+F  File system statistics       H  List this text
+J  Jobs in multiple columns     K  List the OMOUNT queues
+M  Virtual memory data          N  Normal status (some of everything)
+Q  Displays GALAXY queues,      S  Toggle system/job statistics
+   follow with:                 T  Network topology
+    <RET>    All queues         Z  Scheduler statistics
+    LPT<RET> Line Printer
+    PTP<RET> Paper Tape Punch   PLT<RET> Plot
+    CDP<RET> Card Punch         INP<RET> Input queues
+To control the display, type
+----------------------------
+n+ Scroll n lines forward       n- Scroll n lines backwards
+I  Incremental statistics       L  Log into DSK:SYSDPY.LOG
+O  Do not display <OPR>-jobs    R  Refresh screen immediately
+V  Toggle cpu and core          nW Update every "n" decimal seconds
+#  Toggle pty number or con-    %  Toggle runtime/%:age of CPU
+   trolling job                 <SP> Update screen immediately
+<ESC> Freeze until next char ^N List only active jobs (in run-queue)
+A repeated I,O,V,^N or % -command restores the previous setting.
+This is topsy 10-Sep-2003 21:41:54 UP:97:39:45
+
+To choose a display, type the corresponding character without return
+--------------------------------------------------------------------
+A  Autoroll all jobs            \  Network statistics
+F  File system statistics       H  List this text
+J  Jobs in multiple columns     K  List the OMOUNT queues
+M  Virtual memory data          N  Normal status (some of everything)
+Q  Displays GALAXY queues,      S  Toggle system/job statistics
+   follow with:                 T  Network topology
+    <RET>    All queues         Z  Scheduler statistics
+    LPT<RET> Line Printer
+    PTP<RET> Paper Tape Punch   PLT<RET> Plot
+    CDP<RET> Card Punch         INP<RET> Input queues
+To control the display, type
+----------------------------
+n+ Scroll n lines forward       n- Scroll n lines backwards
+I  Incremental statistics       L  Log into DSK:SYSDPY.LOG
+O  Do not display <OPR>-jobs    R  Refresh screen immediately
+V  Toggle cpu and core          nW Update every "n" decimal seconds
+#  Toggle pty number or con-    %  Toggle runtime/%:age of CPU
+   trolling job                 <SP> Update screen immediately
+<ESC> Freeze until next char ^N List only active jobs (in run-queue)
+A repeated I,O,V,^N or % -command restores the previous setting.
+This is topsy 10-Sep-2003 21:41:55 UP:97:39:46
+
+To choose a display, type the corresponding character without return
+--------------------------------------------------------------------
+A  Autoroll all jobs            \  Network statistics
+F  File system statistics       H  List this text
+J  Jobs in multiple columns     K  List the OMOUNT queues
+M  Virtual memory data          N  Normal status (some of everything)
+Q  Displays GALAXY queues,      S  Toggle system/job statistics
+   follow with:                 T  Network topology
+    <RET>    All queues         Z  Scheduler statistics
+    LPT<RET> Line Printer
+    PTP<RET> Paper Tape Punch   PLT<RET> Plot
+    CDP<RET> Card Punch         INP<RET> Input queues
+To control the display, type
+----------------------------
+n+ Scroll n lines forward       n- Scroll n lines backwards
+I  Incremental statistics       L  Log into DSK:SYSDPY.LOG
+O  Do not display <OPR>-jobs    R  Refresh screen immediately
+V  Toggle cpu and core          nW Update every "n" decimal seconds
+#  Toggle pty number or con-    %  Toggle runtime/%:age of CPU
+   trolling job                 <SP> Update screen immediately
+<ESC> Freeze until next char ^N List only active jobs (in run-queue)
+A repeated I,O,V,^N or % -command restores the previous setting.
+This is topsy 10-Sep-2003 21:42:05 UP:97:39:56
+
+To choose a display, type the corresponding character without return
+--------------------------------------------------------------------
+A  Autoroll all jobs            \  Network statistics
+F  File system statistics       H  List this text
+J  Jobs in multiple columns     K  List the OMOUNT queues
+M  Virtual memory data          N  Normal status (some of everything)
+Q  Displays GALAXY queues,      S  Toggle system/job statistics
+   follow with:                 T  Network topology
+    <RET>    All queues         Z  Scheduler statistics
+    LPT<RET> Line Printer
+    PTP<RET> Paper Tape Punch   PLT<RET> Plot
+    CDP<RET> Card Punch         INP<RET> Input queues
+To control the display, type
+----------------------------
+n+ Scroll n lines forward       n- Scroll n lines backwards
+I  Incremental statistics       L  Log into DSK:SYSDPY.LOG
+O  Do not display <OPR>-jobs    R  Refresh screen immediately
+V  Toggle cpu and core          nW Update every "n" decimal seconds
+#  Toggle pty number or con-    %  Toggle runtime/%:age of CPU
+   trolling job                 <SP> Update screen immediately
+<ESC> Freeze until next char ^N List only active jobs (in run-queue)
+A repeated I,O,V,^N or % -command restores the previous setting.
+This is topsy 10-Sep-2003 21:42:16 UP:97:40:06
+
+To choose a display, type the corresponding character without return
+--------------------------------------------------------------------
+A  Autoroll all jobs            \  Network statistics
+F  File system statistics       H  List this text
+J  Jobs in multiple columns     K  List the OMOUNT queues
+M  Virtual memory data          N  Normal status (some of everything)
+Q  Displays GALAXY queues,      S  Toggle system/job statistics
+   follow with:                 T  Network topology
+    <RET>    All queues         Z  Scheduler statistics
+    LPT<RET> Line Printer
+    PTP<RET> Paper Tape Punch   PLT<RET> Plot
+    CDP<RET> Card Punch         INP<RET> Input queues
+To control the display, type
+----------------------------
+n+ Scroll n lines forward       n- Scroll n lines backwards
+I  Incremental statistics       L  Log into DSK:SYSDPY.LOG
+O  Do not display <OPR>-jobs    R  Refresh screen immediately
+V  Toggle cpu and core          nW Update every "n" decimal seconds
+#  Toggle pty number or con-    %  Toggle runtime/%:age of CPU
+   trolling job                 <SP> Update screen immediately
+<ESC> Freeze until next char ^N List only active jobs (in run-queue)
+A repeated I,O,V,^N or % -command restores the previous setting.
+This is topsy 10-Sep-2003 21:42:26 UP:97:40:16
+
+To choose a display, type the corresponding character without return
+--------------------------------------------------------------------
+A  Autoroll all jobs            \  Network statistics
+F  File system statistics       H  List this text
+J  Jobs in multiple columns     K  List the OMOUNT queues
+M  Virtual memory data          N  Normal status (some of everything)
+Q  Displays GALAXY queues,      S  Toggle system/job statistics
+   follow with:                 T  Network topology
+    <RET>    All queues         Z  Scheduler statistics
+    LPT<RET> Line Printer
+    PTP<RET> Paper Tape Punch   PLT<RET> Plot
+    CDP<RET> Card Punch         INP<RET> Input queues
+To control the display, type
+----------------------------
+n+ Scroll n lines forward       n- Scroll n lines backwards
+I  Incremental statistics       L  Log into DSK:SYSDPY.LOG
+O  Do not display <OPR>-jobs    R  Refresh screen immediately
+V  Toggle cpu and core          nW Update every "n" decimal seconds
+#  Toggle pty number or con-    %  Toggle runtime/%:age of CPU
+   trolling job                 <SP> Update screen immediately
+<ESC> Freeze until next char ^N List only active jobs (in run-queue)
+A repeated I,O,V,^N or % -command restores the previous setting.
+LAT Status on topsy 10-Sep-2003 21:42:30 UP:97:40:20
+Server      Received     Xmitted  Re-Xmitted   Seq error     Ill msg    Ill slot
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+LAT Status on topsy 10-Sep-2003 21:42:30 UP:97:40:20
+Server      Received     Xmitted  Re-Xmitted   Seq error     Ill msg    Ill slot
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+LAT Status on topsy 10-Sep-2003 21:42:32 UP:97:40:22
+Server      Received     Xmitted  Re-Xmitted   Seq error     Ill msg    Ill slot
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+LAT Status on topsy 10-Sep-2003 21:42:32 UP:97:40:22
+Server      Received     Xmitted  Re-Xmitted   Seq error     Ill msg    Ill slot
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+LAT Status on topsy 10-Sep-2003 21:42:33 UP:97:40:23
+Server      Received     Xmitted  Re-Xmitted   Seq error     Ill msg    Ill slot
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Queues for topsy 10-Sep-2003 21:44:04 UP:97:41:54
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:44:04 UP:97:41:55
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                       Type H for Help
+ANF Topology for topsy 10-Sep-2003 21:44:04 UP:97:41:55
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ANF Topology for topsy 10-Sep-2003 21:44:04 UP:97:41:55
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:44:06 UP:97:41:57
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:44:07 UP:97:41:57
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:44:08 UP:97:41:58
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queues for topsy 10-Sep-2003 21:44:09 UP:97:42:00
+
+[The queues are empty]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                       Type H for Help
+ANF Topology for topsy 10-Sep-2003 21:44:11 UP:97:42:01
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ANF Topology for topsy 10-Sep-2003 21:44:11 UP:97:42:01
+ Node       Neighbors                   OPR  CTL  LAR  LAP  LMS  LMA  LMR  LMP
+TOPSY(1)                                112       0    0    0    0    0    0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

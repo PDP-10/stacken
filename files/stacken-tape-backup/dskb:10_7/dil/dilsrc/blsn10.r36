@@ -1,0 +1,65 @@
+%TITLE 'BLISSNET10.R36 - Internal definitions for BLISSnet10'
+
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+! OR COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE.
+!
+! COPYRIGHT  (C)  DIGITAL  EQUIPMENT  CORPORATION 1986.
+! ALL RIGHTS RESERVED.
+
+!++
+! Start using the DIL standard edit history format.
+!
+! Facility Blissnet
+!
+! Edit (%O'2', '12-Apr-84', 'Sandy Clemens')
+!  %( Add the TOPS-10 BLISSnet sources for DIL V2.  )%
+!
+! Edit (%O'6', '5-Oct-84', 'Sandy Clemens')
+!  %( Add new format of COPYRIGHT notice.  FILES:  ALL )%
+!--
+
+LITERAL
+    XPN$K_MAX_MSG = 8192,               ! Maximum message size interface will handle
+    XPN$K_USRID_MAX_LEN_C = 39,		! Size of USERID field
+    XPN$K_USRID_MAX_LEN_W = ((XPN$K_USRID_MAX_LEN_C+3)/4) + 1,
+    XPN$K_PASWD_MAX_LEN_C = 39,		! Size of PASSWORD field
+    XPN$K_PASWD_MAX_LEN_W = ((XPN$K_PASWD_MAX_LEN_C+3)/4) + 1,
+    XPN$K_ACCNT_MAX_LEN_C = 39,		! Size of ACCOUNT field
+    XPN$K_ACCNT_MAX_LEN_W = ((XPN$K_ACCNT_MAX_LEN_C+3)/4) + 1,
+    XPN$K_HOSTN_MAX_LEN_C = 6,		! Size of HOSTNAME field
+    XPN$K_HOSTN_MAX_LEN_W = ((XPN$K_HOSTN_MAX_LEN_C+3)/4) + 1,
+    XPN$K_OBJID_MAX_LEN_C = 16,		! Size of OBJECTID field
+    XPN$K_OBJID_MAX_LEN_W = ((XPN$K_OBJID_MAX_LEN_C+3)/4) + 1,
+    XPN$K_TASKN_MAX_LEN_C = 16,		! Size of TASKNAME field
+    XPN$K_TASKN_MAX_LEN_W = ((XPN$K_TASKN_MAX_LEN_C+3)/4) + 1,
+    XPN$K_OPTDT_MAX_LEN_C = 16,		! Size of OPTIONAL DATA field
+    XPN$K_OPTDT_MAX_LEN_W = ((XPN$K_OPTDT_MAX_LEN_C+3)/4) + 1,
+    XPN$K_INTDT_MAX_LEN_C = 16,		! Size of INTERRUPT DATA field
+    XPN$K_INTDT_MAX_LEN_W = ((XPN$K_INTDT_MAX_LEN_C+3)/4) + 1;
+
+MACRO
+
+    $WORD = -1 %,			! mask for MONBLOCK word references
+
+    lh = 18, 18 %,                      ! left halfword field selector
+
+    rh =  0, 18 %,                      ! right halfword field selector
+
+    xpn$$bug (message) =
+        ($XPO_PUT_MSG (STRING = message, SEVERITY = FATAL)) %,
+
+    nlb_binds =                         ! short names for popular NLB fields
+        BIND
+            active = .nlb[NLB$V_ACTIVE],
+            passive = .nlb[NLB$V_PASSIVE],
+            remote_host = .nlb[NLB$A_NODE_NAME] : $STR_DESCRIPTOR (),
+            local_format = .nlb[NLB$B_LCL_FORMAT],
+            local_object_type = .nlb[NLB$B_LCL_OBJTYP],
+            local_descriptor = .nlb[NLB$A_LCL_DESCR] : $STR_DESCRIPTOR (),
+            remote_format = .nlb[NLB$B_REM_FORMAT],
+            remote_object_type = .nlb[NLB$B_REM_OBJTYP],
+            remote_descriptor = .nlb[NLB$A_REM_DESCR] : $STR_DESCRIPTOR (),
+            user_ID = .nlb[NLB$A_USER_ID] : $STR_DESCRIPTOR (),
+            password = .nlb[NLB$A_PASSWORD] : $STR_DESCRIPTOR (),
+            account = .nlb[NLB$A_ACCOUNT] : $STR_DESCRIPTOR (),
+            optional = .nlb[NLB$A_OPTIONAL] : $STR_DESCRIPTOR ()%;

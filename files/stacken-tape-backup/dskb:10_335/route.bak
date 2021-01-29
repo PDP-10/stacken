@@ -1,0 +1,470 @@
+title	route -- implement .ROUTE command.
+
+.text	"/symseg:low/locals"
+
+search	jobdat, uuosym, macten
+
+;*** things that should be in a header file:
+
+opdef	iprou.[ call [sixbit 'iprou.']]
+
+	.iradd==0
+	.irdel==1
+	.irchk==2
+	.irdmp==3
+	.irluk==4
+
+	irilf%==1
+	iradc%==2
+	irnsi%==3
+	irnpv%==4
+	irnec%==5
+
+opdef	ifnam.[ call [sixbit 'ifnam.']]
+opdef	ifndx.[ call [sixbit 'ifndx.']]
+
+t1==1
+t2==2
+t3==3
+t4==4
+
+c==10
+w==11
+n==12
+
+p==17
+
+pdl:	block	<pdllen==^D100>
+
+buffer:	block	<3*<buflen==^D20>>
+
+cclflg:	exp	0
+savc:	exp	-1
+hpos:	exp	0
+
+define error(msg),<
+	jrst[	outstr[ asciz "'msg'"]
+		outstr[ byte (7) 15, 12, 0]
+		jrst	done]
+>
+
+; .ROUTE ADD <prefix> if0 [via] [arp] [bcast]
+; .ROUTE DELETE <prefix>
+; .ROUTE LOOKUP <address>
+; .ROUTE SHOW
+
+route::	tdza	t1,t1
+	 movei	t1,1
+	movem	t1,cclflg
+	reset
+	move	p,[iowd pdllen, pdl]
+
+	rescan	1
+	 jrst	rscan
+	monrt.
+	jrst	route
+
+rscan:	pushj	p,skipsp	;Skip possible spaces.
+	pushj	p,getwrd	;Get a word.
+	came	w,[sixbit 'RO    ']
+	 camn	w,[sixbit 'ROU   ']
+	  jrst	rtcmd
+	came	w,[sixbit 'ROUT  ']
+	 camn	w,[sixbit 'ROUTE ']
+	  jrst	rtcmd
+	jumpe	w,done		;Empty word?
+	pushj	p,skipsp
+rscan2:	pushj	p,getchr
+	 jrst	cmloop
+	caie	c," "		;Skip blanks.
+	 cain	c,.chtab
+	  jrst	rscan2
+	caie	c,"!"		;Scan for comment start or "-".
+	 cain	c,";"
+	  jrst	eat
+	cain	c,"-"		;Start of arguments?
+	 jrst	rtcmd
+	jrst	rscan2
+
+cmloop:	outstr[	asciz "foo?
+"]
+	jrst	done
+
+rtcmd:	pushj	p,getchr
+	 jrst	done
+	caie	c," "
+	 cain	c,.chtab
+	  jrst	rtcmd
+	pushj	p,reeat
+	pushj	p,getwrd	;Get next word here.
+	came	w,['A     ']
+	 camn	w,['AD    ']
+	  jrst	rtadd
+	camn	w,['ADD   ']
+	 jrst	rtadd
+	came	w,['D     ']
+	 camn	w,['DE    ']
+	  jrst	rtdel
+	came	w,['DEL   ']
+	 camn	w,['DELE  ']
+	  jrst	rtdel
+	came	w,['DELET ']
+	 camn	w,['DELETE']
+	  jrst	rtdel
+	came	w,['L     ']
+	 camn	w,['LO    ']
+	  jrst	rtluk
+	came	w,['LOO   ']
+	 camn	w,['LOOK  ']
+	  jrst	rtluk
+	came	w,['LOOKU ']
+	 camn	w,['LOOKUP']
+	  jrst	rtluk
+	came	w,['S     ']
+	 camn	w,['SH    ']
+	  jrst	rtshow
+	came	w,['SHO   ']
+	 camn	w,['SHOW  ']
+	  jrst	rtshow
+	outstr[	asciz "Illegal command.
+"]
+
+eat:	pushj	p,getchr
+	 jrst	done
+	jrst	eat
+
+;* .route add <prefix>
+
+rtadd:	pushj	p,getipa
+	movem	w,buffer+0
+	jumpge	n,.+2
+	movei	n,^D32
+	dpb	n,[point 9,buffer+1,8]
+	pushj	p,skipsp
+	pushj	p,getchr
+add.1:	 error(add: interface name missing)
+	pushj	p,reeat
+	pushj	p,getwrd
+	jumpe	w,add.1
+	move	t1,w
+	ifndx.	t1,
+	 error(add: no such interface)
+	dpb	t1,[point 9,buffer+1,17]
+	hllzs	buffer+1
+	setzm	buffer+2
+	pushj	p,skipsp
+	pushj	p,getchr
+	 jrst	add.3
+	pushj	p,reeat
+	cail	c,"0"
+	 caile	c,"9"
+	  jrst	add.2
+	pushj	p,getipa
+	movem	w,buffer+2
+	pushj	p,skipsp
+	pushj	p,getchr
+	 jrst	add.3
+	pushj	p,reeat
+add.2:	pushj	p,skipsp
+	pushj	p,getwrd
+	jumpe	w,[error(add: bad arguments)]
+	camn	w.['A     ']
+	 jrst	addf.a
+	came	w,['AR    ']
+	 camn	w,['ARP   ']
+	  jrst	addf.a
+	came	w,['B     ']
+	 jrst	addf.b
+	came	w,['BC    ']
+	 camn	w,['BCA   ']
+	  jrst	addf.b
+	came	w,['BCAS  ']
+	 camn	w,['BCAST ']
+	  jrst	addf.b
+	error(add: bad option)	
+
+addf.a:	movei	t1,1
+	jrst	addf.x
+
+addf.b:	movei	t1,2
+addf.x:	iorm	t1,buffer+1
+	pushj	p,skipsp
+	pushj	p,getchr
+	 jrst	add.3
+	pushj	p,reeat
+	jrst	add.2
+
+add.3:	movei	t1,[exp .iradd, buffer]
+	iprou.	t1,
+	 error(add: IPROU. failed)
+	jrst	done
+
+;* .route delete <prefix>
+
+rtdel:	pushj	p,getipa
+	movem	w,buffer+0
+	jumpge	n,.+2
+	movei	n,^D32
+	lsh	n,^D27
+	movem	n,buffer+1
+	setzm	buffer+2
+	pushj	p,skipsp
+	pushj	p,getchr
+	 jrst	del.2
+del.1:	pushj	p,getchr
+	 error(excess arguments to DELETE)
+	jrst	del.1
+
+del.2:	movei	t1,[exp .irdel, buffer]
+	iprou.	t1,
+	 error(delete: IPROU. failed)
+	jrst	done
+
+done:	monrt.
+	jrst	route
+
+;* .route lookup <address>
+
+rtluk:	pushj	p,getipa
+	jumpge	n,[error(prefix not wanted)]
+	movem	w,buffer+0
+	setzm	buffer+1
+	setzm	buffer+2
+	pushj	p,skipsp
+	pushj	p,getchr
+	 jrst	luk.2
+luk.1:	pushj	p,getchr
+	 error(excess arguments to LOOKUP)
+	jrst	luk.1
+
+luk.2:	movei	t1,[exp .irluk, buffer]
+	iprou.	t1,
+	 error(lookup: IPROU. failed)
+	movei	t1,1
+	jrst	show.1
+
+;* .route show
+
+rtshow:	;* should check for a prefix arg here.
+
+	movei	t1,[
+		exp .irdmp, buffer, buflen]
+	iprou.	t1,
+	 error(show: IPROU. failed)
+	jumpe	t1,[
+		pushj	p,pcrlf
+		movei	t1,[
+			asciz "The routing table is empty"]
+		pushj	p,prstr
+		pushj	p,pcrlf
+		jrst	done]
+show.1:	move	t4,t1
+	movei	t1,[asciz "
+     prefix            if       next-hop       flags
+------------------   ------  ---------------  -------
+"]
+;23.123.123.123/12   abcdef  123.123.123.123  arp bcast ...
+
+	pushj	p,prstr
+	setzm	hpos
+	movei	t3,buffer
+show.2:	move	t1,0(t3)
+	pushj	p,pripa
+	pushj	p,pslash
+	ldb	t1,[point 9, 1(t3), 8]
+	pushj	p,prdec
+	movei	t1,^D20
+	pushj	p,tabto
+	ldb	t1,[point 9, 1(t3), 17]
+	ifnam.	t1,
+	 movsi	t1,'???'
+	pushj	p,prsix
+	skipn	2(t3)		;Got a via?
+	 jrst	show.4		; Nope.
+	movei	t1,^D28
+	pushj	p,tabto
+	move	t1,2(t3)
+	pushj	p,pripa
+show.4:	hrrz	t2,1(t3)	;Get flags.
+	jumpe	t2,show.9	;None, skip on.
+	movei	t1,^D44
+	pushj	p,tabto
+	hrrz	t2,1(t3)
+	movei	t1,[asciz " arp"]
+	trne	t2,1
+	 pushj	p,prstr
+	movei	t1,[asciz " bcast"]
+	trne	t2,2
+	 pushj	p,prstr
+show.9:	pushj	p,pcrlf
+	addi	t3,3
+	sojg	t4,show.2
+	jrst	done
+
+prstr:	hrli	t1,(point 7)
+	push	p,t1
+prstr2:	ildb	t1,(p)
+	jumpe	t1,prstr3
+	pushj	p,prchr
+	jrst	prstr2
+prstr3:	pop	p,(p)
+	popj	p,
+
+prdec:	idivi	t1,^D10
+	push	p,t2
+	skipe	t1
+	 pushj	p,prdec
+	pop	p,t2
+	movei	t1,"0"(t2)
+prchr:	aos	hpos
+	outchr	t1
+	popj	p,
+
+prsix:	setz	t2,
+	rotc	t1,6
+	push	p,t1	
+	cail	t2,'A'
+	 caile	t2,'Z'
+	  subi	t2,40
+	movei	t1,100(t2)
+	pushj	p,prchr
+	pop	p,t1
+	jumpn	t1,prsix
+	popj	p,
+
+tabto:	camge	t1,hpos
+	 popj	p,
+	push	p,t1
+	movei	t1," "
+	pushj	p,prchr
+	pop	p,t1
+	jrst	tabto
+
+pripa:	push	p,t1
+	ldb	t1,[point 8,(p),7]
+	pushj	p,prdec
+	pushj	p,prper
+	ldb	t1,[point 8,(p),15]
+	pushj	p,prdec
+	pushj	p,prper
+	ldb	t1,[point 8,(p),23]
+	pushj	p,prdec
+	pushj	p,prper
+	ldb	t1,[point 8,(p),31]
+	pushj	p,prdec
+	pop	p,(p)
+	popj	p,
+
+pcrlf:	outstr[	byte (7) 15, 12, 0]
+	setzm	hpos
+	popj	p,
+
+prper:	movei	t1,"."
+	jrst	prchr
+
+pslash:	movei	t1,"/"
+	jrst	prchr
+
+getipa:	pushj	p,skipsp
+	setzb	w,n
+	movei	t4,4
+	movei	t3,0
+ipa.0:	pushj	p,getchr
+	 jrst	ipa.8
+	cain	c,"."
+	 jrst	ipa.6
+	cain	c,"/"
+	 jrst	ipa.7
+	cail	c,"0"
+	 caile	c,"9"	 
+	  jrst	ipa.8
+	imuli	n,^D10
+	addi	n,-"0"(c)
+	aoja	t3,ipa.0
+
+ipa.6:	sojle	t4,[error(too many dots in ip address)]
+	jumpe	t3,[error(field empty in ip address)]
+	caile	n,^D255
+	 error(number to large in ip address)
+	lsh	w,^D8
+	add	w,n
+	setzb	n,t3
+	jrst	ipa.0
+
+ipa.7:	sojn	t4,[error(ip address is not x.x.x.x)]
+	jumpe	t3,[error(field empty in ip address)]
+	caile	n,^D255
+	 error(number to large in ip address)
+	lsh	w,^D8
+	add	w,n
+	setzb	n,t3
+	jrst	ipa.0
+
+ipa.8:	pushj	p,reeat
+	sojg	t4,[error(ip address is not x.x.x.x)]
+	jumpl	t4,ipa.9
+	jumpe	t3,[error(field empty in ip address)]
+	caile	n,^D255
+	 error(number to large in ip address)
+	lsh	w,^D8
+	add	w,n
+	seto	n,
+	jrst	ipa.10
+
+ipa.9:	jumpe	t3,[error(prefix length missing)]
+	caile	n,^D32
+	 error(prefix length too large)
+ipa.10:	lsh	w,4		;Final four bits...
+	pushj	p,getchr
+	 jrst	reeat
+	caie	c," "
+	 cain	c,.chtab
+	  jrst	reeat
+	error(garbage at end of ip address)
+
+getwrd:	setzb	w,t4
+	move	t3,[point 6,w]
+getw.1:	pushj	p,getchr
+	 jrst	reeat
+	caie	c," "
+	 cain	c,.chtab
+	  jrst	getw.1
+	jrst	getw.3
+
+getw.2:	pushj	p,getchr
+	 jrst	reeat
+getw.3:	cail	c,"0"
+	 caile	c,"9"
+	cail	c,"A"
+	 caile	c,"Z"
+	cail	c,"a"
+	 caile	c,"z"
+	  jrst	reeat
+	cail	c,"a"
+	 subi	c,40
+	subi	c,40
+	cail	t4,6
+	 jrst	getw.2
+	idpb	c,t3
+	aoja	t4,getw.2
+
+skipsp:	pushj	p,getchr
+	 jrst	reeat
+	caie	c," "
+	 cain	c,.chtab
+	  jrst	skipsp
+reeat:	movem	c,savc
+	popj	p,
+
+getchr:	skipge	c,savc
+	 inchwl	c
+	setom	savc
+	movei	t2,1b35
+	lsh	t2,(c)		
+	trne	t2,^B10000000000001
+	 jrst	getchr
+	tdnn	t2,[^B1100000101000001110010001000]
+cpopj1:	 aos	(p)
+cpopj:	popj	p,
+
+end	route

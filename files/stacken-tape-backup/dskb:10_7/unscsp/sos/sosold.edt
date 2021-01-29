@@ -1,0 +1,810 @@
+	TITLE	SOS -- Son of Stopgap Editor
+
+Revision history -- edits since initial release of version 23.
+
+[1]	16 Oct 76	Fix C,file,range from unsequenced input file
+[2]	17 Oct 76	Make /INCR work in option file again
+[3]	17 Oct 76	Clear command number word after done with 
+			command file so subsequent messages are clean.
+[4]	17 Oct 76	D^:. sometimes failed on unsequenced input, fix
+			supersedes edit number 1.  AC C was clobbered
+			if the input file was unsequenced during
+			resolution of the '^' symbol.
+[5]	17 Oct 76	Make SOS remember input format when exiting
+			with a new filename.
+[6]	17 Oct 76	N command could lose current line number place
+			when FTKIONLY was on.  Fix it.
+[7]	17 Oct 76	File already exists message wasn't always being
+			typed.  Reload error code so test succeeds.
+[10]	17 Oct 76	Rubout to BOL failed if /NONUM was set in Alter
+			mode.
+[11]	17 Oct 76	Fix truncation code so it will work if existing
+			filename causes the rename to fail.
+[12]	17 Oct 76	Fix ?Ill mem ref from F and S when file has bad
+			format.
+[13]	19 Oct 76	Fix message for 'file already exists'
+[14]	19 Oct 76	Fix temporary increment in R command
+[15]	20 Oct 76	Fix L command so ,S works again
+[16]	20 Oct 76	Fix ER so device isn't used for first exit.
+[17]	20 Oct 76	Allow K/m:/n to kill a range of pages
+[20]	20 Oct 76	Clean up /STAND, /VT52 and /NOLF so /VT52 is
+			only set with other compatible switches
+[21]	20 Oct 76	Clean up BAKLIN (altmode command) so LPNTR
+			is not referenced.  Internal only.
+[22]	20 Oct 76	Delete the GIVEO routine.  It wasn't used.
+[23]	20 Oct 76	Add the V commands. (By popular demand?)
+[24]	21 Oct 76	Increment CHGCNT in V command
+[25]	21 Oct 76	Check for !n in K/m:/n. It is illegal
+[26]	21 Oct 76	Tell him if he deletes a file with D switch.
+[27]	21 Oct 76	Have Help give error message if can't find
+			command record.
+[30]	21 Oct 76	Clean up the O command switch parsing.
+[31]	21 Oct 76	Modify usage of LPNTR so don't have to keep
+			recomputing count to change of block.  Makes
+			SOSBUF run 12% faster.  Internal only.
+[32]	22 Oct 76	Fix edit [31] so W works again
+[33]	22 Oct 76	Don't create backup if W immediately followed
+			by E during create.  Use the real filename
+			instead.
+[34]	23 Oct 76	Fix truncation logic so it works with short
+			files.
+[35]	23 Oct 76	Make sure that unsequenced copy routine only
+			reads to end of data (OUTSIZ), not to end
+			of file.  Caused junk at end of file if it
+			the file had shrank.
+[36]	23 Oct 76	Fix DORST so change of PPN works correctly
+[37]	23 Oct 76	Fix CX so it devices can be given.  It didn't
+			know about edit [16].
+[40]	23 Oct 76	Have MAKFIL clear .RBDEV, so error handler
+			can type the right device if ENTER fails after
+			an ER command.
+[41]	23 Oct 76	Give %ILC on bad W commands, not ?ill mem ref.
+[42]	23 Oct 76	Use the default path if no PPN is specified, not
+			the outer directory.  Invent a new UUO to do
+			this (XENTER).
+[43]	23 Oct 76	Ensure that output file is always written on
+			create mode, even if E follows W.  Beginning 
+			users didn't think to look for FOO.BAK when 
+			they thought they were creating FOO.
+[44]	23 Oct 76	Have W give the right messages during creates.
+[45]	23 Oct 76	Add the 'output as <filespec>' message.
+[46]	23 Oct 76	ER and CX sometimes lost device on create
+			due to create code not going thru CHNTAB.
+			Fix it.
+[47]	23 Oct 76	Say '%Input file is write protected' if it is.
+[50]	23 Oct 76	Extract a more resonable set of messages when
+			the file is write protected.
+[51]	25 Oct 76	Do truncation of a short file correctly
+[52]	25 Oct 76	Update ORGNAM after save
+[53]	25 Oct 76	Detect /R and newname as an error.
+[54]    25 Oct 76	Keep proper track of filename and format changes
+			when W gives a special filename argument for
+			subsequent W's and the E command.
+[55]	25 Oct 76	Type the filename as '[dev:file.ext[path]]' when
+			user give a W command. (But not on Auto-save).
+[56]	25 Oct 76	Make the 'reject' option of extended search
+			option actually reject the line.  Ancient bug.
+[57]	25 Oct 76	Treat [1,2] as owner for purposes of
+			setting file protection.
+[60]	25 Oct 76	Fix edit [35].  It was losing track of one
+			extra word per block.
+[61]	25 Oct 76	Implement /EXACT.  The code to set and clear
+			the switch was included, but nobody looked
+			at the flag in the search code.
+[62]	26 Oct 76	Fix /TELL so that directory always prints
+			even if no changes since last save when
+			directory is not users PPN (outer level).
+[63]	26 Oct 76	Make input FORMAT be sequenced if BASIC mode.
+			This allows user to exit without typing ES.
+[64]	26 Oct 76	Clear all traces of the default extension if
+			ER finds the file with null extension.  This
+			caused strange effects on next exit.
+[65]	27 Oct 76	Do not use a default extension if a new name
+			has been given with a null extension.  Check
+			NEWNAM, not NEWEXT when selecting the source
+			of the default.
+[66]	27 Oct 76	Make WR, WQ and WD illegal.
+[67]	27 Oct 76	Do not count a W down as a change for /SAVE.
+[70]	27 Oct 76	Fix O command so it diagnoses the NLN error.
+			AC T1 was being clobbered so the first call to
+			ONMOV always won.
+[71]	28 Oct 76	Fix the set of .RBEST on endcopy, saves and
+			final rename.
+[72]	29 Oct 76	Make command file lookup block the right
+			length so chained command files don't get
+			address checks.
+[73]	29 Oct 76	Fix rewind of unsequenced readonly file
+			so junk is not found at beginning of file by
+			clearing use bits.
+[74]	29 Oct 76	Don't avoid setting default extension flag 
+			because the default is null.  This cause the
+			default extensions for the @ command not to
+			work.
+[75]	30 Oct 76	Avoid ill mem refs when user with a large
+			programmer number goes to read the option file.
+			XLKPFL thought it had a path pointer.
+[76]	1  Nov 76	Suppress page number typeout when a form
+			feed is inserted from a command file.
+[77]	1  Nov 76	Add QZ indicator to the =BAK command.
+[100]	1  Nov 76	Handle rubout (non-alter) correctly when
+			removing the last character on a line.
+[101]	1  Nov 76	Avoid typing [0,0] in L command after
+			after filename has been changed with _name.
+[102]	1  Nov 76	Allow formfeed as a null command, then fix
+			the command file logic so that formfeeds can
+			be inserted from either sequenced or unsequenced
+			command files.
+[103]	1  Nov 76	Add the /PROTECTION switch to do the obvious.
+[104]	2  Nov 76	Get the protection from the input file, not
+			from SVPBTS.  More correctly matches the message
+			this way.
+[105]	2  Nov 76	Clear ACCUM before each command.  Caused B
+			command to fail after erroneous PP command.
+			Old bug from version 22.
+[106]	3  Nov 76	Fix List command so that page numbers
+			in the heading are correct when we're just
+			starting a new logical page.
+[107]	3  Nov 76	Rework the _RUN command.  Make the value
+			the same for both of the CX files (since
+			can only run once), and allow a path or
+			PPN specification.  Also, get only one
+			TTY buffer (the second one was useless
+[110]	4  Nov 76	Fix CCL IO word so that /RUN is saved again.
+			anyway) so that SOS can still run with
+			2K low segment if desired.  Edit [111] broke
+			this.
+[111]   4  Nov 76	Issue OFFRUB before typing CRLF when user
+			types ^U in ALTER mode so non-DPY mode users
+			don't get a pair a backslashes on the new line.
+			(Old bug from version 22)
+[112]	4  Nov 76	Clear VT52 from _M33 as well as _M37.
+[113]	5  Nov 76	Do not call the input file write protected
+			if only the backup is.  Just ignore the backup
+			file in this case.
+[114]	5  Nov 76	Make change of protection count as a change
+			during E and W commands.
+[115]	5  Nov 76	Delete some questionable code in SOSEND
+			to lower the file protection.  With the
+			_PROTECT command, the user can do this
+			for himself.
+[116]	5  Nov 76	Allow newname if /R (for changing name on
+			listings), but warn user that output file
+			will not be written.  Change to edit [53].
+[117]	8  Nov 76	Do not allow junk at the end of a V command.
+[120]	8  Nov 76	Fix protection problems relating to files being
+			edited in non-owner PPN's.
+[121]	8  Nov 76	Clean up of SOSEND.  Fix problem of wrong
+			directory being printed if it was changed with
+			an argument to the E command, remove some
+			wasted code in NSCAN, add the routine GETEST
+			to do file size estimates, and fix a bug
+			introduced in [120] that cause W to stop
+			working.
+[122]	8  Nov 76	Edit [111] forgot that the TTY buffers get
+			re-allocated after control-C.  This caused
+			address checks and illegal UUO's.  Make
+			SOSERR know that TTY gets but one buffer also.
+[123]	9  Nov 76	Fix SOSINI so that it returns if it gets errors
+			trying to setup a co-edit
+[124]	9  Nov 76	Fix the SOSERR so that fatal errors during
+			copy search or co-edit don't bomb the first
+			file.  Instead, just return to the first file.
+[125]	9  Nov 76	Add the message "Too many co-files"
+[126]	9  Nov 76	Add the message "Illlegal filespec"
+[127]   9  Nov 76	Allow users to type encryption keys for ER
+			commands, copies, and co-edits.
+[130]	9  Nov 76	Fix the transfer command so that ITD error
+			is not followed by an illegal memory ref.
+			Also make SOSCPY somewhat smaller and faster
+			by deleting the pre-check for core now that
+			the error recovery works correctly.
+[131]	9  Nov 76	Fix SOS so that a _name that changes the
+			directory doesn't cause the editor to die
+			if the new directory is does not have a UFD
+			on the same device as the file is currently
+[132]	9  Nov 76	Have CCL read routine check a version number
+			in the file and reject the file if there
+			is a mismatch.  A mismatch can cause all kinds
+			of strange errors.
+[133]	9  Nov 76	Setup up ORGDEV in CREAT too.  Else get
+			OPEN failure when we go to look for
+			a backup file.
+[134]	9  Nov 76	Make sure that a new file specification for
+			output always has a default device of DSK:,
+			not the input device.
+[135]	9  Nov 76	Rework the TOFNAM routine so that we always
+			get the right filename even under the worst
+			circumstances.  (Like change of name giving
+			new ersatz device, then W, then E).
+[136]	10 Nov 76	Increment STRNUM if the user types a device
+			with _NAME so it types back.
+[137]	10 Nov 76	Diagnose an encryption key typed for any of
+			W, E (but not ER), O, _NAME and @ commands
+			as an error.
+[140]	10 Nov 76	Fix error recovery for file obtained after
+			write protect failure.
+[141]	10 Nov 76	Add the message 'Illegal in Basic mode'.
+[142]	10 Nov 76	Have CREATE code call GVNAM to give the
+			output file name instead of GIVEI to give
+			the input file name.  This way, we always
+			get the correct device and path.  (This is
+			necessary due to some of the above fixes).
+[143]	10 Nov 76	Avoid ill mem ref in SOSCPY if very near
+			page boundary at start of copy.
+[144]	11 Nov 76	Fix message from create code when a Lookup
+			fails to say '?LOOKUP failed...'
+[145]	11 Nov 76	Have SOS return to the co-file if there is
+			one and a fatal error has occured in the
+			first file.
+[146]	11 Nov 76	Allow line ranges in O command to start
+			with ^ , *, + OR -.
+[147]	15 Nov 76	Clear RSW in NSCAN in case he types ER with
+			no filename.  The flag could be left over from
+			a previous command (co-edit or copy).
+[150]	15 Nov 76	Make sure that the buffer is large enough on
+			a create.  If the cluster size is 3 for the
+			output structure and he didn't give a window
+			size, he could end up with a three block buffer.
+			This can cause mysterious things to happen as
+			SOSBUF sometimes needs four blocks.
+[151]	16 Nov 76	Delete the reference to .VNCCL in SOSINI and
+			replace it with a reference to DVNCCL which is
+			external and defined in SOSDAT.  This way, there
+			is no way to build an SOS where the two do not
+			match.  If they don't match, /CCL doesn't work.
+[152]	16 Nov 76	Allow both device and a PPN to be given in
+			the set run command.  Edit [107] which
+			improved the default broke this and the
+			device always became 'DSK' if a PPN or
+			path was given.  Also make the default extension
+			null so the monitor will use its defaults.
+[153]	16 Nov 76	Allow /RUN switch to have a device if given
+			on the command line.  Also, make it smart
+			enough not to go eating part of the next
+			switch so /RUN doesn't have to be the last
+			switch given.  Old bug from version 22.
+[154]	17 Nov 76	Re-do edit [73] to do INPUT UUOs to clear
+			the use bits instead of clearing them
+			ourselves.  Under certain circumstances
+			the do-it-yourself method gave address
+			checks.
+[155]	18 Nov 76	Write zero length file if user deletes
+			everything.
+[156]	18 Nov 76	Clear COMFLF flag before writing the CCL
+			file.  If this is set when the edit
+			restarts, SOS will act very strangely and
+			die with an illegal memory reference if
+			any errors occur.  Old bug from version 22.
+[157]	20 Nov 76	Avoid illegal data modes from O command
+			if device isn't a disk and re-open the TTY
+			after O and L commands in case he did output
+			to TTY (perhaps becase of ASSIGN TTY LPT).
+[160]	20 Nov 76	Get core with CORE UUO before doing INBUF
+			so we can give a better message (NEC instead
+			of address check) and save his co-file if
+			he has one.
+[161]	20 Nov 76	Fix problem of getting CCL file from the
+			wrong area:  First, move MYPPN out of the
+			CCL area and second, always read and write
+			the file from/to the logged in users home
+			area.  (PPN as he logged in).
+[162]	22 Nov 76	Allow the [-] construction to indicate
+			the default path.
+[163]	22 Nov 76	Check CHGCNT to see if any changes this pass
+			in end code and avoid finishing the current
+			output file if we have already written one
+			that can be used instead.
+[164]	23 Nov 76	Add the CT and CC command to allow copies
+			and transfers from the co-file.
+[165]	23 Nov 76	Don't give an error message if the user
+			types CRLF to 'source lines='.  Instead,
+			assume he didn't want anything and continue.
+			Also, do the CLRBFI before typing source
+			lines or part of his input might be eaten
+			if the system chose to context switch him
+			at the wrong moment.
+[166]	24 Nov 76	Fix problem of losing track of CPG and BIGP
+			when transfer has to insert a page mark
+			to prevent order error.  (Delete SUB T2,PGINSD
+			at NOPGIN+1)
+[167]	24 Nov 76	Protect hapless users who type control-C in
+			the middle of a W or end copy from losing
+			their files.
+[170]	24 Nov 76	Do long read if final page of the command
+			is different than current, not just current
+			logical page/physical page mismatch.  Makes
+			searches go faster.
+[171]	24 Nov 76	Re-type the line for him (a la control-R) if
+			he comes back in after control-C from alter
+			mode.
+[172]	25 Nov 76	Add the A switch to the O command and no
+			longer take append to be the default.  If
+			the file already exists and no switch was
+			given, ask him if he wants to supersede it.
+[173]	25 Nov 76	Put the filename in .RBSPL of the .TMP and .TEM
+			files so directory will give the orignal file
+			names as the alias.  This makes it easier to
+			do crash recovery.
+[174]	25 Nov 76	When deleting the input file, first rename it
+			to FILE.X??, then complete the ending 
+			operations, then delete nnnSAV.TMP.  This 
+			way, if the system crashes between the first 
+			rename and final exit, we can still save the
+			users file.
+[175]	25 Nov 76	Get the mode right on unsequenced output files.
+[176]	29 Nov 76	If the extension for the file to be edited is
+			.X??, use a temp file name of .Y?? if necessary.
+			Extension to edit [174].
+[177]	29 Nov 76	Clean up the 'Lines deleted' code to handle
+			pages on which no lines were found.
+[200]	29 Nov 76	Add code to SETTFP to check for project leader
+			and set protection accordingly.  (UA only, under
+			%UAPRT conditional.  Requires project leader
+			privilege and supporting monitor code).
+[201]	30 Nov 76	Fix the move command so it always places the
+			current position pointer at the top of the
+			page if no line number is given.  HILN was
+			not being cleared.
+[202]	 1 Dec 76	Don't call it a change if there is a protection
+			change, but the protection change is caused by
+			editing the file from a different PPN, not by
+			the protection switch.
+[203]	 1 Dec 76	Allow P:n as a valid command (implied dot).
+[204]	 1 Dec 76	Don't do CLRBFI following [CMEND] message so
+			user can type ahead.
+[205]	 1 Dec 76	Do implied dot in command scanner after the
+			colon as well as before for all commands except
+			R and D.  (The latter restriction is to protect
+			against errors and line glitches).
+[206]	 1 Dec 76	Fix the _NOEXACT command.  The flag variable
+			name was misspelled.
+[207]	 2 Dec 76	Allow implied dots on R and D commands if the
+			user has /EXPERT set.  If not, allow any command
+			string except a completely null range.  E. g.,
+			D:. and D^: would be legal, but a D with no
+			arguments would not.
+[210]	 2 Dec 76	Use the CHKACC UUO to give the message 
+			%Input file is write protected to ensure 
+			compatibility with future monitors.
+[211]	10 Dec 76   **  Sometimes SOS would lose a character in the
+			middle of a file that was being read in
+			unsequenced input mode.  This was caused by
+			OCOMPL calling DATAIN with a count of zero.
+			Cure:  Fix the order of the tests.
+			At OCOMP2+12 (SOSBUF) change
+				JUMPL	T1,OCOMP1
+				TRZ	T1,BLKSIZ-1
+			to
+				TRZ	T1,BLKSIZ-1
+				JUMPLE	T1,OCOMP1
+[212]	10 Dec 76	Copy the .RBVER and .RBMOD fields correctly
+			for save the world and normal exit.
+[213]	13 Dec 76	Clean up calls to CPYFIL in SOSEND.  Do edit
+			[155] for save the world also.
+[214]	13 Dec 76	Make CC<line>=<filename> illegal.
+[215]	13 Dec 76	Clear Co-file flag at start of copy command.
+			Else cannot do non-co-copy until co-edit is
+			ended.
+[216]	13 Dec 76	Check for typeahead in the VT52 printout
+			routine and avoid letting the screen update
+			get more than 1 line behind.  Also fix a minor
+			bug with the S switch to extend.
+[217]	14 Dec 76	Fix the NA command so that the numbering will
+			start with the next line if we are currently
+			not pointing to any line at all (either at
+			beginning of a file or page or pointing between
+			lines).
+[220]	15 Dec 76	Fix the Copy and Transfer commands so they won't
+			copy to line zero.
+[221]	16 Dec 76	Fix exit from alter to do enough line feeds
+			so that the next prompt doesn't overwrite
+			part of a wrapped around line.
+[222]	16 Dec 76	Fix number command some more.  If one does an
+			N command (not NA) and it not at the beginning
+			of the file (line 0), point him to a real line.
+			This way we can leave the pointer at least close
+			to where he thinks it is (half a line off).
+[223]	18 Dec 76	Fix control-U code for VT52's to reposition
+			to the start of wrapped lines before erasing.
+			Also, be wary of the user who types in a
+			very long line.  There was no check for this
+			so the user could write over part of the data
+			buffer if he typed in enough junk.
+[224]	18 Dec 76	Force wraparound if space cannot be made by
+			dumping a block from the buffer (line being
+			inserted near the front of a full buffer).
+			Also, delay incrementing the change counter
+			so the above wraparound can be quick if no
+			other changes so far this pass.
+[225]	21 Dec 76	Close the input file before creating the
+			backup file.  This is suspected of causing
+			NER stopcodes in some monitors.
+[226]	21 Dec 76	Save and restore the new line flag used
+			by the read teco routine accross call to
+			alternate file copy.  This edit changed
+			the flag name to L1.NNL and move it to
+			FL from FL2 (to make saving it simpler).
+[227]    3 Jan 76	Allow user to control-C if SOS is prompting
+			for a new filespec from ending code.
+[230]	 4 Jan 76	Fix the alter D command so that VT52 mode does
+			not get confused if a D command is issued at the
+			end of a line that is exactly a multiple of
+			the terminal carriage width.  It would cause
+			the cursor to be placed one line to low because
+			it was outputting an unecessary eraser.
+[231]	 7 Jan 76	Do not erase the line on a VT52 if the user
+			types Q in ALTER mode.  This was a bad idea.
+[232]	14 Jan 76	Fix the O command parser so that O:file,:*
+			is legal.  Add ":" to the list of characters
+			in the NUMCHR bit table.
+[233]	19 Jan 76	Add give commands for /BASIC, /BUFFERS, /CCL
+			/CCEXIT, /EXACT, /AEXACT, /EXPER, /INFORM
+			and /R.
+[234]	21 Jan 76	Fix scanner so that a six character numeric
+			file name is legal. (Old, old bug in all
+			previous versions of SOS).
+[235]	24 Jan 76	Fix the VT52 version of ^R to use the ^U
+			logic for cursor positioning.  Also fix
+			one instance of the ^U code, namely, the
+			case where the display width is exactly
+			LINEW-1.
+[236]	28 Jan 76	Message fixes.  First, if an ER fails
+			and was given from a co-file, type the
+			'now editing' message when we drop back
+			to the first file.  Also, if a Q is given
+			by an expert, give ILC instead of the long
+			message.
+[237]	 3 Feb 76	Add the 'Line longer than 640 characters'
+			message if we find that DATAIN is about
+			to do a wraparound BLT.  This is better
+			than an ?Ill Mem Ref.
+[240]	 7 Feb 76	If a J command was issued and the second
+			line crossed a block boundary, SOS would
+			die with an ?Ill Mem Ref.  BLKCHK was using
+			T4 which contained a byte pointer setup
+			by the JOIN command.  Cure:  Have BLKCHK
+			preseve T4.
+
+[241]	 7 Feb 76	If a file was edited in an area with little
+			space and SAVE (as in W command) could not
+			do a successful ENTER on the first pass
+			of the edit, SOS would die a horrible death.
+			Cure.  Fix SOS to do a special exit at
+			CWTOF, being careful not to do anymore ENTERs,
+			(we know we have written at least one whole
+			file if we get there).  Also, fix up the co-file
+			logic so it doesn't get confused.  (A number
+			of perverse conditions are possible).
+[242]    8 Feb 76	Set the CHGLNF (command can change line size)
+			flag for the '/' and '\' commands in alter mode.
+			If one transposed a pair characters and one
+			of them was a tab, the VT52 display would
+			get messed up.
+[243]    9 Feb 76	Add the message '%No room to desequence--keep
+			line numbers?', for the case where insufficient
+			room remains on the disk for a copy but a
+			renameable temp file exists.  Also fix a date75
+			problem in the .XAC file and fix the references
+			to NEDCRF so they don't clobber R2.TSC.
+[244]	10 Feb 76	Give user choice of quitting or exiting when
+			we can't make the next temp file (if the
+			original file has not yet been renamed, that
+			is).  Generally clean up the code a bit so
+			that more of these situations are recoverable.
+			Also, if he has specified that the file was
+			to be desequenced, warn him that we are
+			going to save the line numbers.
+[245]	21 Feb 77	Do not give a free CRLF when a user rub back
+			to the beginning of a line in non-VT52 mode.
+
+[246]	21 Feb 77	Allow editing a file with a huge number of nulls
+			at the beginning.
+
+[247]	21 Feb 77	Reset the save counters after an auto save
+			even if the save resulted in 'no changes'.
+[250]	21 Feb 77	Prevent page counting problems and resulting
+			internal confusions when LSRCH crosses page
+			boundaries.
+[251]	22 Feb 77	Allow numeric option names for /OPT.
+[252]	23 Feb 77	Fix LTL logic on TTY input again.  Edit
+			223 broke it.
+[253]	23 Feb 77	Fix SOS so that it can find a named option
+			line even if it is the first line in
+			SWITCH.INI.
+[254]	25 Feb 77	Fix N command in Alter mode so that VT52
+			display is correct for multi-line lines.
+[255]	26 Feb 77	Make the formfeed command clear the screen
+			on a VT52.
+[256]	26 Feb 77	Clear .RBEST on a create.  This may still have
+			something left in it if SOS is starting with
+			an ER command.
+[257]	26 Feb 77	Be sure that the line image is updated when
+			exiting from alter mode.  If REFDLY had not
+			expired when the user typed E, the image was
+			never be updated.  Also set DELBAK during 
+			insertion to eliminate some unnecessary retyping
+[260]	26 Feb 77	Fix calculation of ^+n constructions.  If the
+			the first line really existed, it was one too
+			small.
+[261]	28 Feb 77	Add the message 'Illegal when read-only'
+[262]	4  Mar 77	Fix the insert and copy commands so they
+			won't generate funny increments, and add the
+			I!n construction to denote an increment that
+			will allow the insertion of n lines.
+[263]	8  Mar 77	Fix O command in ALTER so it exits neatly
+			if one types CR as the argument.
+[264]	9  Mar 77	Add /VT05 and /NOVT05 so VT05 users can have
+			the fancy VT52 style alter mode also.  Also,
+			add XCT TMF??? so it is relatively easy to
+			implement this feature for other terminals.
+[265]	9  Mar 77	Re-implement GENSTR to use the DSKCHR UUO so
+			that it will work if a structure is defined
+			with more than eight units.
+[266]	10 Mar 77	Add the # special symbol, means top of last
+			range, and %, which means continuation of last
+			insert.  Makes line range specification a little
+			more flexible.
+[267]	10 Mar 77	Add the [Edit aborted] message.
+[270]	10 Mar 77	Make /INFORM a default if SOS is assembled
+			with INFSW turned on.
+[271]	16 Mar 77	Optimize the display alter routines so that
+			less characters are needed for ^U, Q, -<tab>
+			and termination of insert.
+[272]	18 Mar 77	Go back to beginning of line for wrapped lines
+			when doing a -nJ in alter mode.  Aesthetic patch
+[273]	19 Mar 77	Fix Delete command to check for 0 lines deleted
+			and issue an %NLN error if so.
+[274]	19 Mar 77	Add the routine FINDLO, FINDHI and FINDCL to
+			locate the LOLN, CLN and HILN easily.  Saves
+			about 50 words in the high segment and makes
+			the code shorter.
+[275]	20 Mar 75	Make edit [242] a little smarter.  Since the
+			the problem can only happen when one of the
+			characters is funny, check for codes below
+			ASCII 40.
+[276]	21 Mar 77	Enhance the = command to allow =% and =#.
+[277]   26 Mar 77	Enhance the H command to accept multiple
+			character arguments, and switch arguments
+			using the form H/switch, to allow switch
+			specific help.
+[300]	26 Mar 77	Add the messages "%Ambiguous parameter
+			name" and "%No such parameter" and use
+			them for _ (set), = (give) and H/switch.
+[301]	27 Mar 77	Implement support for the default protection
+			by job provided in 6.03.  Use old code if
+			the new GETTAB fails (table not present).
+[302]	27 Mar 77	Use the GETTAB to determine what the unit
+			of core allocation is to decide whether
+			to return core, not the KIONLY feature test.
+[303]	28 Mar 77	Fix ALTER so that it works on displays with
+			TTY TAB enabled.  Have SOS turn off TTY TAB
+			during ALTERs and restore it otherwise.
+[304]	28 Mar 77	Add the message '%Can't delete input file' if
+			DELETE UUO fails for ED (or EN).
+[305]	28 Mar 77	Fix /LFxxxx string to work correctly when
+			TTY TAB is enabled.
+[306]	18 Apr 77	Fix WS so doesn't get fatal line to long message
+			on a short file.  PNTR was being restore when
+			it shouldn't have been.
+[307]	18 Apr 77	Diagnose illegal circumstances for ED exit.
+[310]	18 Apr 77	Add 'multiple filenames illegal' message.
+[311]	18 Apr 77	Add 'null filename illegal' message.
+[312]	18 Apr 77	Fix ALTER G command to accept string
+			currently being pointed to. (Also M and Y).
+[313]	18 Apr 77	Add /CRLF:n command
+[314]	 3 May 77	Fix INC1=order message.  Broken by edit [262].
+[315]	 3 May 77	Fix =SEQ command.
+[316]	 3 May 77	Diagnose all cases of 'no changes' on new file
+			if he doesn't insert anything.
+[317]	10 May 77	Re-do prompting logic, add new prompts, fix
+			bugs.
+[320]	10 May 77	Fix rubout logic so it can handle all altmodes
+			correctly in search strings.  Some were being
+			prematurely handled as break characters, making
+			it impossible to rub them out.
+[321]	11 May 77	Make EQ do the abort a copy-search without
+			prompting for a line range.  Make errors and
+			null respones go back into the search file
+			so he can look around some more (or type EQ
+			to get out.
+[322]	11 May 77	Add the ';' command for commenting command files
+[323]   15 May 77	Have a +n line number indicate if it goes past
+			the top of the page so certain commands can
+			take appropriate action.
+[324]	15 May 77	Fix X command so that it will continue inserting
+			if a CR is typed at the end of a line.
+[325]	15 May 77	Fix A/p1:/p2 so it doesn't mess up CPG and
+			will work.
+[326]	17 May 77	Fix ^R and P commands in alter mode so they
+			retype the line.  This is necessary if the line
+			gets munged by system messages or something.
+[327]	19 May 77	Allow N (-N) in Alter mode to cross pages.
+[330]	19 May 77	Add increment (temp and permanent to the X
+			command.  The new forms are:
+				Xrange,incr
+				Xrange;tempincr
+				Xrange,incr,S
+				Xrange;incr,S   and so forth
+[331]	25 May 77	JU command sometimes messed up the file if
+			execute as the first pass of an unsequenced
+			file.  Cure:  call GETLTH before using data
+			to ensure that the whole line is in core.
+[332]	25 May 77	Insert re-enter protection into the Help
+			command to prevent address checks.
+[333]	25 May 77	Clear flags in FL before restore from CCL
+			file.  Else DPYF, READOF, EXTOG etc don't
+			work correctly.
+[334]	25 May 77	Move CURINS, LSLOLN into CCL area.
+[335]	25 May 77	Fix SETTTY so it does the correct thing
+			with ECHO and NOECHO relative to the setting
+			of DISF.
+[336]	25 May 77	Call V52TPN instead of V52TYP in Alter C command
+			due to an obsure bug in SCNSER which causes
+			SKIPNL to skip if the last character was a
+			control-U.
+[337]	25 May 77	Watch for CURINS during renumber operations
+			and fix if needed.
+[340]	27 May 77	Fix illegal line format from Alter J command.
+[341]	27 May 77	Fix case of ^R in alter mode on VT52 when
+			cursor is at end of line.  VT52 refresh code
+			was being too clever.
+[342]	 2 June 77	Re-prompt user if he control-C's from TI state.
+[343]	 2 June 77	Reset the value of # on a substitue command.
+[344]	 6 June 77	Allow TTY type devices to use Line Editor
+			mode input for correct CTLR/R and CTLR/U
+			processing, plus rubout through altmode.
+			Make /STANDARD include up arrow echo of
+			control characters by default.
+[345]	 6 June 77	Fix interrogation routines so they don't have
+			a hair trigger and add the /DELETE and /NODELETE
+			switches to get confirmation on ED's.
+[346]	6 June 77	Move DPY, FCS, EXPER and M37 flags into the
+			shared co-file area so the switches can be
+			set at any time.
+[347]	10 June 77	Get correct device and path into ESF file
+			on a copy/edit to a new device or path.
+[350]	16 June 77	Fix Q option of control-C trap when SOS
+			prompts for a new file name on EQ exit.
+[351]	16 June 77	Clean up .TEM files if _R is selected
+			after edit begins.
+[352]	 8 July 77	Rework /CCL save stuff a little so that the
+			last file examined or edited is always found.
+			Also, don't write the ESF file if he says EQ.
+[353]	21 July 77	Change S switch in P and O commands to "U".
+[354]	24 July 77	Decrement auto save counter when doing N
+			commands in Alter mode.
+[355]	24 July 77	Allow Alter in Readonly.
+[356]	24 July 77	Allow / for setting switches during the edit
+[357]	24 July 77	Fix Alter so change count is updated only
+			if the line is actually changed.  Do a
+			compare on the resulting line against
+			the original to decide.
+[360]	24 July 77	Add synonym switches NOVT, NOFILL, NOCRLF.
+[361]	16 Aug 77	Optimize the VT52 refresh code some more.
+			In particular, the X command and DPYALT entry.
+[362]	16 Aug 77	Diagnose junk at the end of /page constructions
+			(implied move command).
+[363]	16 Aug 77	Fix R<line>!<count> so more than one line
+			can be inserted.
+[364]	16 Aug 77	Fix X command so that it won't give order
+			errors if the previous line ended with a
+			line feed and the current one ends with
+			a carriage return.
+[365]	16 Aug 77	Move COMFLF (Command file flag) into the
+			co-file common area in case command file
+			changes co-files.
+[366]	13 Sep 77	Light BELLF flag at command dispatch.  It
+			can be zeroed by copy.
+[367]	16 Sep 77	Clear setting of /CRLF in alter mode.
+[370]	16 Sep 77	Allow /CRLF to work from SWITCH.INI
+[371]	16 Sep 77	Ensure "." is set correctly after X command.
+[372]	16 Sep 77	Don't change the value of "." on =# or =%
+			command.
+[373]	4 Oct 77	Redo <bell> <bell> logic so it really
+			works.
+[374]	8 Oct 77	Redo =CASE so that it can be understood.
+			Simplify the case folding switches and
+			interpretations.
+[375]	8 Oct 77	Add the /ENCRYPT switch which prompts for
+			for passwords.
+[376]	8 Oct 77	Fix N command in alter transversing into
+			a group of null pages at either end of
+			the file
+[377]	26 Oct 77	Fix change count to recognize that format
+			changes are real even if no changes since
+			last save on a creating edit.
+[400]	26 Oct 77	Allow exit from copy if in first file and
+			co-editing.  Tests were in the wrong order.
+[401]	26 Oct 77	Set logical page corectly when doing N's in
+			alter mode that cross page boundaries.
+[402]	26 Oct 77	Handle T/n,range correctly.  Need a special
+			check for line zero.  Convert it to an
+			ASCII zero.
+[403]	29 Oct 77	If /CCL was selected, as well as /ISAVE or
+			/SAVE by command or special option, and
+			was not selected by the main option in 
+			SWITCH.INI then a set of superflous messages 
+			was typed.
+[404]  1 Nov 77		Fix default page in copy from alternate file
+			without search.
+[405]	7 Nov 77	Add logic to add formfeed when line number
+			wraps around when reading unsequenced input.
+[406]	7 Nov 77	Enhance the 'File already exists' message
+			by typing the file name also.
+[407]	7 Nov 77	Make the value of ^ on a null page INCR instead
+			of 100.
+[410]	7 Nov 77	Restart SOS if the user types CONTINUE instead
+			of typing EXIT.
+[411]	7 Nov 77	Allow output file switches.
+[412]	23 Nov 77	Don't assume original file was unsequenced
+			if a copy-search was done to an unsequenced
+			file.
+[413]	25 Nov 77	Make searches go a little faster by not
+			computing the line length before searching
+			each line.
+[414]	25 Nov 77	Clear FRCPAG before calling scan.  Edit
+			[404] didn't fix transfer.
+[415]	26 Nov 77	Clear STARF before doing a /N command to
+			position to top of page N.  It was only
+			cleared by GETL before.
+[416]	2 Dec 77	Fix illegal address in UUO when doing several
+			auto saves on an unsequenced file from the
+			Alter N command.
+[417]	10 Dec 77	(DEC-10 Memorial Edit)  Have Alter-N command
+			update HILN so behavior from auto-alter and
+			when altering a line range is more straight-
+			forward.
+[420]	10 Jan 78	Fix temporary file write algorithm so
+			EDS file can be written to disk if TMPCOR
+			is full.  Coding error (.RBLEN not setup).
+[421]	19 Jan 78	Clear CNTF at COMND so we don't get garbage
+			line number if we do a co-create immediately
+			following a command using a count range.
+[422]	2 Feb 78	Make sure that .RBVER gets set to zero on
+			an ER command.
+[423]	9 Mar 78	Add OBUF+3 (so encryption doesn't lose) and
+			BUFBLL (so don't do loose piece of line) to
+			to alternate file copy save list.
+[424]	30 Mar 78	Make version right in second .TMP file.
+[425]	10 May 78	Make =DSK work in readonly mode.
+[426]	10 May 78	Eliminate spurious F* and S*
+			prompts when reading from a command file.
+[427]	10 May 78	Fix destination of copy to a null page.  New 
+			text ended up on the following page.
+[430]	18 May 78	Clear CTRL/C trapping when prompting
+			for file name after ER.
+[431]	18 May 78	When justifying, leave at lease
+			two spaces following a colon,
+			only one after a semicolon.
+[432]	18 May 78	Don't allow N command in Basic
+			mode.
+[433]	16 June 78	If user specifies a line range
+			on a resequence, make sure that
+			the result in still in sequence.
+[434]	16 June 78	Add support for ^W.
+[435]	15 Aug  78	Don't attempt to create an SFD if
+			the user supplied no path information
+			at all and the default path does not
+			exist on the specified device.  Say
+			SFD not found instead of ?ill mem ref.
+[436]	15 Aug 78	Handle ^W that cause a free CRLF to
+			happen when it echo on input in display
+			mode.
+[437]	30 Aug 78	Do TRMOP.s to get the terminal type in 7.01
+			and later monitors.  Set switches appropriately.
+[440]	8 Sep 78	If ENTER fails because .RBPOS is set to an
+			occupied block, clear .RBPOS and try again.
+[441]  19 Sep 78	Save the input encryption key across copies.
+			Else, bad things happen if the file being
+			copied from has a different key.  Thanks
+			to JCH.
+[442]   4 Oct 78	If users gives a copy command in readonly
+			mode, give the message IRO instead of ILC.
+[443]   21 Oct 78	Allow R SOS[path]-command. to work.  In
+			the past, the path messed up the command
+			scanner.
+[444]   21 Nov 78	SOS looped if the starting number was smaller
+			than the increment for an unsequenced file.
+			Fix it so it doesn't loop.
+
+[445]	8 Apr 79	Improve error messages on exit.

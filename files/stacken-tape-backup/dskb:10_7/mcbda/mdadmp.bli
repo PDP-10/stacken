@@ -1,0 +1,498 @@
+
+MODULE MDADMP (					!ACCESS DUMP FILE
+		IDENT = '003020',
+		LANGUAGE (BLISS16, BLISS36)
+		) =
+BEGIN
+!
+!
+!
+! COPYRIGHT (C) 1978 BY
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+!
+!
+! THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+! ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+! INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+! COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+! OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+! TRANSFERRED.
+!
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+! AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+! CORPORATION.
+!
+! DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+!
+
+!++
+! FACILITY: MDADMP
+!
+! ABSTRACT:
+!
+!
+! THIS MODULE CONTAINS THE ROUTINES TO ACCESS THE DUMP FILE AS A CORE IMAGE
+!
+!
+! ENVIRONMENT: ANY
+!
+! AUTHOR: ALAN D. PECKHAM, CREATION DATE: 25-AUG-78
+!
+! MODIFIED BY:
+!
+!	Alan D. Peckham, 2-Jul-80 : VERSION 3
+! 01	- General update for MCB V3.0
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+
+FORWARD ROUTINE
+    DMPOPN,					!Open and initialize the dump file.
+    GETAPR,                                     !Get APR setting
+    GETBYT,					!ACCESS A BYTE AT THE GIVEN VIRTUAL ADDRESS
+    GETWRD,					!ACCESS A WORD AT THE GIVEN VIRTUAL ADDRESS
+    MAPAPR : NOVALUE,				!Set an apr bias.
+    MAPKNL : NOVALUE,				!Set for KERNAL mapping space.
+    MAPTSK,					!Map user space to given task.
+    MAPUSR : NOVALUE;				!Set for user mapping space.
+
+!
+! INCLUDE FILES
+!
+
+LIBRARY 'MDACOM';				!MDA common definitions.
+
+LIBRARY 'RSXLIB';				!RSX definitions.
+
+!
+! MACROS:
+!
+!	None
+!
+! EQUATED SYMBOLS:
+!
+!
+! OWN STORAGE:
+!
+
+OWN
+    DMPBLK,
+    KISAPR : VECTOR [8],			!The KERNAL mapping registers.
+    UISAPR : VECTOR [8],			!The user mapping registers.
+    SPACE : INITIAL (KISAPR);			!Current mapping space.
+
+!
+! EXTERNAL REFERENCES:
+!
+
+EXTERNAL ROUTINE
+    OPEN,					!Open a file.
+    GETFIL,					!Get a word from the file.
+    POSFIL;					!Position to a word in the file.
+
+EXTERNAL
+    DMPOFF;
+
+GLOBAL ROUTINE DMPOPN (DMP_FILBLK) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+    DMPBLK = .DMP_FILBLK;
+    SPACE = KISAPR;
+    KISAPR [0] = %O'0000';
+    KISAPR [1] = %O'0200';
+    KISAPR [2] = %O'0400';
+    KISAPR [3] = %O'0600';
+    KISAPR [4] = %O'1000';
+    KISAPR [5] = %O'1200';
+    KISAPR [6] = %O'1400';
+    KISAPR [7] = %O'7600';
+    UISAPR [0] = -1;
+    UISAPR [1] = -1;
+    UISAPR [2] = -1;
+    UISAPR [3] = -1;
+    UISAPR [4] = -1;
+    UISAPR [5] = -1;
+    UISAPR [6] = -1;
+    UISAPR [7] = -1;
+    OPEN (.DMPBLK, F_READ, F_BINARY)		!Open the file.
+    END;					!OF DMPOPN
+
+GLOBAL ROUTINE GETAPR (APR_NUM) = 	!Get a mapping bias
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	APR_NUM				!THE APR NUMBER
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	The present APR bias
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    BIND
+	APR = (.SPACE) : VECTOR [8];
+
+    .APR [.APR_NUM]
+    END;					!OF GETAPR
+
+GLOBAL ROUTINE GETBYT (ADR) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	WORD_VALUE;
+
+    IF .ADR<0, 1>				!If odd boundry
+    THEN
+	BEGIN
+	WORD_VALUE = GETWRD (.ADR - 1);
+	.WORD_VALUE<8, 8>			!then get the high byte of the word
+	END
+    ELSE
+	BEGIN
+	WORD_VALUE = GETWRD (.ADR);
+	.WORD_VALUE<0, 8>			!otherwise get the low byte.
+	END
+
+    END;					!OF GETBYT
+
+GLOBAL ROUTINE GETWRD (ADR) =
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	NONE
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LITERAL
+	BLOCK_SIZE = 512;
+
+    OWN
+	WORD_VALUE;
+
+    BIND
+	WORD_PTR = CH$PTR (WORD_VALUE,, 16);
+
+    WORD_VALUE = .VECTOR [.SPACE, .ADR<13, 3>]^6 + .ADR<0, 13>;
+    POSFIL (.DMPBLK, .WORD_VALUE/BLOCK_SIZE + .DMPOFF, .WORD_VALUE MOD BLOCK_SIZE);
+
+    IF GETFIL (.DMPBLK, WORD_PTR, 1) EQL 1	!and get the word.
+    THEN
+	CH$RCHAR (WORD_PTR)
+    ELSE
+	0
+
+    END;					!OF GETWRD
+
+GLOBAL ROUTINE MAPAPR (APR_NUM, BIAS) : NOVALUE = 	!SET A MAPPING BIAS
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!	APR_NUM				!THE APR NUMBER
+!	BIAS					!VALUE TO INSERT IN APR
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    BIND
+	APR = (.SPACE) : VECTOR [8];
+
+    APR [.APR_NUM] = .BIAS			!Set in the bias.
+    END;					!OF MAPAPR
+
+GLOBAL ROUTINE MAPKNL : NOVALUE = 		!Set to the KERNAL mapping space.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+    SPACE = KISAPR				!Set for KERNAL mapping registers.
+    END;					!OF MAPKNL
+
+GLOBAL ROUTINE MAPTSK (TCB_ADDRESS) = 		!Map user space to given task.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+
+    LOCAL
+	APR_NUMBER,
+	BIAS,
+	HEADER_ADDRESS,
+	NUM_APRS,
+	NUM_WINDOWS,
+	PCB_ADDRESS,
+	WINDOW_ADDRESS;
+
+    SPACE = KISAPR;				!Set for KERNAL mapping registers.
+    HEADER_ADDRESS = GETWRD (GETWRD (.TCB_ADDRESS + FL$OFFSET (T_PCB)) + SYMBOL ('P.HDR'));
+
+    IF (WINDOW_ADDRESS = GETWRD (.HEADER_ADDRESS + FL$OFFSET (H_WND))) EQL 0 THEN RETURN FALSE;
+
+    IF GETWRD (.WINDOW_ADDRESS + FL$OFFSET (W_BLVR) + 2) NEQ 0
+    THEN
+	BEGIN
+	UISAPR [0] = %O'0000';
+	UISAPR [1] = %O'0200';
+	UISAPR [2] = %O'0400';
+	UISAPR [3] = %O'0600';
+	UISAPR [4] = %O'1000';
+	UISAPR [5] = %O'1200';
+	UISAPR [6] = %O'1400';
+	UISAPR [7] = %O'7600';
+	END
+    ELSE
+	BEGIN
+	UISAPR [0] = %O'7777';
+	UISAPR [1] = %O'7777';
+	UISAPR [2] = %O'7777';
+	UISAPR [3] = %O'7777';
+	UISAPR [4] = %O'7777';
+	UISAPR [5] = %O'7777';
+	UISAPR [6] = %O'7777';
+	UISAPR [7] = %O'7777';
+	END;
+
+    IF ((NUM_WINDOWS = GETWRD (.WINDOW_ADDRESS)) EQL 0) OR (.NUM_WINDOWS GTR RSX_MAX_WND) THEN RETURN FALSE;
+
+    WINDOW_ADDRESS = .WINDOW_ADDRESS + 2;
+
+    WHILE (NUM_WINDOWS = .NUM_WINDOWS - 1) GEQ 0 DO
+
+	IF (PCB_ADDRESS = GETWRD (.WINDOW_ADDRESS + FL$OFFSET (W_BPCB))) NEQ 0
+	THEN
+	    BEGIN
+	    BIAS = GETWRD (.PCB_ADDRESS + FL$OFFSET (P_REL)) + GETWRD (.WINDOW_ADDRESS + FL$OFFSET (W_BOFF));
+	    APR_NUMBER = (GETBYT (.WINDOW_ADDRESS + FL$OFFSET (W_BFPD)) - %O'200')^-1;
+	    NUM_APRS = GETBYT (.WINDOW_ADDRESS + FL$OFFSET (W_BNPD));
+
+	    WHILE (NUM_APRS = .NUM_APRS - 1) GEQ 0 DO
+		BEGIN
+
+		IF (.APR_NUMBER LSS 0 OR .APR_NUMBER GTR 7) OR (.BIAS LSS 0 OR .BIAS GTR %O'7777')
+		THEN
+		    RETURN FALSE;
+
+		UISAPR [.APR_NUMBER] = .BIAS;
+		BIAS = .BIAS + %O'200';
+		APR_NUMBER = .APR_NUMBER + 1
+		END;
+
+	    WINDOW_ADDRESS = .WINDOW_ADDRESS + W_BLGH^1
+	    END;
+
+    SPACE = UISAPR;				!Set for user mapping registers.
+    TRUE					!Mapping done successfully.
+    END;					!OF MAPTSK
+
+GLOBAL ROUTINE MAPUSR : NOVALUE = 		!Set to the user mapping space.
+
+!++
+! FUNCTIONAL DESCRIPTION:
+!
+!
+!
+!
+! FORMAL PARAMETERS:
+!
+!
+! IMPLICIT INPUTS:
+!
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!
+!	NONE
+!
+! ROUTINE VALUE:
+!
+!	NONE
+!
+! SIDE EFFECTS
+!
+!	NONE
+!
+!--
+
+    BEGIN
+    SPACE = UISAPR				!Set for user mapping registers.
+    END;					!OF MAPUSR
+
+END
+
+ELUDOM

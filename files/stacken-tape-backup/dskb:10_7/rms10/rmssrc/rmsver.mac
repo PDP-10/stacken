@@ -1,0 +1,18 @@
+	TITLE	RMSVER	Set RMS version number
+
+	SEARCH	RMSINT, RMSMAC
+
+
+;Revision history
+;
+; 116	  1	Dev		(WXD, 4/2/86) Create new module to set version
+;				number of RMS.EXE and RMSCOB.EXE.
+
+
+;Set TOPS-10 version number
+
+	LOC	137
+	$VERS
+	RELOC
+
+	END

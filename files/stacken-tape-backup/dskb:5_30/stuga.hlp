@@ -1,0 +1,52 @@
+Stuga - ett svenskt adventure!
+
+               IIIIIIIIIIIIIIII
+   _ _ _      II              II      _ _ _
+__I I I I_____I                I_____I I I I__
+  I I I I     I   I--I  I--I   I     I I I I
+  I_I_I_I     I   I  I  I  I   I     I_I_I_I
+              I   I  I  I  I   I    
+              I   I *I  I* I   I
+              I   I__I  I__I   I
+              II              II
+               II            II
+                II          II
+                 I__      __I
+                    I    I
+                    I    I
+                    I    I
+                    I    I
+                    II  II           Thorvald, ordf|rande
+                     I__I            i Stugr}det.
+
+Stuga startas med kommandot
+	R GAM:STUGA
+Du ska utforska ett hus och dess omgivningar. Datorn {r dina |gon och
+h{nder. I huset kan vad som helst h{nda; du kan falla ner genom fall-
+luckor, r|vare kan ta alla dina v{rdesaker, rulltrappor kan sp{rras
+av och telefoner kan ringa. Utanf|r huset finns stora skogar att str|va
+omkring i, vattenfall att duscha i och mystiska varelser som dyker upp
+n{r man minst v{ntar det...
+Det g{ller att hitta och ta vara p} alla skatter och v{rdef|rem}l, och
+att utf|ra vissa trick. H|gsta m|jliga po{ngsumma {r 335. Den som upp-
+n}r 335 po{ng kan v{nta sej en bel|ning...
+
+Ge enkla order till datorn, till exempel SL[PP TAVLAN, \PPNA D\RREN,
+FYLL SAFTFLASKAN, NORR, UPP]T, H\GER.
+S} gott som alla kommandoord kan f|rkortas till fem bokst{ver. Ett
+undantag {r riktningarna. Vill man f|rflytta sej }t n}got h}ll ska
+man utanf|r stugan anv{nda v{derstreck som kan f|rkortas till 
+N (norr), N\ (nord|st), \ (|ster), S\ (syd|st), S (s|der), SV (syd-
+v{st), V (v{ster), NV (nordv{st). Inuti huset anv{nds riktningarna
+F (fram}t), B (bak{t), V (v{nster), H (h|ger), U (upp}t), N (ner}t).
+
+I vissa rum kan du f} s{rskild hj{lp om du skriver HJ[LP, men det ger
+po{ngavdrag. INVEN listar alla saker du b{r p}, PO[NG skriver ut hur
+m}nga po{ng du har och TITTA skriver ut rummets fullst{ndiga beskriv-
+ning. Ge kommandot SLUTA n{r du inte vill utforska l{ngre. INFO ger
+en kort sammanfattning av dessa kommandon.
+
+I telem|tessystemet KOM finns ett m|te f|r alla stugautforskare. Det
+heter Thorvalds Stugr}d.
+
+Stuga {r skrivet av Viggo och Kimmo Eriksson samt Olle Johansson.

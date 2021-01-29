@@ -1,0 +1,554 @@
+                                                                                                                                    
+     $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+    $                                                                                                                               
+   $                                                                                                                                
+  $                                                                                                                                 
+  $                                                                                                                                 
+ $                                                                                                                                  
+$                                                                                                                                   
+$                                                                                                                                   
+$                                                                                                                                   
+$                                                                                                                                   
+$                                                                                                                                   
+$                                                                                                                                   
+$                                                                                                                                   
+$                                                                                                                                   
+$                                                                                                                                   
+$                                                                                                                                   
+$                        QQQQQQQQQQQQ                                                                                               
+$                      QQQQQQQQQQQQQQQQ                                                                                             
+$                    QQQQQQQQQQQQQQQQQQQQ                                                                                           
+$                   QQQQQQ          QQQQQQ                                                                                          
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$                  QQQQQ              QQQQQ                                                                                         
+$              QQQQQQQQQQQQQQ         QQQQQ         $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+$              QQQQQQQQQQQQQQQQ       QQQQQ         $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+$              QQQQQQQQQQQQQQQQQQ     QQQQQ         $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+$                  QQQQQ     QQQQQ    QQQQQ         $$$$                                                       ****  **  **  **  ** 
+$                   QQQQQ     QQQQQ  QQQQQ          $$$$                                                      ****  **  **  **  *** 
+$                    QQQQQ     QQQQQQQQQQ           $$$$                                                     ****   ** **  **  **** 
+$                     QQQQQQ    QQQQQQQQ            $$$$                                                    ****   ** **  **  **  **
+$                       QQQQQQQQQQQQQQ              $$$$                                                   ****   ** **  **  **** **
+$                        QQQQQQQQQQQQQQ             $$$$                                                  ********* **  ** ******* *
+$                          QQQQQQQQQQQQQ            $$$$                                                 *** **** *** *** ****  *** 
+$                                   QQQQQ           $$$$                                                ***  ** ***  *** ***     ***
+$                                     QQQQQ         $$$$                                                ***  ****   **  ***        *
+$                                       QQQQQ       $$$$                                               ***  ***   *** ***           
+$                                                   $$$$                                              ***  *******  ****            
+$                                                   $$$$                                             ***  ** ***  ****              
+$                                                   $$$$                                            ***  **  *******                
+$                                                   $$$$                                            ***  **  ****                   
+$                                                   $$$$                                           ***  **   **                    *
+$                                                   $$$$                                          ***  **   ***                     
+$                    QQQ               QQQ          $$$$                                         ***  **    *************           
+$                  QQQQQQQ           QQQQQQQ        $$$$                                        ***  **    ****************         
+$                QQQQQQQQQQQ       QQQQQQQQQQQ      $$$$                                        **  **    *******     ******        
+$               QQQQQQQQQQQQQ     QQQQQQQQQQQQQ     $$$$                                       **  **    ****** **********          
+$              QQQQQQQQQQQQQQQ   QQQQQQQQQQQQQQQ    $$$$                                      ***  **   *******************         
+$              QQQQQQQQQQQQQQQQ QQQQQQQQQQQQQQQQ    $$$$                                      **  **    ********* ****** **         
+$              QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ    $$$$                                     **  **    *********   ****   *         
+$              QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ    $$$$                                    ***  **    ****** *           *         
+$              QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ    $$$$                                    **  **    ******  *           *         
+$               QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ     $$$$                                   **  **    ******   *           *         
+$                QQQQQQQQQQQQQQQQQQQQQQQQQQQQQ      $$$$                                  ***  **    ******   *           *         
+$                 QQQQQQQQQQQQQQQQQQQQQQQQQQQ       $$$$                                  **  **    *******   *           *         
+$                  QQQQQQQQQQQQQQQQQQQQQQQQQ        $$$$                                 ***  **   *******    *          *          
+$                   QQQQQQQQQQQQQQQQQQQQQQQ         $$$$                                **  **    *******     *          *          
+$                    QQQQQQQQQQQQQQQQQQQQQ          $$$$                               ***  **    *******     *          *          
+$                     QQQQQQQQQQQQQQQQQQQ           $$$$                              ***  **    *******      *          *      ****
+$                      QQQQQQQQQQQQQQQQQ            $$$$                             ****  *    *******       **         ***    ****
+$                       QQQQQQQQQQQQQQQ             $$$$                             **   **   *******        **           ****     
+$                        QQQQQQQQQQQQQ              $$$$                            ***  **    *******        **              **    
+$                         QQQQQQQQQQQ               $$$$                            **   **   *******         **                *   
+$                          QQQQQQQQQ                $$$$                           ***  **   ********         **                    
+$                           QQQQQQQ                 $$$$                           **   **  ********         ***                    
+$                            QQQQQ                  $$$$                          ***  **  ********         ** **     ^^############
+$                             QQQ                   $$$$                          **   **  *******         **   **           #######
+$                              Q                    $$$$                         ***  **   *******         **   **              ----
+$                                                   $$$$                         **   **  *******         **    ***                 
+$                                                   $$$$                        ***  **  *******          **    ***                 
+$                                                   $$$$                        **   **  *******         **   ******                
+$                                                   $$$$                       **   **   *******         **  **   **                
+$                                                   $$$$                       **   **  *******          *****     **               
+$                                                   $$$$                      **   **   *******          ******     **              
+$                                                   $$$$                      **   **   *******       ***********    **             
+$                                                   $$$$                     ***  **   *******      ********************            
+$                                                   $$$$                     **  **   *******     ****(((((   ***********           
+$                                                   $$$$                    ***  **   *******   ****(((((   ***************         
+$                                                   $$$$                    **   **  *******  ****((    (((    **************       
+$                                                   $$$$                    **  **   ***********((((((    ((((    *************     
+$                                                   $$$$                   ***  **  **********(((((((((((((((((((   ((**************
+$                                                   $$$$                   **  **   ********(((((((((((((((((((    ((((((((*********
+$                                                   $$$$                   **  **   *******(((((((((((((((   (((     ((((((((((*****
+$                                                   $$$$                  ***  **  ******((((((((((((((((    (((((((  ((((((((((((((
+$                                                   $$$$                  **   ***XXXXXXXX(((((     (((((   (((((((((((((((         
+$                                                   $$$$                  **   **XXXXXXXXXXX((((((    ((((((((((((((((   (((((((    
+$                                                   $$$$                 **XXXXXXXX..XXXXXXXXX(((((((((((((((((((((((((   ((((((((((
+$                                                   $$$$                 **XXXXX....X....XXXXXXXXX((((((((     ((((((((   ((((((((((
+$                                                   $$$$                **XXXXX....XX...XXXXXXXXXXXXX(((((((      ((((((((((((((((((
+$                                                   $$$$              **XXXXXX....XXXXXXXX.....XXXXXXXXX(((((((     ((((((((((((((((
+$                                                   $$$$           **XXXXXXX... .XXXXXXX......XXXXXXXXXXXXXX(((((((((((((     ((((((
+$                                                   $$$$          **XXXXXXXX....XXXXXXX.....XXXXXXXXXXXXXXXXXXXXXX(((((((((        (
+$                                                   $$$$        **XXXXXXXXX.....XXXXX......XXXXXXXXXXXXXXXXXXXXXXXXXXX((((((((((((((
+$                                                   $$$$      **XXXXXXXXXX......XXXX.......XXXX...XXXXXX  XXXX  XXXXX  XXXXXX(((((((
+$                                                   $$$$   **XXXXXXXXXXXX......XXXX...............XXXXX  XXX  XXXXX  XXXXXXXXXXXXXXX
+$                                                   $$$$**XXXXXXXXXXXXXXX.....XXXXX...XXX........XXXX  XXX  XXXXX  XXXXXXXXXXXXXXXXX
+$                                                   $$$$**XXXXXXXXXXXXXX.....XXXX...XXXXXXX......XXXX  XXXXX XXXXX  XXXXXX   XXXXXXX
+$                                                   $$$$**XXXXXXXXXXXXX.....XXXX...XXXXXXXX.....XXXX  XXXXXX XXXXXX  XXXX   XXXXXXXX
+$                                                   $$$$**XXXXXXXXXXX......XXXXX...XXXXXXXX.....XXX   XXXXX  XXXXX  XXXXX  XXXXXXXXX
+$                                                   $$$$...................XXXX....XXXXXXX......XXX   XXXX  XXXXX  XXXXX    XXXXXXXX
+$                                                   $$$$.........XXXXXX...XXXXX......XXXXX.....XXX   XXXXXX  XXXXX  XXX     XXXXXXXX
+$                                                   $$$$.......XXXXXXXX...XXXX.......XXXXXXXXXXXXX...XXXXXX  XXXXX  XX      XXXXXXXX
+$                                                   $$$$....XXXXXXXXXXX...XXX.......XXXXXXXXXXXXX...XXXXXXXX  XXXXX  X      XXXXXXXX
+$                                                   $$$$..XXXXXXXXXXXXX...XXX.....XXXXXXXXXXXXXX   XXXXXXX  XXXXX  XXX              
+$                                                   $$$$XXXXXXXXXXXXXXX....XX....XXXXXXXXXXXXXX   XXXXXXX  XXXXX  XXXQQQQQ          
+$                                                   $$$$XXXXXXXXXXXXXXX....XX....XXXXXXXXXXXXXX   XXXXXX  XXXXX  XXXQQQQQQQQQQ      
+$                                                   $$$$XXXXXXXXXXXXX.............XXXXXXXXXXXXX  XXXXXX  XXXXX  XXXXQQQQQQQQQQQQ    
+$                                                   $$$$XXXXXXXXXXXX.....XXXXXX.....XXXXXXXXXXX  XXXXXX  XXXXX  XXXQQQQQQQQQQQQQQQ  
+$                                                   $$$$XXXXXXXXXXX.....XXXXXXXXX.......XXXXXX  XXXXXXXX  XXXXX  XXQQQQQQQQQQQQQQQQQ
+$                                                   $$$$XXXXXXXXXXX.....XXXXXXXXXX....XXXXXXXX  XXXXXXXX  XXXXX  XX     QQQQQQQQQQQQ
+$                                                   $$$$XXXXXXXXXXX.....XXXXXXXXXXX...XXXXXX   XXXXXXX  XXXXX  XXXXXX      QQQQQQQQQ
+$                                                   $$$$XXXX............XXXXXXXXXXXXXXXXXXXX  XXXXX  XXXXX  XXXXXXXXXX      QQQQQQQQ
+$                                                   $$$$XX..............XXXXX...XXXXXXXXXXX  XXXXX  XXXXX  XXXX   XXXXXX      QQQQQQ
+$                                                   $$$$.................XXX....XXXXXXXXXXX  XXXXX  XXXXX  XXX       XXXXX     QQQQQ
+$                                                   $$$$........................XXXXXXXXXX  XXXXXX  XXXXX  XX        XXXXX      QQQQ
+$                                                   $$$$XXXXXXXXX...................XXXXXX  XXXXXX  XXXXX  X         XXXXXXXX    QQQ
+$                                                   $$$$XXXXXXXXXX..................XXXXX  XXXXX   XXXXX  XX          XXXXXXXX    QQ
+$                                                   $$$$XXXXXXXXX.................XXXXXXX  XXX  XXXXXX  XXX           XXXXXXXXX    Q
+$                                                   $$$$XXXXXXXX.................XXXXXXX  XXXX  XXXXX  XXXX           XXXXXXXXXX    
+$                                                   $$$$XXXXXX...XXXXXXX........XXXXXXXX  XXXX  XXXXX  XXXX          XXX    XXXXX   
+$                                                   $$$$XXXX...XXXXXXXXXX.....XXXXXXXXXX  XXXXX  XXXXX  XX          XXX       XXXX  
+$                                                   $$$$X....XXXXX...XXXX....XXXXXXXXXXX  XXXXX  XXXXX  XX          XXX        XXX  
+$                                                   $$$$.............XXXX....XXXXXXXXXX  XXXXXXX  XXXXX  XX        XXX        XXXXX 
+$                                                   $$$$............XXXXX....XXXXXXXXXX  XXXX  XXXXX  XXXXXXX      XXX        XXXXX 
+$                                                   $$$$............XXXXX....XXXXXXXXXX  XX  XXXXX  XXXXXXXXXXX    XXX         XXXXX
+$                                                   $$$$..........XXXXXXX....XXXXXX..XX  XX  XXXXX  XXXX   XXXXXXXXXXX         XXXXX
+$                                                   $$$$.......XXXXXXXXXX...XXXXXX..XX  XXXX  XXXXX  XX        XXXXXXX         XXXXX
+$                                                   $$$$..XXXXXXXXXXXXXXX...XXXXX...XX  XXXX  XXXXXX  X          XXXXXXXX     X  XXX
+$                                                   $$$$XXXXXX.....XXXXX...XXXXXX...XX  XXXX  XXXXX  XX          XXXXXX        XXXXX
+$                                                   $$$$XXXXX......XXXX...XXXXXX....XX  XX  XXXXXX  XX          XXXX XXXXXX  X  XXXX
+$                                                   $$$$XXXX....XXXXXX....XXXX.....XX  XX  XXXXXX  XXX        XXXXX    XXXXXXX XXXXX
+$                                                   $$$$XXX........................XX  XX  XXXXX  XXXX       XXXXX       XXXXXXXXXXX
+$                                                   $$$$X..........................XX  XX  XXXXX  XXXX        XXXX       XXXXXXXXXX 
+$                                                   $$$$X.........XXXXXX........  QXX  XXX  XXXXX  XXX        XXXX      XXXXXXXXXXX 
+$                                                   $$$$X.....XXXXXXXXX..........QQXX  XXXX  XXXXX  XX        XXXX  XXXXXXX  XXXXXX 
+$                                                   $$$$X....XXXXXXXX..........QQQQXX  XXXX  XXXXX  XX        XXXXXXXXXXX   XXXXX   
+$                                                   $$$$X....XXXXXXX..........QQQQQXX  XXXX  XXXXX  XX    XXXXXXXXXX         XXXXX  
+$                                                   $$$$X....XXXXX..........QQQQQQQXX  XXXX  XXXXX  XX  XXXXXXXX             XXXX   
+$                                                   $$$$XXXXXXXXX.........QQQQQQQQQXX  XXXX  XXXXX  XXXXXXXXXXX              XXX   Q
+$                                                   $$$$XXXXXXX.X.......QQQQQQQQQQQXX  XX  XXXXX  XXXXX    XXX              XXX  QQQ
+$                                                   $$$$XXXX..........QQQQQQQQQQQQQXX  XX  XXXXX  XXXX      XXX             XXX  QQQ
+$                                                   $$$$XXX..........QQQQQQQQQQQQQQXX  X  XXXXX  XXXXXX     XXX           XXXX  QQQQ
+$                                                   $$$$XX.........QQQQQQQQQQQQQQQQXX  XX  XXXXX  XXXXX     XXX          XXX   QQQQQ
+$                                                   $$$$X.........QQQQQQQQQQQQQQQQQXX  XXX  XXXXX  XXXX    XXXX         XXX  QQQQQQQ
+$                                                   $$$$........QQQQQQQQQQQQQQQQQQQXX  XXXX  XXXXX  XXX    XXX        XXX   QQQQQQQQ
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                                                                                                                                                                              
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$                             $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$                                                                                                             $$$$$$$$$$$$$$$$$$$$$$$$
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                              
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$                             $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$                                                                                                             $$$$$$$$$$$$$$$$$$$$$$$$
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$                             $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$                                                                                                             $$$$$$$$$$$$$$$$$$$$$$$$
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$                             $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$                                                                                                             $$$$$$$$$$$$$$$$$$$$$$$$
+**** *** **  ########     YY                             Y    YYYYYYYYYYYYYYYYYYYYY                     YYY                                                                                                                                                                   
+** ** **  ****########     Y                             YY    YYYYYYYYYYYYYYYYYYYYY                   YYY                                                                                                                                                                    
+**  ** **   ***########                                  YYY    YYYYYYYYYYYYYYYYYYYY                  YYY                                                                                                                                                                     
+ **  **  ***   #########                                  YYY    YYYYY  YYYYYYYYYY                   YYY                                                                                                                                                                      
+  **  ***   ****#########                                  YYYY   YYYYYYYYYYY                       YYY                                                                                                                                                                       
+*  *** ****      #########                                   YYYYYYYYYYYYYYYYY                     YYY                                                                                                                                                                        
+**   *** ****    ##########                                    YYYYY YYYYYYYYYY                    YYY                                                                                                                                                                        
+* **   **** *******#########                                     YYY  YYYYYYYYY                   YYY              QQQQQQQQQQQQQ                                                                                                                               QQQQQQQQQQQQ   
+**  **    ****     #########                             #       YYY   YYYYYYY                    YYY            QQQQQQQQQQQQQQQQQ                                                                                                                          QQQQQQQQQQQQQQQQQQ
+****  ***     ******########                             ##       YYY   YYYY    YY                YYY          QQQQQQQQQQQQQQQQQQQQQ                                                                                                                      QQQQQQQQQQQQQQQQQQQQ
+  ****   ****       ########                             ###       YYY   YYY  YYYYYY  YYYYY       YYY         QQQQQQQQQQQQQQQQQQQQQQQ                                                                                                                    QQQQQQQQQQQQQQQQQQQQQ
+    *****   *****   ########                             ####       YYY      YYYYYYYYYYYYYYYY     YYY        QQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                                  QQQQQQQQQQQQQQQQQQQQQQ
+       ******    *****######                             ######       YYY    YYYYYYYYYYYYYYYYYY   YYY       QQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                                QQQQQQQQQQQQQQQQQQQQQQQ
+           ******     ######                             #######      YYY    YYYYYYYYYYYYYYYYYY   YYY      QQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                                QQQQQQQQQQQQQQQQQQQQQQQ
+*             **********####                             ########      YYY    YYYYY  YYYYYYYYY    YYY      QQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                              QQQQQQQQQQQQQQQQQQQQQQQQ
+**********          *****###                             ##########     YYY    YYY   YYYYYYY      YYY     QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+ ******************       ##                             ###########     YYY    YYYYYYYYYY        YYY     QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+   *******************     #                             ############      YYYYYYYYYYYYYYYY       YYY     QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+                    ***    *                             #############      YYYYYYYYYYYYYYYY      YYY     QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+     **********            *                              Printed on###        YYYYYYYYYYYYY      YYY     QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+   ***************         *                               %Decsystem10#       YYY    YYYYY       YYY     QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+  **** ******   ******     *                               *#############       YYY       YYYYY   YYYY    QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+  **    ****    ***        *                              ** #With#Many###       YYY     YYYYYYY   YYY    QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+                           *                              **  #Thanks#to####        YYY   YYYYYYYYYYYYY   QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+                                                          **   #Dan#Meyers###      YYY    YYYYYYYYYYYYYY   QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+                                                         ***   *##############      YYY   YYYYYYYYYYYYYYY   QQQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+                                                         ***   **##############      YYY   YYYYY   YYYYYY    QQQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+                                                         **   ** ##############       YYY   YYYY   YYYYYYY    QQQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+                                                          **  ***  ##############      YYYYYYYYYYYYYYYYYYYY    QQQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+                                                           *  ***   ##############       YYYYYYYYYYYYYYY        QQQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQQ
+                                                            * ***    ##############       YYY  YYYYY             QQQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQQ 
+   **                                                       * ***    *##############       YYYYY                  QQQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQQ  
+**  *                                                        ****    **##############    YYYY                      QQQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQQ   
+*****                                                         ***   **  ##############YYYY                          QQQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQQ    
+                                                               **   **  *##############Y                             QQQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQQ     
+                                                                *   **  **##############                              QQQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQQ      
+                                                                **  **  ** ###############                             QQQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQQ       
+                                                               **** ** **  *###############                             QQQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQQ        
+#######^^                                                     ******** **  **################                            QQQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQQ         
+##                                                           ********* **  ** ################                            QQQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQQ          
+                                                            **** ***** **  **  *##############                             QQQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQQ           
+                                                          ************ **  ** ** ###############                            QQQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQQ            
+                                                         ****      ******  ** **  ################                           QQQQQQQQQQQQ                                                                                                             QQQQQQQQQQQ             
+                          **                             *****************  ** **  *################                          QQQQQQQQQQQ                                                                                                             QQQQQQQQQQ              
+                         ***                             **          ****  ** ** ** ###############                            QQQQQQQQQQ                                                                                                             QQQQQQQQQ               
+                       *****                             ***************** ** ** **  *###############                           QQQQQQQQQ                                                                                                             QQQQQQQQ                
+                     *****                                           ******** ** **  * ###############                           QQQQQQQQ                                                                                                             QQQQQQQ                 
+                   *********                             ************  ****** ** ** *   ################                          QQQQQQQ                                                                                                             QQQQQQ                  
+                 *****                                               **  ******* ** *   **###############                          QQQQQQ                                                                                                             QQQQQ                   
+               *************                             ************     ****** ** *  **  ################                         QQQQQ                                                                                                             QQQQ                    
+            *****                                                      ********* ** *  ** ** ###############                         QQQQ                                                                                                             QQQ                     
+         *******************                             ************************** * ** **  *###############                         QQQ                                                                                                             QQ                      
+      **********************                             **************************** ** *  ** ###############                         QQ                                                                                                             Q                       
+****************************                             ******************((((****** ***  **  *################                        Q                                                                                                                                     
+****************************                             ********************************** **  **###############                                                                                                                                                             
+****************************                             **************(((((((((*********** **  **###############                                                                                                                                                             
+((**************************                             ********((((((((((((   (((**********  *** ###############                                                                                                                                                            
+((((((((((******************                             ((((((((((((((((((((    ((((******* ***  ** ##############                                                                                                                                                           
+((((((           (((((((((((                             ((((((((  (((((((((((    (((((*******  **    *#############                                                                                                                                                          
+((((((((        ((((((((((((                                 ((((   (((((((((((   ((((((********  ****  #############                                                                                                                                                         
+((    ((((((((((((((((((((((                                 (((((  (((((((((((((((((((   ********     **##############                                                                                                                                          QQQQQQQ      
+((    ((((((((((((   (((                                         (  (((((((((((((((((    (((************   #############                                                                                                                                       QQQQQQQQQQQ    
+((    ((((((((((((   (((                                         ((((((((     (((((((((((((((((******  *****##############                                                                                                                                    QQ         QQ   
+((((((((((((((((((   (((                                         ((((      ((((((((((((((((((**********      ###############                                                                                                                           XXXXXXXQ           QXXX
+(((((           (((((((((((                                  (((((((((((((((((((((((((((((XXXXXXX**************###############                                                                                                                         XXXXXXXQ           QXXX
+((((             (((((((((((                                 ((((((((((((((((((XXXXXXXXXXXXXXXXXXXXXX***********###############                                                                                                                        XXXXXXXQ           QXXX
+((((((((((((((((((((((((((((                             ((((((((((((((((XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX*********###############                                                                                                                       XXXXXXXQQ         QQXXX
+((((((((((((((((((((((((((((                             (((((((XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX      *******#############         Q                                                                                                             Q     QQQQQ       QQQQQ 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXX                             XXXXXXXXXXXXXXXXXXXXX  XXXXXXXXXXXXXXXX              ******##########         QQ                                                                                                                     QQQQ  X  QQQQ   
+XXXXXXXXXXXXXXXXXXXXXXXXXX                                      XXXXXXXXXXXXX   XXXXXXXXXXXXX         X   XXX    *****#######         QQ                                                                                                                       QXXXX.XXXXQ    
+XXXXXXXXXXXXXXXXXXXXXXXXXXXX                             XXXXXX  XXXXXXXXXXX   XXXXXXXXXXXXX          XXXXXXX      ****#####          QQ                                                                                                                        XXX...XXX     
+XXXXXXXXXX   XXXXXXXXXXX  XX                             XXXXXX  XXXXXXXXXX   XXXXXXXXXXXXX            XXXXXX         XXX##           QQ                                                                                                                       QXXXX.XXXXQ    
+XXXXXXXXXXX   XXXXXXXXXXX  X                             XXXXXX  XXXXXXXXXX   XXXXXXXXXXXXX            XXXXXXXX         XXXX           QQ                                                                                                                     QQQQ  X  QQQQ   
+XXXXXXXXXXXXX   XXXXXXXXXX                               XXXXXX  XXXXXXXXX   XXXXXXXXXXXXX    XX      XXXX  XX             XXXX         Q                                                                                                             Q     QQQQQ       QQQQQ 
+XXXXXXXXXXXXX   XXXXXXXXXXX                               XXX  XXXXXXXXXX   XXXXXXXXXXXXXX  XXXX     XXXX                X   XXX                                                                                                                       XXXXXXXQQ         QQXXX
+XXXXXXXXXXXXXX   XXXXXXXXXX                                     XXXXXXXXX   XXXXXXXXXXXXXXXXXXX     XXXX                XXXXXXXXXX                                                                                                                     XXXXXXXQ           QXXX
+ XXXXXXXXXXXXXX   XXXXXXXX                               XXXXXX  XXXXXXX   XXXXXXXXXXXXX   XXXXX     X                  XXXXXX XXXX                                                                                                                    XXXXXXXQ           QXXX
+  XXXXXXXXXXXXXX   XXXXXX  X                             XXXXXXX  XXXXXX  XXXXXXXXXXXXX   XXXXXXX                        XXXXXXX XXXX                                                                                                                  XXXXXXXQQ         QQXXX
+   XXXXXXXXXXXXX   XXXXX  XX                             XXXXXXX  XXXXX   XXXXXXXXXXXXX  XXX   X             XXX        XXXX  XXX  XXXX                                                                                                                       QQ         QQ   
+XXXXXXXXXXXXXXXXX   XXXXX  X                             XXXXXX  XXXXX   XXXXXXXXXXXXX  XXX             WR  ITTEN      XXXX        XXXXX                                                                                                                       QQQQQQQQQQQ    
+XXXXXXXXXXXXXXXXXX   XXXXX                               XXXXX  XXXXXX   XXXXXXXXXXXX                 BYXDANXHE       XXXX        XXXXXXX                                                                                                                        QQQQQQQ      
+  XX   XXXXXXXXXXX   XXXXXXX                               XX  XXXXXX   XXXXXXXXXXXX                    WETTXA        XXX       XXXX  XXX                                                                                                             X            GGG        
+QQ      XXXXXXXXXXX   XXXXXX                             X    XXXXXXX   XXXXXXXXXXXX                    NDXDAVEX             XXXXXX  X XX                                                                                                             XXX          GGG        
+QQQX  X  XXXXXXXXXXX   XXXXX                             XX   XXXXXX   XXXXXXXXXXXX                    NIXO  NXX           XXXXXXXX  X  X                                                                                                             XXXXX        GGG      GG
+QQQQXXXX  XXXXXXXXXXX   XXXX                             X    XXXXXX   XXXXXXXXXXXX                   XXXX               XXXXXXXXX  X  XX                                                                                                             XXXXXXX      GGGG    GGG
+QQQQXXX   XXXXXXXXXXXX  XXXX                             X    XXXXXX   XXXXXXXXXXXX            XX     XX               XXXXXXXXXX  X  XXX                                                                                                             XXXXXXXXXXXXXXX  GGGGGGG
+QQQQQX     XXXXXXXXXXX   XX                                XXX  XXXX  XXXXXXXXXXXX         XX XAND                  XXXXXXXXXXXXX   X  XX                                                                                                             XXXXXXXXXXXXX   GGGGGGGG
+QQQQQQ     XXXXXXXXXXXX  XXX                              XXXXX  XX   XXXXXXXXXXX         JEFFXBU                XXXXXXXXXXXXXXX   X  XXX                                                                                                             XXXXXXXXXXXXXXX  GGGGGGG
+QQQQQQQ   XXXXXXXXXXXXXX  XX                               XXXX  XX   XXXXXXXXXXX           NCEXXX            XXXXXXXXXXXXXXXXXX   X  XXX                                                                                                             XXXXXXXXXX   XXX  GGGGGG
+QQQQQQQ  XXXXXXXXXXXXXXX  XX                             X  XX  XX   XXXXXXXXXXX           JUNEX77         XXXXXXXXXXXXX     XX  XX  XXXX                                                                                                             XXXXXXXXXXXXX GGGGGGGGG 
+QQQQQQQQ XXXXXXXXXXXXXXXX  X                             XX   XXXX   XXXXXXXXXXX           XXX  X      XXXXXXXXXXXXXX       XXX  XX  XXXX                                                                                                             XXXXX     XXXXXXXXXXGGGG
+QQQQQQQQ      XXXXXXXXXXXX                               XXXXXXXX   XXXXXXXXXXX           XXX     XXXXXXXXXXXXXXXXX      XXXXXX  XX  XXXX                                                                                                             XXXX       XXXXXXXXX    
+ QQQQQQQQ XX   XXXXXXXXXXX                               XXXXXXXX   XXXXXXXXXX     XX      XX    XXXXXXXXXXXXXXXX     XXXXXXXXX  XXX  XXX                                                                                                             XXXX                    
+ QQQQQQQQ XXX  XXXXXXXXXXXX                              XXXXXXXX   XXXXXXXXXXXX  XXX      XXXXXXXXXXXXXXXXXX     XXXXXXXXXXXX  XX  XXXXX                                                                                                             XXX                XXX  
+  QQQQQQQ  XXXXXXXXXXXXXXXX                               XXXXXXX  XXXXXXXXXX XXXXXX      XXXXXXXXXXXXXXX       XXXXXXXXXX  XX  XX  XXXXX                                                                                                             XXX              XXXXX  
+  QQQQQQQXXXXXXXXXXXXXXXXXXX                              XXXXXX   XXXXXXXX   XXXXXXX  XXXXXXXXXXXXX        XXXXXXXXXXX     XX  X  XXXXXX                                                                                                             XXX     X     XXXXXX   X
+  QQQQQQQXXXXXXX   XXXXXXXXX                               XXXXX  XXXXXXXXXX   XXXXXXXXXXXXXXXXXX        XXXXXXXXXX       XXXX  XX  XXXXX                                                                                                             XXXX  XX   XXXXXX       
+   QQQQQQXXX  XXX   XXXXXXXX                               XXXXX  XXXXXXXXXX  XXXXX    XXXXXX      XXXXXXXXXXXX       XXXXXXXX XXX  XXXXX                                                                                                             XX XX XX  XXXXXX       X
+   QQQQQQXXX  XXXX  XXXXXXXX                             X  XXXXX XXXXXXXXXX  XXXXX    XXXXXX   XXXXXXXXXXXXX      XXXXXXXXXXX  XXX  XXXX                                                                                                             X    XX  XXXXXXXX     XX
+   QQQQQQXXX   XXX   XXXXXXX                             X  XXX  XXXXXXXXXX  XXXX   XXXXXXX   XXXXXX     XXXXXXX    XXXXXXXX  XX  XXXXXXX                                                                                                             X X  XX  XXXXXXXXX   XXX
+   QQQQQQXXX         XXXXXXX                             XX  XX XXXXXXXXXXXX        XXXXXX   XXXXXX    XXXXXXX       XXXXXXX  XX  XXXXXXX                                                                                                               X  XX XXXXXXXXXX    XX
+   QQQQQQXXX    XX   XXXXXXX                             XXX    XXXXXXXXXXXX     XXXXXXXXX   XXXXX   XXXXXXX          XXXXXX  X  XXXXXXXX                                                                                                              XX  XX XXXXXXXXX       
+   QQQQQQXXXX        XXXXXXX                             XXX    XXXXXXXXXXX     XXXXXXXXX   XXXXX   XXXXXXXX     X XX   XX  X  XXXXXXXXXX                                                                                                              XX  XX XXXXXXXX        
+   QQQQQQXXXXX      XXXXXXXX                             XXX   XXXXXXXXX         XXXXXXXX   XXXXX   XXXXXXXXX      XXXXXXX  X  XXXXXXXXXX                                                                                                              XX  XX XXXXXXXX        
+   QQQQQQXXXXXX      XXXXXXX                             XXX   XXXXXXXX          XXXXXXX   XXXXX   XXXXXXXXXXXX    XXX  XX  XXX  XXXXXXXX                                                                                                               X  XX XXXXXX         Q
+   QQQQQQXXXXXXXX      XXXXX                             XXX   XXXXXXXX         XXXXXXX   XXXXX   XXXXXXXXXXXXXXXXXXX   XX  XXX  XXXXXXXX                                                                                                             X    XX XXX          QQQ
+  QQQQQQQXXXXXXXXXX   XXX                                  X   XXXXXXXX   XX   XXXXXXX   XXXXXX   XXXXXXXXXXXXXXXXX    XXX  XX  XXXXXXXXX                                                                                                             X X  XX            QQQQQ
+  QQQQQQQXXXXXXXXXXXXXXXX                                      XXXXXXXXXXXX   XXXXXX   XXXXXX   XXXXXXXXXXXXXXXXX   XXXXXX  X  XXXXXXXXX                                                                                                                X  XX          QQQQQQQ
+QQQQQQQXXXXXXXXXXXXXXXXXXX                               X        XXXXXXXXX  XXXXXXX   XXXXXX   XXXXXXXXXXXX   XXXXXXXXXX  X  XXXXXXXXXX                                                                                                                X  X          QQQQQQQQ
+ QQQQQQXXXXXXXXXXXXXXXXXXXXX                             XXXX     XXX  XXXXXXXXXXXXX   XXXXXX   XXXXXXXXXXXX  XX   XXXXXXX  XX  XXXXXXXX                                                                                                               XX  XX        QQQQQQQQQ
+QQQQQQQXXXXXXXXXXXXXXXXXXXXX                             XXXXXXX   XX  XXXXXXXXXXXXX   XXXXXX   XXXXXXXXXXX XX      XXXXXX  XXX  XXXXXXXX                                                                                                              XX  XX      QQQQQQQQQQQ
+QQQQQQXX  XXX   XXXXXXXXXXXX                             XXXXXXXXXX    XXXX   XXXXXX   XXXXX   XXXXXXXXXXX XX       XXXXXXX XXX  XXXXXXXX                                                                                                              XX  XX    QQQQQQQQQQQQQ
+QQQQQXX  XXXX   XXXXXXXXXXXX                             XXXXXXXXXXXXXX   X  XXXXXXX  XXXXX   XXXXXXXXXXX  XX  XXXXXX       XX  XXXXXXXXX                                                                                                               X  XX  QQQQQQQQQQQQQQQ
+QQQQQXXXXXXXXX   XXXXXXXXXXX                             XXX    XXXXXXXXXXXXXXXXXXXX  XXXXX   XXXXXXXXXXX  XXXXXXX   XXXXX  XX  XXXXXXXX                                                                                                                X  XXQQQQQQQQQQQQQQQQQ
+QQQQXXXXXXXXXXXX XXXXX   XXX                             X       XXXXXXXXXXXXXXXXXXXXXXXXXX   XXXXX     XXXXXXX      XXXXX  X  XXXXXXXXX                                                                                                                X  XXQQQQQQQQQQQQQQQQQ
+QQQXXXXXXXXXXXXXXXXXXXX  XXX                                     XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX       X        XXXXXXXX  XX XXXXXXXXX                                                                                                               XX  XXQQQQQQQQQQQQQQQQQ
+QQXXXXXXXXXXXXXXXXXXXXX  XXX                                       XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  XXXXXXXX    X    XXXXX  XXX XXXXXXXX                                                                                                              XXX  XXGGGGGGGGGGGGGGGGG
+Q     XXXXXXXXXXXXXXXXXXXXXX                                       XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX    XX     XXXX   XXX   XXXXX                                                                                                               XXX XXGGGGGGGGGGGGGGGGGG
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                                                                                            
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$                                                         $$$$$                                                                       
+                                                                                                                     $                                                                      
+                                                                                                                      $                                                                     
+                                                                                                                       $                                                                    
+                                                                                                                       $                                                                    
+                                                                                                                        $                                                                   
+                                                                                                                         $                                                                  
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+                                                                                                                          $                                                                 
+$$$$$$$$$$$$$$                                                                                                            $                                                                 
+$$$$$$$$$$$$$$                                                                                                            $                                                                 
+$$$$$$$$$$$$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+QQ        $$$$                                                                                                            $                                                                 
+QQQ       $$$$                                                                                                            $                                                                 
+QQQQ      $$$$                                                                                                            $                                                                 
+QQQQQ     $$$$                                                                                                            $                                                                 
+QQQQQ     $$$$                                                                                                            $                                                                 
+QQQQQQ    $$$$                                                                                                            $                                                                 
+QQQQQQQ   $$$$                                                                                                            $                                                                 
+QQQQQQQ   $$$$                                                                                                            $                                                                 
+QQQQQQQ   $$$$                                                                                                            $                                                                 
+QQQQQQQ   $$$$                                                                                                            $                                                                 
+QQQQQQQ   $$$$                                                                                                            $                                                                 
+QQQQQQQ   $$$$                                                                                                            $                                                                 
+QQQQQQQ   $$$$                                                                                                            $                                                                 
+QQQQQQ    $$$$                                                                                                            $                                                                 
+QQQQQ     $$$$                                                                                                            $                                                                 
+QQQQ      $$$$                                                                                                            $                                                                 
+QQQ       $$$$                                                                                                            $                                                                 
+QQQ       $$$$                                                                                                            $                                                                 
+QQ        $$$$                                                                                                            $                                                                 
+Q         $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+          $$$$                                                                                                            $                                                                 
+XXXX      $$$$                                                                                                            $                                                                 
+XXXX      $$$$                                                                                                            $                                                                 
+XXXX      $$$$                                                                                                            $                                                                 
+XXXX      $$$$                                                                                                            $                                                                 
+   QQ     $$$$                                                                                                            $                                                                 
+    QQ    $$$$                                                                                                            $                                                                 
+     QQ   $$$$                                                                                                            $                                                                 
+     QQ   $$$$                                                                                                            $                                                                 
+     QQ   $$$$                                                                                                            $                                                                 
+    QQ    $$$$                                                                                                            $                                                                 
+   QQ    G$$$$                                                                                                            $                                                                 
+XXXX     G$$$$                                                                                                            $                                                                 
+XXXX    GG$$$$                                                                                                            $                                                                 
+XXXX   GGG$$$$                                                                                                            $                                                                 
+XXXX  GGGG$$$$                                                                                                            $                                                                 
+     GGG G$$$$                                                                                                            $                                                                 
+    GGG  G$$$$                                                                                                            $                                                                 
+  GGGG   G$$$$                                                                                                            $                                                                 
+ GGG     G$$$$                                                                                                            $                                                                 
+GGG  GG  G$$$$                                                                                                            $                                                                 
+GG  GG  GG$$$$                                                                                                            $                                                                 
+G  GGG  GG$$$$                                                                                                            $                                                                 
+G  GGG    $$$$                                                                                                            $                                                                 
+GG   GGG  $$$$                                                                                                            $                                                                 
+G  GGG    $$$$                                                                                                            $                                                                 
+GGGG      $$$$                                                                                                            $                                                                 
+ GG       $$$$                                                                                                            $                                                                 
+    XXXXXX$$$$                                                                                                            $                                                                 
+ XXXXXXXXX$$$$                                                                                                            $                                                                 
+XXXXXXXXXX$$$$                                                                                                            $                                                                 
+XXXXXXXXXX$$$$                                                                                                            $                                                                 
+ XXXXXXXXX$$$$                                                                                                            $                                                                 
+XXXXXXXXXX$$$$                                                                                                            $                                                                 
+XXXXXXXXXX$$$$                                                                                                            $                                                                 
+XXXXX     $$$$                                                                                                            $                                                                 
+XXX      Q$$$$                                                                                                            $                                                                 
+XX     QQQ$$$$                                                                                                            $                                                                 
+X    QQQQQ$$$$                                                                                                            $                                                                 
+   QQQQQQQ$$$$                                                                                                            $                                                                 
+ QQQQQQQQQ$$$$                                                                                                            $                                                                 
+ QQQQQQQQQ$$$$                                                                                                            $                                                                 
+QQQQQQQQQQ$$$$                                                                                                            $                                                                 
+QQQQQQQQQQ$$$$                                                                                                            $                                                                 
+QQQQQQQQQQ$$$$                                                                                                            $                                                                 
+QQQQQQQQQQ$$$$                                                                                                            $                                                                 
+QQQQQQQQQQ$$$$                                                                                                            $                                                                 
+QQQQQQQQQQ$$$$                                                                                                            $                                                                 
+QQQQQQQQQQ$$$$                                                                                                            $                                                                 
+QQQQQQQQQQ$$$$                                                                                                            $                                                                 
+QQQQQQQQQQ$$$$                                                                                                            $                                                                 
+QQQQQQQQQQ$$$$                                                                                                            $                                                                 
+QQQQQQQQQ.$$$$                                                                                                            $                                                                 
+QQQQQQQQ..$$$$                                                                                                            $                                                                 
+GGGGGGG...$$$$                                                                                                            $                                                                 
+GGGGGG....$$$$                                                                                                            $                                                                 

@@ -1,0 +1,1915 @@
+	TITLE	SOSXLT - The ALTER Mode Family (eXtended!)
+;		------------------------------
+; This file contains for ALTER mode as follows:
+;	1. The A command
+;	2. Command dispatching
+;	3. SETALT - Set up a line for altering
+;	4. GNCH1 - Get an alter mode character
+;	5. Alter mode command processing
+;	6. The extend (X) command
+; 
+ 
+ 
+	SEARCH	SOSTCS
+	$INIT
+
+ 
+	SUBTTL	The X Command
+
+XPAND::	SKIPN	NEWALT##	;NEW ALTER?
+	 JRST	$XPAND##	;NO
+	SETOM	XCMDF		; Flag we are doing an X command
+	JRST	ALTER1		; And do an alter
+
+	SUBTTL	The A Command
+ 
+; Here for the A command - Beginning of Alter Mode
+ 
+ALTER::	SKIPN	NEWALT##	;NEW ALTER?
+	 JRST	$ALTER##	;NO
+	SETZM	XCMDF		; This is not an extend
+
+; Join here for the X-command
+
+ALTER1:	SETOM	PRVSIZ		; Fix count
+	SETZM	SSW		; Clear suppress switch
+	SETZM	CSW		; CLEAR COMMAND STRING SWITCH
+	PUSHJ	P,GET2SD##	; Get the range
+	SKIPN	XCMDF		; If X-command then
+	JRST	XCMD4		; NO--CHECK FOR SWITCHES
+	CAIN	C,";"		; Check for legal delimiter
+	JRST	[PUSHJ P,SCAN	; Get number
+		 TRNN FL,NUMF	; Is there a number
+		 NERROR ILC	; No, quit
+		 MOVE T2,INCR
+		 MOVEM T2,TEMINC
+		 JRST XCMD1]	; Join processing
+	CAIE	C,","		; Is there a switch or new increment
+	JRST	ALTER2		; No, check for end of line
+	PUSHJ	P,SCAN##	; Get it
+	TRNN	FL,NUMF		; Is there a number?
+	JRST	XCMD2		; No, look for switch
+XCMD1:	CAMN	T1,LNZERO##	; Line zero?
+	NERROR	ILC		; Is illegal
+	MOVEM	T1,INCR		; Save increment
+	PUSHJ	P,SCAN##	; Scan next
+XCMD4:	CAIE	C,","		; Still have a switch?
+	JRST	ALTER2		; No, so better be the end
+	PUSHJ	P,SCAN##	; Scan the switch
+XCMD2:	MOVS	T1,ACCUM	;  to T1
+	CAIN	T1,'S  '	; SUPPRESS SWITCH?
+	  JRST	[SETOM SSW	; YES--NOTE SUPPRESS
+		 JRST  XCMD3]	; AND CONTINUE
+	CAIN	T1,'C  '	; ALTER COMMAND STRING SWITCH?
+	  JRST	[SETOM CSW	; YES--NOTE SPECIAL COMMAND STRING
+		 JRST  XCMD3]	; AND CONTINUE
+	NERROR	ILC		; it's and error
+XCMD3:	PUSHJ	P,SCAN##	; To reach end of line
+	CAIN	C,","		; STILL HAVE SWITCH?
+	  JRST	XCMD2		; YES--SCAN IT
+ALTER2:	PUSHJ	P,CKTRMF##
+	SKIPE	CSW		; SPECIAL COMMAND STRING?
+	  PUSHJ	P,ACSTR		; YES--READ THE STRING
+	PUSHJ	P,FINDLO##	; Get first line of range
+	TRZ	FL,LINSN	; Not seen yet
+				CONT.
+ALT1:	PUSHJ	P,ONMOV##	; Check for in range
+	  JRST	ALT2		; No, finish up
+	TRO	FL,LINSN	; We did see something
+	CAMN	T1,PGMK 	; Check for a page
+	JRST	ALT3		; Do not try to change this
+	MOVEM	T1,CLN		; Now, in case we said altmode
+	MOVE	T1,CPG		; Same for page
+	MOVEM	T1,CPGL
+	SKIPE	SSW		; If S-switch
+	TRO	FL2,SUPN	; Do suppress thing
+	MOVEI	T5,CPOPJ	; Assume alter command
+	SKIPE	XCMDF		; True?
+	MOVEI	T5,ALTELX	; First free command
+	PUSHJ	P,ALTLIN	; Do the Alter (or eXtend)
+	  PJRST	LEVINS##	; He said altmode
+	PUSHJ	P,AINSED	; Go insert
+ALT4:	PUSHJ	P,FINDN##	; Get the next line
+	JRST	ALT1		; Continue loop
+
+ALT3:	MOVE	T2,CPG		; We are on a later page now
+	ADDI	T2,1		; Add fudge factor
+	MOVEM	T2,CPGL 	; Save as .
+	PUSHJ	P,PGPRN##	; Print him a message
+	MOVE	T1,LNZERO##	; Set to first? line
+	MOVEM	T1,CLN		; For .
+	JRST	ALT4		; Continue past it
+
+ALT2:	TRNN	FL,LINSN	; Was there anything there?
+	JRST	[SKIPE XINSRT##	; Auto insert on X command?
+		  SKIPN XCMDF	; X command?
+		   NERROR NLN	; No, give error message
+		 TRZ FL,CNTF	; Don't handle these here
+		 JRST INSGO##]	; Yes, treat as an insertion
+	MOVE	T1,CPG		; Get the current page
+	MOVEM	T1,CPGL 	; Save as .
+	SKIPE	XINSRT##	; Auto insert on X command?
+	 SKIPG	XCMDF		; Go back to insert?
+	  JRST	COMND## 	; No, next command
+	MOVE	T1,CLN		; Current line
+	MOVEM	T1,HILN		; Save for INSRTX
+	JRST	INSRTX##	; Join insert routine
+	SUBTTL	SPECIAL COMMAND STRING HANDLING
+
+; Read in a string to use
+
+ACSTR::	SKIPN	NEWALT##	;NEW ALTER?
+	 NERROR	ILC		;NO
+	MOVE	T1,[2,,[ASCIZ/A*/]]; Get prompt string
+	SKIPN	COMFLF		; Skip if in command file
+	PUSHJ	P,PROMPT##	; Prompt
+	PUSHJ	P,ACINIT	; Point to beginning of string
+	MOVEI	T1,ACLEN	; Get max len
+	PUSHJ	P,GNCH##	; Get a char
+	CAIE	C,15		; <CR>?
+	  JRST	ACSTR3		; No
+	PUSHJ	P,GNCH##	; Yes--eat <LF>
+	ILDB	C,ACPTR		; Get char from stored string
+	JUMPN	C,CPOPJ##	; Return if something there
+	NERROR	NSG		; Else error
+ACSTR1:	PUSHJ	P,GNCH##	; Get a char
+ACSTR3:	CAIN	C,200
+	  MOVEI	C,33
+	IDPB	C,ACPTR		; Store
+	CAIN	C,12		; <lf>?
+	  JRST	ACSTR2		; Yes-end
+	SOJG	T1,ACSTR1	; Loop for all
+	JRST	ER1RTN		; Error return
+
+ACSTR2:	MOVEI	C,0		; Insure null byte
+	IDPB	C,ACPTR		; Store
+	POPJ	P,		; And return
+
+; Setup byte pointer to string
+
+ACINIT:	MOVE	T1,[POINT 7,ACBUF]; Point to buffer
+	MOVEM	T1,ACPTR	; Store
+	POPJ	P,		; And return
+
+; Routine to get one char from the string
+
+ACCHR:	ILDB	C,ACPTR		; Get a char
+	JUMPN	C,CPOPJ##	; Return if got one
+	NERROR	ILC		; Else error
+
+DOBELL:	OUTCHR	[7]		; Bong the gong
+	SKIPN	CSW		; In special command mode?
+	  POPJ	P,		; No--just return
+	MOVE	T1,[POINT 7,[BYTE (7) 15,12,0]]; Yes--point to crlf
+	MOVEM	T1,ACPTR	; So next cmd finishes line
+	POPJ	P,		; And return
+	SUBTTL	AINSED -- Insert Altered line into the buffer
+
+;AINSED -- Insert Altered line into the Buffer
+;
+;Call with PNTR pointing to unaltered line in buffer and
+;altered line in LIBUF.  Checks to see if line was actually changed
+;by doing a string compare.  If it was, it inserts the new line in
+;the buffer with INSED, and handles the decrement and test on SAVEN
+;for auto-save.
+
+AINSED:	MOVE	T1,NCNT		; Get new count
+	CAME	T1,OCNT		; Is it the same?
+	JRST	AINSD1		; No, must update the line
+	MOVN	T1,T1		; Minus count
+	MOVSS	T1		; To left half
+	HRRI	T1,LIBUF	; Point to Alter buffer
+	MOVEI	T2,(PNTR)	; Point to line in edit buffer
+	HRLI	T2,(POINT 36,)	; Make a word pointer
+AINCMP:	ILDB	T3,T2		; Word from the buffer
+	CAME	T3,(T1)		; Compare with Altered line
+	JRST	AINSD1		; Different, go update line
+	AOBJN	T1,AINCMP	; Loop over whole line
+	POPJ	P,		; All same, therefore no changes
+
+AINSD1:	PUSHJ	P,INSED##	; Update line in buffer
+	SKIPE	SSAVEN		; Is save activated?
+	SOSLE	SAVEN		; Yes, decrement count and check
+	POPJ	P,		; No, just return
+	PUSH	P,HILN		; Save current hiln
+	MOVE	T1,CLN		; Get current line...
+	MOVEM	T1,HILN 	; And establish as hiln for auto-save
+	PUSHJ	P,ASVCOD##	; Do the auto-save
+	POP	P,HILN		; Restore hiln
+	POPJ	P,
+	SUBTTL	Command Dispatching for ALTER Mode
+ 
+; Here to alter a line
+ 
+ALTLIN::SKIPN	NEWALT##	;NEW ALTER?
+	 JRST	$ATLIN##	;NO
+	PUSHJ	P,SETMOV	; SET MOVE MODE
+	SKIPN	T1,CRLFSW	; If not set
+	PJRST	ALTLNX		; Just do the alter
+	MOVEM	T1,SVCRLF	; Save, in case of errors
+	SETZM	CRLFSW		; Clear
+	PUSHJ	P,SETTTY##	; Re-set to zero
+	PUSHJ	P,ALTLNX	; Do the alter
+	  CAIA
+	AOS	(P)		; If skip return
+RSCRLF::MOVE	T1,SVCRLF	; Get value back
+	SETZM	SVCRLF		; Clear save
+	MOVEM	T1,CRLFSW	; Reset
+	PJRST	SETTTY##
+
+
+; Call ALTLNX if a user supplied procedure should be executed
+; after SETALT has set things up
+
+ALTLNX:	PUSHJ	P,SETALT	; Set up line for alteration
+IFN	%UAHPQ,<
+	PUSHJ	P,HPQON##	;[UA WRS]  Use HPQ for ALTER mode
+>
+	SKIPE	CSW		; SPECIAL COMMAND STRING?
+	  PUSHJ	P,ACINIT	; YES--INIT COMMAND ALTER STRING
+ 	PUSHJ	P,(T5)		; Call user routine
+ALTLN1::			; Here if you don't want SETALT called
+	SKIPN	NEWALT##	;NEW ALTER?
+	 JRST	$ATLN1##	;NO
+ALTLP2: TLZ	FL,NEGF 	; Turn off "-" seen flag
+	PUSHJ	P,V52TPN	; Type line again
+	SETZM	CHGLNF##	; Reset this flag
+	SETZB	T2,DELBAK	; Reset 'deleting backward' flag
+ALTLP:	TRZ	FL2,SUPN!ALTDUP	; Turn duplexing back off
+	PUSHJ	P,GNCH1 	; Get on chr in ddt submode
+	TLNE	CS,LETF_16	; Check for letter
+	TRZ	C,40		; And convert to upper case
+	MOVSI	T1,-ALTLG	; Get length of command table
+; 
+ALTLP3: HRRZ	T3,ALTAB(T1)	; Fetch an entry
+	ANDI	T3,377		; GET JUST THE CHAR
+	CAIE	C,(T3)		; Check for character match
+	AOBJN	T1,ALTLP3	; No match, look at next
+	JUMPGE	T1,ALTBEL	; Ring the bell if not found
+	MOVS	T3,ALTAB(T1)	; Re-fetch entry (need flags)
+	TRNE	FL,READOF	; Read-only?
+	TLNN	T3,XAM		; and command modifies the file?
+	CAIA
+	JRST	ALTBEL		; Yes, error
+	TLNN	T3,XNEGF	; Minus sign permitted?
+	TLNN	FL,NEGF 	; No: is it set?
+	JRST	ALTDSP		; Ok to execute command
+ALTBEL: PUSHJ	P,DOBELL		; Bong a gong
+	CLRBFI			; Clear type ahead
+	JRST	ALTLP2		; Try again
+ 
+ALTDSP:	TLNE	T3,XOFF		; COMMAND STORE OFFSET?
+	  HRRZM	T3,MODE		; YES--STORE IT
+	TLNE	T3,XOFF		; COMMAND STORE OFFSET?
+	  JRST	ALTLP		; YES--NO DISPATCH
+	PUSHJ	P,(T3)		; Execute command
+	  JRST	ALTLP2		; Reset repeat count and get new command
+	JRST	ALTLP		; Skip return from digits no count reset
+ 
+; Here to ring bell after a command detected error
+ 
+ALTFS2: POP	P,ALTCNT
+ERARTN: POP	P,ALTP
+ER1RTN: POP	P,(P)		; Clear junk off stack
+ERRRTN: PUSHJ	P,DOBELL
+	SETO	T2,		; Flag meaning error
+	POPJ	P,		; Then return
+	SUBTTL	ALTER Mode Commands Table
+ 
+; Flags
+ 
+XNEGF==400000			; Command may take a - sign
+XAM==200000			; Command modifies the line
+XOFF==100000			; STORE INDEX NOT DISPATCH
+ 
+	DEFINE	ACMNDS,<
+I==0
+	REPEAT	^D10,<
+	X	I+"0",	ALTDG, XNEGF	;; Accumulate a number
+I==I+1>
+	X	"B", INSBLK, XAM	;; Insert blanks
+	X	"D", ALT.D, XNEGF!XAM	;; Delete characters
+	X	"C", ALTCN, XNEGF!XAM	;; Change some characters
+	X	"E", ALTEX,		;; Exit w/no print
+	X	"I", ALTIN, XAM		;; Insert text
+	X	"J", AJOIN, XNEGF!XAM	;; Insert CRLF and join
+	X	"N", ALTNXL, XNEGF	;; Advance to next line
+	X	"O", INSONE, XAM	;; Insert one character
+	X	"P", APRINT,		;; Print and save pos
+	X	"Q", ALTALT,		;; Quit while ahead
+	X	"T", INSTAB, XAM	;; INSERT TABS
+	X	"X", ALTEOL,XNEGF!XAM	;; Extend the line
+	X	"/", ALTSL, XNEGF!XAM	;; Transpose 2 chars
+;;	X	"\", ALTBSL, XNEGF!XAM	;; Transpose previous 2
+	X	"-", ALTNEG,		;; Command goes left
+	X	"+", INSNXT, XAM	;; Don't ask
+	X	73, INSCRF, XAM		;; Break the line
+	X	"'", INSQT, XAM		;; Make ^<ch>
+	X	12, ALTFN,		;; Done with alter
+	X	15, CPOPJ1,		;; Ignore CR's
+	X	"R"-100+200, ALTCTR,	;; P up to current only
+	X	"U"-100+200, ALTCU,	;; Restore and restart
+	X	"W"-100+200, ALTBSW	;; Backspace one word
+
+	X	"K",MODE.K,XOFF!XNEGF!XAM	;; Delete some characters
+	X	"R",MODE.R,XOFF!XNEGF!XAM	;; Replace some characters
+	X	"V",MODE.V,XOFF!XNEGF!XAM	;; Invert case to EOL
+	X	"\",MODE.L,XOFF!XNEGF!XAM	;; LOWER CASE SOME CHARS
+	X	"^",MODE.U,XOFF!XNEGF!XAM	;; UPPER CASE SOME CHARS
+	X	233,SETMOV,			;;RESET TO MOVE MODE
+
+	X	" ",UNI.SP,XNEGF		;; UNIT = 1 CHAR
+	X	"H"-100+200,UNI.BS,XNEGF	;; UNIT = -1CHAR
+	X	177,UNI.BS,XNEGF		;; UNIT = -1 CHAR
+	X	11,UNI.Z,XNEGF			;; UNIT = TO EOL
+	X	"Z",UNI.Z,XNEGF			;; UNIT = TO EOL
+	X	"W",UNI.W,XNEGF			;; UNIT = 1 WORD
+	X	"S",UNI.S,XNEGF			;; UNIT = TO CHAR
+	X	"F",UNI.F,XNEGF			;; UNIT = TO STRING
+	X	"G",UNI.G,XNEGF			;; UNIT = PAST STRING
+	X	"M",UNI.M,XNEGF			;; UNIT = STRING
+	X	"L",UNI.L,XNEGF			;; UNIT = WHOLE LINE
+	>
+ 
+; The commands table
+ 
+	DEFINE	X(A,B,C),<XWD	B,A!C>
+ALTAB:	ACMNDS
+ALTLG==.-ALTAB
+ 
+ 
+	SUBTTL	SETALT - Set Up a Line for ALTER
+ 
+; Routine to set up a line for altering
+ 
+SETALT:	MOVEI	T1,0		; Be sure TTY TAB is off
+	PUSHJ	P,SETTAB##	; (but remember old setting)
+	PUSHJ	P,LOADCL##
+SALT1:	MOVE	ALTP,[POINT 7,LIBUF+1,13]	; Set up pointer
+	SETZM	ALTCNT		; So far we are 0 chrs into line
+	HRRZM	T1,OCNT 	; And save it for insed
+	OFFECHO 		; Turn off echo
+	TRZ	FL2,RUBF!ALTDUP!RUBF2; Clear rubout and echoing flags
+	SETZM	ALTFLG		; Nothing inserted so far
+	MOVE	T1,LIBUF	; Print line number and tab
+	PUSHJ	P,OUTSN##	; Sequence number
+	SETOM	PRVSIZ		; Force typeout if on VT52
+	POPJ	P,
+ 
+RPSALT=:SALT1
+ 
+; Macros for rubout control
+ 
+DEFINE	OFFRUB<
+	PUSHJ	P,.OFFRB
+>
+.OFFRB:	SKIPE	DPYFLG
+	POPJ	P,
+	TRZE	FL2,RUBF2
+	OUTSTR	[ASCIZ /\\/]
+	TRZE	FL2,RUBF
+	OUTCHR	["\"]
+	POPJ	P,
+ 
+ 
+DEFINE	ONRUB<
+	PUSHJ	P,.ONRUB
+>
+.ONRUB: SKIPE	DPYFLG
+	POPJ	P,
+	TRZE	FL2,RUBF2
+	OUTSTR	[ASCII /\\/]
+	TRON	FL2,RUBF
+	OUTCHR	["\"]
+	POPJ	P,
+	SUBTTL	GNCH1 - Get a Character in ALTER Mode
+ 
+; Routine to get the next alter mode command character
+ 
+; Here to get any character (including altmode)
+ 
+AGNCH1::PUSHJ	P,GNCH1 	; Get a character
+	TRZ	C,200		; Clear special flags
+	POPJ	P,
+ 
+GNCH1A: SKIPE	CSW		; SPECIAL COMMAND STRING?
+	  PJRST	ACCHR		; YES--GET CHR AND RETURN
+	SKIPE	COMFLF		; Cmd file?
+	JRST	[PUSHJ P,RDCHAR##
+		JRST GNCH1C]
+	SKIPE	MACLVL##	; MACRO?
+	 JRST	[PUSHJ P,CHINM##;YES--GET CHAR
+		 JRST  GNCH1C]	;AND CONTINUE
+GNCH1D::INCHRW	C
+IFN CKPSW,<
+	PUSHJ	P,CKPCHR##	; Save in checkpoint file
+>
+	SKIPN	REFDLY		; Does he have this enabled?
+	JRST	GNCH1H		; No, save overhead
+	SETO	CS,		; Set to wake this job
+	WAKE	CS,		; Wake it so HIBER will return quickly
+	  JFCL			;
+	SETZ	CS,		; No sleep time, no enable bits
+	HIBER	CS,		; This clears the enable conditions
+	  JFCL			; ?*%@!
+GNCH1H:	ANDI	C,177
+	PUSHJ	P,CHKALT##	; Convert altmodes to ESCAPE if needed
+IFN	%UAHPQ,<
+	CAIN	C,"C"-100	; Check for ^C
+	PUSHJ	P,FAKINT##
+>
+GNCH1C:	CAIE	C,33		; Never duplex esc
+	TRNN	FL2,ALTDUP	; And not unless desired
+	POPJ	P,
+	CAIE	C,12		; Not line feed
+	CAIN	C,15		; Or return
+	POPJ	P,
+	CAIE	C,"U"-100	; Don't echo ^U
+	CAIN	C,177		; And finally ignore rubout
+	POPJ	P,
+	TLNN	FL2,BKSPF	; Is backspace special?
+	JRST	.+3
+	CAIN	C,"H"-100	; Don't echo backspace if _DPY&_BACKSP
+	POPJ	P,
+	CAIN	C,"W"-100	; Don't duplex ^W
+	POPJ	P,		;
+	SKIPE	VT52FL		; VT52?
+	CAIE	C,"R"-100	; and ^R
+	CAIA
+	POPJ	P,		; Return
+	OFFRUB			; If we are duplexing then not deleting
+	PJRST	FOCHR##
+ 
+GNCH1:: PUSHJ	P,GNCH1A	; Get a chr in ddt mode
+	CAIE	C,"R"-100	; If ^R
+	CAIN	C,33		; Convert altmode to 200
+	TRO	C,200
+	TLNE	FL2,BKSPF	; Skip if not in /BAC mode
+	CAIE	C,"H"-100	; Skip if /BAC and char is ^H
+	CAIN	C,"U"-100	; Skip if not ^U
+	TRO	C,200		; Flag as special
+	CAIN	C,"W"-100	; ^W?
+	TRO	C,200		; Yes, set special bit
+	TRNE	C,200		; Check for special
+	POPJ	P,		; and return the character
+	SKIPE	QMDFLG
+	CAIE	C,"'"		; Check for quote
+	JRST	GNCH1B		; No, this chr is ok
+	PUSHJ	P,GNCH1A	; Get another
+	SKIPE	CTBL(C) 	; If 0 hn ctbl, keep it
+	MOVS	C,CTBL(C)	; Get alternate code
+	ANDI	C,177		; Get rid of extra bits
+GNCH1B: MOVE	CS,CTBL(C)	; Load CS
+	TLNE	CS,LETF_16	; Check for letter
+	TDC	C,CASEBT	; And apply case conversion
+	POPJ	P,		; All done
+	SUBTTL	UNIT ACTION ROUTINES
+
+ALTZNK:	PUSH	P,MODE		; SAVE MODE
+	MOVEI	T1,MODE.K	; GO INTO DELETE MODE
+	MOVEM	T1,MODE		; ..
+	PUSHJ	P,UNI.W		; DELETE WORD
+	POP	P,MODE		; RESTORE MODE
+	POPJ	P,		; AND RETURN
+
+ALTBSW:	PUSH	P,MODE		; SAVE MODE
+	PUSHJ	P,SETMOV	; GO INTO MOVE MODE
+	TLC	FL,NEGF		; GO BACKWARDS
+	PUSHJ	P,UNI.W		; BACKSPACE WORD
+	POP	P,MODE		; RESTORE MODE
+	POPJ	P,		; AND RETURN
+
+ALTTAB::SKIPN	NEWALT##	;NEW ALTER?
+	 JRST	$ATTAB##	;NO
+	PUSH	P,MODE		; SAVE MODE
+	PUSHJ	P,SETMOV	; GO INTO MOVE MODE
+	PUSHJ	P,UNI.Z		; DO COMMAND
+	POP	P,MODE		; RESTORE MODE
+	POPJ	P,		; AND RETURN
+
+UNI.L:	MOVE	T1,MODE		; GET MODE
+	CAIE	T1,MODE.M	; MOVE MODE?
+	  JRST	[PUSHJ P,ALTLNN	; NO--POSITION TO BL
+		 JRST  UNI.Z]	; AND DO EOL CMD
+	PJRST	ALTLN		; YES--POSITION AND TYPE LINE
+
+UNI.BS:	TLCA	FL,NEGF		; BACKSPACE = -SPACE
+UNI.Z:	  MOVSI	T2,1		; EOL = 10000 SPACE
+UNI.SP:	MOVE	T1,MODE		; GET MODE
+	PUSHJ	P,@MODDSP(T1)	; DISPATCH
+RCHK:	PUSH	P,MODE		; SAVE OLD MODE FOR REPLACE CHECK
+	PUSHJ	P,SETMOV	; GET MOVE MODE
+	POP	P,T1		; GET MODE BACK
+	CAIE	T1,MODE.R	; REPLACE?
+	  POPJ	P,		; NO--RETURBN
+	PUSHJ	P,V52TYP	; YES--RETYPED LINE
+	PJRST	ALTINZ		; GO DO INSERT
+SETMOV:	MOVEI	T1,MODE.M	; GET MOVE MODE
+	MOVEM	T1,MODE		; SET
+	POPJ	P,		; AND RETURN
+
+UNI.W:	MOVE	T1,MODE		;GET MODE
+	MOVE	T1,MODDSP(T1)	; GET DISPATCH
+	PUSHJ	P,.ALTWD	; DO WORD STUFF
+	PJRST	RCHK		; AND CHECK FOR REPLACE
+
+UNI.S:	PUSHJ	P,.ALTSR	; SEARCH FOR CHAR
+	JUMPLE	T2,SETMOV	; RETURN IF NOTHING TO DO
+	PJRST	UNI.SP		; AND DO IT
+
+UNI.M:	MOVE	T1,MODE		; GET MODE
+	MOVE	T1,MODDSP(T1)	; GET DISPATCH
+	MOVEM	T1,ALTWPR##	; PASS IT
+	MOVEI	T1,ALT.SP	; GET SPACER
+	MOVEM	T1,ALTFXT	; PASS IT
+	PUSHJ	P,ALTGTS	; DO STRING
+	PJRST	RCHK		; AND CHECK FOR REPLACE
+
+UNI.F:	MOVE	T1,MODE		; GET MODE
+	MOVE	T1,MODDSP(T1)	; GET DISPATCH
+	MOVEM	T1,ALTFXT	; PASS IT
+	PUSHJ	P,ALTFS		; GO DO FIND
+	PJRST	RCHK		; AND CHECK FOR REPLACE
+
+UNI.G:	MOVE	T1,MODE		; GET MODE
+	MOVE	T1,MODDSP(T1)	; GET DISPATCH
+	MOVEM	T1,ALTWPR##	; PASS IT
+	MOVEM	T1,ALTFXT	; AND FOR FIND
+	PUSHJ	P,ALTGTS	; GO DO FIND
+	PJRST	RCHK		; AND CHECK FOR REPLACE
+
+MODDSP:	ALT.SP			; 0=CHAR
+	ALT.K			; 1=DELETE(KILL)
+	ALT.K			; 2=REPLACE
+	ALT.V			; 3=INVERT
+	ALT.U			; 4=UPPER CASE
+	ALT.L			; 5=LOWER CASE
+
+MODE.M=0
+MODE.K=1
+MODE.R=2
+MODE.V=3
+MODE.U=4
+MODE.L=5
+
+	SUBTTL	The -, Space, Tab, X, ^ and V Commands
+ 
+; The - command
+ 
+ALTNEG: TLO	FL,NEGF
+	JRST	CPOPJ1##
+ 
+; Here to accumulate digits
+ 
+ALTDG:	IMULI	T2,^D10 	; Accumulate repeat count
+	ADDI	T2,-"0"(C)
+	JRST	CPOPJ1		; Skip return so at not to 0 rpt. cnt.
+ 
+; The tab and space commands
+
+ALTBOL:	PUSHJ	P,SAVR##	; Save T3-T5
+	PUSHJ	P,CSRPOS	; Compute number of wraps
+	PUSHJ	P,FIXWPC	; Account for multiple of LINEW
+	PJRST	UPCRSR		; And position
+
+ALTSP::	SKIPN	NEWALT##	;NEW ALTER MODE?
+	 JRST	$ALTSP##	;NO
+ALT.SP: TLNE	FL,NEGF 	; Check backwards
+	PJRST	ALTBS		; Yes: back space
+	OFFRUB
+	  ; 
+ALTSP2: LDB	C,ALTP		; Get the chr we are pointing at
+	CAIN	C,15		; If return then as far as can go
+	PJRST	FORCE##
+	TRNN	FL2,SUPN	; Special hack for xtend
+	PUSHJ	P,OCHR##	; Print it
+	IBP	ALTP		; Advance pointer
+	AOS	ALTCNT		; And count
+	SOJG	T2,ALTSP2	; Do correct number of times
+	PJRST	FORCE## 	; Dump it
+ 
+ALT.L:	MOVE	T1,[TRO C,40]	; MAKE LOWER CASE
+	 JRST	ALTCHG		; AND CHANGE
+ALT.U:	SKIPA	T1,[TRZ C,40]	; MAKE UPPER CASE
+ALT.V:	  MOVE	T1,[TRC C,40]	; INVERT CASE
+ALTCHG:	MOVEM	T1,ALTCXT	; SAVE
+	TLNN	FL,NEGF 	; If going forward
+	JRST	ALTCG0
+	PUSH	P,T2		; Save count
+	PUSHJ	P,ALTBS 	; Backspace
+	EXCH	T2,(P)		; Restore count
+	SUB	T2,(P)		; In case count was too large
+ALTCG0: OFFRUB			; Terminate deletes and backspaces
+ALTCG1: LDB	C,ALTP		; Get character
+	CAIN	C,15		; Test for end of line
+	JRST	ALTCG2		;  Yes, done
+	MOVE	CS,CTBL(C)	; Get character's flag bits
+	TLNE	CS,LETF_16	; Test for a letter
+	XCT	ALTCXT		; YES, DO CASE CONVERSION
+	DPB	C,ALTP		; Put character back
+	PUSHJ	P,OCHR		; Type character
+	IBP	ALTP		; Incr byte pointer
+	AOS	ALTCNT		;  & character count
+	SOJG	T2,ALTCG1	; Decr count & repeat
+ALTCG2: TLNE	FL,NEGF 	; If going backward
+	POP	P,T2		; Get garbage of the stack
+	PJRST	FORCE		; Force typing out
+ 
+; The X command
+ 
+ALTELX:	SETZ	T2,		; Come here initially for the X command
+	TLZ	FL,NEGF		; Clear negative flag
+ALTEOL:	PUSH	P,T2		; SAVE POSSIBLE INCREMENT
+	PUSHJ	P,ALTTAB	; Go to end of line
+	POP	P,T2		; Restore increment
+	TLZ	FL,NEGF
+	PJRST	ALTIN		; And go merge with insert
+	SUBTTL	 The R, K and D Commands
+
+ALT.D:				; Here for immediate mode DELETE
+ALT.K:	SETOM	CHGLNF		; Note can change print size of line
+	TLNE	FL,NEGF 	; Backwards?
+	JRST	ALTBDL		; Yes:
+	MOVEM	ALTP,SVALTP	; Save current pointer posithon
+ALT.K1: LDB	C,ALTP		; Get current chr
+	CAIN	C,15		; At end of line?
+	JRST	ALT.K5		; Yes, go finish off
+	SKIPN	EXPFLG		; Print only if non-expert
+	SKIPE	VT52FL		; Or in fancy disply mode
+	CAIA
+	PUSHJ	P,ALTDPN	; Yes: print char
+	IBP	ALTP		; Advance pointer
+	SOJG	T2,ALT.K1	; Check count and continue
+ALT.K5: SKIPN	VT52FL		; If on a display
+	SKIPN	DPYFLG		; Are we on a display?
+	JRST	ALT.K6		; No--skip extra blank stuff
+	MOVEI	C," "		; Yes--put out one more...
+	PUSHJ	P,OCHR		; Blank to delete last character
+	MOVE	C,BACCHR##	; Then put out a backspace...
+	PUSHJ	P,OCHR		; To puts us back at the right point
+ALT.K6: PUSHJ	P,FORCE 	; Force output
+ALT.K3: MOVE	T3,SVALTP	; Get back pointer
+ALT.K4: LDB	C,ALTP		; Move line down
+	DPB	C,T3
+	JUMPE	C,ALT.K2	; Done?
+	IBP	ALTP		; Advance pointers
+	IBP	T3
+	JRST	ALT.K4
+ALT.K2: MOVE	ALTP,SVALTP	; Restore pointer again
+	POPJ	P,
+ 
+; The P and ^R commands
+ 
+ALTCTR:	SKIPN	VT52FL		; Display?
+	PJRST	RPRINT		; No standard function
+V52RTP:	SETOM	PRVSIZ		; Force retype
+	PJRST	V52TPP		; and do it
+
+RPRINT:	PUSH	P,ALTCNT	; Save current count
+	PUSHJ	P,ALTLNN	; Restart the line
+	PJRST	APRNT1
+ 
+APRINT: SKIPE	VT52FL
+	PJRST	V52RTP		; Do special thing for displays
+	PUSH	P,ALTCNT	; Save current count
+	PUSHJ	P,ALTLN 	; Print rest of line and start over
+APRNT1: POP	P,T2		; Get back count
+	JUMPN	T2,ALT.SP
+	POPJ	P,
+ 
+; Here to print characters as they are deleted
+ 
+ALTDPN: SKIPE	DPYFLG		; On a display?
+	JRST	DISDPN		; Do it right then
+	PUSH	P,C
+	MOVEI	C,"\"
+	TRNN	FL2,RUBF2
+	PUSHJ	P,OCHR
+	TRZE	FL2,RUBF
+	PUSHJ	P,OCHR
+	TRON	FL2,RUBF2
+	PUSHJ	P,OCHR
+	POP	P,C
+	JRST	OCHR
+DISDPN: TLNN	FL,NEGF 	; Going backward?
+	JRST	DSDPN2		; No, then go forward
+	SETOM	DELBAK		; Set 'deleting backward' flag
+	PUSHJ	P,RUBAK 	; Backspace over the character
+	PJRST	TYPSTR##	; Type eraser--returned in T1 by RUBAK
+; 
+DSDPN2: CAIG	C," "		; Use blank to for non-printing chars
+	MOVEI	C," "		; Map all special characters into a blank
+	PUSHJ	P,OCHR		; Output deleted character
+	MOVE	C,BACCHR##	; Code for backspace
+	PJRST	OCHR		; Output and return
+	SUBTTL	The I Command
+
+
+;  The I command -- text insertion
+ 
+ALTINZ: TLZ	FL,NEGF 	; Commands join here to terminate with
+				; an I command.  R, T, !, H and M.
+	SETZ	T2,		; Clear increment
+; 
+ALTIN:	TRO	FL2,ALTDUP	; Turn on duplexing
+	MOVEM	T2,ALTINC	; Save in case he inserts a return
+	MOVEI	T1,GNCH1
+ALTIN0:	MOVEM	T1,IGNCH##	; Set up routine to get characters
+ALTIN1:	PUSHJ	P,@IGNCH##	; Get a character
+	CAIN	C,233		; Finish on altmode
+	POPJ	P,
+	SETOM	CHGLNF		; Can change print size of line
+	SETOM	DELBAK		; Like deleting backward
+	CAIN	C,15		; Finish on CR
+	JRST	ALTFNZ
+	CAIN	C,12
+	JRST	INSCR		; Go insert a CRLF
+	CAIN	C,"U"-100+200	; A ^U?
+	JRST	ALTCU		; Abort this disaster
+	CAIE	C,"H"-100+200	; Is this a special delete char?
+	CAIN	C,177		; Check for backspace
+	JRST	ALTIBS		; And delete chr to left
+	CAIN	C,"R"-100+200	; Did he type ^R?
+	JRST	[PUSHJ	P,RPRINT
+		 JRST	ALTIN1] ; Re-echo and loop for more
+	CAIN	C,"W"-100+200	; ^W?
+	JRST	ALTIWS		; Wordspace backward
+	MOVE	T3,ALTP 	; Get set to shift things
+	PUSH	P,ALTCNT	; Save this for later
+	LDB	T1,T3		; Get chr from line
+ALTIN2: DPB	C,T3		; Shift line
+	JUMPE	C,ALTIN3	; Done
+	AOS	ALTCNT		; Count it
+	ILDB	C,T3
+	DPB	T1,T3
+	JUMPE	T1,ALTIN3	; Done
+	AOS	ALTCNT		; Count
+	ILDB	T1,T3
+	JRST	ALTIN2
+ALTIN3: MOVE	T2,ALTCNT	; See if overflow happened
+	CAIL	T2,MXWPL*5
+	NERROR	LTL		; Yes
+	POP	P,ALTCNT	; Restore old count
+	IBP	ALTP		; Advance pointer
+	AOS	ALTCNT		; And count
+ALTIN4:	PUSHJ	P,V52TPI	; Type if in VT52 mode
+	JRST	ALTIN1		; Go get more
+ 
+; Here to insert a CRLF (i.e. a new line)
+ 
+INSCR:	OFFRUB
+	SETOM	PRVSIZ		; Zap this, new line
+	SKIPE	VT52FL		; Vt52?
+	XCT	TMFCLN		; Clear to end of line
+	OCRLF
+	SKIPN	T1,ALTINC	; Did he specify an increment?
+	SKIPA	T3,INCR 	; No, use standard
+	PUSHJ	P,ASCON##	; Convert to ASCII
+	MOVE	T1,T3		; Find the new line number
+	MOVE	T2,LIBUF	; Current one
+	PUSHJ	P,ASCIAD##	; Add
+	PUSH	P,T1		; Save result
+	PUSHJ	P,FINDN 	; Get the next one
+	POP	P,T2
+	CAMG	T2,LIBUF	; Is there a war problem
+	JRST	INCBAD		; Yes, we must try to compute one
+	JUMPE	T1,INCOK	; End of file, any inc is ok
+	CAME	T1,PGMK 	; Also ok if a page mark
+	CAMGE	T2,T1		; Or in correct order
+	JRST	INCOK
+INCBAD: CAME	T1,PGMK
+	SKIPN	T1
+	MOVE	T1,LNOVER##	; One over the top of the world
+	MOVEM	T2,LIBUF2	; Save in case nothing will work
+	MOVE	T2,LIBUF	; Get current
+	PUSHJ	P,ASCAV##	; Find average
+	CAME	T2,LIBUF	; There may have only been a dif of 1
+	JRST	INCOK		; All is well
+	RERROR	ORDER		; Tell him
+	PUSHJ	P,FINDB##	; Get back where we belong
+	PUSHJ	P,RPRINT 	; Type out line to current point
+	JRST	ALTIN4		; And continue insert
+
+INCOK:	MOVEM	T2,LIBUF2	; Save it
+	MOVEM	T2,CLN		; And set as current line
+	PUSHJ	P,FINDB 	; Back up to where we belong
+	MOVE	T1,[XWD LIBUF+1,LIBUF2+1]
+	BLT	T1,LIBUF2+MXWPL+1; Save old buffer
+	PUSH	P,ALTP		; Save pointer
+	MOVEI	C,15
+	DPB	C,ALTP		; And terminate this line
+	MOVEI	C,12
+	IDPB	C,ALTP
+	MOVEI	C,0		; Fill out line with nulls
+AINSC2: TLNN	ALTP,760000
+	JRST	AINSC3
+	IDPB	C,ALTP
+	JRST	AINSC2
+AINSC3: SUBI	ALTP,LIBUF-1	; Find count
+	HRRZM	ALTP,NCNT
+	PUSHJ	P,INSED 	; Replace old line
+	PUSHJ	P,FINDN 	; Move up to next
+	SETZM	OCNT		; This is a new line going in
+	MOVE	T1,LIBUF2	; Move line number over
+	CAMLE	T1,HILN		; Is it smaller than HILN?
+	MOVEM	T1,HILN		; No, make HILN consistent
+	MOVEM	T1,LIBUF
+	SETZM	LIBUF+1
+	MOVE	T1,[XWD LIBUF+1,LIBUF+2]
+	BLT	T1,LIBUF+MXWPL+1; Zero out rest
+	POP	P,T2		; Restore pointer to rest of line
+	MOVE	ALTP,[POINT 7,LIBUF+1]; Dest pointer
+	ADD	T2,[XWD 70000,MXWPL+3]; Adjust input pointer
+	MOVEI	C,11		; And set up the tab
+MOVNEW: IDPB	C,ALTP
+	CAIN	C,12
+	JRST	DONNEW		; Finished moving rest of line
+	ILDB	C,T2		; Pick up one
+	JRST	MOVNEW
+DONNEW: SUBI	ALTP,LIBUF	; Get count
+	MOVEI	ALTP,1(ALTP)	; Used to be - movei ac,1-libuf(ac)
+	MOVEM	ALTP,NCNT
+	PUSH	P,ALTP		; And save
+	PUSHJ	P,INSED 	; Insert
+	MOVE	ALTP,[POINT 7,LIBUF+1,13]; Set up for alter
+	SETZM	ALTCNT
+	POP	P,OCNT		; Set for old count
+	MOVE	T1,LIBUF
+	PUSHJ	P,OUTSN##
+	SETOM	ALTFLG		; We have inserted 
+	JRST	ALTIN4		; And continue inserting
+	POPJ	P,
+ 
+; Here if he types a rubout in insert mode
+ 
+ALTIBS: MOVEI	T2,0		; Set count to 0
+	MOVEM	ALTP,SVALTP	; Save pointer
+	PUSHJ	P,ALTBS 	; Do a backspace
+	JUMPE	T3,ALTIN1	; If hit beginning of the line
+	EXCH	ALTP,SVALTP	; Get back and save current
+	PUSHJ	P,ALT.K3	; Delete that chr
+	SKIPE	DPYFLG		; On a display?
+	PUSHJ	P,TYPSTR##
+	JRST	ALTIN4		; Get more
+ 
+; Here on ^W in insert mode
+
+ALTIWS:	MOVEI	T2,0		; Set count to 0
+	TLO	FL,NEGF		; Set negative flag
+	PUSHJ	P,ALTZNK	; Backup
+	TLZ	FL,NEGF		; Clear it now
+	JRST	ALTIN4		; Get next
+;  THE O COMMAND -- Insert a single character
+ 
+INSONE:	OFFRUB			; Issue pending backslashes
+	MOVEI	T1,INSO1	; Next entry when insert want a character
+	MOVEM	T2,INOCNT##	; Rep count for insertion
+	SETOM	V52SPF
+	PJRST	ALTIN0		; Start the insertion
+; 
+INSO1:	MOVEI	T1,INSO2	; Next entry
+	MOVEM	T1,IGNCH	; Save it
+	PUSHJ	P,AGNCH1	; Read up next character
+	MOVEM	C,INOCHR##
+	CAIE	C,15		; Don't duplex carriage return
+	CAIN	C,12		; or linefeed
+	POPJ	P,
+	PJRST	OCHR		; Duplex the character
+; 
+INSO2:	SOSG	INOCNT		; Count satisfied?
+	JRST	INSO3		; Terminate
+	MOVE	C,INOCHR	; Restore character to insert
+	CAIE	C,12		; Don't print a linefeed
+	PJRST	OCHR		; Output it again
+	POPJ	P,		; Return to insert routine
+; 
+INSO3:	MOVEI	C,233		; Termination character
+	SETZM	V52SPF
+	PJRST	FORCE
+ 
+;  The semicolon command -- insert a <CR> <LF> to break the current line
+
+INSCRF:	MOVEI	C,12
+	PJRST	INSCHR
+
+;  THE B COMMAND -- Insert one or more blanks (short for nO<blank>)
+ 
+INSTAB:	SKIPA	C,["	"]	; TAB CHARACTER
+INSBLK:	MOVEI	C," "		; Blank character
+INSCHR:	MOVEM	C,INOCHR	; Pass it for one character insert code
+	SETOM	V52SPF		; Kill typeout by insert for awhile
+	SKIPN	T2		; Zero implies one
+	MOVEI	T2,1		; Adjust it
+	AOS	T2		; Fudge count
+	MOVEM	T2,INOCNT	; Set up the count
+	MOVEI	T1,INSO2	; Address for character repetition
+	PJRST	ALTIN0		; Go insert the characters
+
+; The + command -- duplicate the current character
+ 
+INSNXT:	OFFRUB
+	PUSHJ	P,ALTBAK	; Peek at previous character
+	JUMPE	T3,CPOPJ##	; If at beginning of line
+	MOVE	C,T3		; Character under cursor
+	IBP	ALTP		; Reset pointer
+	CAIN	C,15		; If a null line
+	JRST	ERRRTN		; This is an error
+	PJRST	INSCHR		; Else output it
+ 
+; Here for the ' command
+ 
+INSQT:	OFFRUB			; As usual
+	PUSHJ	P,AGNCH1	; Go get his character
+	CAIG	C,100		; Make sure it will be gt 0
+	JRST	ERRRTN		; Nope, bong the gong
+	TRZ	C,777640	; Clear parity and convert to UC
+	SUBI	C,100		; Make it a control character
+	CAIE	C,15		; Bare carriage returns confuse SOS
+	CAIN	C, 12		; and so do linefeeds
+	JRST	ERRRTN		; Bong the gong
+	JRST	INSCHR		; Do, O, + and B thing
+ 
+	SUBTTL	The F Command
+ 
+;  The F command
+ 
+ALTFS:	PUSHJ	P,ALTFG 	; Get search string
+; 
+ALTFSR: PUSH	P,T2
+	PUSH	P,ALTP
+	PUSH	P,ALTCNT
+	SETZM	INOCNT
+; 
+ALTFS1: LDB	C,[POINT 7,AFSBUF##,6]; Break character for search
+	MOVEI	T2,1
+	TLNE	FL,NEGF 	; Skip if going forward
+	PUSHJ	P,[PUSH P,ALTP
+		   AOS	-1(P)
+		   JRST ALTBC1]
+	PUSHJ	P,ALTCS 	; Look for instance of initial character
+	ADDM	T2,INOCNT
+	CAIN	T3,15		; Give up if the search fails
+	JRST	ALTFS2
+	JUMPE	T3,ALTFS2	; If search fails going backward
+	SKIPE	T2		; Don't space if zero
+	PUSHJ	P,ALTSSP	; Space over to it
+	PUSHJ	P,ALTCMP	; Is it the one we're looking for
+	  JRST	ALTFS1		; No, try for another
+	POP	P,ALTCNT	; Restore count
+	POP	P,ALTP		; And pointer
+	SKIPE	T2,INOCNT	; Get count
+	PUSHJ	P,@ALTFXT	; PROCESS THOSE CHARS
+	POP	P,T2
+	SOJG	T2,ALTFSR	; Do search specified number of times
+	POPJ	P,
+ 
+	SUBTTL	Subroutine to Read in a Search String
+ 
+ALTFG:	OFFRUB			; Terminate any rubouts or deletes
+	MOVEI	T4,^D19 	; Max search string length
+	MOVE	T3,[POINT 7,AFSBUF##-1,34]; Pointer to buffer
+ALTG1:	PUSHJ	P,GNCH1 	; Get a character for search string
+	CAIN	C,15		; Is it <CR>
+	JRST	ALTG2		; Denotes string at eol
+	CAIN	C,233		; End of search string
+	JRST	ALTG3		; Yep
+	CAIN	C,"U"-100+200	; Negative acknowlege?
+	JRST	ALTFG		; Take it again from the top
+	CAIE	C,"H"-100+200	; Yes, do we have a backspace?
+	CAIN	C,177		; Rubout?
+	JRST	[CAMN	T3,[POINT 7,AFSBUF-1,34]
+		 JRST	ALTG1
+		 ADD T3,[POINT 0,0,28]
+		 TLNE T3,(1B0)
+		 SUB T3,[POINT 0,1,0]
+		 AOJA T4,ALTG1]
+	TRZ	C,200		; Clear special bits for anything else
+	CAIL	C,140		; Skip if not lower case
+	TDZ	C,AEXACF	; Conditionally convert to upper
+	IDPB	C,T3		; Save this character in sstr buffer
+	SOJG	T4,ALTG1	; Try for another
+; 
+	JRST	ER1RTN		; The search string is too long
+ 
+ALTG2:	IDPB	C,T3		; Put <CR> in search string
+	PUSHJ	P,GNCH1 	; Swallow the line feed
+; 
+ALTG3:	SETZ	C,		; End of string marker
+	CAIE	T4,^D19 	; If null string, T4 is still 19
+	IDPB	C,T3		; Mark it
+	POPJ	P,		; Return
+ 
+	SUBTTL	The G Command
+ 
+ALTGTS: PUSHJ	P,ALTFG 	; Get string to search for
+	CAIN	T2,0
+	MOVEI	T2,1		; Make positive
+	TLNN	FL,NEGF 	; Going backward
+	JRST	ALTG1A		; If not
+	PUSH	P,[ALTG1B]
+	PUSH	P,T2
+	PUSH	P,ALTP
+	PUSH	P,ALTCNT	; Save state in case search fails
+	PUSHJ	P,LFSBUF
+	MOVEM	T2,INOCNT
+	PUSHJ	P,ALTSSP	; Silent space over the string
+	JRST	ALTFS1		; Do the search
+ 
+ALTG1A: TLO	FL2,L2.SSI	; Allow G to skip F string
+	PUSHJ	P,ALTFSR	; Do the search
+ALTG1B: JUMPL	T2,CPOPJ	; If search failed
+	PUSHJ	P,LFSBUF	; Get length of search string
+	TLZ	FL,NEGF 	; Clear negative flag
+	JRST	@ALTWPR##	; Process search string
+ 
+;  Routine to compute length of the search string (Returned in T2)
+ 
+LFSBUF: MOVE	T1,[POINT 7,AFSBUF]; Start of search string
+	SETZ	T2,		; Initialize count
+; 
+LFSBF1: ILDB	C,T1		; Get character from search string
+	JUMPE	C,CPOPJ
+	AOJA	T2,LFSBF1	; Increment count
+	SUBTTL	The Character-Search Commands: S, K, ! and "
+
+.ALTSR: PUSHJ	P,AGNCH1	; Get character to search for
+	CAIN	C,15		; Carriage return is end of line
+	JRST	.ALTSC		; Fake it
+	CAIL	C,140		; Lower case
+	TDZ	C,AEXACF	; Map upper/lower if desired
+	PUSH	P,ALTP
+	PUSH	P,ALTCNT	; Save these
+	SETZM	INOCNT		; Clear counter
+	MOVEM	C,INOCHR	; Save targent character
+; 
+.ALTS1: PUSH	P,T2
+	MOVE	C,INOCHR	; Restore character
+	PUSHJ	P,ALTCS
+	CAIE	T3,0		; Off front end - skip
+	CAIN	T3,15		; or if reached end of line
+	JRST	[PUSHJ P,DOBELL	; Type a bell
+		SETZM  (P)	; Clear remaining count
+		JRST   .ALTS2]	; And use what we have
+	ADDM	T2,INOCNT	; Accumulate repitition count
+	PUSHJ	P,ALTSSP	; Space over
+.ALTS2: POP	P,T2
+	SOJG	T2,.ALTS1
+	POP	P,ALTCNT	; Restore counter
+	POP	P,ALTP		; and pointer
+	MOVE	T2,INOCNT	; Restore count
+	TLNE	FL,NEGF 	; Backward?
+	SUBI	T2,1		; Go one less
+	POPJ	P,
+ 
+ 
+ 
+.ALTSC: PUSHJ	P,GNCH1 	; Swallow line feed
+	MOVSI	T2,1		; Force end of line with huge count
+	POPJ	P,		; And return
+ 
+; Common search routine
+ 
+ALTCS:	MOVEI	T2,1		; Create a repeat count
+	TLNE	FL,NEGF 	; Backwards?
+	JRST	ALTBCS		; Yes: search backwards
+	LDB	T3,ALTP 	; Chec to see if at end of line
+	CAIN	T3,15
+	POPJ	P,
+	MOVE	T1,ALTP 	; Get a copy of the pointer
+	TLNE	FL2,L2.SSI	; Suppress?
+;**;	TLO	FL2,L2.SSI	; LET S/F FIND CHAR AT CURRENT POSITION
+	MOVEI	T2,0		; Yes, clear space count
+ALTCS1: TLZN	FL2,L2.SSI	; Suppress incrementing?
+	IBP	T1		; No, increment pointer
+	LDB	T3,T1		; Get a character
+	CAIL	T3,140		; Lower case
+	TDZ	T3,AEXACF	; Conditionally convert
+	CAIE	T3,15		; Done if end of line
+	CAMN	T3,C		; Or a match
+	POPJ	P,
+	AOJA	T2,ALTCS1	; Else keep count and keep looking
+ 
+ALTCMP: MOVE	T3,[POINT 7,AFSBUF##]; Pointer to alter search buf
+	MOVE	T4,ALTP 	; Copy of current pointer
+	LDB	C,T4		; Current source character
+ALTCM1:	CAIL	C,140
+	TDZ	C,AEXACF
+	ILDB	T1,T3		; Next target character
+	JUMPE	T1,CPOPJ1	; Done, it matched!
+	CAIL	T1,140		; Lower case?
+	TDZ	T1,AEXACF##	; Conditionally fix
+	CAIE	C,(T1)		; Do they match
+	POPJ	P,		; No match this time
+	ILDB	C,T4		; Get next source character
+	JRST	ALTCM1		; And compare it too
+ 
+	SUBTTL	Commands that Exit the Line:  Q, ^U, E, <CR>, <LF> and N
+
+
+; The Q command
+ 
+ALTALT: OFFRUB
+	SKIPE	VT52FL		; On a display?
+	PUSHJ	P,[PUSHJ P,ALTBOL ; Position to front of line
+		XCT TMFCTE	; Clear rest of screen
+		PUSHJ	P,SETALT	; Setup unmodified line
+		TLZ	FL,NEGF		; And let ALTTAB go forward
+		PJRST	ALTTAB]
+	SKIPE	ALTFLG
+	PUSHJ	P,FINDN##
+	ONECHO
+	JRST	T1POPJ##
+
+
+; The N command--advance to next or previous line
+
+ALTNXL:	PUSH	P,T2		; Save count
+	PUSH	P,[0]		; Save a zero as a flag
+	TLZE	FL,NEGF		; Clear this before ALTFN
+	SETOM	(P)		; Note that command is negative
+	PUSHJ	P,[PUSHJ P,ALTFN] ; End this line.  ALTFN prunes PDL.
+	  JFCL			; Ignore skip return
+	PUSHJ	P,AINSED	; Insert corrected line
+	SKIPE	(P)		; Negative argument?
+	OUTSTR	[ASCIZ/ 
+/]				; Blank line, even if TTY NO BLANKS
+ALTNX1:	SKIPN	(P)		; Forward?
+	PUSHJ	P,FINDN		; Find next
+	SKIPE	(P)		; Backward?
+	PUSHJ	P,FINDB		; Find previous
+	JUMPE	T1,ALTNLN	; If no next line
+	CAMN	T1,PGMK		; Page mark?
+	JRST	ALTNPG		; No next line
+	PUSHJ	P,SETALT	; Setup next line for alter
+	POP	P,T2		; Get negative flag
+	SKIPE	T2		; Was NEGF set?
+	TLO	FL,NEGF		; Yes, relight it in the flag register
+	POP	P,T2		; Restore the count
+	MOVE	T1,LIBUF	; New line number
+	MOVEM	T1,CLN		; Make this current now
+;	MOVEM	T1,HILN		; Redefine top of range
+	MOVE	T1,CPG		; Current page
+	MOVEM	T1,CPGL		; Make it the current logical page
+;	MOVEM	T1,HIPG		; ..and page at top of range
+	SOJG	T2,ALTNXL
+	POPJ	P,		; Continue with this stuff
+
+ALTNLN:	RERROR	NLN
+ALTNL0:	SKIPN	(P)		; Negative
+	PUSHJ	P,FINDB		; Backup to previous
+	CAME	T1,PGMK		; Is this a page mark?
+	JRST	ALTNL1		; No
+	MOVE	T2,CPG		; Get the current page
+	SKIPE	(P)		; Going backward?
+	AOS	T2		; Yes, off by one
+	PUSHJ	P,PGPRN##	; Retype
+	JRST	ALTNL0		; Go look again
+
+ALTNL1:	ADJSP	P,-1
+	POP	P,T2
+	PJRST	SETALT
+ 
+ALTNPG:	MOVE	T2,CPG		; Current page
+	SKIPN	(P)		; If negative
+	AOS	T2		; Do not adjust
+	PUSHJ	P,PGPRN##	; Type it so he knows
+	JRST	ALTNX1
+
+; The CR command
+ 
+ALTFNZ:	PUSHJ	P,GNCH1
+	LDB	C,ALTP		; Current character
+	CAIN	C,15		; End of line?
+	MOVMS	XCMDF		; Indicate CR end
+	PJRST	ALTFN
+; 
+; Here if <LF> was typed without CR
+; 
+ALTEX:	SKIPN	VT52FL		; On a display?
+	TRO	FL2,SUPN	; No, E means suppress typeout
+ALTFN:	PUSHJ	P,V52TFR	; Make sure display is okay.
+	SKIPE	VT52FL		; On a display?
+	TRO	FL2,SUPN	; Yes, suppress unecessary typeout
+	PUSHJ	P,CSRPOS	; Get cursor position
+	PUSHJ	P,FIXWPC	; Fix wrap count for wrap waiting
+	MOVE	T5,WRPCNT	; Save count of wraps
+	PUSHJ	P,ALTTAB	; Space to end of line
+	TRZ	FL2,SUPN	; Clear suppress flag
+	SKIPN	VT52FL		; VT52?
+	JRST	ALTFNX		; No, line was just typed
+	PUSHJ	P,PRNTSZ	; Get the print size of the line
+	PUSHJ	P,FIXWPC	; Fix wrap count for wrap waiting
+	SUB	T5,WRPCNT	; Difference in line position
+LFLUP:	JUMPGE	T5,ALTFNX	; If none
+	OUTCHR	[12]		; Extra line feed
+	AOJA	T5,LFLUP	; Keep checking
+
+ALTFNX:	PUSHJ	P,ALTFNL	; Finish the line
+	JRST	T1PPJ1##	; Prune PDL and give skip return
+
+; Routine to finish up line currently being altered and setup NCNT
+; for INSED.
+
+ALTFNL:	OCRLF
+	ONECHO			; Get out of non-duplex mode
+ALTFN1: ILDB	C,ALTP		; Look one chr over
+	CAIE	C,12		; This should be the line feed
+	NERROR	ILFMT		; Something is wrong
+	MOVEI	C,0		; Zero remainder of line
+ALTFN2: TLNN	ALTP,760000	; All done?
+	JRST	ALTFN3		; Yes
+	IDPB	C,ALTP		; No, put in another 0
+	JRST	ALTFN2
+ALTFN3: SUBI	ALTP,LIBUF-1	; Get size of new line
+	HRRZM	ALTP,NCNT	; And save for insed
+	POPJ	P,
+ 
+; The ^U command
+ 
+ALTCU:	SKIPE	VT52FL
+	JRST	[PUSHJ	P,ALTBOL
+		 XCT TMFCTE ; Clear rest of screen
+		 SETOM  PRVSIZ	; For retype of whole line
+		 PJRST SETALT]
+	OFFRUB
+	OUTSTR	[ASCIZ /^U
+/]
+	PJRST	SETALT		; Go restart line and forget edit so far
+ 
+	SUBTTL	The \ and / commands
+
+
+; THE / COMMAND -- Transpose the next two letters
+ 
+; THE \ COMMAND  (Same as -/)
+ 
+ALTBSL: TLC	FL,NEGF 	; Complement neg flag and do / command
+; 
+ALTSL:	TLNE	FL,NEGF 	; Backward?
+	JRST	ALTSLB		; Backup a couple
+ALTSL1: LDB	T1,ALTP 	; Next character in buffer
+	MOVE	T2,ALTP 	; Save its position
+	ILDB	C,ALTP		; and the next one after that
+	CAIE	T1,15		; Is it carriage return?
+	CAIN	C,15		; Same
+	JRST	ALTSL2		; Command not valid at end of line
+	CAIL	C,40		; Special?
+	CAIGE	T1,40		; (either one)
+	SETOM	CHGLNF		; Yes, line size might change
+	OFFRUB
+	PUSHJ	P,OCHR		; Output 2nd character
+	DPB	C,T2		; And make it the first
+	MOVE	C,T1		; Now for the second
+	PUSHJ	P,OCHR		; Output it too
+	DPB	C,ALTP		; Add first character to buffer
+	IBP	ALTP		; And advance pointer
+	PUSHJ	P,FORCE 	; Make them visible
+	AOS	ALTCNT
+	AOS	ALTCNT		; Increment alter count by two
+	POPJ	P,		; And return
+; 
+ALTSLB: MOVEI	T2,2		; Count for backspace
+	PUSHJ	P,ALT.SP 	; Space back two
+	JRST	ALTSL1		; Join common processing 
+; 
+ALTSL2: MOVE	ALTP,T2 	; Restore pointer
+	ADJSP	P,-1		; Pop junk off the PDL
+	JRST	ALTBEL		; Signal error
+	SUBTTL	The J command.  Join to Next Line
+
+; The J command
+ 
+AJOIN:	OFFRUB
+	SETOM	PRVSIZ		; Zap this, new line configuration
+	TLNE	FL,NEGF		; Backward?
+	JRST	MJOIN		; This is special
+AJOIN0:	PUSH	P,T2
+	PUSHJ	P,FINDN 	; Go see if next line is really there
+	CAME	T1,PGMK
+	SKIPN	T1
+	JRST   [RERROR  NNN
+		PUSHJ	P,FINDB	; Refind the line
+		POP	P,T2
+		JRST	RPRINT]
+	PUSHJ	P,GETLTH##	; Get line length, make sure it in core
+	PUSH	P,T1		; Save length for later
+	PUSHJ	P,ALTTAB	; Space to end of line
+	MOVEI	T2,1(PNTR)	; Point past line number
+	HRLI	T2,(POINT 7,0,6); Point to first character
+	MOVEI	T3,MXWPL*5-6	; Maximum length
+	SUB	T3,ALTCNT	; Minus what we already have
+	PUSH	P,ALTP		; Save pointer to this line
+JOIN1:	ILDB	C,T2		; Fetch a character
+	DPB	C,ALTP		; Store the character in the line
+	IBP	ALTP		; Advance the pointer
+	CAIN	C,12		; Line feed?
+	JRST	JOIN2		; Yes, end of line
+	SOJG	T3,JOIN1	; Loop to end of line
+	MOVE	ALTP,(P)	; Restore ALTP
+	MOVEI	C,15		; Line feed
+	IDPB	C,ALTP		; Store
+	MOVEI	C,12		; Line feed
+	IDPB	C,ALTP		; Store
+	RERROR	LTL		; Line too long
+	POP	P,ALTP
+	PUSHJ	P,FINDB
+JOINER:	POP	P,T1
+JOINR1:	POP	P,T2
+	PJRST	RPRINT		; Re-type it
+
+JOIN2:	PUSHJ	P,INSTRZ	; Add trailing zeros
+	POP	P,ALTP		; Restore ALTP
+	PUSHJ	P,FINDB		; And back to old line
+	POP	P,T1		; Restore line length
+	ADDM	T1,OCNT		; Increase words to delete
+	PUSHJ	P,INSJLN	; Insert the joined lines
+	POP	P,T2		; Restore remaining count
+	SOJG	T2,AJOIN0	; Join as many as he wants
+	PJRST	V52TPN		; Then type line on VT52
+	SUBTTL	The -J command -- Join to Previous Line
+
+; Here for -J command.
+
+MJOIN:	PUSH	P,T2
+	PUSHJ	P,BUFLEN	; Get length of line
+	PUSH	P,T1		; Save word count
+	PUSHJ	P,FINDB		; Find the previous line
+	CAME	T1,PGMK
+	SKIPN	T1
+	JRST	[RERROR NLN	; No such line
+		 CAMN   PNTR,BUFFIR
+		 PUSHJ	P,FINDN
+		 JRST   JOINER]
+	PUSHJ	P,GETLTH	; Get length of this one
+	MOVE	T2,T1		; Make a copy
+	ADD	T2,(P)		; Compute sum
+	POP	P,(P)
+	CAILE	T2,MXWPL+1	; See if it will fit
+	JRST	[RERROR LTL
+		 CAMN	PNTR,BUFFIR
+		 PUSHJ	P,FINDN
+		 JRST	JOINR1]
+	ADDM	T1,OCNT		; Increment count of words to delete
+	MOVSI	T1,-MXWPL	; Max line length
+	SETZM	LIBUF2(T1)	; Clear a word
+	AOBJN	T1,.-1		; Loop over whole buffer
+	SKIPE	VT52FL		; On a display?
+	PUSHJ	P,ALTBOL	; Go to beginning of the line
+	MOVE	T4,[POINT 7,LIBUF2]
+	MOVE	T2,[POINT 7,LIBUF+1,6]	; Point to data
+; 
+MJOIN1:	ILDB	C,T2		; Get a character from current line
+	IDPB	C,T4		; Stash in second line buffer
+	CAIE	C,12		; End yet?
+	JRST	MJOIN1		; No
+	PUSHJ	P,LOADCL##	; Load that line
+	MOVE	ALTP,[POINT 7,LIBUF+1,6]	; Point to that data
+	SETZM	ALTCNT		; Set count at beginning
+MJOIN3:	ILDB	C,ALTP		; Get a character
+	CAIN	C,15		; Is it end of text line
+	JRST	MJOIN4		; Yes
+	AOS	T2,ALTCNT	; Increment count
+	JRST	MJOIN3		; Loop over whole line
+
+MJOIN4:	MOVE	T3,[POINT 7,LIBUF2]	; Point to old line
+MJOIN5:	ILDB	C,T3		; Fetch a character
+	DPB	C,ALTP		; Store this one next
+	IBP	ALTP		; Then increment the pointer
+	CAIE	C,12		; End of line yet?
+	JRST	MJOIN5		; No, keep looking
+	PUSHJ	P,INSTRZ	; Add trailing zeros
+	TLZ	FL,NEGF		; Clear neg-flag
+	PUSHJ	P,INSJLN	; Insert the line into the buffer
+	PUSHJ	P,RPRINT
+	POP	P,T2		; Restore this
+	SOJG	T2,MJOIN
+	POPJ	P,
+	SUBTTL	Support Routines for J and -J Commands
+
+
+; Subroutine to compute the length of the line in LIBUF
+; 
+BUFLEN:	MOVE	T2,[POINT 7,LIBUF+1,6]	; First character
+	MOVEI	T1,7		; Minimum length
+BUFLN1:	ILDB	C,T2		; Character
+	CAIE	C,12		; End of line?
+	AOJA	T1,BUFLN1	; Increment count and keep looking
+	ADDI	T1,4		; Round to whole words
+	IDIVI	T1,5		; Compute words required
+	POPJ	P,
+
+
+; Subroutine to install a joined line
+; Call
+; New line in LIBUF, OCNT setup with length of old lines
+; Returns with OCNT set to old value of NCNT, line in buffer
+; 
+INSJLN:	PUSHJ	P,BUFLEN	; Words in joined line
+	MOVEM	T1,NCNT		; Insert that many
+	PUSHJ	P,INSED		; Install the new line
+	MOVE	T1,NCNT
+	MOVEM	T1,OCNT		; Make that the old count
+	POPJ	P,
+
+
+; Routine to add trailing zeros to the last word in the line
+; Call with ALTP setup pointing to first character after the LF
+
+INSTRZ:	MOVEI	C,0		; Get a zero
+INSTR1:	DPB	C,ALTP		; Add one
+	TRNN	ALTP,760000	; At end of word?
+	POPJ	P,		; Yes, done
+	IBP	ALTP		; No, advance one character
+	JRST	INSTR1		; And clear next
+	SUBTTL	The W Command -- Space Over by Words
+
+.ALTWD: MOVEM	T1,ALTWPR	; Process to perform for word stuff
+	OFFRUB
+; 
+ALTWD1: PUSH	P,ALTP		; Save pointer
+	TLNN	FL,NEGF 	; Going backward
+	TDZA	T1,T1		; Set T1 to zero and skip
+	SETO	T1,		; Set T1 to -1
+	PUSH	P,T1		; Sum of characters seen in word skip
+	PUSH	P,T2		; Save count if any
+; 
+ALTWD2: TLNE	FL,NEGF 	; If forward
+	JRST	ALTWD3		; If going backward
+; 
+	PUSHJ	P,ALTWS 	; Skip over word
+	JRST	ALTWD4		; 
+; 
+ALTWD3: PUSHJ	P,ALTWBS	; Move to beginning of previous word
+	AOS	-1(P)		; Fudge factor
+; 
+ALTWD4: ANDI	T2,-1		; Clr flag in case
+	ADDM	T2,-1(P)	; Tally spacing count
+	SOSLE	(P)		; Count down number of words
+	JRST	ALTWD2		; Loop again if more to do
+; 
+	POP	P,(P)		; Clear counter from stack
+	POP	P,T2		; Get length of words skipped
+	POP	P,ALTP
+	PJRST	@ALTWPR 	; Do specified operation
+ 
+; Routine to skip over next word
+ 
+ALTWS:	HRROI	T2,0		; Set flg and count
+	LDB	T3,ALTP 	; Get current character
+	JRST	.+2		; Skip increment
+ALTWS1: ILDB	T3,ALTP 	; Get a character
+	CAIN	T3,15		; Done if end of line
+ALTWS2: POPJ	P,		; Quit
+	MOVE	T3,CTBL(T3)	; Fetch character table entry
+	JUMPE	T3,ALTWS4	; Skip blanks etc...
+	ANDI	T2,-1		; Clr flag
+	JUMPG	T3,ALTWS3	; Skip letters & numbers
+	TRNN	FL2,QSEPF	; Separators
+	TRNN	T3,NSEPF	; Today
+	JRST	IPOPJ		; Real break - quit!
+ALTWS3: AOJA	T2,ALTWS1	; Keep count and continue
+ALTWS4: JUMPL	T2,ALTWS3	; First blnks
+	AOS	T2
+ALTWS5: ILDB	T3,ALTP
+	CAIE	T3,15		; Quit on CR
+	SKIPE	CTBL(T3)	; Or first non-blank
+	POPJ	P,
+	AOJA	T2,ALTWS5
+ 
+IPOPJ:	TRNE	T2,777777	; Test count for zero
+	POPJ	P,		; Non-zero:  just return
+	IBP	ALTP		; Increment alter pointer
+	AOJA	T2,CPOPJ	; Increment count and return
+	SUBTTL	The C Command
+
+; The C command
+ 
+ALTCN:	OFFRUB
+	TLNN	FL,NEGF 	; Going forward?
+	JRST	ALTCN2
+	PUSH	P,T2		; Save count
+	PUSHJ	P,ALT.SP 	; Backup
+	EXCH	T2,(P)
+	SUB	T2,(P)
+	POP	P,T1
+ALTCN2: LDB	C,ALTP		; At end of line?
+	CAIN	C,15
+	POPJ	P,		; Yes, stop
+	CAIGE	C," "		; Normal graphic character?
+	SETOM	CHGLNF		; No, line size may change then
+ALTCN1: PUSHJ	P,AGNCH1	; Get a character
+	CAIE	C,177		; Do not let him insert a rubout
+	CAIN	C,12		; Ignore carriage return
+	JRST	ALTCN1
+	CAIE	C,33		; Stop on altmode and line feed
+	CAIN	C,15
+	POPJ	P,
+	CAIGE	C," "		; Normal graphic character?
+	SETOM	CHGLNF		; No, line size may change then
+	PUSHJ	P,FOCHR##	; Duplex character
+	DPB	C,ALTP		; Replace it
+	IBP	ALTP		; Advance pointer
+	AOS	ALTCNT		; And count
+	PUSHJ	P,V52TPN	; Clean up the line
+	SETZM	CHGLNF		; Clear flag if set
+	SOJG	T2,ALTCN2	; Continue
+	POPJ	P,
+	SUBTTL	Spacing Routines 
+
+; Subroutine to move alter pointer without changing display
+; Call like ALT.SP
+ 
+ALTSSP: TLNE	FL,NEGF 	; Silent Space backward?
+	JRST	ALTSBS		; Do silent back space then
+ALTSS1: LDB	C,ALTP		; Fetch a character
+	CAIN	C,15		; See if it is a CR
+	POPJ	P,		; It is, so stop
+	IBP	ALTP		; No, increment pointer
+	AOS	ALTCNT		;  and count
+	SOJG	T2,ALTSS1	; Loop until space request satisfied
+	POPJ	P,		; Then return
+ 
+; Here for silent space backward
+ 
+ALTSBS: PUSHJ	P,ALTBAK	; Backup
+	JUMPE	T3,CPOPJ	; Stop if beginning of line
+	SOS	ALTCNT		; Decrement counter
+	SOJG	T2,ALTSBS	; Loop until request satisfied
+	POPJ	P,		; Then return
+ 
+; The backspace command
+ 
+ALTBS:	PUSHJ	P,ALTBAK	; Get previous char
+	JUMPE	T3,ALTCBS	; Jump if done
+	ONRUB
+	SOS	ALTCNT		; Decrease count
+	MOVE	C,T3
+	SKIPN	DPYFLG		; Non display device?
+	PUSHJ	P,OCHR
+	SKIPE	DPYFLG		; On a display?
+	PUSHJ	P,RUBAK 	; Backspace the real way
+	SOJG	T2,ALTBS	; More, more
+	PJRST	FORCE
+
+ALTCBS: PUSHJ	P,FORCE 	; Finish buffer
+	SKIPN	DPYFLG		; Just return if on display
+	JRST	ALTCB1		; Normal mode, output SN.
+	SETZ	T1,		; Clear T1 to avoid ill mem ref
+	POPJ	P,
+
+PRNTSN: PUSHJ	P,FORCE 	; Finish print line
+ALTCB1: OFFRUB			; No more rub
+	SKIPN	VT52FL
+	OCRLF
+	SKIPE	VT52FL
+	OUTCHR	[15]
+	MOVE	T1,LIBUF	; Also print seq num
+	PJRST	OUTSN
+ 
+; The L command
+ 
+ALTLN:	SKIPE	VT52FL		; On a fancy display?
+	JRST	[PUSHJ P,ALTBOL	; Position to front
+		 JRST ALTLNN]	; Then re-type sequence number
+	MOVEI	T2,1000 	; Finish printing the line
+	PUSHJ	P,ALT.SP
+ALTLNN: MOVE	ALTP,[POINT 7,LIBUF+1,13]; Pointer to start
+	SETZM	ALTCNT		; Reset count
+	PJRST	PRNTSN		; And reprint line number
+ 
+; Common routines to backup in a line
+ 
+ALTBAK: CAMN	ALTP,[POINT 7,LIBUF+1,13]
+	PJRST	ALTRTZ		; Return zero if at beginning
+	ADD	ALTP,[POINT 0,0,28]
+	TLNE	ALTP,(<1B0>)	; Check word overflow
+	SUB	ALTP,[POINT 0,1,0]
+	LDB	T3,ALTP 	; Get char
+	POPJ	P,
+; 
+ALTRTZ: MOVEI	T3,0		; Return 0
+	POPJ	P,
+ 
+	SUBTTL	Backward Deletion Routine
+
+; Routine to do backwards deletion
+ 
+ALTBDL: MOVEM	ALTP,SVALTP	; Save pntr
+ALTBD1: PUSHJ	P,ALTBAK	; Back a char
+	JUMPE	T3,ALTBD2	; Done if no more
+	SOS	ALTCNT		; Decrement count
+	MOVE	C,T3		; For printing
+	PUSHJ	P,ALTDPN
+	SOJG	T2,ALTBD1
+ALTBD2: PUSHJ	P,FORCE 	; Force printing
+	PUSH	P,ALTP		; Save new pntr
+	MOVE	T3,SVALTP	; Get set to move line
+ALTBD3: LDB	C,T3
+	DPB	C,ALTP		; Move char
+	JUMPE	C,APOPJ		; Done if zero
+	IBP	T3		; Advance pntrs
+	IBP	ALTP
+	JRST	ALTBD3
+
+	SUBTTL	Display Backspace Handler
+
+; Here to perform a terminal cursor backspace
+ 
+RUBAK:: PUSH	P,T2		; Save accumulator T2
+	PUSH	P,T4		; and T4
+	PUSH	P,C		; Save character argument
+	PUSHJ	P,CSRPOS	; Get current position
+	POP	P,C		; Character to delete
+	PUSH	P,T4		; Save length so far
+	JSP	T1,RBC		; Compute length with deleted character
+	POP	P,T2		; Get old length
+	SKIPE	ALTCNT		; If at start of line
+	JUMPE	T2,REITR1	; If will be at end of screen
+	JUMPE	T4,REITER	; If at edge of screen
+	SUB	T4,T2		; Compute displacement
+	SETZ	T1,		; In case length is zero
+	JUMPE	T4,RPOPJ	; If net displacement is zero
+	MOVEI	T1,[BYTE (7)" ","H"-100,0,0,0]; Normal eraser
+	CAIN	T4,2		; Skip if not a control character
+	MOVEI	T1,[BYTE (7)" "," ","H"-100,"H"-100,0]; Special eraser
+	PUSH	P,T2		; SAVE AN AC
+	MOVE	T2,BACCHR##	; GET BACKSPACE CHAR
+	CAIN	T2,"H"-100	; BACKSPACE?
+	  JRST	TEMP.X		; YES, ALL SET
+	MOVEI	T1,[BYTE (7) " ",32,0,0,0]; NO, ASSUME ^\
+	CAIN	T4,2		; SKIP IF NOT A CONTROL CHARACTER
+	MOVEI	T1,[BYTE (7) " "," ",32,32,0]; SPECIAL ERASER
+TEMP.X:	POP	P,T2		; GET BACK THE AC
+	MOVE	C,BACCHR##	; Code for backspace
+	SKIPG	T4		; If move will be backward
+	MOVEI	C," "		; Blank moves cursor forward
+	MOVM	T4,T4		; And insure count is positive
+	PUSHJ	P,OCHR		; Output a spacer
+	SOJG	T4,.-1		; Back over the character
+RPOPJ:	POP	P,T4		; restore
+T2POPJ::POP	P,T2
+	POPJ	P,
+; 
+; Here to retype the line (wraparound condition)
+
+REITER:	SOS	WRPCNT
+REITR1:	PUSHJ	P,UPCRSR	; Move up if wanted
+	MOVE	T1,VT52FL
+	AND	T1,DELBAK
+	SKIPE	T1
+	XCT	TMFCTE		; Clear rest of screen
+	MOVE	ALTP,[POINT 7,LIBUF+1,13]; Start of buffer
+	PUSHJ	P,FORCE 	; Clear any rubouts
+	MOVE	T1,LIBUF	; Holds the current line number
+	PUSHJ	P,PRNTSN	; Output the line number
+	MOVE	T2,ALTCNT	; Number of characters in buffer
+	SETZM	ALTCNT		; Reset to zero
+	PUSH	P,FL		; Save flags
+	TLZ	FL,NEGF 	; NEGF must not be set to do spacing
+	PUSHJ	P,ALT.SP 	; Respace the line
+	POP	P,FL		; Restore the flags the way the were
+	SETZ	T1,0		; Clear eraser
+	JRST	RPOPJ		; Return
+
+;CSRPOS -- Routine to return the relative cursor position
+;
+;Call with
+;	PUSHJ	P,CSRPOS
+;	<Return here with position in T4, wrap count in WRPCNT>
+;Uses T1, T2, T4 and C
+
+CSRPOS:	MOVE	T2,[POINT 7,LIBUF+1,6]; Initialize pointer a line start
+	LDB	T4,PMTSZP##	; Get prompt length
+	SETZM	WRPCNT##	; Zero the wraparound count
+	JSP	T1,.+1		; Set up T1 for later returns
+RBK0:	ILDB	C,T2		; Next character from buffer
+	CAME	T2,ALTP 	; Up to current position yet
+	JRST	RBC##		; Compute length of this character
+	POPJ	P,		; Return, size is in T4
+ 
+; Routine to do backwards search
+ 
+ALTBCS: PUSH	P,ALTP		; Save pntr
+	ADDI	T2,1		; Advance pointer
+	PUSHJ	P,ALTBAK	; Don't look at first character
+ALTBC1: PUSHJ	P,ALTBAK	; Prev char
+	JUMPE	T3,APOPJ	; End of line
+	CAIL	T3,140
+	TDZ	T3,AEXACF
+	CAME	T3,C		; Match?
+	AOJA	T2,ALTBC1	; No: count and continue
+	JRST	APOPJ## 	; Restore ALTP and return
+
+
+; Routine to do a backward word search
+
+ALTWBS:	HRROI	T2,0		; Set flag and count
+ALTWB1: PUSHJ	P,ALTBAK	; Get the previous character
+	JUMPE	T3,CPOPJ	; and return if at beginning of line
+	MOVE	T3,CTBL(T3)	; Look up character in the char table
+	JUMPE	T3,ALTWB3	; Skip over spaces and so forth
+	ANDI	T2,-1		; and signal that we found something
+	JUMPG	T3,ALTWB2	; Skip letters and numbers
+	TRNN	FL2,QSEPF	; 
+	TRNN	T3,NSEPF	; Seperator flag set?
+	POPJ	P,		; Restore ALTP and return
+ALTWB2: AOJA	T2,ALTWB1	; Increment character count and loop 
+ALTWB3: JUMPGE	T2,CPOPJ	; If not first blanks
+	AOJA	T2,ALTWB1	; Continue looking
+	SUBTTL	Support Routines for Fancy Display Version of ALTER Mode
+
+; Routine to re-type line after a control-C
+; Call with
+;	PUSHJ	P,CCRTYP
+;	<Return here>
+
+CCRTYP::SKIPN	NEWALT##	;NEW ALTER?
+	 JRST	$CRTYP##	;NO
+	MOVEI	T1,0		; Be sure tabs are clear
+	PUSHJ	P,SETTAB##	; ..
+	PUSHJ	P,RPRINT	; Re-type the first part
+	SETOM	PRVSIZ		; Force typeout
+	PJRST	V52TPN		; Go retype the line without delay
+
+; V52TYP -- Routine to retype the line currently being altered
+; 
+; This routine checks VT52FL so it can be used even if this flag has
+; not been selected.  Ensures that the current screen image matches
+; the internal line image.  The refresh is not performed if there
+; is a character waiting to be typed, or the specified refresh delay
+; has not elapsed. (/REFDLY).
+;
+; Call V52TPN if the line should be refreshed immediately without
+; waiting for REFDLY milliseconds.
+
+V52TPI:	SKIPE	V52SPF##	; Suppressing intermediate typeout?
+	POPJ	P,		; Yes, return
+	PUSHJ	P,V52TYP	; Type the line again
+	SETZM	CHGLNF		; Clear typeout flag
+	POPJ	P,		; And return
+
+V52TYP:	SKIPE	T1,REFDLY	; Does he want a delay (slow terminal)
+	HIBER	T1,		; Yes wait for time or next character
+	  JFCL			; No HIBER or no wait
+V52TPN:	SKIPLE	T1,TSPEED	; GET USER TERMINAL SPEED
+	 CAML	T1,BAUD		; FAST ENOUGH FOR UPDATE?
+	  CAIA			; YES
+	   POPJ P,		; NO--DONT DO IT
+V52TPP:	SKPINC			; Is he ahead?
+	  SKIPN	VT52FL		; Or not on a VT52?
+	POPJ	P,		; Yes, skip this stuff then
+V52TFR:	TRNE	FL2,SUPN	; Suppressing?
+	POPJ	P,		; Yes, no typeout
+	LDB	C,ALTP		; Current character
+	CAIN	C,15		; End of line
+	SKIPN	DELBAK		; and deleting backward
+	CAIA
+	PJRST	SETPVS		; Yes, line is okay.  Update PRVSIZ.
+	PUSH	P,FL		; Save flags
+	PUSH	P,T2		; and count
+	TLZ	FL,NEGF		; Always type forward
+				 CONT.
+; 
+;  Get the length of the new line it can be compared with the old
+; 
+	PUSHJ	P,PRNSZC	; Get display length in characters
+	MOVE	T4,T1		; Save in T4
+	CAME	T4,PRVSIZ##	; Same as last time?
+	JRST	V52TP2		; No
+	SKIPN	CHGLNF		; Does this command change line size?
+	JRST	V52TP4		; No, just return after restoring AC's
+; 
+;  We must have done a insert, delete or change.  Since the whole
+;  line is the same length, there must be a tab taking up the
+;  difference.  Type all characters until we find a tab or EOL.
+; 
+	PUSH	P,ALTP		; Save the pointer
+CHKTB1:	LDB	C,ALTP		; Load next character
+	PUSHJ	P,OCHR##	; No, type it
+	CAIE	C,15		; End of line
+	CAIN	C,"I"-100	; or tab
+	JRST	CHKTB2		; If yes
+	IBP	ALTP		; Increment the pointer
+	JRST	CHKTB1		; And type till we find a tab
+
+CHKTB2:	PUSH	P,T4		; Save line size
+	PUSHJ	P,CSRPOS	; Get cursor position
+	PUSHJ	P,FIXWPC	; Fix line wrap count
+	POP	P,T4		; Get T4 back
+	POP	P,ALTP		; and the pointer
+	JRST	V52TP6		; Go retype the first part of the line
+				 CONT.
+;  Here if the line size is different than it was last time
+; 
+V52TP2:	EXCH	T4,PRVSIZ	; Get old size, save new
+	JUMPL	T4,V52TP5	; If explicit request to retype the line
+	SUB	T4,PRVSIZ	; Compute difference
+	JUMPG	T4,V52TP5	; If new size smaller
+	LDB	C,ALTP		; Look at current character
+	CAIN	C,15		; Is it a carriage return
+	JRST	V52TP4		; If line grew at EOL, screen still OK
+V52TP5:	PUSH	P,ALTCNT	; Save count
+	PUSHJ	P,ALTTAB	; Print rest of the line
+	POP	P,ALTCNT	; Restore the alter character count
+	MOVEI	C," "		; Blank to use as eraser
+	SKIPG	T4		; Line shrank?
+	MOVEI	T4,0		; No
+	SKIPE	T1,T4		; Save difference
+ERSLUP:	PUSHJ	P,OCHR		; Type a blank
+	SOJG	T4,ERSLUP	; Over and over till done
+	ADD	T1,PRVSIZ	; Get previous size
+	SUBI	T1,1		; End of line causes special problems
+	IDIV	T1,LINEW	; Compute number of wraps
+	MOVEM	T1,WRPCNT	; and set it up
+V52TP6:	PUSHJ	P,FORCE##	; Force pending output
+	PUSHJ	P,UPCRSR	; Move cursor up if needed
+	PUSHJ	P,RPRINT	; Reprint the first part of the line
+V52TP4:	POP	P,T2		; Restore the count
+	POP	P,FL		; and the flags
+	POPJ	P,		; Finally, return
+; UPCRSR -- Routine to move the cursor after backspacing through a line
+;	   break.
+; Called after multiple calls to RBC have setup the line break count
+; in WRPCNT.  May be called even if fancy display mode is not selected
+; since this routine is a no-op if VT52FL is not set.
+
+UPCRSR::SKIPE	VT52FL		; Not unless desired
+	SKIPG	T1,WRPCNT	; or needed
+	POPJ	P,
+UPLUP:	XCT	TMFCUP		; Up one line
+	SOJG	T1,UPLUP
+	POPJ	P,		; And return
+
+
+;SETPVS -- Routine to setup the correct value of PRVSIZ
+;Call
+;	PUSHJ	P,SETPVS
+;	<Return here with character size in T1>
+;Uses T1, C
+
+SETPVS::PUSHJ	P,PRNSZC	; Get size of line in characters
+	MOVEM	T1,PRVSIZ	; Save as previous size
+	POPJ	P,		; Return
+
+
+;PRNSZC -- Get print size in characters
+;
+;Call
+;	PUSHJ	P,PRNSZC
+;	<Return here with character count in T1>
+;Uses T1, C
+
+PRNSZC:	PUSHJ	P,SAVR##	; Preserve T3-T5
+	PUSH	P,T2		; Save T2
+	PUSHJ	P,PRNTSZ	; Measure print size of line
+	MOVE	T1,WRPCNT	; Get number of whole lines
+	IMUL	T1,LINEW	; Times width of one line
+	ADD	T1,T4		; Plus characters on last line
+	JRST	T2POPJ		; Restore T2 and return
+
+
+;PRNTSZ -- Get the print size of the current line
+;
+;Call
+;	PUSHJ	P,PRNTSZ
+;	<Size in T4, line count in WRPCNT>
+;Uses C, T1, T2, T4
+
+PRNTSZ:	SETZB	T4,WRPCNT	; Size counter
+	MOVE	T2,[POINT 7,LIBUF+1,6]
+	TLNE	FL2,LNUMF	; Printing line numbers?
+	MOVEI	T4,^D8		; If yes, line number is 1 tab stop
+CNTLUP:	ILDB	C,T2		; Get a character
+	CAIN	C,15		; End of line?
+	POPJ	P,
+	JSP	T1,RBC##	; Size chacacter, return through T1
+	JRST	CNTLUP		; Loop over whole line
+
+;FIXWPC -- Subroutine to adjust for wrap waiting
+;
+;Needed because the monitor leave the cursor at end of line even though
+;it logically is at the beginning of the next line.
+;
+;Call with T4 and WRPCNT set up by RBC
+;	PUSHJ	P,FIXWPC
+;	<return here with WRPCNT possible decremented by one>
+
+FIXWPC::SKIPN	T4		; Start of new line?
+	SKIPN	WRPCNT		; With non-zero wrap count?
+	POPJ	P,		; Not waiting to wraparound
+	SOS	WRPCNT		; Account for one wrap short
+	POPJ	P,
+
+	XLIST
+	LIT
+	LIST
+	RELOC	0
+
+MODE:	BLOCK	1
+ALTCXT:	BLOCK	1
+ALTFXT:	BLOCK	1	
+
+ACPTR:	BLOCK	1
+ACBUF:	BLOCK	<ACLEN==^D200>/5+1
+CSW::	BLOCK	1
+	END

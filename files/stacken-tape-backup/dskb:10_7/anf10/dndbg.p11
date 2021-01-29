@@ -1,0 +1,304 @@
+.SBTTL	DNDBG - DEBUGGING STORAGE BLOCKS  4 MAY 83
+
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED
+;  OR COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE.
+;
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION
+; 1976,1977,1978,1979,1980,1981,1984,1988.
+;ALL RIGHTS RESERVED.
+
+VRDBG=012			;FILE EDIT NUMBER
+
+.REPT 0
+
+REVISION HISTORY
+
+0(6)	26-SEP-78	KR	ADD ECHO TASK
+0(7)	29-SEP-78	KR	FIX DISCONNECT OF ECHO TASK
+.ENDR;.REPT 0
+
+	PROFILE	BLOCK	;RESERVE SOME STORAGE FOR PROFILER DATA
+	MCPQUE		;RESERVE SOME STORAGE FOR POKE TRACE
+	SINK	STORE	;DEFINE STORAGE FOR SINK FUNCTION
+	HDRDMP	STORE	;DEFINE CIRCULAR BUFFER FOR HEADER DUMP
+	DMPSLS	STORE	;DEFINE CIRCULAR BUFFERS FOR SYN LINE DEBUGGING
+
+;******** here is a convenient place to insert the soumsg macro calls ******
+
+	NCLLOG	100	;DEFINE CIRCULAR BUFFER FOR NCL TRACE
+	NCLLOG		;DEFINE CODE FOR NCL TRACE
+	
+;	SET SOME PATCH SPACE ASIDE
+
+.IIF	NDF	FT.PAT,FT.PAT=0
+.IF	NE	FT.PAT
+PATCH:
+    .REPT FT.PAT
+	.WORD 0			;FILL PATCH SPACE WITH ZEROS.
+    .ENDR
+.ENDC
+
+.IIF NDF,FTETR,FTETR=0
+.IIF NDF,ETRNUM,ETRNUM=1000.
+.IF NE,FTETR
+	ETRACE	ETRNUM
+.ENDC;.IF NE,FTETR
+.SBTTL	DNDBG - ECHO TASK ROUTINES	19 Sep 78
+
+.IF NE,FTECHO
+
+.IIF NDF,ECHON,ECHON=1
+OBJECH=OBJTSK				;Echo device is a TSK
+.MACRO X A				;macro to set symbol EnSTS to the
+E'A'STS=E'A'DDB				; DDB address used by DDBGEN
+.ENDM X
+
+Z=0
+.REPT ECHON				;generate a dummy hardware address
+X	\Z				;for each echo device
+Z=Z+1
+.ENDR;.REPT ECHON
+
+.MACRO DDXGEN A,B,C,D,E			;Generate the device specific part
+.ENDM DDXGEN				; of the DDBs
+
+;Now generate the DDB's
+
+DRESET=0				;use new names
+	DDBGEN	ECH,E,ECHON,2,<DS.OUT>	;The output bit is set
+
+.SBTTL ECHO - The ECHO TSK device driver
+
+.IIF NE,<.-<ECHSER-2>>,.ERROR .		;Address of task name must precede
+	.WORD	ECHNAM			; the service routine name
+
+;The service routine for the ECHO TSK
+
+ECHSER:	JSR	PC,DVCCFM		;Handle connect confirm/etc.
+
+;The main "ECHO" service routine
+
+1$:	JSR	PC,TSKSER		;Call the common TSK code
+10$:	  RTS	PC			;Return if nothing to do
+
+;Here to check for data requests so we can send messages
+
+16$:	TSTB	DB.IDR(J)		;Do we have any data requests?
+	BLE	10$			;No, leave message in queue
+
+;Here we turn the message around hence - ECHO
+
+20$:	MOV	#002,R0			;NCL Data with EOM message type
+	JSR	PC,DVDBSM		;Start a big NCL data [sub]message
+	  BCS	10$			;Can't, try again later
+	MOV	DB.OBF(J),R1		;Chunk with data from host
+	MOV	CN.MLK(R1),DB.OBF(J)	;Delink from input stream
+	MOV	CN.CNT(R1),R2		;Count of NCL submessage bytes
+	ASSERT	NE			;Better be something there
+	MOV	CN.ADR(R1),R3		;Address of NCL submessage bytes
+
+;If this were a real device driver, this would be a dispatch based on
+;the type. However, since this is a Kwick Krock . . .
+
+	JSR	PC,GETEXN		;Get NCL submessage byte count
+	ASSERT	R0 EQ R2		;Submessage should be rest of message
+	CMPB	#002,(R3)+		;Looking at a Data (with EOM)?
+	BEQ	23$			;Yes, happy
+	TRAP				;No, unhappy
+23$:	MOV	R3,R1			;Want data address in R1
+	MOV	R0,R2			;And submessage count in R2
+	DEC	R2			;One less byte of interest
+	BEQ	26$			;If empty, then all done with copy
+	ADD	R2,DB.ICN+4(J)		;Precount data bytes to be copied
+	MOV	DB.IAD(J),R0		;NCL chunk address for echoed data
+	JSR	PC,CNBLTB		;"BLT" the data bytes into echo msg
+	MOV	R0,DB.IAD(J)		;Update NCL message pointer
+26$:	MOV	R1,R0			;Trailing chunk address
+	BIC	#CNKSIZ-1,R0		;Backup to start of chunk
+	JSR	PC,FRECKS		;Pitch remainder of chunk(s)
+	JSR	PC,DVDSBM		;Cap off NCL data message
+30$:	JSR	PC,NCLIN1		;"Echo" the message back to the sender
+	CLR	DB.IBF(J)		;We don't own that message anymore
+	DECB	DB.IDR(J)		;Also used up one data request
+	BR	1$			;Try for another
+.SBTTL SNKSER - The SINK TSK device driver
+
+.IIF NE,<.-<SNKSER-2>>,.ERROR .		;Address of task name must precede
+	.WORD	SNKNAM			; the service routine name
+
+SNKSER:	JSR	PC,DVCCFM		;Handle connect confirm/etc.
+
+;The main "SINK" service routine
+
+1$:	JSR	PC,TSKSER		;Common TSK service code
+	  RTS	PC			;If nothing to do, return
+
+;Here we drain the message into the bit bucket hence - SINK
+	MOV	CN.MLK(R0),DB.OBF(J)	;De-link this message from queue
+	JSR	PC,FRECKS		;Free the chunks
+	BR	1$			;Try for another
+SRCSER:	TRAP
+MGRSER:	TRAP
+.SBTTL TSKSER - common TSK device service code
+
+TSKSER:	BIT	#DS.CON,@J		;Connected yet?
+	BNE	20$			;Yes, continue
+10$:	RTS	PC			;No, exit
+
+;Here if we are currently running connected or are disconnecting
+
+20$:	BIT	#DS.DSC,@J		;Disconnect occur?
+	BNE	40$			;Yes, go handle it
+
+;Here to see if we need to send some data requests
+
+25$:	JSR	PC,DVXDRQ		;(DNDEV)ship some data requests
+	MOV	DB.OBF(J),R0		;Get head of message queue
+	BEQ	30$			;If there is one, process it
+	ADD	#2,(SP)			;Do a success return
+	RTS	PC			; and return
+
+;Here when nothing to process to see if we are still connected
+
+30$:	BIT	#DS.DIE!DS.DSC,@J	;Did -10 either go away or disconnect?
+	BEQ	10$			;No, (ho hum) nothing else to do!
+
+;Here to de-link messages if we got disconnected
+
+40$:	MOV	DB.OBF(J),R0		;Any messages?
+	BEQ	50$			;No, just terminate
+	CLR	DB.OBF(J)		;Yes, well, there used to be
+	JSR	PC,FRECNL		;Delete all messages
+
+;Here to send the disconnect/disconnect confirm after queues cleaned up
+
+50$:	JMP	DVCCFM			;(DNDEV)send disconnect if appropriate
+.SBTTL ECHINI - TSK initilization and timeout routines
+
+;Routine to compare incoming task name against legal values
+
+SRCINI:	BIC	#DS.OUT,@J		;Clear the output bit
+	BR	INICOM			;Join the common code
+ECHINI:	BIS	#DS.OUT,@J		;Set the output bit
+INICOM:	MOV	DB.RPC(J),DB.OPC(J)	;Set up the device service routine
+	RTS	PC			;Return
+
+;Here on a TSK timeout
+
+ECHTIM:	TRAP				;Currently none, should never get here
+.SBTTL ECHSEL - Routine to handle incoming connects
+
+;Here on a connect for a TSK device
+
+ECHSEL:	SAVE	<R5,R4>			;Save some registers
+	SAVE	<R2,R3>
+	MOV	#ECHTAB,R5		;Point R5 to the first connect block
+10$:	MOV	@R5,R4			;Point R4 to the ASCIZ TSK name
+	MOV	(SP),R3			;Restore the count and pointer to
+	MOV	2(SP),R2		; the TSK name in the MSG
+	JSR	PC,TSKCOM		;Compare it to the names we like
+	  BR	70$			;Here if current name does not match
+
+;Here when we have found a TSK name match and want to scan the TSK DDBs
+
+20$:	CMP	(SP)+,(SP)+		;Get R3 and R2 off the stack
+	MOV	R5,R4			;Copy pointer to current connect block
+	MOV	#E0DDB,J		;Get the first TSK DDB
+	MOV	#ECHON,R0		;Get the number of TSK DDBs we have
+
+;Here to see if the DDB we are pointing at is free to use
+
+30$:	TST	@J			;Is this DDB already connected?
+	BMI	40$			;Yes, go to the next DDB and try again
+
+;Here when we have a free DDB to initalize it
+
+	MOV	2(R4),DB.RPC(J)		;Set up the device service routine
+	JSR	PC,@4(R4)		;Call the initilization routine
+	MOVB	DB.UNI(J),R0		;Move the Unit number into R0
+	BR	60$			; and finally return
+
+;Here we skip to the next DDB when the one we were looking at was connected
+
+40$:	MOV	DB.LNK(J),J		;Skip to the next DDB
+	SOB	R0,30$			; and try again
+
+;Here to make a no such unit return
+
+50$:	MOV	#ECHON+1,R0		;Lose, indicate with invalid unit #
+
+;Here for common exit  restoring R4 and R5
+
+60$:	RESTORE	<R4,R5>
+	RTS	PC
+
+;Here when the current name does not match the name in the connect message
+
+70$:	ADD	#6,R5			;Skip to the next TSK connect block
+	CMP	#ECHTBE,R5		;Was the current one the last one?
+	BNE	10$			;No, Go ahead and try this one
+	CMP	(SP)+,(SP)+		;Get stack back in phase
+	BR	50$			;Select non-existant unit and return
+.SBTTL TSKCOM - Subroutine to compare 2 ASCIZ strings for a match
+
+TSKCOM:	JSR	PC,GETBYT		;Get character of the TSK name
+	SAVE	R0			;Save it for later
+	BIC	#177600,R0		;Clear all but the character
+	CMPB	R0,(R4)+		;Compare against current name
+	BNE	20$			;If not equal, declare non-match
+	RESTORE	R0			;Restore the original character
+	TSTB	@R4			;Check for the end of an ASCIZ string
+	BEQ	50$			;Yes, we found a match
+	TSTB	R0			;Is extensible bit on?
+	BMI	TSKCOM			;Yes, try another character
+10$:	RTS	PC			;No, String too short, non-match
+
+;Here when the strings are different and we may have to eat the string
+
+20$:	RESTORE	R0			;Here on non-compare
+	TSTB	R0			;See if we are at end of string
+	BPL	10$			;If we are, just return error
+
+
+;Here to flush extra input from the message
+
+30$:	JSR	PC,GETBYT		;(DNNCL)get next byte of string
+40$:	TSTB	R0			;Is the extensible bit on?
+	BMI	30$			;Yes, go back for another character
+	RTS	PC			;No, return
+
+;Here if compare successfully but may need to flush the rest of the string
+
+50$:	ADD	#2,(SP)			;Set success return
+	BR	40$			; and flush rest of string if needed
+
+.SBTTL ECHTAB - Table of connect blocks for TSKs
+
+ECHTAB:	.WORD	ECHNAM			;ECHO	pointer to name
+	.WORD	ECHSER			;	service routine address
+	.WORD	ECHINI			;	initialization routine address
+	.WORD	SNKNAM			;SINK	pointer to name
+	.WORD	SNKSER			;	service routine address
+	.WORD	ECHINI			;	initialization routine address
+
+;RDH	As these aren't implemented, and only TRAP if exercised . . .
+;RDH
+;RDH	.WORD	SRCNAM			;SOURCE	pointer to name
+;RDH	.WORD	SRCSER			;	service routine address
+;RDH	.WORD	SRCINI			;	initialization routine address
+;RDH	.WORD	MGRNAM			;MANGR	pointer to name
+;RDH	.WORD	MGRSER			;	service routine address
+;RDH	.WORD	ECHINI			;	initialization routine address
+
+ECHTBE=.				;End of the connect block table
+
+;The ASCIZ TSK names we identify our TSKs with
+
+ECHNAM:	.ASCIZ	/ECHO/
+SNKNAM:	.ASCIZ	/SINK/
+SRCNAM:	.ASCIZ	/SOURCE/
+MGRNAM:	.ASCIZ	/MANGR/
+	.EVEN
+
+.ENDC;.IF NE,FTECHO
+

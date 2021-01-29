@@ -1,0 +1,47 @@
+LUFFAR
+
+Luffarschack med LUFFAR spelas p} en spelplan om 20*20 rutor p}
+traditionellt s{tt. Spelaren och LUFFAR turas om att placera sin
+markering i en ledig ruta. Spelet g{ller att f|rst f} fem markeringar
+i rad ({ven diagonalt r{knas). Spelaren kan ange programmets spelstyrka
+p} en skala fr}n 1 t o m 10 och f}r v{lja vem som skall b|rja.
+
+
+Tillg{ngliga kommandon {r:
+
+Mark|rf|rflyttningar (med piltangenter eller siffror) -- flyttar mark|ren.
+
+	Mark|rf|rflyttningar kan anges antingen med piltangenter eller
+	via siffror (praktiskt om terminalen har numeriskt tangentbord).
+	
+	+------+-------+-------+
+	!  7   !   8   !   9   !
+	!upp&  ! upp   ! upp&  !
+	!v{nstr!       ! h|ger !
+	+------+-------+-------+
+	!  4   !   5   !   6   !
+	!v{nstr!  fel  ! h|ger !
+	+------+-------+-------+
+	!  1   !   2   !   3   !
+	! ner& !  ner  !  ner& !
+	!v{nstr!       ! h|ger !
+	+------+-------+-------+
+	!  -   !   0   !   .   !
+	!2 ner ! 2 ner ! 2 ner !
+	!&vnstr!       !&h|ger !
+	+------+-------+-------+
+
+X				    -- Din markering
+Q				    -- sluta (genast)
+H				    -- kortare hj{lp
+ESC ESC				    -- skriv om sk{rminneh}llet.
+
+F|r att starta programmet LUFFAR skriv:
+
+.RUN GAM:LUFFAR
+
+Lycka till!
+
+Det inns ocks} en engelskspr}kig version GAM:TICTAC.
+
+	<Slut p} GAM:LUFFAR.HLP - 830629/MO>

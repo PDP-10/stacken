@@ -1,0 +1,29 @@
+
+
+
+                              TOOLS TAPE
+
+
+
+
+
+The various programs in the tools area  have  been  found  useful  for
+performance  analysis  or  debugging  or looking at crash dumps.  They
+come as is with no warranty expressed or implied and are admittedly of
+uneven  quality.   They  are here for your use if you wish to try them
+following the rule, "USER BEWARE".
+
+
+
+1.0  MONITR.MEM AND TOPCMD.MEM
+
+This publication was originally created for those customers  who  were
+converting  from  a  TOPS-10 system to a TOPS-20 system.  The title of
+the publication and the organization of material was designed to  meet
+that objective.  Customers at 1983 Fall DECUS who saw this publication
+requested DIGITAL to release it to all TOPS-10  customers  because  it
+contains  useful  information  for  those  not  converting to TOPS-20.
+Because of the number of customer requests, we are  distributing  this
+publication  as part of the TOPS-10 customer supported tape.  There is
+no commitment on DIGITAL's part to upgrade this material  with  future
+releases nor to respond to requests for enhancements or corrections.

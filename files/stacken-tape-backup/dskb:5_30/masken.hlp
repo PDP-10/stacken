@@ -1,0 +1,60 @@
+
+
+	MASKEN.
+	=======
+
+	Spelets ide':
+
+	Spelet g}r ut p} att styra MASKEN  |ver  sk{rmen  s}
+	att dess huvud tr{ffar ett m}l.   MASKENs  huvud  {r
+	markerat med ett '\', kroppen med 'X' och m}let  med
+	'$'.
+
+	Hur man spelar:
+
+	MASKEN startas med  monitorkommandot  R  GAM:MASKEN.
+	Efter att du har svarat p} den eller de  fr}gor  som
+	programmet st{ller ritas spelplanen och  MASKEN  ut.
+	S} fort spelplanen {r f{rdigritad b|rjan MASKEN r|ra
+	sig.  Nu g{ller det  att  styra  MASKEN  mot  m}let.
+	Styr g|r man med tangenterna 'A' och  '[',  d{r  'A'
+	f}r MASKEN att sv{nga }t v{nster, '[' }t h|ger.  OBS
+	att h|ger/v{nster {r ur MASKENs synvinkel!!!!  D} du
+	tr{ffar m}let uppdateras din po{ng och ett nytt  m}l
+	kommer upp p} sk{rmen.
+
+	Vad som avslutar spelet:
+
+	Man kan forts{tta att jaga m}l tills  dess  att  man
+	tr{ffar sig sj{lv eller v{ggen  med  MASKENs  huvud.
+	F|r att g|ra lite mer sport |ver det hela  s}  v{xer
+	MASKEN kontinuerligt, oavsett om  du  tr{ffar  n}gra
+	m}l eller inte.   Dessutom  |kar  r|relsehastigheten
+	allteftersom du tr{ffar m}len.
+
+	Hur man f}r reda p} andras resultat:
+
+	Alla som spelar MASKEN f}r sitt resultat  lagrat  p}
+	en sk scorefil.  Denna scorefil kan man f} utskriven
+	i sorterat skick med hj{lp  av  MSCORE.   Programmet
+	startas med kommandot R GAM:MSCORE.  
+
+	Summering av MASKENs kommmandon:
+
+	'A','a' : Styr MASKENs huvud }t v{nster.
+	'[','{' : Styr MASKENs huvud }t h|ger.
+	'R','r' : Rensar och skriver om sk{rmen.
+	'P','p' : Paus.   Programmet  stoppar  tills  man
+		  trycker p} n}gon tangent (vilken som helst).
+
+
+	MASKEN {r skriven i  SIMULA  av  Mats  L|fstr|m  och
+	Jonas Hallberg, b}da fr}n ADB-inst.  SU.   Ide'n  {r
+	h{mtad fr}n  ett  spel  som  distribuerats  av  ABC-
+	klubben.
+
+	
+			Lycka till!
+
+
+		< End of GAM:MASKEN.HLP >

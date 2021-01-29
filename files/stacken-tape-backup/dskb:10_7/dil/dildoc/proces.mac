@@ -1,0 +1,89 @@
+	Title Proces
+;
+;  COPYRIGHT (C) DIGITAL EQUIPMENT CORPORATION 1983, 1986.
+;  ALL RIGHTS RESERVED.
+;  
+;  THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED  AND
+;  COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE AND WITH
+;  THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS  SOFTWARE  OR
+;  ANY  OTHER  COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE
+;  AVAILABLE TO ANY OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE
+;  SOFTWARE IS HEREBY TRANSFERRED.
+;  
+;  THE INFORMATION IN THIS SOFTWARE IS  SUBJECT  TO  CHANGE  WITHOUT
+;  NOTICE  AND  SHOULD  NOT  BE CONSTRUED AS A COMMITMENT BY DIGITAL
+;  EQUIPMENT CORPORATION.
+;  
+;  DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF
+;  ITS SOFTWARE ON EQUIPMENT THAT IS NOT SUPPLIED BY DIGITAL.
+;
+;
+; Facility: DIL-SAMPLE
+; 
+; Edit History:
+; 
+; new_version (1, 0)
+; 
+; Edit (%O'1', '29-Oct-82', 'Sandy Clemens')
+; %(  Clean up DIL sample application and place in library.
+;     Files: JTSERV.CBL (NEW), JTTERM.CBL (NEW), IDXINI.CBL (NEW),
+;     JTTERM.VAX-COB (NEW), JTVRPT.CBL (NEW), PROCES.MAC (NEW) )%
+; 
+; Edit (%O'6', '20-Jan-83', 'Sandy Clemens')
+; %(  Add copyright notice for 1983. Files: DSHST.TXT, IDXINI.CBL,
+;     JTSERV.CBL, JTTERM.CBL, JTTERM.VAX-COB, JTVRPT.CBL, PROCES.MAC )%
+; 
+; Edit (%O'7', '24-Jan-83', 'Sandy Clemens')
+; %(  Add liability waiver to copyright notice. Files: DSHST.TXT,
+;     IDXINI.CBL, JTSERV.CBL, JTTERM.CBL, JTTERM.VAX-COB, JTVRPT.CBL,
+;     PROCES.MAC )%
+;
+; new_version (2, 0)
+; 
+; Edit (%O'12', '17-Apr-84', 'Sandy Clemens')
+; %( Add V2 files to DS2:.
+;    Make TOPS-10 version of PROCES.MAC -- Doug Rayner. )%
+;
+; new_version (2, 1)
+; 
+; Edit (%O'13', '3-Jul-86', 'Sandy Clemens')
+; %( Add V2.1 files to DS21:. )%
+;
+	Entry Proces
+	Search Uuosym
+	T1==1
+	T2==2
+	T3==3
+	T4==4
+	P==17
+
+	Opr==Xwd 1,2		;Full file access PPN
+
+Proces:
+
+; This is the  code that  will check  to see  if the  process that  is
+; running the DIX sample application server is an enabled wheel. It is
+; used to determine the number of passive links that should be opened.
+; The DIX sample application server will open four passive links for a
+; non-enabled wheel process and will open six links passive links  for
+; an enabled wheel.
+;
+
+	Getppn	T1,		;Get job's PPN
+	  Jfcl			;Ignore special return
+	Camn	T1,[Opr]	;[1,2]?
+	  Jrst	Yeswhl		;Yes
+
+Nowhl:	Movei	T4,0		;put 0 into acc 7, this means NO WHEEL
+	Movem	T4,@0(16)	;put 0 into arguement of subroutine
+	Jrst	Fini		;ok, go to the end
+	
+
+Yeswhl:	Movei	T4,1		;put 1 into acc 7, this means WHEEL
+	Movem	T4,@0(16)	;put 1 into arguement of subroutine
+
+Fini:				;ok, we are done now
+
+	Popj	p,		;return
+
+	End

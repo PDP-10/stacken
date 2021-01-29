@@ -1,0 +1,479 @@
+	TITLE	SPY		STRREF counter program.
+	SUBTTL	/Tarl/DPM/WSM
+	SEARCH	UUOSYM,MACTEN,SNUP
+	.REQUI	REL:SNUP
+	SALL
+
+SPYWHO=0
+SPYMIN=1
+SPYVER=1
+SPYEDT=36
+
+COPYRIGHT (c) 1983 BY DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+ALL RIGHTS RESERVED.
+\
+
+;
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+;ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE AND WITH THE INCLUSION
+;OF THE ABOVE COPYRIGHT NOTICE. THIS SOFTWARE OR ANY OTHER COPIES THEREOF
+;MAY NOT BE PROVED OR OTHERWISE MADE AVILABLE TO ANY OTHER PERSON. NO
+;TITLE AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT NOTICE AND
+;SHOULD NOT BE CONSTRUED AS A COMMITMENT BY DIGITAL EQUIPMENT CORPORATION.
+;
+;DIGITAL ASSUMES NO RESPOSIBILITY FOR THE USE OR RELIABILITY OF ITS
+;SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+
+
+;; ****WARNING**** ****WARNING**** ****WARNING**** ****WARNING****
+
+;If you happen to have snarfed a copy of this program, make sure
+;that you keep it updated for every load of the monitor. Symbols
+;and/or usage of ACs may change without warning. Needless to say
+;you can cause EUE/UIL/IME/OUCH stopcodes easily this way.
+;Also, note that running this is going to increase monitor overhead
+;substantially, anywhere from +5% on an unloaded system, to unity
+;on a loaded one (Particularly if lotsa 9600 baud terminals). Also,
+;cache hit ratio goes down by about 8%.
+
+;; ****WARNING**** ****WARNING**** ****WARNING**** ****WARNING****
+
+;Later note - Code has been sped up by calling CCTYO directly, so above
+;figures are much too high. The restrictions which have been introduced
+;with this code are: If line lengths (TT WIDTH) are different, you are
+;likely to get extra CRLFs in your output. Cure: TT NO CRLF. Also, FORM
+;TAB and any other filler generators will cause unknown results. Cure:
+;TT FORM TAB. TTY NO PAGE has the interesting side effect of ^S causing
+;output to stop at the generating terminal, rather than be lost on the
+;receiving terminal.
+;Current options:
+;
+;	^E^X:	Exit to monitor level after doing a RESET
+;	^E^O:	Make characters you type go to victim's output buffer
+;	^E^I:	Your type-in goes to his input buffer
+;	^E^N:	Throw away input characters (Default)
+;	^E^P:	Go back to parser (Select tty to spy on)
+;	.REENTE	(If program stops somehow) Will reset and exit
+;Note - Size of program is such that only two pages actually get locked
+;in core (Pages 0 and 1), so any future modifications should attempt to not
+;cause more pages to lock.
+;Later note: Code has been shrunk, at last notice code occupies only one
+;page.
+
+;Suggested enhancements:
+;Provide some kind of escape sequence conversion so that video editing
+;  works across terminal types.
+;Allow multiple terminals by providing a table of terminals being spyed
+;  upon, which would inform as to which terminal the info was going to.
+;Trap input characters from spying terminal directly at RECINT instead
+;  of opening the terminal in PIM mode an TRMOP.ing them.
+;Special case dumping characters into input buffers on network lines to
+;  also dump them into output buffers under some special conditions.
+;Add an option to the parser to pass you on to a PTY, so you can use
+;  an ordinary looking terminal to run WHO or SYSTAT.
+;Add a command option ^E^R which will exit and run a program. This used
+;  to avoid being caught in the act of spying on someone.
+;Write some code to get rid of any funny pages we may own - this will
+;  reduce the amount of core required to nail down.
+
+;
+;Edit history
+;32	Check who is running the program. Update for changes to SCNSER.
+;	Note that some obscure code has been added to check who you are.
+;33	Update for more monitor changes
+;34	Add copyright statement
+;Version 1(A) as of here
+;35	Upgrade to 703.
+;36	7.03 changed.
+
+;User ACs
+T4=1+<T3=1+<T2=1+<T1=1>>>
+P4=1+<P3=1+<P2=1+<P1=T4+1>>>
+TTY==17					;Channel to use for TTY
+
+IFN <V.SNUP-6>,<PRINTX ?SNUP version skew. Please use correct version of
+		PRINTX       SNUP, or else you are likely to cause crashes.
+	>
+
+
+LOC	<.JBREN=124>
+EXP	BYEBYE				;In case bomb out
+LOC	<.JBVER=137>
+EXP	<VRSN.	(SPY)>
+RELOC
+
+	ADVANC	6,6			;Max 6 references, max 6 breakpoints
+
+;Define which breakpoints we want to use, and what to do with them.
+;	OFFSet is LABEL+OFFSet, when no label exists where you want it.
+
+DEFINE	PNTS,<
+	PNT	XMTCN8,0,ECHOUT		;Gets everything to go to TTY
+	PNT	ECHTST,7,ECHIN		;MIC non-echo
+	PNT	ECHTS2,3,ECHIN		;Network non-echo, since FEs echo
+;	PNT	ECHTS1,5,ECHIN		;Proper non-echo
+>
+
+DEFINE	PNT(SYMB,OFFS,ROUT),<
+	EXP	OFFS
+	PUSHJ	%P,ROUT
+>
+
+
+;Argument list for the SNOOP uuo.
+ARGLST:	ARGLEN
+	Z				;Put checksum here
+	PNTS				;Generate snoop table
+ARGLEN=.-ARGLST-1			;Number of arguments after size
+
+DEFINE	PNT(SYMB,OFFS,ROUT),<RADIX50 0,SYMB>
+REFS:	PNTS
+BRKNUM=.-REFS				;Number of breakpoints
+;Put any references to symbols you need here.
+ICCTYO:	RADIX50	0,CCTYO			;Command level typeout routine
+MSHNNS:	55207
+REFSIZ=.-REFS				;Real size of symbols to look for
+
+
+ESCFLG:	Z
+TOFUNC:	Z				;Default to throw away input
+PDL:	IOWD	50,STACK
+STACK:	BLOCK	50
+UDX:	Z
+
+;This code (And associated variables like the buffer)
+; must be nailed down at interrupt level. Initializing
+; code (At LOKTOP+) will dissapear before the LOCK uuo.
+;Later note - Buffer no longer exists.
+
+LOCKED:	MOVEI	T1,LOKTOP	;End of space which must be locked
+	CORE	T1,		;Wipe everything else away
+	 JRST	BYEBY0		;Ooops
+	MOVE	T1,ICCTYO	;Get addr of CCTYO routine
+	HRRM	T1,CCT		;Save for interrupt level pushj
+	MOVEI	T2,LK.LNP!LK.LLS!LK.LLC ;Lock into EVM with cache on.
+	LOCK	T2,		;Nail us down!
+	 JRST	BYEBY1		;Ooops
+	LSH	T2,^D9		;Convert page number to address.
+	SETZ	T3,		;Start offsets at 0
+NXTPNT:	CAILE	T3,BRKNUM	;Transfer BRKNUM breakpoints
+	 JRST	CHKHIM		;Go do the snoop
+	MOVE	T4,T3		;Get normal index
+	ADD	T4,T3		; twice, so we end up with t3*2
+	MOVE	T1,REFS(T3)	;Get a monitor address
+	ADDM	T1,ARGLST+2(T4)	;Put in block for snoop, adding offset
+	ADDM	T2,ARGLST+3(T4)	;Make the pushjs EVM relative
+	AOJA	T3,NXTPNT	;Go transfer another point
+
+CHKHIM:	MOVEI	T2,LITS		;get pointer to our literals
+	HRROI	T1,2		;all ones, 2
+	GETTAB	T1,		;Get the value
+	 JRST	DIE4		;Sigh.
+	SUBI	T2,20		;Make a real value out of this
+	LDB	T1,[POINT 17,T1,16] ;Get interesting value
+	SOJN	T1,DOSNUP	;If not, skip this
+	MOVE	T1,MSHNNS	;Get value supplied by monitor
+	HRLI	T1,'6 @'	;Flag info
+	SETAM	T1,4(T2)	;Set things up
+	MOVEI	T1,<RADIX50 0,2BJ1> ;Get symbol we want to use
+	EXCH	T1,5(T2)	;and put this down there.
+
+DOSNUP:	MOVE	T1,[.SODBP,,ARGLST] ;Args for SNOOP
+	SNOOP.	T1,		;Define breakpoints
+	 JRST	BYEBY2		;Argh.
+GETNUM:	PUSHJ	P,PARSER	;Parse a command
+	MOVX	T3,-1		;-1 for us
+	TRMNO.	T3,		;Get out UDX
+	 JRST	BYEBY8		;Lose
+	CAMN	T1,T3		;Is it us?
+	JRST	BYEBY7		;Yes
+	TXZ	T1,-1-UX.UNT	;Keep just the line number
+	MOVE	T2,[%CNLNP]	;Get addr of LINTAB
+	GETTAB	T2,		;So we can compare LDB addresses
+	 JRST	DIE4		;Trash!
+	ADDI	T1,(T2)		;Lintab+TTYnumber=Pointer to LDB
+	PEEK	T1,		;Get addr of object tty ldb
+	HRRM	T1,UP2		;Put where we need the positive quantity
+	HRRM	T1,UP3		; Ditto.
+	TRC	T1,-1		;Complement addr
+	HRRM	T1,UN1		;Put where we need the complement.
+	TXZ	T3,-1-UX.UNT	;Keep just our line number
+	ADDI	T3,(T2)		;Plus LINTAB
+	HRRM	T3,MYLDB	;Save for interrupt level code.
+	OUTSTR	[ASCIZ	/[Spying on TTY/]
+	HRRZ	T1,UDX		;Get victim terminal's UDX
+	ANDI	T1,777		;Parse out TTY number
+	PUSHJ	P,TOCT		;And type it.
+	OUTSTR	[ASCIZ	/]
+/]				;Eol, what the heck.
+	SETSTS	TTY,.IOPIM	;Set our tty to PIM mode.
+	HRLZI	T1,.SOIBP	;Insert breakpoints
+SX:	SNOOP.	T1,		;To activate our code.
+	 JRST	BYEBY3		;Fugh.
+LOOP:	MOVSI	T1,(HB.RTC)	;wait for a char
+	HIBER	T1,		;zzzz
+	 JFCL
+	INCHRS	P1		;Get a character if available
+	 JRST	LOOP		;None, loop back and sleep
+	SKIPN	ESCFLG		;Was the previous character an escape char?
+	 CAIN	P1,"E"-100	;Or is this character an escape character?
+	  JRST	CHANGE		;Escape, do something about it.
+DRP:	SKIPN	TOFUNC		;Are we supposed to do something with type-in?
+	 JRST	IGNTYP		;Nope - beep at him, and ignore character
+	LSH	P1,35		;Left justify the character
+	HRLI	T1,3		;3 Words for TRMOP
+	HRRI	T1,T2		;Arg block in T2
+	MOVE	T2,TOFUNC	;Get trmop. function
+	MOVE	T3,UDX		;Get UDX of terminal
+	MOVEI	T4,P1		;Address of string
+	TRMOP.	T1,		;Do the trmop.
+	 JRST	BYEBY5
+	JRST	LOOP		;See if more characters
+
+CHANGE:	CAIE	P1,"E"-100	;^E?
+	  JRST	CHNG1		;Nope, process
+	EXCH	P1,ESCFLG	;Put P1 in flag location (Flag will be ^E or 0)
+	JUMPE	P1,LOOP		;No previous flag, mark we are in ESC sequence
+	SETZM	ESCFLG		;Set Flag back to no escape sequence.
+	JRST	DRP		;Double ^E, drop it in his buffer.
+CHNG1:	SETZM	ESCFLG		;Got the escape sequence, wipe flag
+	CAIN	P1,"X"-100	;^E^X ?
+	 JRST	BYEBYE		;Yep - he wants out.
+	CAIN	P1,"I"-100	;Change where his type-in goes ?
+	 JRST	CHNG2		;Yep, This means dump it in Input buffer
+	CAIN	P1,"O"-100	;Change where type-in goes ?
+	 JRST	CHNG3		;Yep - put it in his output buffer
+	CAIN	P1,"P"-100	;Change terminal we are watching ?
+	 JRST	CHNG4		;Yup - go do it
+	CAIN	P1,"N"-100	;Does he want to make it illegal to type in?
+	 JRST	CHNG5		;Yup - go do it
+IGNTYP:	MOVEI	T1,7		;<BEL>
+	OUTCHR	T1		;Beep, tell him he isn't being kosher
+	JRST	LOOP		;And proceed with pending business
+CHNG2:	MOVEI	T1,.TOTYP	;Trmop function to dump in input buffer
+	MOVEM	T1,TOFUNC	;Make subsequent trmops dump in his input
+	OUTSTR	[ASCIZ	/[Entering ADVISE mode]
+/]
+	JRST	LOOP		;Proceed
+CHNG3:	MOVEI	T1,.TOOUS	;Function to dump in output buffer
+	MOVEM	T1,TOFUNC	;Make all proceeding go to output buffer
+	OUTSTR	[ASCIZ	/[Entering TALK mode]
+/]
+	JRST	LOOP		;Proceed
+CHNG4:	HRLZI	T1,.SORBP	;De-activate intercepting code
+	SNOOP.	T1,		;So we have a rest period
+	 JRST	BYEBY6		;Ooops - big trouble!
+	JRST	GETNUM		;Go back and get a terminal number
+CHNG5:	SETZM	TOFUNC		;No function for totype
+	JRST	LOOP
+
+
+TOCT:	IDIVI	T1,10		;Parse off last octal digit
+	HRLM	T2,(P)		;Save on a safe spot in the stack
+	SKIPE	T1		;Parsed it all ?
+	 PUSHJ	P,TOCT		;Nope - get next digit
+	HLRZ	T1,(P)		;get back a digit
+	ADDI	T1,"0"		;Convert it to an ascii character
+	OUTCHR	T1		;Output it
+	POPJ	P,		;And return
+
+DIE4:	OUTSTR	[ASCIZ	/GETTAB failed./]
+DIE:	JRST	BYEBYE		;Do the reset anyway.
+; PARSE USER COMMANDS OF THE FORM:
+;	XXX		LINE XXX
+;	TTYXXX		LINE XXX
+;	OPRXXX		OPR XXX
+;	CTY		CTY
+;	NNN_LLL		NODE NNN LINE LLL
+;	JXXX		JOB XXX
+;
+PARSER:	SETSTS	TTY,.IOASC	;Set our terminal to normal ascii mode.
+	OUTSTR	[ASCIZ	/SPY>/]
+	PUSHJ	P,SIXINP	;Read a sixbit word
+	CAIN	P3,"_"		;Node delimiter ?
+	 JRST	PRSNOD		;Yes
+	LDB	T1,[POINT 6,P4,5] ;Get first character
+	CAIN	T1,'J'		;Job ?
+	 JRST	PRSJOB		;YES
+PRSRND:	MOVE	T1,P4		;Copy stuff
+	IONDX.	T1,		;Get UDX if possible
+	  SKIPA			;CAN'T
+	JRST	PRSR.1		;Onward
+	MOVS	T1,P4		;Get stuff in RH
+	HRLI	T1,'TTY'	;Add TTY - maybe only specified nnn
+	IONDX.	T1,		;Try again
+	  HALT	.
+PRSR.1:	MOVEM	T1,UDX		;Store udx
+	JRST	PRSEND		;Done
+
+PRSNOD:	MOVE	P1,P4		;Save node name
+	PUSHJ	P,SIXINP	;Get line or TTYnnn
+	MOVE	P2,P4		;Save it
+	HLRZ	T1,P2		;Get LH of line
+	CAIE	T1,'TTY'	;Was it TTYnnn ?
+	 jRST	PRSN.1		;No
+	HRLZ	P2,P2		;Yes - make it a line number only
+	CAIN	P3,":"		;Terminate in a colon ?
+	 PUSHJ	P,FLUSH		;Yes - eat junk following it
+	  JFCL			;Always skips
+PRSN.1:	MOVE	P4,P2		;Get line number
+	PUSHJ	P,CNVOCT	;Convert to octal
+	  HALT	.
+	MOVE	T1,[.NDRNN,,T2]	;Set up AC
+	MOVEI	T2,2		;2 word argument block
+	MOVE	T3,P1		;Get node name
+	NODE.	T1,		;Convert node name to number
+	  HALT	.
+	HRL	P4,T1		;Set up uuo with P4:= node #,,line #
+	MOVE	T2,P4		;Save incase..
+	GTXTN.	P4,		;Return sixbit tty name
+	 TRNA			;Try a connect first
+	JRST	PRSRND		;Go exit parser
+	MOVE	P4,[.NDTCN,,T1]	;Code for executing a connect
+	MOVEI	T1,2		;2 words
+	NODE.	P4,		;Try a connect
+	  HALT	.
+	OUTSTR	[ASCIZ |Connecting|]
+	JRST	PRSRND		;Convert SIXBIT/TTYNNN/
+
+
+PRSJOB:	LSH	P4,6		;Shift out 'J'
+	PUSHJ	P,CNVDEC	;Convert SIXBIT to decimal number in 'P4'
+	  HALT	.
+	TRMNO.	P4,		;Get UDX
+	  HALT	.
+	MOVEM	P4,UDX		;Store it
+
+PRSEND:	SKIPGE	P3		;End of line ?
+	  HALT	.
+	MOVE	T1,UDX		;Be nice
+	POPJ	P,		;Return
+TYI:	INCHWL	P3		;Get a character
+	CAIN	P3,.CHCRT	;Is it a carriage return ?
+	 JRST	TYI		;Yes - ignore it
+	PUSH	P,T1		;Save t1
+	MOVEI	T1,1		;A bit
+	LSH	T1,(P3)		;See if a break character
+	CAIE	P3,.CHDEL	;<rubout> ?
+	TDNE	T1,[001455016210] ;Break character ?
+	MOVEI	P3,		;Yes
+	POP	P,T1		;Restore t1
+	CAIG	P3,"Z"+40	;Lower case ?
+	 CAIGE	P3,"A"+40	;...
+	  SKIPA			;NOPE
+	TXZ	P3," "		;Yes - convert to upper case
+	CAIN	P3,.CHTAB	;<tab> ?
+	MOVEI	P3," "		;Yes - make it a space
+	POPJ	P,		;Return
+
+FLUSH:	PUSHJ	P,TYI		;Get a character
+	CAIN	P3," "		;Is is a space ?
+	 JRST	FLUSH		;Yes - eat it
+CPOPJ1:	AOS	(P)		;No - always give skip return
+CPOPJ:	POPJ	P,		;Return
+SIXINP:	MOVE	T1,[POINT 6,P4]	;Byte pointer to destination
+	SETZB	T2,P4		;Zero counter and destination
+	PUSHJ	P,FLUSH		;Eat leading spaces and tabs
+
+SIXI.1:	PUSHJ	P,TYI		;Get a character
+	CAIL	P3,"0"		;Is it a
+	 CAILE	P3,"9"		; number ?
+	  CAIL	P3,"A"		;Is it a
+	   CAILE P3,"Z"		; Letter ?
+	    POPJ P,		;No to something - return
+	TLNN	T1,770000	;Have six characters yet ?
+	 JRST	SIXI.1		;Yes - ignore extra characters
+	SUBI	P3," "		;Convert ascii to sixbit
+	IDPB	P3,T1		;Stash character
+	AOJA	T2,SIXI.1	;Loop for next one
+
+CNVOCT:	SKIPA	T3,[^D8]	;Radix 8
+CNVDEC:	MOVEI	T3,^D10		;Radix 10
+	MOVE	T2,P4		;Get number to convert
+	MOVEI	P4,0		;Clear result
+
+CNVNUM:	LSHC	T1,6		;Shift in a character
+	ANDI	T1,77		;Strip off junk
+	CAIG	T1,'0'-1(T3)	;Is it a
+	 CAIGE	T1,'0'		; legal digit ?
+	  POPJ	P,		;No - just return
+	IMULI	P4,(T3)		;Multiply result by radix
+	ADDI	P4,-'0'(T1)	;Add on this digit
+	JUMPN	T2,CNVNUM	;Loop if more more characters to convert
+	JRST	CPOPJ1		;Skip return
+
+BYEBY0:	OUTSTR	[ASCIZ	/Couldn't reduce core/]
+	TRNA
+BYEBY1:	OUTSTR	[ASCIZ	/Couldn't lock/]
+	TRNA
+BYEBY2:	OUTSTR	[ASCIZ	/First SNOOP failed/]
+	TRNA
+BYEBY3:	OUTSTR	[ASCIZ	/Second SNOOP failed/]
+	TRNA
+BYEBY5:	OUTSTR	[ASCIZ /TRMOP. failed/]
+	TRNA
+BYEBY6:	OUTSTR	[ASCIZ	/De-activating SNOOP failed!/]
+	TRNA
+BYEBY7:	OUTSTR	[ASCIZ	/Fool!!!/]
+	TRNA
+BYEBY8:	OUTSTR	[ASCIZ	/TRMNO. of ourselves failed!/]
+BYEBYE:	RESET
+	OUTSTR	[ASCIZ	/
+Exiting SPY/]
+	EXIT	1,
+	JRST	.
+
+
+;Here when we have a character in T3
+ECHIN:
+ECHOUT:
+UN1:	TRNE	%U,0		;Test against complement of bits we know
+	 POPJ	%P,		;One of the bits we know isnt on, is on.
+UP2:	TRC	%U,0		;Complement the bits we want to know about
+UP3:	TRCE	%U,0		;Test for the bits we want to be on.
+	 POPJ	%P,		;Not this terminal, return quick
+	PUSH	%P,%T1		;Save
+	PUSH	%P,%T2		; An
+	PUSH	%P,%T3		;
+	PUSH	%P,%T4		;  AC
+	PUSH	%P,%U		;We will change this
+MYLDB:	MOVE	%U,0		;Our LDB
+CCT:	PUSHJ	%P,0		;Dump this character in our buffer.
+	POP	%P,%U		;Restore LDB addr
+	POP	%P,%T4		;  restore
+	POP	%P,%T3		;
+	POP	%P,%T2		; an
+	POP	%P,%T1		;AC
+	POPJ	%P,		;Done
+
+
+LITS:	LIT
+;;;;ALL CORE AFTER THIS WILL DISSAPEAR AT LOCK TIME
+
+LOKTOP:
+
+
+START:	RESET
+	MOVE	P,PDL		;Set up stack
+	SETZM	.JBSA		;And avoid a .start
+	OPEN	TTY,[EXP 0,<SIXBIT /TTY/>,0]
+	 JRST	BYEBY9		;Give us a channel for SETSTS.
+	HRLI	T1,REFSIZ	;We need REFSIZ addresses
+	HRRI	T1,REFS		;They are in this table
+	PUSHJ	P,GETADR##	;Convert symbols to addresses
+	MOVE	T1,CHKSUM	;Get monitor checksum
+	MOVEM	T1,ARGLST+1	;Monitor checksum, so snoop can verify
+	MOVSI	T1,'DDT'	;now for program name
+	SETNAM	T1,		;Change our name, to screw people over.
+	OUTSTR	[ASCIZ /[Type ^E^X to exit]
+/]
+	JRST	LOCKED		;Go to the code which has to be nailed down.
+BYEBY9:	OUTSTR	[ASCIZ	/Open of TTY failed/]
+	JRST	BYEBYE
+LIT
+;This is the end of the code which doesnt
+; Have to be locked in.
+
+	END	START

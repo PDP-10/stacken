@@ -1,0 +1,719 @@
+	TITLE	PULSAR - TAPE/DISK SUBSYSTEM LABELS PROCESSOR
+
+;
+;
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1975,1976,1977,1978,1979,
+;1980,1981,1982,1983,1984,1985,1986,1987.  ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+
+	SEARCH	GLXMAC			;Search the library universal
+	SEARCH	PLRMAC			;SEARCH UNIVERSAL FILE
+	SEARCH	QSRMAC			;For the dialogue symbols
+	SEARCH	ORNMAC			;And we talk to OPR a little, too
+	PROLOG	(PULSAR)		;SEARCH OTHER UNIVERSALS
+
+	PLRVSN==<VRSN.(PLR)>		;GEN VERSION NUMBER
+
+	LOC	137
+	EXP	PLRVSN			;SAVE/SET IT
+	RELOC	0
+
+	LOC	124			;GET REENTER ADDRESS
+	EXP	G$REST			;SET IT
+	RELOC	0			;REPHASE US
+
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1971,1987.
+ALL RIGHTS RESERVED.
+\;END COPYRIGHT MACRO
+
+;THIS IS THE MAIN PROGRAM FOR THE TAPE LABELLER. IT RECEIVES THE IPCF
+;	MESSAGES FROM THE SYSTEM AND DISPATCHES TO THE APPROPRIATE
+;	ROUTINE IN PLRLBP.
+
+
+SUBTTL	Directory for PULSAR
+SUBTTL	Global Variables
+
+G$TXTB::BLOCK	TXTSIZ			;Text buffer
+G$TXTP::BLOCK	1			;Byte pointer to text buffer
+G$CPU::	BLOCK	1			;CPU TYPE CODE
+G$TERM:: BLOCK	1			;TERMINATION CODE TO RETURN
+G$DEBUG::BLOCK	1			;NON-ZERO FOR DEBUG
+					; TO USER ON LABEL RELEASE
+G$UNL::	BLOCK	1			;Non-zero if we're doing
+					;and unload
+G$PROC:: BLOCK	1			;0 If we're running at MAIN (exec) level
+					; non-zero if running a TCB (user) level
+
+G$LIST::BLOCK	1			;Space for the list handle for TCB list
+G$MSGL::BLOCK	1			;List handle for deferred messages
+G$ACK::	EXP	0			;Space for the sequential WTOR ack numbers
+G$COD::	BLOCK	1			;ACK to give to MDA
+G$SCHD::BLOCK	1			;-1 if we should look at processes
+
+G$SAB::	BLOCK	SAB.SZ			;A free-for-all SAB
+					;All users of this must set all
+					;fields at runtime
+
+G$MSAB:: $BUILD	SAB.SZ			;A SAB for sending to MDA
+	  $SET	(SAB.SI,SI.FLG,1)	;Send by special index
+	  $SET	(SAB.SI,SI.IDX,SP.MDA)	;Send to MDA
+					;Users must set SAB.MS, SAB.LN
+	 $EOB
+
+;Some GETTABable items
+G$SYSP:: BLOCK	1			;PPN for SYS: UFD (typically [1,4])
+G$MFDP:: BLOCK	1			;PPN for MFD (typically [1,1])
+G$FFAP:: BLOCK	1			;PPN for the operator (typically [1,2])
+G$PROU:: BLOCK	1			;Default UFD protection
+G$PSTP:: BLOCK	1			;Default standard file protection
+G$INDP:: BLOCK	1			;INDEPENDANT PROJECT-PROGRAMMER NUMBERS
+G$SETS:: BLOCK	1			;Flag if monitor supports disk sets
+G$SETN:: BLOCK	1			;Disk set numbers monitor mounts (bit mask)
+
+G$SEQC:: BLOCK	1			;CODE TO PROCESS SEQUENCE ERRORS
+G$REEL:: BLOCK	1			;TEMP STORAGE FOR REELID (PLRINI)
+
+	SLSIZE==.FSDSO+<3*^D36>		;SIZE OF A STRUUO SEARCH LIST ARG BLOCK
+G$OSL::	BLOCK	SLSIZE			;OLD SEARCH LIST BLOCK
+G$NSL::	BLOCK	SLSIZE			;NEW SEARCH LIST BLOCK
+G$BLOK:: BLOCK	BLOKLN			;J-random UUO arg block space
+					;Contents of this block are extremely volatile
+					;User should CHKLN desired length
+					;Against BLOKLN!
+
+G$COMR:: BLOCK	1			;PC of the last call to COMERR
+	SUBTTL	GLOBAL data (static)
+
+;All these locations contain static data
+
+;A table of type-able density values
+G$DENS::
+	$BUILD	.TFD62+1
+	$SET	(.TFD00,,<[ASCIZ/Default/]>)
+	$SET	(.TFD20,,<[ASCIZ/200/]>)
+	$SET	(.TFD55,,<[ASCIZ/556/]>)
+	$SET	(.TFD80,,<[ASCIZ/800/]>)
+	$SET	(.TFD16,,<[ASCIZ/1600/]>)
+	$SET	(.TFD62,,<[ASCIZ/6250/]>)
+	$EOB
+
+;A table of type-able label types
+G$LTYP::
+	$BUILD	LT.MAX+1
+	$SET	(LT.BLP,,<[ASCIZ/Bypass/]>)
+	$SET	(LT.SL ,,<[ASCIZ/ANSI/]>)
+	$SET	(LT.SUL,,<[ASCIZ/ANSI with User labels/]>)
+	$SET	(LT.IL ,,<[ASCIZ/IBM/]>)
+	$SET	(LT.IUL,,<[ASCIZ/IBM with User labels/]>)
+	$SET	(LT.LTM,,<[ASCIZ/Leading tape mark/]>)
+	$SET	(LT.NSL,,<[ASCIZ/Non-standard/]>)
+	$SET	(LT.NL ,,<[ASCIZ/No labels/]>)
+IFN FTCOBOL,<
+	$SET	(LT.CBA,,<[ASCIZ/COBOL ASCII/]>)
+	$SET	(LT.CBS,,<[ASCIZ/COBOL SIXBIT/]>)
+>;END IFN FTCOBOL
+	$SET	(LT.NLV,,<[ASCIZ/No labels, User End of volume/]>)
+	$EOB
+SUBTTL	Initialization
+
+PULSAR:	AOSE	STFLAG			;MAKE SURE WE AREN'T RESTARTED
+	STOPCD	(PNR,HALT,,<PULSAR not restartable>)
+	RESET				;Just for kicks
+	MOVE	P,[IOWD PLR.SZ,PDL]	;SET UP A PUSHDOWN LIST
+	MOVEI	S1,IB.SZ		;Size of the initialization block
+	MOVEI	S2,IB			;There's the block!
+	PUSHJ	P,I%INIT		;Get the library
+	ZERO	G$TERM			;THIS IS ESSENTIALLY G$INIT
+	$CALL	L%CLST			;Get a list handle for the TCB list
+	MOVEM	S1,G$LIST		;Save for use throughout
+	$CALL	L%CLST			;Get a list handle for the message list
+	MOVEM	S1,G$MSGL		;Save for use throughout
+	$CALL	.CPUTY			;GET CPU TYPE
+	MOVEM	S1,G$CPU		;SAVE IT
+TOPS10 <
+	MOVX	S1,%FTST2		;SECOND FILE STRUCTURE PARAMETER WORD
+	GETTAB	S1,			;GET IT
+	  SETZ	S1,			;NOT SUPPORTED
+	TRNN	S1,F%SETS&RHMASK	;FTSETS TURNED ON?
+	TDZA	S1,S1			;NO, GET A ZERO AND SKIP
+	SETO	S1,			;YES, GET A -1
+	MOVEM	S1,G$SETS		;SAVE FOR DYNAMIC TESTS
+	AOJN	S1,INIT.1		;JUMP IF FEATURE NOT TURNED ON
+	MOVX	S1,%LDSET		;GET DISK SETS THIS MONITOR MOUNTS
+	GETTAB	S1,			;GET IT
+	  SETZ	S1,			;NOT SUPPORTED
+	MOVEM	S1,G$SETN		;SAVE THAT ALSO
+INIT.1:
+>
+	$LOG	(<PULSAR starting>,,,<$WTFLG(WT.SJI)>)
+	PUSHJ	P,L$INIT##		;INITIALIZE THE LABEL PROCESSOR
+	PUSHJ	P,T$INIT##		;THE TAPE I/O MODULE
+	PUSHJ	P,I$INIT##		;AND THE SYSTEM INTERFACE
+	PUSHJ	P,Q$INIT##		;AND THE CATALOG/QUOTA PROCESSOR
+
+	$CALL	I%ION			;TURN ON THE PSI SYSTEM
+	JRST	MAIN			;AND GO ON TO THE MAIN LOOP
+
+STFLAG:	-1				;FLAG TO PREVENT RESTARTS
+SUBTTL	Main Loop
+
+MAIN:	MOVE	P,[IOWD PLR.SZ,PDL]	;Set up a PDL
+	SETZ	S1,			;Set infinite sleep time
+	$CALL	I%SLP			;Go hibernate till something happens
+	SETZM	G$PROC			;Note that we're in the exec
+	SKIPA				;Go read the messages
+MAIN.1:	PUSHJ	P,CHKJOB		;Now look for a runnable process
+	PUSHJ	P,CHKMSG		;Check queued and incoming messages
+					;Process any that came in, but
+					;we didn't get interrupted for
+	SKIPE	G$SCHD			;Any more to service?
+	JRST	MAIN.1			;Do some more work
+	JRST	MAIN			;Do this forever
+	SUBTTL	CHKMSG - Check incoming and queued messages
+
+;This routine will check each message in the queue for runnability
+; and try to get the messages off the queue.
+; It will also check the incoming IPCF message queue
+
+CHKMSG:	MOVE	S1,G$MSGL		;Get queued message list handle
+	$CALL	L%FIRST			;Get the first entry in the queue
+	JUMPF	CHKM.3			;Nothing there
+CHKM.1:	MOVE	M,S2			;Copy the adrs of the message
+	PUSHJ	P,PRCMSG		;Try it out
+	JUMPF	CHKM.2			;Doesn't work now, try later
+	MOVE	S1,G$MSGL		;Get back the list handle
+	$CALL	L%DENT			;All done with this message, delete it
+CHKM.2:	MOVE	S1,G$MSGL		;Get list handle again
+	$CALL	L%NEXT			;Try the next message
+	JUMPT	CHKM.1			;There is one, try it
+CHKM.3:	PJRST	CHKIPC			;Try to do some IPCF work
+SUBTTL	CHKIPC -- Routine to check for incoming IPCF messages from interesting processes
+
+;This routine returns immediately if no IPCF message is available.
+;It will pass each message to the appropriate handler
+
+CHKIPC:	$SAVE	<P1>			;Save some regs
+CHKI.A:	$CALL	C%RECV			;Go get a message
+	JUMPF	.RETT			;All done if no more there!
+	MOVE	P1,S1			;Copy the MDB adrs
+	MOVX	S1,MSGNOM		;Set no-match index
+	LOAD	S2,MDB.SI(P1),SI.FLG	;Get the special index flag
+	JUMPE	S2,CHKI.C		;Not from a special job, flush it
+	LOAD	S2,MDB.SI(P1),SI.IDX	;Special PID, get PID index
+	CAXN	S2,SP.IPC		;Is it from the monitor?
+	 MOVX	S1,MSGTLP		;Yes, should be tape message
+	CAXE	S2,SP.QSR		;From OPR via QUASAR?
+	CAXN	S2,SP.OPR		;From OPR (a command!)
+	 MOVX	S1,MSGCOM		;Yes, probably HELP!
+CHKI.C:	LOAD	M,MDB.MS(P1),MD.ADR	;Get addrs of message
+	PUSHJ	P,@MSGTAB(S1)		;Mold the message into shape
+	JUMPF	CHKI.D			;Can't make it look reasonable, flush it
+	PUSHJ	P,PRCMSG		;Process this message
+	JUMPT	CHKI.D			;If we can do it now, delete it
+	MOVE	S1,G$MSGL		;Can't do it now, queue it up
+	$CALL	L%LAST			;Get to the end of the list
+	MOVE	S1,G$MSGL		;Get the message list handle again
+	LOAD	S2,MDB.MS(P1),MD.CNT	;Get the size of the message
+	$CALL	L%CENT			;Add a message to the end of the list
+	LOAD	S1,MDB.MS(P1),MD.ADR	;Get the adrs of the message again
+	MOVSS	S1			;Move from the message
+	HRR	S1,S2			;To the list entry
+	LOAD	S2,MDB.MS(P1),MD.CNT	;Get size once more
+	ADDI	S2,0(S1)		;Figure termination adrs
+	BLT	S1,-1(S2)		;Copy the message
+CHKI.D:	$CALL	C%REL			;Release that message
+	JRST	CHKI.A			;Try for another message
+
+	;CONTINUED ON THE NEXT PAGE
+	;CONTINUED FROM THE PREVIOUS PAGE
+
+;These routines handle the messages from the two sources:
+;Tape position requests
+;Operator commands
+;These routine are responsible for making sure that messages from
+; different sources are distinguishable even if all messages are placed
+; in the G$MSGL queue for messages.
+
+DEFINE MSGNAM,<
+	..Z==0
+	X	(MSGNOM,.RETF)		;;Junk mail
+	X	(MSGCOM,.RETT)		;;Operator commmand (from OPR)
+	X	(MSGTLP,CHKI.M)		;;Tape postion req. (from monitor)
+>
+DEFINE X(OFFSET,RTN),<
+	OFFSET==..Z
+	EXP	<RTN>
+	..Z==..Z+1
+>
+
+MSGTAB:	MSGNAM				;Build the indexes and the table
+
+;Massage routine for messages from the monitor
+;IE make the type code unique among messages from ORION, QUASAR, etc.
+CHKI.M:
+	LOAD	S1,TLM.HD(M),TH.FUN	;Get the message type
+	CAIE	S1,.IPCTL		;Tape labeling message?
+	$RETF				;No, Then the montior has fouled up!
+	MOVX	S1,MONMSG		;Internal code for monitor message
+	STORE	S1,.MSTYP(M),MS.TYP	;Make the message discernable
+	$RETT
+	SUBTTL	PRCMSG - Process a message
+
+;This routine will dispatch to the appropriate message processor
+; for a certain message.
+;Call -
+;	M/	Message adrs (queued or just-received)
+;Returns
+;	TRUE/	Message has been processed
+;	FALSE/	Message not processed (caller should Q it up)
+
+PRCMSG:
+	LOAD	S1,.MSTYP(M),MS.TYP	;Get type field of header
+	MOVSI	S2,-NUMMAI		;Make AOBJN to main keyword table
+PRCM.1:	HLRZ	T1,MAITAB(S2)		;Get next keyword
+	CAIE	T1,(S1)			;Match what parser returned?
+	AOBJN	S2,PRCM.1		;No, try again
+	SKIPL	S2			;Hit one?
+	JSP	S1,COMERR##		;No, things are strange
+	HRRZ	S2,MAITAB(S2)		;Get service routine addr
+	MOVE	S1,.MSCOD(M)		;Get the ack code
+	MOVEM	S1,G$COD		;Save it in case we have to send ack
+	PJRST	(S2)			;Go handle the particular message
+
+;Each of these routines should return TRUE if the message has been
+; completely processed (even if it is not understandable).  If the
+; desired action cannot be performed now, then the routine
+; must return false.
+	MONMSG==100000			;Unique code for monitor message
+MAITAB:	MONMSG,,MSGD.T			;Monitor message for label processing
+	.OMRSP,,O$CRSP##		;Keyword code ,, service routine
+	.QOREC,,O$CREC##		;Recognize (kick AVR) from QUASAR
+	.QOUNL,,O$CUNL##		;Unload command
+	.QOVMN,,O$CVMN##		;Volume given to user
+	.QOVDM,,O$CVDM##		;Volume deassigned (dismounted)
+	.QOVSD,,O$CVSD##		;Volume switch directive
+	.QOREW,,O$CREW##		;Rewind a volume at switch time
+	.QOBLD,,O$CBLD##		;Build a structure
+	.QODSM,,O$CDSM##		;Dismount a structure
+	.QOASL,,O$CASL##		;Add str to user's search list
+					; (or remove from search list)
+	.ODCSL,,O$CLST##		;ADD/REM STR/UNI FROM SSL/ASL/SDL
+	.ODSSL,,O$SLST##		;SHOW SYSTEM LISTS
+	.ODSTP,,V$IMSG##		;Set Tape INITIALIZE
+	.OMHAC,,Q$AACK##		;Application Hello ACK
+	.OMCMD,,Q$OCMD##		;Command from OPR
+	NUMMAI==.-MAITAB		;Length of the table
+	SUBTTL	Message handler for monitor-generated messages
+
+;Message from the monitor (on tape postioning, or unit on-line)
+MSGD.T:	LOAD	S1,TLM.ST(M),TS.RQT	;GET THE REQUEST TYPE ON TAPE LABEL MSG
+	SKIPLE	S1			;ZERO OR NEGATIVE REQUEST?
+	CAILE	S1,LR.MAX		;OR GREATER THAN MAX?
+	JSP	S1,COMERR		;Illegal request, flush it
+IFN FTTRACE,<
+	SKIPE	G$DEBUG			;Are we debugging?
+	$TEXT	(,<Recieved message - ^T/@MSGD.1(S1)/>)
+	JRST	MSGD.2			;Jump around message table
+MSGD.1:	[ASCIZ //]
+	[ASCIZ /FIRST INPUT/]
+	[ASCIZ /FIRST OUTPUT/]
+	[ASCIZ /POSITIONING/]
+	[ASCIZ /TAPE MARK/]
+	[ASCIZ /EOT/]
+	[ASCIZ /CLOSE INPUT/]
+	[ASCIZ /CLOSE OUTPUT/]
+	[ASCIZ /FORCE EOV/]
+	[ASCIZ /USER REQUEST/]
+	[ASCIZ /ABORT/]
+MSGD.2:
+>;End IFN FTTRACE
+	LOAD	S1,TLM.DV(M)		;GET THE DEVICE NAME FROM MESSAGE
+	PUSHJ	P,G$FTCB		;GO FIND THE TCB
+	JUMPF	MSGD.3			;GIVE THIS GUY AN ERROR
+	LOAD	S1,TLM.ST(M),TS.RQT	;GET THE REQUEST TYPE ON TAPE LABEL MSG
+	SKIPL	S1,MSGD.4(S1)		;GET FLAGS,,DISPATCH
+	SKIPN	TCB.WS(B)		;THIS TCB IDLE?
+	SKIPA	S2,[TI.ABO]		;FUNCTION IS OK EVEN IF TCB ISN'T IDLE
+	$RETF				;NO, PROCESS IT LATER
+	TLNE	S1,LD.ABO		;ABORTING?
+	IORM	S2,TCB.IO(B)		;TURN ON FOR THE SCHEDULER
+	LOAD	S2,TLM.ST(M),TS.INF	;GET XTRA INFO FROM MESSAGE
+	STORE	S2,TCB.IN(B)		;STORE IN TCB
+	LOAD	S2,TLM.ST(M),TS.RQT	;GET BACK REQUEST TYPE FROM MESSAGE
+	HRRZS	S1			;STRIP OFF FLAGS
+	PJRST	G$NPRC			;CREATE NEW STACK
+
+;Here if the monitor requests action on a non-mounted drive
+MSGD.3:	MOVX	S1,LE.IOP		;GET 'INVALID OPERATION' ERROR CODE
+	MOVEM	S1,G$TERM		;SAVE AS ERROR
+	LOAD	S1,TLM.DV(M)		;GET THE DEVICE NAME
+	PUSHJ	P,T$LGET##		;DO THE LABEL GET ON THAT DEVICE
+					;AND KEEP THE USER MOVING, IF POSSIBLE
+	$RETT				;AND LOOK FOR MORE MESSAGES
+
+
+; Labeler function dispatch
+; Format: XWD	flags,processor-addr
+; where flags are:
+
+	LD.ANY==400000			;LEGAL FOR ANY WS (MUST BE SIGN BIT)
+	LD.ABO==200000			;ABORT
+
+
+MSGD.4:	XWD	0,0			;ILLEGAL REQUEST TYPE, CAUGHT ABOVE
+	XWD	0,L$FINPUT##		;FIRST INPUT
+	XWD	0,L$FOUTPUT##		;FIRST OUTPUT
+	XWD	0,L$POSI##		;POSITIONING REQUEST
+	XWD	0,L$TMARK##		;TAPE MARK SEEN
+	XWD	0,L$EOT##		;PHYSICAL EOT SEEN
+	XWD	0,L$CLIN##		;CLOSE INPUT
+	XWD	0,L$CLOU##		;CLOSE OUTPUT
+	XWD	0,L$FEOV##		;FORCE END OF VOLUME
+	XWD	0,L$USRQ##		;USER REQUEST
+	XWD	LD.ANY+LD.ABO,L$ABOR##	;ABORT CURRENT OPERATION
+SUBTTL	CHKJOB -- Check and Run Processes
+
+CHKJOB:	SKIPN	G$SCHD			;Anything to do?
+	$RETT				;No, quit fast!
+	SETZM	G$SCHD			;Note that we've seen it
+	$SAVE	<P1>			;Preserve a work space
+	MOVE	S1,G$LIST		;Get list handle
+	$CALL	L%FIRST			;Start at head of list
+CHKJ.1:	JUMPF	.RETT			;Empty list
+	MOVE	P1,S2			;Save addr of this entry
+	$CALL	L%RENT			;Remember this entry
+	MOVE	T1,TCB.WS(P1)		;GET THE WAIT STATE CODE
+	MOVX	T2,TI.ABO		;GET THE ABORT OPERATION BIT
+	TDNN	T2,TCB.IO(P1)		;ABORTING?
+	JUMPGE	T1,CHKJ.2		;NO--STEP TO NEXT IF THIS NOT RUNNABLE
+	MOVEM	P1,TCB.AC+B(P1)		;Make process' B point to TCB
+	TDNN	T2,TCB.IO(P1)		;ABORTING?
+	SETZM	TCB.WS(P1)		;NO--MARK TCB AS IDLE NOW
+	MOVEM	P,LSAVEP		;Save our stack so we can return to
+					;caller of CHKJOB when process blocks
+	MOVSI	0,TCB.AC+1(P1)		;SWAP US
+	HRRI	0,1			; INTO TCB
+	BLT	0,17			;  TCB CONTEXT
+	MOVE	0,TCB.AC(B)		;RESTORE AC 0
+
+	SETZM	G$TERM			;Flag no error
+	SETOM	G$PROC			;Note we're running a (user) process
+	POPJ	P,			;THIS POPJ RETURNS TO THE PROCESS
+					; AT THE PLACE IT BLOCKED (OR
+					; STARTS THE PROCESS AT THE APPROPRIATE
+					; L$XXXX ROUTINE
+
+;THE TCB IS SET UP SUCH THAT THE LAST POPJ BACK TO THE TOP LEVEL
+;WILL RETURN HERE. A PROCESS ALSO PUSHJ'S HERE WHEN IT IS BLOCKED.
+
+G$NJOB:: MOVEM	TF,TCB.AC+TF(B)		;Save 'TF' in the TCB
+	MOVE	TF,[S1,,TCB.AC+S1]	;Get source,,destination offset
+	ADDI	TF,0(B)			;Get source,,destination address
+	BLT	TF,TCB.AC+17(B)		;Save the TCB context
+	MOVE	P,LSAVEP		;Get back to caller of CHKJOB
+					;stack context
+	MOVE	S1,G$LIST		;Get list handle
+	$CALL	L%PREM			;Get back to wherever we were
+	SKIPF				;Some one else is messing around
+	CAME	S2,B			;Same as one we dispatched to?
+	STOPCD	(PLM,HALT,,<Previous list TCB has been meddled>)
+	AOSE	G$PROC			;Clear the user mode flag
+	STOPCD	(RSE,HALT,,<Reschedule from exec level>) ;We weren't in a process?
+
+	;CONTINUED ON THE NEXT PAGE
+	;CONTINUED FROM THE PREVIOUS PAGE
+
+	MOVX	S1,TS.KIL		;Does TCB want to quit?
+	TDNN	S1,TCB.ST(B)		;By lighting this bit?
+	JRST	CHKJ.2			;No, proceed normally
+	MOVE	S1,B			;Aim at the TCB
+	PUSHJ	P,G$DTCB		;Delete it
+
+CHKJ.2:	MOVE	S1,G$LIST		;Get back the list handle
+	$CALL	L%NEXT			;Try next TCB
+	JRST	CHKJ.1			;Do it all over
+SUBTTL	Process control routines
+
+;These routines are used to change the state of a process and
+; start up a new process.  They must be called with B aimed at the TCB
+
+;G$STTR sets TRUE for a process, and starts it up
+G$STTR::PUSHJ	P,.RETT			;Get TRUE indicator
+	PJRST	G$STTF			;Set for process
+
+;G$STFL sets FALSE for a process, and starts it up
+G$STFL::PUSHJ	P,.RETF			;Get FALSE indicator
+;	PJRST	G$STTF			;Save it, and start the process
+;Fall through
+
+;G$STTF sets either true or false, depending on the current state of the
+; TF indicator
+;Then, it sets the process runnable
+G$STTF::MOVEM	TF,TCB.AC+TF(B)		;Store indicator
+;	PJRST	G$STRN			;Start the process
+;Fall through
+
+;G$STRN sets a process as runnable
+G$STRN::MOVX	TF,TI.ABO		;GET ABORT BIT
+	TDNE	TF,TCB.IO(B)		;ABORTING?
+	SKIPA	S1,TCB.WS(B)		;YES
+	MOVX	S1,TW.RUN		;GET RUNNABLE CODE
+	MOVEM	S1,TCB.WS(B)		;SET WAIT STATE
+	DOSCHD				;FORCE A SCHEDULING PASS
+	$RETT				;RETURN
+SUBTTL	More process control routines
+
+;G$OJOB - Break out of a process to allow others to run
+; Is useful if label service will take extraordinarily long,
+; and since we are a single server for all tapes, we should break
+; out when possible
+G$OJOB::PUSHJ	P,G$STRN		;Keep this one runnable
+	PJRST	G$NJOB			;But allow others to get worked on
+
+;G$NPRC Creates a stack context for the process.
+;The process will run at the address passed in S1.
+G$NPRC::MOVE	TF,[IOWD TCB.PZ,TCB.PL]	;Get a stack
+	ADDI	TF,(B)			;Relocate into TCB
+	PUSH	TF,[G$NJOB]		;Save termination address
+	PUSH	TF,S1			;Save start address
+	MOVEM	TF,TCB.AC+P(B)		;Save stack pointer
+	PJRST	G$STRN			;And mark this one runable
+
+;G$PREQ - Request work from another process
+;This routine allows one process to have another process
+; do some work, and return to the calling process when
+; the work is complete.
+;Call with the requesting TCB in B.
+; S1/ routine to start other TCB at
+; S2/ 'other' TCB, which will do the work.
+;Returns True or False, the results of the other TCB's work
+;Does not return until the other process completes the work
+
+G$PREQ::
+	$SAVE	<P1,P2>
+	DMOVE	P1,S1			;Save the input arguments
+	LOAD	S1,TCB.WS(P2)		;Get the other guy's wait state
+	CAIE	S1,TW.IGN		;Is it busy?
+	STOPCD	(RAT,HALT,,<Requesting work for active TCB>)
+	MOVX	S1,TW.BLK		;Get state code for 'blocked'
+	STORE	S1,TCB.WS(B)		;Mark caller as blocked
+	EXCH	B,P2			;Swap to new TCB
+	MOVE	S1,TCB.DV(P2)		;1st item on stack - other TCB
+	PUSHJ	P,G$NPRC		;Start process from scratch
+	EXCH	P,TCB.AC+P(B)		;Get process stack
+	PUSH	P,[G$UBLK]		;Routine to run when done - unblocker
+	PUSH	P,P1			;Start at caller's request
+	EXCH	P,TCB.AC+P(B)		;Put the stacks back right
+	EXCH	P2,B			;Get back to old TCB
+	PUSHJ	P,G$NJOB		;Stop this guy, for a while
+	$RET				;Give T/F from other process to caller
+
+;G$UBLK - Exit handler for blocked processes
+;A process which is doing work for another process will
+; return here when the work has been done
+G$UBLK:	POP	P,S1			;Get the blocked TCB name
+	PUSH	P,B			;Save this (running) TCB
+	PUSH	P,TF			;Save T/F from work done
+	PUSHJ	P,G$FTCB		;Get the waiting TCB back
+	SKIPT				;It better be there!
+	STOPCD	(WNF,HALT,,<Waiting TCB not found>)
+	POP	P,TCB.AC+TF(B)		;Give true or false to blocked process
+	PUSHJ	P,G$STRN		;Mark this one as runnable
+	POP	P,B			;Get back to running TCB
+	$RETT				;Go run someone else
+SUBTTL	Utility Routines -- Routine to Make a TCB
+;Called with:
+;T1 - SIXBIT device name
+;T2 - Job number
+;T3 - PPN of (prospecitve) owner
+;Returns:
+;B - Has address of TCB
+;	True (always)
+
+G$MTCB::PUSH	P,T1			;SAVE T1
+	PUSH	P,T2			;AND T2
+	PUSH	P,T3			;AND T3
+	MOVE	S1,T1			;GET DEVICE NAME IN S1
+	PUSHJ	P,G$FTCB		;SEE IF WE CAN FIND THIS ONE
+	JUMPT	MAKT.2			;ITS ALREADY THERE, USE IT
+	MOVE	S1,G$LIST		;Get back list handle
+	MOVEI	S2,TCB.SZ		;Get size of TCB
+	$CALL	L%CENT			;Create the new TCB
+	MOVE	B,S2			;Save start of block
+MAKT.2:	PUSH	P,TCB.CH(B)		;Save the characteristics
+	PUSH	P,TCB.IO(B)		;Save the I/O status
+	SETZM	TCB.FZ(B)		;Knock off first location
+	MOVEI	S1,TCB.FZ+1(B)		;Get destination addr for BLT
+	HRLI	S1,-1(S1)		;Set Source addr
+	BLT	S1,TCB.LZ(B)		;Clear the TCB
+	POP	P,TCB.IO(B)		;RESTORE THE I/O STATUS
+	POP	P,TCB.CH(B)		;AND THE CHARACTERISTICS
+	POP	P,TCB.OW(B)		;GET BACK OWNER'S PPN
+	POP	P,TCB.JB(B)		;AND JOB NUMBER
+	POP	P,TCB.DV(B)		;AND DEVICE NAME
+	MOVE	S1,TCB.DV(B)		;Get drive name
+	PUSHJ	P,I$DEVT##		;Get the device type code
+	STORE	S1,TCB.CH(B),TC.TYP	;Save device type in TCB
+	MOVX	S1,.OTMNT		;Object type - MOUNT device
+	STORE	S1,TCB.OB(B)		;Save it
+	$RETT				;Give true return
+SUBTTL	G$DTCB - Routine to destroy a TCB
+
+;This routine takes a TCB addr in B, and gives back its storage
+;It must NOT be called with the stack in the TCB's context,
+;since this would put the stack into NXM.
+;Call -
+;	S1/	TCB addr to delete
+;Returns -
+;	TRUE
+
+G$DTCB::MOVE	S2,S1			;Keep TCB addr
+	MOVE	S1,G$LIST		;Get the list handle for TCBs
+	$CALL	L%APOS			;Get to that entry of the list
+	$CALL	L%DENT			;And destroy it
+	$RETT
+SUBTTL	Utility Routines -- Routine to Find A TCB From an ITN
+
+;CALLED WITH S1 CONTAINING THE ITN
+;RETURNS TRUE/FALSE, TCB ADDRESS IN B
+
+FNDITN:	MOVE	T1,S1			;Save the arg
+	MOVE	S1,G$LIST		;GET list handle
+	$CALL	L%FIRST			;Start at begining
+FNDI.1:	JUMPF	.RETF			;Quit if list is empty
+	MOVE	B,S2			;Save ptr to entry
+	LOAD	T2,TCB.VL(B)		;GET WORD WHERE ITN IS KEPT
+	CAMN	T2,T1			;IS THIS THE ONE?
+	$RETT				;YES RETURN TRUE
+	$CALL	L%NEXT			;Step to the next entry
+	JRST	FNDI.1			;Try this one
+	SUBTTL	G$REST - PULSAR RESTART (REENTER) PROCESSING ROUTINE
+
+	;This routine is given control on a REENTER command to PULSAR.
+	;It is used to recover from a hung device crash caused by the
+	;monitor. It will pick up the last PC from location 130, and
+	;restart execution from there.
+
+G$REST:	SKIPG	130			;CHECK THE RESTART ADDRESS
+	PUSHJ	P,S..PNR		;NO GOOD,,STOPCODE
+	JRST	@130			;RESTART THE PROGRAM
+SUBTTL	G$FTCB -- Routine to Find a TCB
+;Call with Device name in S1
+;Return with TCB addr in B if true.
+
+G$FTCB:: PUSHJ	P,.SAVET		;SAVE SOME REGISTERS
+	MOVE	T1,S1			;GET HEAD OF TCB CHAIN
+	MOVE	S1,G$LIST		;Get list handle
+	$CALL	L%FIRST			;Start at head of list
+FNDT.1:	JUMPF	.RETF			;Quit at end of list
+	MOVE	B,S2			;GET TCB ADR INTO B
+	LOAD	T2,TCB.DV(B)		;GET DEVICE NAME FOR THIS TCB
+	CAMN	T2,T1			;IS IT THE ONE
+	$RETT				;GIVE GOOD RETURN
+	$CALL	L%NEXT			;Advance to next element
+	JRST	FNDT.1			;Try this one
+SUBTTL	G$FACK -- Routine to Find a TCB waiting for WTOR
+;Call with ACK code to be matched in S1
+;Returns TCB addr in B if true, false if no TCB has that ack number
+
+G$FACK::PUSHJ	P,.SAVET		;Save some regs
+	MOVE	T1,S1			;Save required ack number
+	MOVE	S1,G$LIST		;Get list handle
+	$CALL	L%FIRST			;Start at top of list
+G$FA.1:	JUMPF	.RETF			;End of list, no match
+	MOVE	B,S2			;Aim at TCB
+	LOAD	T2,TCB.AK(B)		;Get this guy's ack #
+	JUMPE	T2,G$FA.2		;No ack here?
+	CAMN	T2,T1			;There is one, does it match?
+	$RETT
+G$FA.2:	$CALL	L%NEXT			;Move to next entry
+	JRST	G$FA.1			;Try this one
+SUBTTL	Text buffer routines
+
+
+; Initialize the text buffer
+; Call:	PUSHJ	P,G$TXTI
+;
+G$TXTI::$SAVE	<S1>			;Save S1 (others depend on it)
+	SETZM	G$TXTB			;Clear the first word
+	MOVE	S1,[G$TXTB,,G$TXTB+1]	;Set up BLT
+	BLT	S1,G$TXTB+TXTSIZ-1	;Clear the buffer
+	MOVE	S1,[POINT 7,G$TXTB]	;Set up byte pointer
+	MOVEM	S1,G$TXTP		;Store it
+	POPJ	P,			;Return
+
+
+; Store a character in the text buffer
+; Call:	MOVE	S1,character
+;	PUSHJ	P,G$TYPE
+;
+G$TYPE::SKIPN	G$TXTB+TXTSIZ-1		;Buffer full ?
+	IDPB	S1,G$TXTP		;No - deposit character
+	POPJ	P,			;Return
+SUBTTL	Local Storage
+
+	PLR.SZ==140			;Size of the PDL
+PDL:	BLOCK	PLR.SZ			;PUSHDOWN LIST
+
+IB:	$BUILD	IB.SZ
+
+	$SET	(IB.FLG,IP.STP,1)	;Send stopcodes to ORION
+
+	$SET	(IB.INT,,VECTOR##)	;The PSI interrupt vectors
+
+	$SET	(IB.PIB,,PIB)		;Aim at the desired PID block
+
+	$SET	(IB.PRG,,%%.MOD)	;Program name
+
+	$EOB
+
+;Build the PID block describing us as the Tape Labeller.
+PIB:	$BUILD	PB.MNS			;A small PID block
+
+	$SET	(PB.HDR,PB.LEN,PB.MNS)	;Size of this block
+
+	$SET	(PB.FLG,IP.PSI,1)	;Use PSI for IPCF
+	$SET	(PB.FLG,IP.JWP,1)	; get me a job-wide PID
+	$SET	(PB.FLG,IP.SPF,1)	;  and make me a system PID
+
+	$SET	(PB.INT,IP.CHN,CHNIPC)	;Offset to IPCF intrupt block
+	$SET	(PB.INT,IP.SPI,SP.TLP)	;This PID is for the tape labeller
+
+	$SET	(PB.SYS,IP.SQT,^D511)	;Infinite send quota
+	$SET	(PB.SYS,IP.RQT,^D511)	;Infinite receive quota
+
+	$EOB
+
+LSAVEP:	BLOCK	1			;Storage for P while jobs
+					;run under CHKJOB dispatching
+SUBTTL	G$SMDA - Send a message to MDA
+
+;This routine is used to send any message to MDA
+;Call -
+;	S1/	Length of the message
+;	S2/	Adrs of the message
+;Returns
+;	TRUE (always)
+
+G$SMDA::
+	STORE	S1,G$MSAB+SAB.LN	;Save the length
+	STORE	S2,G$MSAB+SAB.MS	;Save the adrs of the message
+	DMOVE	S1,[EXP SAB.SZ,G$MSAB]	;Aim at the argument block
+	$CALL	C%SEND			;Fire it off to MDA
+	$RETT
+	END	PULSAR

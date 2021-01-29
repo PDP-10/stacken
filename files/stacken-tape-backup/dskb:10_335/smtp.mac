@@ -1,0 +1,167 @@
+TITLE	SMTP  - Simple Mail Transfer Protocol.
+SEARCH	MACTEN,UUOSYM
+
+DEFINE	ERROR(MESSAGE)<
+	JRST[	MOVEI	2,[
+			ASCIZ	MESSAGE]
+		JRST	NNHALT]>
+
+START:	RESET
+	MOVE	17,[
+		IOWD	STKLEN,STKBLK]
+	MOVEI	1,CONBLK
+	MOVEM	1,NSPBLK+.NSAA1
+	MOVX	1,NS.WAI!INSVL.(.NSFEA,NS.AFN)!3
+	MOVEM	1,NSPBLK+.NSAFN
+	MOVEI	1,NSPBLK
+	NSP.	1,
+	 ERROR	"Unable to open DECnet connection"
+
+LOOP:	MOVE	1,NSPBLK+.NSACH
+	TXNN	1,NS.NDA
+	 JRST	NOTTYO
+	DMOVE	1,[
+		EXP	BUFLEN
+		POINT	7,BUFBLK]
+	DMOVEM	1,NSPBLK+.NSAA1
+	MOVX	1,NS.WAI!INSVL.(.NSFDR,NS.AFN)!4
+	MOVEM	1,NSPBLK+.NSAFN
+	MOVEI	1,NSPBLK
+	NSP.	1,
+	 ERROR	"Unable to read from DECnet connection"
+	MOVE	1,NSPBLK+.NSAA2
+	SETZ	2,
+	IDPB	2,1
+	OUTSTR	BUFBLK
+	JRST	LOOP
+NOTTYO:	TXC	1,INSVL.(.NSSDR,NS.STA)
+	TXNN	1,NS.STA
+	 JRST	NOMORE
+	MOVX	1,HB.DIN!HB.RTL!^D500
+	HIBER	1,
+	 HALT
+	SKPINL
+	 JRST	NOTTYI
+	DMOVE	1,[
+		EXP	1
+		POINT	8,2,27]
+	DMOVEM	1,NSPBLK+.NSAA1
+	MOVX	1,NS.WAI!NS.EOM!INSVL.(.NSFDS,NS.AFN)!4
+	MOVEM	1,NSPBLK+.NSAFN
+	MOVEI	1,NSPBLK
+	INCHWL	2
+	NSP.	1,
+	 ERROR	"Unable to write to DECnet connection"
+	JRST	LOOP
+NOTTYI:	MOVX	1,NS.WAI!INSVL.(.NSFRS,NS.AFN)!2
+	MOVEM	1,NSPBLK+.NSAFN
+	MOVEI	1,NSPBLK
+	NSP.	1,
+	 ERROR	"Unable to obtain DECnet connection status"
+	JRST	LOOP
+NOMORE:	OUTSTR[	ASCIZ	"
+[SMTP: Connection closed]"]
+	MONRT.
+	JRST	START
+
+NNHALT:	OUTSTR[	ASCIZ	"
+?SMTP: "]
+	OUTSTR	(2)
+	OUTSTR[	ASCIZ	", "]
+	MOVE	2,[
+		XWD	-NSPLEN,NSPERR]
+NNH.01:	HLRZ	3,(2)
+	CAME	3,1
+	 AOBJN	2,NNH.01
+	JUMPGE	2,NNH.02
+	HRRZ	3,(2)
+	OUTSTR	(3)
+	JRST	NNH.03
+NNH.02:	OUTSTR[	ASCIZ	"error "]
+	PUSHJ	17,NNOCTA
+NNH.03:	CLRBFI
+	MONRT.
+	HRRZ	1,.JBSA
+	JRST	(1)
+
+NNOCTA:	IDIVI	1,^D8
+	HRLM	2,(17)
+	SKIPE	1
+	 PUSHJ	17,NNOCTA
+	HLRZ	2,(17)
+	ADDI	2,"0"
+	OUTCHR	2
+	POPJ	17,
+
+NSPERR:	XWD	NSABE%,[ASCIZ "argument block format error"]
+	XWD	NSALF%,[ASCIZ "allocation failure"]
+	XWD	NSBCN%,[ASCIZ "bad channel number"]
+	XWD	NSBFT%,[ASCIZ "bad format type in process block"]
+	XWD	NSCFE%,[ASCIZ "connect block format error"]
+	XWD	NSIDL%,[ASCIZ "interrupt data too long"]
+	XWD	NSIFM%,[ASCIZ "illegal flow control mode"]
+	XWD	NSILF%,[ASCIZ "illegal function"]
+	XWD	NSJQX%,[ASCIZ "job quota exhausted"]
+	XWD	NSLQX%,[ASCIZ "link quota exhausted"]
+	XWD	NSNCD%,[ASCIZ "no connect data to read"]
+	XWD	NSPIO%,[ASCIZ "percentage input out of bounds"]
+	XWD	NSPRV%,[ASCIZ "no privileges to perform function"]
+	XWD	NSSTB%,[ASCIZ "segment size too big"]
+	XWD	NSUKN%,[ASCIZ "unknown node name"]
+	XWD	NSUXS%,[ASCIZ "unexpected state: unspecified"]
+	XWD	NSWNA%,[ASCIZ "wrong number of arguments"]
+	XWD	NSWRS%,[ASCIZ "function called in wrong state"]
+	XWD	NSCBL%,[ASCIZ "connect block length error"]
+	XWD	NSPBL%,[ASCIZ "process block length error"]
+	XWD	NSSBL%,[ASCIZ "string block length error"]
+	XWD	NSUDS%,[ASCIZ "unexpected state: disconnect sent"]
+	XWD	NSUDC%,[ASCIZ "unexpected state: disconnect confirmed"]
+	XWD	NSUCF%,[ASCIZ "unexpected state: no confidence"]
+	XWD	NSULK%,[ASCIZ "unexpected state: no link"]
+	XWD	NSUCM%,[ASCIZ "unexpected state: no communication"]
+	XWD	NSUNR%,[ASCIZ "unexpected state: no resources"]
+	XWD	NSRBO%,[ASCIZ "rejected by object"]
+	XWD	NSDBO%,[ASCIZ "disconnected by object (when running)"]
+	XWD	NSRES%,[ASCIZ "no resources"]
+	XWD	NSUNN%,[ASCIZ "unrecognized node name"]
+	XWD	NSRNS%,[ASCIZ "remote node shut down"]
+	XWD	NSURO%,[ASCIZ "unrecognized object"]
+	XWD	NSIOF%,[ASCIZ "invalid object name format"]
+	XWD	NSOTB%,[ASCIZ "object too busy"]
+	XWD	NSABM%,[ASCIZ "abort by management"]
+	XWD	NSABO%,[ASCIZ "abort by object"]
+	XWD	NSINF%,[ASCIZ "invalid node name format"]
+	XWD	NSLNS%,[ASCIZ "local node shut down"]
+	XWD	NSACR%,[ASCIZ "access control rejection"]
+	XWD	NSNRO%,[ASCIZ "no response from object"]
+	XWD	NSNUR%,[ASCIZ "node unreachable"]
+	XWD	NSNLK%,[ASCIZ "no link"]
+	XWD	NSDSC%,[ASCIZ "disconnect complete"]
+	XWD	NSIMG%,[ASCIZ "image field too long"]
+	XWD	NSREJ%,[ASCIZ "unspecified reject reason"]
+	XWD	NSBCF%,[ASCIZ "bad combo of ns.eom & ns.wai flags"]
+	XWD	NSADE%,[ASCIZ "address error"]
+NSPLEN==.-NSPERR
+
+NSPBLK:	BLOCK	4
+
+CONBLK:	EXP	4,NODNAM,SRCPDB,DSTPDB
+
+;NODNAM:	XWD	6,3
+;	BYTE	(^D8)"R","T","R","0","8","B"
+
+NODNAM:	XWD	5,3
+	BYTE	(^D8)"T","O","P","S","Y"
+
+;SRCPDB:	EXP	3,1,0
+SRCPDB:	EXP	5,1,0,0,RAGNAR
+RAGNAR:	XWD	3,6
+	BYTE	(^D8)"R","A","G","N","A","R"
+
+DSTPDB:	EXP	3,0,^D125
+
+BUFBLK:	BLOCK	<BUFLEN==^D512>/^D5+^D1
+
+STKBLK:	BLOCK	<STKLEN==20>
+
+END	START

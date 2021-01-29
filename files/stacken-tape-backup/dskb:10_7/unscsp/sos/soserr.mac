@@ -1,0 +1,611 @@
+	TITLE	SOSERR - Error handling and interrupts
+;		-----------------------------------
+; 
+;  This file contains the following error handling routines:
+;	1. General error handling
+;	2. Control-C interrupt and reenter code
+;	3. Error message tables
+; 
+
+	SEARCH	SOSTCS
+	$INIT
+
+	SUBTTL	GENERAL ERROR HANDLING
+;		----------------------
+
+
+
+ERRHD0::		; The error handler
+	MOVEM	T1,SVT1E	; Save t1 in case of rerror
+	LDB	T1,[POINT 9,.JBUUO,8]	; Get the OPCODE
+	CAIL	T1,FIOUUO	; Special IO UUO?
+	  JRST	IOUHAN		; Yes, go handle
+	CAIN	T1,1		; Is this a fatal error
+	SETZM	EXPFLG		; Use long form of message
+	HRRZ	T1,.JBUUO##	; Pick up the error number
+	SKIPE	T1
+	CAILE	T1,NUMER
+	ERROR	ILUUO		; Wrong error, call self
+	TLNE	FL2,INOPTF!INPARS ; Treat option file as special
+	JRST	OPTERR		; ...
+	MOVEM	T1,SVERN	; Save for =error command
+	MOVE	T1,ETBL-1(T1)	;GET ADDR OF ERROR MESSAGES
+	SKIPE	EXPFLG		;SEE IF /EXPERT
+	 MOVSS	T1		;YES--GET SHORT FORM ADDR
+	OUTSTR	(T1)		;OUTPUT MESSAGE
+	OCRLF			;AND ANOTHER CRLF
+	SKIPE	COMFLF		;IN COMMAND FILE?
+	 JRST	[OUTSTR	COMESS	; PRINT "COMMAND # " MESSAGE
+		 OUTSTR	COMCNT	; AND COMMAND COUNTER NUMBER
+		 OCRLF		; CRLF
+		 JRST	.+1]	; AND CONTINUE
+	HRRZ	T1,.JBUUO	; Error number
+	CAIN	T1,CMEND	; Command end?
+	JRST	CKIND		; Yes, go do it
+	SKIPLE	MACLVL##	;IN A MACRO?
+	 SOS	MACLVL##	;YES--POP UP A LEVEL
+	LDB	T1,[POINT 9,.JBUUO,8] ; Get UUO
+	CAILE	T1,3
+	HALT	.		; Error	ILUUO
+	CAIN	T1,3		; Is this an RERROR?
+	JRST	ERRDHN		; No
+	CLRBFI			; No, clear the input buffer
+	PUSHJ	P,CTTBFO##	; Clear TTOBUF
+ERRDHN:	XCT	ERND(T1)	; Do good thing
+	SETZM	COMFRP##	;CLEAR COUNT IN CASE IN CMD FILE REPEAT
+	JRST	@ERRHD		; Rerror will fall through xct and return
+
+ERND:	ERROR	ILUUO		; 0 is an error
+	JRST	FATAL		; Quit or die
+	JRST	CKIND		; Check ind file
+	MOVE	T1,SVT1E	; Rerror- restore t1
+
+FATAL:	SKIPE	ISCOP		; Left over from last copy
+	JRST	COPDON##	; Yes, do special clean up
+	SKIPL	CXFPDP		; Is he co-editing?
+	JRST	BYEBYE##	; No, just return
+	SKIPE	CXFMNE		; Is he allowed to co-exit?
+	JRST	CXFERR##	; Special exit
+	JRST	CXFRTN##	; Yes, return to first file
+
+
+CKIND::	SKIPN	COMFLF		; In command file?
+	JRST	COMND##		; Not in file, just go on
+	SETZM	COMFLF		; Aren't any more
+	RELEAS	IND,		; Release the file
+	MOVE	T1,SVCCIN	; Restore the previous
+	MOVEM	T1,CHIN		; Character input routine
+	JRST	COMND		; Go on
+
+REENT::	PUSHJ	P,CNCRST	; Restore TTY stuff
+	TRO	FL,NECHO	;Force it
+	ONECHO			;Be sure ECHO is ok
+	PUSHJ	P,CTTBFO	; Clear out tty output buffer
+	PUSHJ	P,SETTTY##	; Go reset some tty characteristics
+	SETZM	MACLVL##	;CLEAR MACRO NESTING LEVEL
+	TLNN	FL2,NORENT	; Should we allow this ?
+	JRST	COMND		; Sure, go get next command
+	TLO	FL2,RENTF	; No, better post a notice...
+	JRST	T1POPJ##	; Restore T1 and return
+
+OPTERR::MOVE	T1,SVT1E	; Restore T1
+	POP	P,0(P)		; Up a level
+	POPJ	P,		; And give error return
+	SUBTTL	IO UUO Handler
+;		--------------
+
+; Come here on a special IO UUO
+; 
+; T1 must contain the OPCODE for the UUO
+
+IOUHAN:	PUSH	P,ERRHD		; Simulate PUSHJ
+	SUBI	T1,FIOUUO	; Scale to zero
+	JRST	@IOTAB(T1)	; And go to UUO specific routine
+
+	SUBTTL	XENTER -- Extended ENTER Function
+;		---------------------------------
+
+; XENTER -- Extended ENTER function
+;
+; Call with
+;	XENTER	chn,addr
+; 	  <error return>
+;	<success return>
+
+; XENTER differs from the ENTER UUO in that
+;	(1)  If .PTPPN is zero, the default path will be used.
+;	(2)  If the enter succeeds and a path block was given,
+;	     a PATH. UUO will be done so the caller can find out
+;	     exactly where the file was created.
+; Uses AC's T1 and T2
+
+XENTUU::PUSHJ	P,SAVR##	; Preserve T3 - T5
+	HRRZ	T3,.JBUUO	; Point to Enter block
+	SKIPE	T4,.RBPPN(T3)	; Do we have a path pointer?
+	TLNE	T4,-1		;  or a PPN
+	JRST	XENT1		; A PPN
+	SKIPN	.PTPPN(T4)	; PPN field zero?
+	SETZM	.RBPPN(T3)	; Yes, tell MTR to use default path
+XENT1:	MOVEI	T5,<<ENTER 0,0>_-^D27> ; ENTER op-code
+	DPB	T5,[POINT 9,.JBUUO,8] ; Set it up in .JBUUO
+	XCT	.JBUUO		; Execute the ENTER UUO
+	  JRST	[MOVEM T4,.RBPPN(T3)	; Failed, restore .RBPPN
+		 POPJ P,]		; and return
+	SKIPE	T4		; Path pointer?
+	TLNE	T4,-1		;
+	JRST	CPOPJ1##	; No, leave .RBPPN as MTR did and return
+	HRLI	T4,.PTMAX	; Length of the path block
+	LDB	T5,[POINT 4,.JBUUO,12] ; Fetch logical channel
+	LDB	T5,[POINT 4,CHNTAB(T5),12] ; Then physical channel
+	MOVEM	T5,.PTFCN(T4)	; Set for PATH. UUO
+	PATH.	T4,		; Read the path
+	  JRST	CPOPJ1##	; Should never happen
+	HRRZM	T4,.RBPPN(T3)	; Restore path pointer in ENTER block
+	JRST	CPOPJ1##	; And give good return
+	SUBTTL	ENTER UUO 
+;		---------
+
+XCTENT::PUSH	P,[[ASCIZ/?ENTER fails for /]]
+	JRST	XCTENR
+
+
+; Here on a rename UUO
+
+XCTRNM::PUSH	P,[[ASCIZ/?RENAME fails for /]]
+	  ; 
+XCTENR:	POP	P,FTYPE		; Save failure type for later
+	AOSN	UUONOM		; Silent UUO?
+	PJRST	IOEXCT		; Yes, just execute it
+ENTAGN:	PUSHJ	P,IOEXCT	; Do the UUO
+	CAIA			; It failed, report the problem
+	JRST	CPOPJ1##	; else return successfully
+	PUSHJ	P,SAVR##	; Save some AC's
+	HRRZ	T1,.JBUUO	; Address of the lookup block
+	SKIPN	.RBNAM(T1)	; Skip if were trying to delete because
+	POPJ	P,		;  message looks dumb without name.
+	HLRZ	T4,.JBUUO	; Get UUO type
+	TRZ	T4,777		; Clear junk
+	HRRZ	T3,.RBEXT(T1)	; Error code
+	CAIN	T3,ERAEF%	; File already exits?
+	POPJ	P,		; No message (He who set RB.NSE knows
+				; what he is doing)
+	CAIN	T3,ERPOA%	; Partial allocation?
+	JRST   [HLLZS .RBEXT(T1); Clear this
+		JRST  CPOPJ1##]	; And indicate success
+	SKIPE	T2,.RBPPN(T1)	; Path pointer must not be zero
+	TLNE	T2,-1		;  or be a PPN
+	JRST	ENTNPT		;  for SFD creation
+	CAIN	T3,ERSNF%	; Subdirectory not found?
+	JRST	ENTNSD		; Go make a new directory
+	CAIN	T3,ERBNF%	; Can't write at this position on disk?
+	JRST	[SETZM .RBPOS(T1) ; Clear position argument
+		 HLLZS .RBEXT(T1) ; Clear error code
+		 PJRST ENTAGN]	; Go try this again
+ENTNPT:	LDB	T2,PUUOAC	; Get channel designator
+	HRRZ	T2,CHNTAB##(T2)	; Address of the open block
+	MOVE	T2,.OPDEV(T2)	; And the device itself
+	OUTSTR	@FTYPE
+	PJRST	LEFERR##	; Type file name and message
+
+	SUBTTL	ENTER UUO -- Code to build SFD's
+;		--------------------------------
+
+; Here to create a new directory if needed
+
+ENTNSD:	PUSHJ	P,ENTNS0	; Make a new directory
+	  POPJ	P,		; Failed
+	XCT	.JBUUO		; Retry the UUO
+	  POPJ	P,		; Failed
+	JRST	CPOPJ1##
+
+
+ENTNS0:	PUSH	P,.JBUUO	; Save UUO location
+	MOVEI	T4,<<ENTER 0,0>_-^D27>
+	DPB	T4,[POINT 9,.JBUUO,8]
+	HRRZ	T3,.JBUUO	; Get address of the ENTER block
+	PUSH	P,.RBNAM(T3)	; Save the name
+	PUSH	P,.RBEXT(T3)	;  and the extension
+	PUSH	P,.RBPRV(T3)	;  and the privilege
+	PUSH	P,.RBCNT(T3)	;  and the size
+	HRRZ	T4,.RBPPN(T3)	; Point to the path block
+	MOVEI	T2,SFDLIM+.PTPPN(T4)	; Point to last SFD name
+ENTNS1:	CAIG	T2,(T4)		; Backed into PPN
+	JRST	ENTNSR		; Monitor bug
+	SKIPN	T5,(T2)		; See if non-null name
+	SOJA	T2,ENTNS1	; Loop over all
+
+; Here when last SFD name has been found
+
+	MOVEI	T4,(T2)		; Save path block address
+	MOVSI	T2,'SFD'	; Extension for an SFD
+	MOVEM	T2,.RBEXT(T3)	; Place in enter block
+	MOVEI	T2,4		; Length of ENTER block
+	MOVEM	T2,.RBCNT(T3)	; Save new length
+	SETZM	.RBPRV(T3)	; Clear protection field
+	SETZM	(T4)		; Zap the name
+	MOVEM	T5,.RBNAM(T3)	; Setup the new name
+	XCT	.JBUUO		; Re-execute the UUO
+ENTNSR:	  SOS	-5(P)		; Note the problem
+	MOVEI	T2,<<CLOSE 0,0>_-^D27>
+	DPB	T2,[POINT 9,.JBUUO,8]
+	HLLZS	.JBUUO
+	XCT	.JBUUO		; XCT the close
+	MOVEM	T5,(T4)		; Restore last SFD name
+	POP	P,.RBCNT(T3)	; Restore old block size
+	POP	P,.RBPRV(T3)	; And privilege
+	POP	P,.RBEXT(T3)
+	POP	P,.RBNAM(T3)	; Restore the real file name
+	POP	P,.JBUUO
+	JRST	CPOPJ1##
+	SUBTTL	INUUO and OUTUUO Local UUO Routines
+;		-----------------------------------
+
+; Here on an INUUO or an OUTUUO
+
+XINOUT::AOSN	UUONOM		; See if no message
+	PJRST	IOEXCT		; Yes, just do it then
+	PUSHJ	P,IOEXCT	; See if it works
+	  POPJ	P,		; Good return, all done
+
+; Here on an INUUO or OUTUUO error
+
+	PUSHJ	P,SAVR##	; Save some registers
+	LDB	T3,PUUOAC	; Get channel designator
+	HLLZ	T3,CHNTAB##(T3)	; Get channel number
+	TLO	T3,(GTSTS.)	; Make status instruction
+	HRRI	T3,T4		; Point to temp AC
+	XCT	T3		; Get the status
+	TRNN	T4,IO.ERR	; Any errors?
+	  JRST	CPOPJ1		; No errors, must be EOF
+	HLRZ	T5,.JBUUO##	; Get opcode of UUO
+	TRZ	T5,777		; Clear non-opcode part
+	CAIN	T5,(<INUUO>)	; Inuuo?
+	OUTSTR	[ASCIZ/?INPUT/]
+	CAIN	T5,(<OUTUUO>)	; Outuuo?
+	OUTSTR	[ASCIZ/?OUTPUT/]
+	OUTSTR	[ASCIZ/ error for device /]
+	PUSH	P,T1
+	PUSH	P,T2
+	MOVEI	T3,OCHR##
+	LDB	T1,PUUOAC
+	HRRZ	T1,CHNTAB##(T1)	; Get address of open block
+	MOVE	T1,.OPDEV(T1)	; Fetch the device
+	PUSHJ	P,GVDST1##	; Type the device name
+	PUSHJ	P,FORCE##	; Let him see it
+	OUTSTR	[ASCIZ/ -- /]
+	TRNE	T4,400000	; Write lock?
+	OUTSTR	[ASCIZ/ write locked  /]
+	TRNE	T4,200000	; Search error
+	OUTSTR	[ASCIZ/ search error  /]
+	TRNE	T4,100000	; Disk parity error?
+	OUTSTR	[ASCIZ/ parity error  /]
+	TRNE	T4,40000
+	OUTSTR	[ASCIZ/ Disk full or quota exceeded  /]
+	OCRLF
+	POP	P,T2		; Restore T2
+	JRST	T1PPJ1##	; Restore T1 and return
+	SUBTTL	IO UUO Channel mapping routine
+;		------------------------------
+
+; Here on most IO UUO's
+
+IOEXCT::PUSH	P,ALTP		; Save a scratch register
+	HLL	ALTP,IOTAB##(T1); Load the OPCODE
+	LDB	T1,PUUOAC	; Fetch the channel designator
+	IOR	ALTP,CHNTAB##(T1); Or in the channel number
+	HRR	ALTP,.JBUUO	; Get effective address of UUO
+	MOVE	T1,SVT1E	; Restore T1 now, might be address
+				;  of the UUO
+	XCT	ALTP		; Execute the UUO
+	  JRST	APOPJ##		; Xmit non-skip
+	JRST	APOPJ1##	; Xmit skip return
+
+PUUOAC::POINT	4,.JBUUO,12	; Points to AC field of an LUUO
+
+	SUBTTL	CORE UUO handler
+;		----------------
+
+; Note:  The following routine is provided due to the way that
+;	 the CORE UUO works on VM systems.  If a CORE UUO reduces
+;	 a jobs core assigment then all non-contiguous low segment
+;	 pages are removed.  This makes debugging with VMDDT very
+;	 difficult becuase break points no longer work properly.
+;	 This code simulates CORE UUO's for releasing core only.
+
+IFN FTVDDT,<		; Only useful for VM systems
+
+CORUUO::PUSHJ	P,SAVR##	; Preserves all registers
+	LDB	T1,PUUOAC	; Fetch users AC
+	CAIN	T1,T1		; Is it T1?
+	SKIPA	T1,SVT1E	; Use saved value of T1
+	MOVE	T1,(T1)		; Get the argument for CORE UUO
+	MOVE	T3,T1		; Argument to T3
+	MOVE	T1,SVT1E	; Restore T1
+	  ; 
+CORUU2:	TRO	T3,777		; Round to end of page
+	CAMN	T3,.JBREL##	; Is this a no-op?
+	JRST	CPOPJ1##	; Yes, just return
+	CAML	T3,.JBREL##	; Growing larger
+	JRST	COREIT		; Yes, and CORE UUO is faster
+	PUSH	P,T3		; Requested core size
+	MOVE	T3,[1,,T4]	; Delete page,,arg in register 2
+	MOVEI	T4,1		; Do it one page at a time
+	MOVE	T5,.JBREL##	; Current size
+	LSH	T5,-^D9		; Convert to a page number
+	TLO	T5,400000	; Delete this page
+	PAGE.	T3,		; Page destroy
+	  JRST	CORIT0		; Use CORE UUO, non-VM system
+	POP	P,T3		; Restore desired page
+	JRST	CORUU2		; Do this thing again
+
+; Here to use the CORE UUO instead of PAGE.
+
+CORIT0:	POP	P,T3		; Here if T3 has been pushed
+	  ; 
+COREIT:	CORE.	T3,		; Do a core UUO
+	  POPJ	P,		; Indicate non-skip
+	JRST	CPOPJ1##	; Indicate skip
+>
+	SUBTTL	CONTROL-C INTERCEPT HANDLERS
+;		----------------------------
+
+; Enable intercept.
+;	Call ENBINT for the standard intercept
+;	Call ENBIN1 if you just want all ^C's ignored for awhile
+;		    (use only for very critical code, be sure to
+;		     call CHKCCI when the critical code is done)
+
+ENBIN1::MOVEI	T1,CNCIN1
+	JRST	ENBIN2
+
+ENBINT::MOVEI	T1,CNCINT
+ENBIN2:	HRRM	T1,CNCBLK
+	MOVEI	T1,CNCBLK
+	MOVEM	T1,.JBINT##
+	SETOM	CNCLOK		; Clear interlock for first time
+	MOVEI	T1,REENT	; Set reenter address
+	MOVEM	T1,.JBREN##
+	POPJ	P,
+
+; Disable intercept
+
+DISINT::SETZM	.JBINT##
+	SETZM	.JBREN		; Clear reenter address
+	POPJ	P,
+
+	SUBTTL	Control-C Intercept Routines
+;		----------------------------
+
+; Interupt handler
+
+CNCIN1:	PUSH	P,CNCBLK+2
+	SETZM	CNCBLK+2
+	TRO	FL2,R2.CCI
+	POPJ	P,
+
+
+; Here after ENBIN1 has been used to sheild control-C's to see
+; if he typed one and let him out if he has.
+
+CHKCCI::TRZN	FL2,R2.CCI	; Waiting?
+	POPJ	P,		; No, just return
+				; Fall through to FAKINT
+; Here to simulate a ^C
+
+FAKINT::POP	P,CNCBLK+2
+	MOVSI	T1,2
+	MOVEM	T1,CNCBLK+3
+				; Fall through to CNCINT
+
+; Here on a control-C.  (Real or simulated)
+
+CNCINT:	AOSE	CNCLOK		; Trying to re-enter?
+	JRST	CNCAGN		; Yes: skip over code
+	PUSH	P,CNCBLK+2	; Get PC
+	PUSH	P,T1		; Save a reg
+CNCAGN:	HLRZ	T1,CNCBLK+3	; Get reason
+	CAIE	T1,1B34		; ^C only
+	ERROR	ICN
+	SETZM	CNCBLK+2	; Re-enable
+	GTSTS.	TTY,SVTSTS	; Get tty status
+	SKIPN	CCEXIT		; Does he just want to exit?
+	JRST	CNCINQ		; No, ask what to do
+MONRET:
+	MOVE	T1,TABINI	; Get initial setting
+	PUSHJ	P,SETTAB##	; Restore the setting
+	EXIT	1,		; EXIT for a moment
+	JRST	CNCINR		; Now return
+				CONT.
+
+CNCINQ:	ONECHO			; In case from alter or rubout stream
+	OUTSTR	[ASCIZ "
+Yes? "]
+	SKIPN	EXPFLG		; Short messages?
+	OUTSTR	[ASCIZ "(Type H for help):  "]
+	INCHRW	T1		; Get a character
+	MOVEM	T1,SVT1E	;SAVE IT
+CRGET:	INCHRW	T1		; Get next
+	CAIN	T1,15		; Skip any carriage returns
+	JRST	CRGET
+	CLRBFI
+	CAIN	T1,12		; Then get a line feed
+	JRST	CNCIQ1
+	OCRLF
+	JRST	CNCINQ		; Get something else
+
+CNCIQ1:	MOVE	T1,SVT1E	;RESTORE SAVED CHAR
+	ANDI	T1,137		; Force to upper case
+	CAIN	T1,"H"		; Help
+	JRST	CNCHLP
+	CAIN	T1,"C"		; Continue
+	JRST	CNCINR		; Just retrun
+	CAIN	T1,"R"		; Re-enter?
+	JRST	REENT
+	CAIN	T1,"M"		; To monitor?
+	JRST	MONRET		; Yes, do that
+	CAIN	T1,"E"		; Exit?
+	JRST	CNCXIT		; Prepare to exit
+	CAIN	T1,"Q"		; Quit?
+	JRST	CNCQIT
+	CAIN	T1,"D"		; Enter DDT?
+	SKIPN	.JBDDT		; DDT loaded?
+	JRST	CNCINQ		; No get another response
+	MOVE	T1,SVT1E	;RESTORE T1
+	PUSH	P,.JBDDT	; Save address of DDT
+	SETOM	CNCLOK		; Clear interlock
+	POPJ	P,		; [DDT]
+
+	SUBTTL	Interactive Control-C Routines
+;		------------------------------
+
+; Here for "E"
+
+CNCXIT:	SKIPE	CXFMNE		; Wrong side of co-edit?
+	JRST	CNCINQ		; Exit is not an option
+	TLO	FL2,DOENDF	; Say we want to end
+	JRST	REENT		; and fake a '.REENTER'
+
+; Here for "Q"
+
+CNCQIT:	SKIPE	CXFMNE		; Wrong side of co-edit
+	JRST	CNCINQ		; Not an option now
+	SETZM	ENDFLG		; If waiting for filename
+	JRST	QUIT##		; Else just quit
+
+CNCINR::HRRZ	T1,-1(P)	; Get intercept PC
+	CAIN	T1,GNCH1D##	; Alter mode TTY input wait?
+	PUSHJ	P,CCRTYP##	; Yes, re-type line for him
+	CAIN	T1,GETONE##	;
+	PUSHJ	P,RPRMPT
+	CAIN	T1,GET##	; Waiting for INPUT?
+	PUSHJ	P,RETYPE	; Retype prompt
+	CAIE	T1,GETRPC##	; Waiting for rubout close?
+	JRST	CNCIR1
+	SOS	-2(P)		; Indicate ^C happened
+	AOS	-1(P)		; And get terminal out of IO wait
+	AOS	-1(P)		; ...
+CNCIR1:	PUSHJ	P,CNCRST	; Restore stuff
+	JRST	T1POPJ##	; and return
+
+RETYPE::PUSHJ	P,RPRMPT##	; Re-issure current prompt
+	PUSH	P,TIBUF+.BFPTR	; Save input byte pointer
+	SETZ	T1,		; A zero
+	IDPB	T1,(P)		; Mark end of input stream
+	ADJSP	P,-1		; Clear PDL
+	MOVEI	T1,TBUF		; Point to buffer
+	PJRST	TYPSTR##	;  and type it out.
+
+CNCHLP:	OUTSTR	CNCTXT
+	SKIPN	CXFMNE		; May not exit now?
+	OUTSTR	CNXTXT		; No, give him the quit options
+	SKIPE	.JBDDT##
+	OUTSTR	[ASCIZ "D - Transfer to DDT
+"]
+	JRST	CNCINQ
+
+CNCTXT:	ASCIZ "Type one of:
+C - to CONTinue automatically
+M - return to MONITOR now, cancelling all edits made during this session
+R - to do REEnter (terminate losing search etc.)
+"
+
+CNXTXT:	ASCIZ	"E - to end edit and close file
+Q - to quit (delete temporary files)
+"
+
+; Here on return from control-C
+; 
+CNCRST::OPEN.	TTY,TTDEVI	; Re-open it in case of ^C in a UUO
+	HALT			; If this happens, we're screwed
+	STSTS.	TTY,@SVTSTS	; Restore TTY status
+	PUSH	P,.JBFF##	; Save first free address
+	MOVE	T1,TTYBA##	; Use previous buffer address...
+	MOVEM	T1,.JBFF	; As current first free
+	INBUF.	TTY,1		; Fake out the monitor
+	POP	P,.JBFF		; Restore real first free
+	PUSHJ	P,SETTTY##	; Go reset some tty characteristics
+	SETOM	CNCLOK		; Clear interlock
+	POPJ	P,		; Continue onward
+; Routine to turn on norent flag and modify stack to automatically
+; Cause restoration upon POPJ or CPOPJ1.
+
+SETRFL::TLOE	FL2,NORENT	; Set norent flag and skip if off
+	POPJ	P,		; Already on, don't need auto-restore
+	POP	P,0(P)		; Prune stack
+	PUSHJ	P,@1(P)		; Set restore address and return
+	 ; 
+	SKIPA			; Skip incrementing instruction
+	AOS	(P)		; Here for auto-skip return
+	TLZ	FL2,NORENT	; Restore norent as off
+	POPJ	P,		; Return to client
+	SUBTTL	ERROR MESSAGE TABLES
+;		--------------------
+
+DEFINE	ERMSG,<
+	I==0
+	X	(ICN,?Internal confusion)
+	X	(DIE,?Device input error)
+	X	(DDE,?Device output error)
+	X	(ILC,%Illegal command)
+	X	(ILUUO,?Illegal UUO)
+	X	(LTL,%Line too long)
+	X	(NLN,<%No such line(s)>)
+	X	(NSP,%No such page)
+	X	(ORDER,%Out of order)
+	X	(ACF,%Already changed the file)
+	X	(ILR,%Illegal replacement)
+	X	(WAR,%Wrap around)
+	X	(TMS,%Too many strings)
+	X	(STL,%String too long)
+	X	(ISS,%Illegal search string)
+	X	(ILFMT,%Illegal line format)
+	X	(NSG,%No string given)
+	X	(FNF,%File not found)
+	X	(DNA,%Device not available)
+	X	(NEC,%Insufficient core available)
+	X	(IRS,%Illegal replacement string)
+	X	(STC,%Search string too complex)
+	X	(ITD,%Illegal transfer destination)
+	X	(NNN,%No next line)
+	X	(SRF,%Search fails)
+	X	(CMERR,%Indirect read error)
+	X	(CMEND,[Indirect EOF])
+	X	(MAR,%Margin error)
+	X	(BBF,?Bad "BASIC" file format)
+	X	(MEC,%Must exit co-file first)
+	X	(TMC,%Too many co-files)
+	X	(BFS,%Bad file specification)
+	X	(IBM,%Illegal in Basic mode)
+	X	(ELL,?Line longer than 640 characters in file)
+	X	(IRO,%Illegal when read-only)
+	X	(APN,%Ambiguous parameter name)
+	X	(NPN,%No such parameter)
+	X	(CFB,%Command file too big)
+	X	(PMI,%Page mark inserted to prevent wrap around)
+	X	(URT,%Unrecognized DISPLAY terminal type)
+	X	(IMN,%Illegal macro name)
+	X	(TMM,%Too many macro names)
+	X	(MDL,%Macro definition too long)
+	X	(MTD,%Macros nested too deep)
+	X	(ISW,%Illegal switch)
+	X	(FIQ,%Filespec illegal on Quit)
+>
+
+; The expert error message table
+
+DEFINE X(EXPERR,NOVERR),<
+	I==I+1
+	IFN <I-EXPERR>,<PRINTX ?Error table is out of order>
+	IFE <I-EXPERR>,<
+		IRPC NOVERR,<
+			C="'NOVERR"
+			STOPI>
+		IFE C-"[",<XWD [ASCIZ/['EXPERR']/],[ASCIZ/NOVERR/]>
+		IFE C-"?",<XWD [ASCIZ/?'EXPERR/],[ASCIZ/NOVERR/]>
+		IFE C-"%",<XWD [ASCIZ/%'EXPERR/],[ASCIZ/NOVERR/]>
+		>
+	>
+ETBL::	ERMSG
+NUMER==.-ETBL
+
+	END

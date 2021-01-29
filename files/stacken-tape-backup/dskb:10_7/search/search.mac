@@ -1,0 +1,377 @@
+	TITLE	SEARCH
+
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1986,1988.
+;ALL RIGHTS RESERVED. 
+;
+;
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+;ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+;INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+;COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+;OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+;TRANSFERRED.
+;
+;THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+;AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+;CORPORATION.
+;
+;DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+;SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+
+	SEARCH	UUOSYM,SWIL
+	.REQUEST REL:SWIL
+
+.BCOPY
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1986,1988.  ALL RIGHTS RESERVED.
+\;END COPYRIGHT MACRO
+.ECOPY
+
+;Edit history
+
+	;1)This variant of SEARCH was created by CJA with the KS
+	;in mind.  However, while it will search large files
+	;on the KL, until I get rid of the OWGBP use, the
+	;KS won't be happy.
+	;/TL 20-Aug-86
+
+	;2)Modified by CJA to remove OWGBP use to make
+	;the KS (and TL) happy.
+	;/CJA 25-Aug-86
+
+	;3)Close files with CL.ACS so that file access dates are not
+	;changed.
+	;/JJF 23-May-88
+
+; Version numbers
+;
+	SEAVER==1			;MAJOR VERSION
+	SEAMIN==0			;MINOR VERSION
+	SEAEDT==3			;EDIT LEVEL
+	SEAWHO==0			;WHO DID IT
+	%%SEAS==<BYTE(3)SEAWHO(9)SEAVER(6)SEAMIN(18)SEAEDT>
+
+	LOC 	137
+	%%SEAS			;PUT VERSION NUMBER IN
+
+	T1=1
+	T2=2
+	T3=3
+	T4=4
+	c=10	;from scan
+	P=17
+
+	SUKPAG=50		;Number of pages to suck in at once
+	SUKLEN=1000*SUKPAG	;Same thing in words
+	TEXADR==200000-SUKLEN	;First page for I/O
+	TEXPAG==TEXADR/1000	;In pages
+
+	INJFN=2
+	TWOSEG	400000
+
+S2::	JFCL
+	RESET
+	AOSE	MAPPED		;First time through?
+	JRST	NOMAP		;No, don't have to map section 1 then
+	MOVE	T1,[.PAGCD,,T2]	;Create SOME pages for I/O
+	DMOVE	T2,[-<sukpag+1>
+		    TEXPAG-1]
+	PAGE.	T1,		;Create pages
+	  HALT
+NOMAP:	MOVE	T1,.JBFF	;Reset free space pointer
+	MOVEM	T1,SCNSPC
+	MOVE	P,[-50,,PDL-1]	;Reset stack
+	MOVE	T1,[1,,WLDBLK]
+	pushj	p,.ISCAN##	;SCAN works only in section 0
+	MOVE	T1,[1,,WLDBLK]
+	pushj	p,.PSCAN##	;Initialize command line
+	OUTSTR	[ASCIZ /File spec to search: /]
+
+FILINL:	pushj	p,.FILIN##	;Get file spec
+	PUSHJ	P,ALLSPC	;Allocate space at .JBFF
+	pushj	p,.GTSPC##	;and move spec to my address space
+	CAME	c,[.CHEOL]	;Last spec?
+	JRST	FILINL		;No, get more
+	SETZM	WLDPNT		;Got all specs, initialize WILD's pointer
+;
+	CLRBFI			;Get rid of any useless characters
+	MOVE	T1,[STAB,,STAB+1]
+	SETZM	STAB
+	BLT	T1,STAB+177	;Initialize search string table ala TECO
+
+	OUTSTR  [prompt: ASCIZ /String to search for: /]
+	MOVSI	T2,400000	;BIT MASK FOR FIRST CHAR POSITION
+	MOVSI	T3,-^D36	;MAX 36 CHAR SUBSTRING
+
+INSRCH:	INCHWL	T1
+	CAIE	T1,"X"-100	;MATCH ALL CHARS?
+	JRST	NOTALL		;NO
+	PUSHJ	P,MCHALL	;YES, SET UP PROPER MASK
+	JRST	NXTSCH		;AND GO FOR NEXT INPUT CHAR
+
+NOTALL:	CAIE	T1,"S"-100	;^S means match all separators
+	JRST	NOTSEP		;NOT A WILD MATCH
+;
+;	HERE IF WANT TO MATCH ANY SEPARATOR (CHAR .LE. 40)
+;
+	PUSHJ	P,MCHALL	;FIRST SAY MATCH ALL CHARS
+	MOVEI	T1,^D25		;NOW SAY NO MATCH ALL ALPHA
+SEPLP1:	ANDCAM	T2,STAB+"A"(T1)
+	ANDCAM	T2,STAB+"a"(T1)
+	SOJGE	T1,SEPLP1
+	MOVEI	T1,^D9
+SEPLP2:	ANDCAM	T2,STAB+"0"(T1)	;and no match digit
+	SOJGE	T1,SEPLP2
+	JRST	NXTSCH
+
+MCHALL:	MOVEI	T1,177		;Match all characters
+SEPLOP:	IORM	T2,STAB(T1)
+	SOJGE	T1,SEPLOP
+	POPJ	P,
+
+;Here to flag a match on a particular character
+
+NOTSEP:	CAIN	T1,15		;Is it <CR> ?
+	  JRST	INSRD		;Yes, done with string input
+	CAIG	T1,"z"		;Is it a lower case alpha?
+	CAIGE	T1,"a"
+	  SKIPA			;No, don't convert to upper case
+	TRZ	T1,40		;Yes, convert to upper case
+	CAIL	T1,"A"		;IS IT ALPHA?
+	CAILE	T1,"Z"
+	  SKIPA
+	IORM	T2,STAB+40(T1)	;Yes, match both cases
+	IORM	T2,STAB(T1)
+NXTSCH:	LSH	T2,-1		;Next bit position
+	AOBJN	T3,INSRCH	;Continue inputting string
+
+INSRD:	CLRBFI			;Zap the rest of the line
+	HRRZS	T3		;KEEP POSITIVE CHARACTER COUNT
+	MOVEM	T3,STRLEN	;SAVE LENGTH OF STRING
+	MOVEM	T2,12		;Save final bit position
+	LSH	12,1		;Real last bit position
+	SKIPN	12
+	MOVEI	12,1		;A whole 36 bits
+	SUBTTL	JUMP TABLE SETUP
+
+	MOVSI	11,-^D128	;Set up AOBJN pointer
+JTLOOP:	MOVN	T1,STAB(11)	;Get bits for this character
+	JUMPE	T1,JTLOO2	;This character doesn't occur in the substring
+	AND	T1,STAB(11)	;Mask lowest bit which is set
+	JFFO	T1,.+1		;Count to bit position
+	SUBI	T2,-1(T3)	;Difference between this and last
+	MOVNM	T2,JTAB(11)	; is the distance we can skip
+	SKIPA
+JTLOO2:	MOVEM	T3,JTAB(11)	;We can skip a whole STRLEN characters
+	AOBJN	11,JTLOOP
+
+;
+; SET UP THE rule 2 jump table.  T3 has STRLEN in it.
+;
+	MOVN	T4,T3		; Get negative strlen
+KTLOOP:	AOJGE	T4,KTLEND	;Point to next entry to fill in
+	MOVEM	T3,KTAB(T4)
+	SOJA	T3,KTLOOP
+KTLEND:
+;
+;	NOW HAVE THE FILE SPEC AND THE STRING TO SEARCH FOR
+;
+;
+;	LOOP OVER EACH FILE IN REQUEST
+;
+FILOOP:	MOVE	T1,[5,,WLDBLK]
+	pushj	p,.LKWLD##	;Find next wild file
+	  JRST	DONE		;No more to do
+	MOVEI	T1,.RBSIZ	;LOOKUP block will include file size
+	MOVEM	T1,LKPBLK
+	MOVEI	T1,.IODMP	;Dump mode input
+	IORM	T1,OPNBLK
+	SETZM	OPNBLK+2	;No buffers
+	SETOM	FNDFLG		;String not found yet
+	OPEN	INJFN,OPNBLK	;Try to OPEN
+	  JRST	NXTFIL		;No luck, just try next file
+	LOOKUP	INJFN,LKPBLK	;LOOKUP the file
+	  JRST	NXTFIL		;No luck, just try next one
+	SKIPN	T2,LKPBLK+.RBSIZ ;Get words written
+	  JRST	NXTFIL		;Skip zero length files
+	MOVE	14,T2		;Save length
+	MOVEI	T1,TEXADR
+	MOVEM	T1,TEXLEN+1
+	SUBI	T2,SUKLEN
+	MOVEM	T2,TEXMOR
+	SKIPLE	T2
+	SETZ	T2,
+	ADDI	T2,SUKLEN
+	MOVEM	T2,TEXLEN
+	IMULI	14,5		;Convert file length to characters
+FOO:	MOVE	T1,[2,,FILARG]	;Suck in 2 PAGES
+	FILOP.	T1,
+	  HALT
+	INCHRS	T1		;Get a char if there is one
+	SKIPA			;If the guy typed anything,
+	pushj	p,.TFILE##	; show him the name of the file
+	MOVEI	T1,<12B34>	;Stuff an LF immediately
+	MOVEM	T1,TEXADR-1	;preceeding first buffer (for typeout)
+
+;
+;	Now file is mapped in, search it
+;
+	SETZ	T1,
+	RUNTIM	T1,
+	MOVEM	T1,TIME0
+
+	MOVE	11,STRLEN	;GET LENGTH OF STRING
+	ADJBP	11,[POINT 7,TEXADR] ;Make a byte pointer to the text
+	SUB	14,STRLEN	;Account for length of string
+	JUMPL	14,NXTFIL	;File is not as long as the string!
+
+FIRSTC:	LDB	T1,11		;Get a character from the text
+	SKIPG	5,JTAB(T1)	;Is it the last char of the pattern?
+	  SOJA	5,SLOOP		;Yes, check rest of the string
+FIRST1:	SUB	14,5		;Count chars
+	JUMPL	14,NXTFIL	;Not found
+	ADJBP	5,11		;Advance pointer
+	MOVE	11,5		;Put it in the right place
+	TRZE	11,200000	;Did we go off end of last page?
+	pushj	p,nxtpag	;Yes, read in next one
+	JRST	FIRSTC
+
+SLOOP:	DMOVE	T3,11		;Get current pointer and bit position
+
+STRLOP:	LSH	T4,1		;Next bit position
+	JUMPE	T4,FOUND	;We got a match
+	ADD	T3,[070000,,0]	;BACK UP THE BYTE POINTER
+	SKIPG	T3		;NEED TO GO TO PREVIOUS WORD?
+	SUB	T3,[430000,,1]	;YES, DO IT
+	LDB	T1,T3		;Get a char
+	TDNE	T4,STAB(T1)	;Match?
+	  SOJA	5,STRLOP	;Yes, count characters and continue
+;
+; Here we have no patch somewhere back in the string.
+; Slide the string forward and try again.
+; AC5 is negative char position, with 0 as rightmost char.
+;
+	MOVE	T4,JTAB(T1)	;Get rule 1 advance amount
+	CAMGE	T4,KTAB(5)	;If rule 2 amount is greater
+	  MOVE	T4,KTAB(5)	;Then use it instead
+	ADD	5,T4		;Advance the pointer
+	JRST	FIRST1		;and look some more.
+;
+;	Here if found, 11 points to start of string found
+;	Find start and end of line to type it out
+;
+FOUND:	AOSE	FNDFLG
+	JRST	FNDIT
+	SETZ	T1,
+	RUNTIM	T1,
+	SUB	T1,TIME0		;SEE HOW MANY MS IT TOOK
+	OUTSTR	[ASCIZ /Search took /]
+	pushj	p,.TDECW##
+	OUTSTR	[ASCIZ / milliseconds
+/]
+	MOVEI	T1,OPNBLK
+	MOVEI	T2,LKPBLK
+	MOVEI	T3,PTHBLK
+	pushj	p,.TOLEB##
+
+	OUTSTR	[ASCIZ /  found
+/]
+FNDIT:	MOVE	T2,11		;Get pointer to start of string
+BEGLOP:	HRRZ	T1,T2		;Copy address portion
+	CAIGE	T1,TEXADR-200	;Does string start at start of text?
+	  JRST	TYPLIN		;Yes, don't back up any further
+	LDB	T1,T2		;Get byte
+	CAIE	T1,14		;IS IT FF
+	CAIN	T1,12		;OR LF?
+	  JRST	TYPLIN		;YES, TYPE THE LINE STARTING AFTER THAT
+	ADD	T2,[070000,,0]	;BACK UP THE BYTE POINTER
+	SKIPG	T2		;NEED TO GO TO PREVIOUS WORD?
+	SUB	T2,[430000,,1]	;YES, DO IT
+	AOJA	14,BEGLOP		;AND KEEP TRACK OF BYTE COUNT
+
+;
+;	T2 HAS POINTER TO START OF LINE
+;
+TYPLIN:	MOVEI	T3,^D24*^D82	;MAX BYTES TO OUTPUT (FULL SCREEN)
+TYPLI1:	ILDB	T1,T2		;Get a character of text
+	OUTCHR	T1		;And output it
+	SOJLE	14,EOL		;Until we run out of characters
+	CAIE	T1,12		;or hit the LF
+	  SOJG	T3,TYPLI1	;or output a full screen of junk
+EOL:	MOVE	11,T2	;Set pointer to start of next line for next search
+	pushj	p,.TCRLF##	;Give an extra CRLF to separate lines
+	JUMPG	14,FIRSTC	;If there is more text to search, do it
+
+NXTFIL:	CLOSE	INJFN,CL.ACS	;Close file, but don't update access date
+	RELEAS	INJFN,		;Done with this file
+	JRST	FILOOP		;So go to next one
+
+DONE:	OUTSTR	[ASCIZ /
+Done!
+/]
+	EXIT
+
+NXTPAG:	ADDI	11,TEXADR
+	MOVE	T1,[TEXADR+SUKLEN-200,,TEXADR-200]
+	BLT	T1,TEXADR-1	;Move second buffer to first
+	SKIPG	T1,TEXMOR
+	  HALT
+	SUBI	T1,SUKLEN
+	MOVEM	T1,TEXMOR
+	JUMPGE	T1,NXTPA1
+	ADDI	T1,SUKLEN
+	MOVEM	T1,TEXLEN
+NXTPA1:	MOVE	T1,[2,,FILARG]
+	FILOP.	T1,
+	  HALT
+	POPJ	P,
+ALLSPC:	MOVE	T1,.JBFF	;Get pointer to free core
+	MOVEM	T1,LASSPC	;It is start of next file spec block
+	ADDI	T1,.FXLEN	;Allocate space
+	MOVEM	T1,.JBFF	;remember new end
+	CAMG	T1,.JBREL	;Is that core available already?
+	JRST	.+3		;Yes
+	CORE	T1,		;No, ask for it
+	  HALT
+	MOVE	T1,LASSPC	;Get back address of space
+	MOVEI	T2,.FXLEN	;and length
+	POPJ	P,
+
+WLDBLK:	12,,%%FXVE		;NEW SWIL VERSION WORD
+	SCNSPC,,LASSPC
+	OPNBLK,,LKPBLK
+	.FXLEN,,6
+	WLDPNT
+
+	SALL
+	LIT
+
+	RELOC	0
+
+MAPPED:	EXP	-1
+PAGARG:	EXP	0
+
+FILARG:	XWD	INJFN,.FOFXI	;Arg list for extended dump mode input
+	EXP	TEXLEN		;Address of extended I/O list
+TEXMOR:	BLOCK	1		;Remaining words in file
+TEXLEN:	BLOCK	1		;Number of words to read
+	EXP	TEXADR,0,0	;Address of text buffer, list terminator
+
+PDL:	BLOCK	50
+TIME0:	BLOCK	1
+STRLEN:	BLOCK	1
+FNDFLG:	BLOCK	1
+WLDPNT:	BLOCK	1
+SCNSPC:	BLOCK	1
+LASSPC:	block	1
+OPNBLK:	BLOCK	3
+LKPBLK:	BLOCK	6
+PTHBLK:	BLOCK	^D9
+
+STAB:	BLOCK	200		;THE ALPHABET
+JTAB:	BLOCK	200
+
+	BLOCK	^D36		;as long as the pattern string can be
+KTAB:	BLOCK	0		;Indexed backwards
+
+	END	S2
+

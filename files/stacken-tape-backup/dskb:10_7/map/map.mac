@@ -1,0 +1,3401 @@
+;TITLE	MAP - DECsystem-10 page mapper
+SUBTTL	D. P. Mastrovito /DPM
+
+
+;COPYRIGHT (C) 1980,1981,1982,1983,1984,1985,1986 BY
+;DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+;
+;
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+;ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+;INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+;COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+;OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+;TRANSFERRED.
+;
+;THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+;AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+;CORPORATION.
+;
+;DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+;SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+
+
+; Version numbers
+;
+	MAPMAJ==2			;MAJOR VERSION
+	MAPMIN==0			;MINOR VERSION
+	MAPEDT==57			;EDIT NUMBER
+	MAPWHO==0			;WHO DID IT
+	%%MAP==<BYTE(3)MAPWHO(9)MAPMAJ(6)MAPMIN(18)MAPEDT>
+
+	MAPDAY=="20"			;BUILD DAY
+	MAPMON=="Mar"			;BUILD MONTH
+	MAPYER=="86"			;BUILD YEAR
+
+
+	SALL				;FOR CLEAN LISTINGS
+	.DIRECT FLBLST			;FOR CLEANER LISTINGS
+SUBTTL	Table of Contents
+
+
+;		Table of Contents for MAP %2(35)
+;
+;
+;			   Section			      Page
+;   1. Table of contents. . . . . . . . . . . . . . . . . . .    2
+;   2. Revision history . . . . . . . . . . . . . . . . . . .    3
+;   3. Compiler interface setup . . . . . . . . . . . . . . .    5
+;   4. Program interface definitions. . . . . . . . . . . . .    8
+;   5. Internal definitions . . . . . . . . . . . . . . . . .    9
+;   6. .MAPD - Deposit. . . . . . . . . . . . . . . . . . . .   11
+;   7. .MAPE - Examine. . . . . . . . . . . . . . . . . . . .   12
+;   8. .MAPG - GETTAB UUO simulation. . . . . . . . . . . . .   13
+;   9. .MAPI - Initialization . . . . . . . . . . . . . . . .   18
+;  10. .MAPJ - JOBPEK UUO simulation. . . . . . . . . . . . .   25
+;  11. Address mapping
+;       11.1.   Compute a mapped address. . . . . . . . . . .   27
+;       11.2.   Convert virtual to physical addresses . . . .   28
+;       11.3.   Copy a block of mapped data . . . . . . . . .   30
+;       11.4.   KA relocation and protection. . . . . . . . .   31
+;       11.5.   KI paging . . . . . . . . . . . . . . . . . .   32
+;       11.6.   KL paging . . . . . . . . . . . . . . . . . .   33
+;       11.7.   Dispatch tables . . . . . . . . . . . . . . .   35
+;       11.8.   Monitor . . . . . . . . . . . . . . . . . . .   36
+;       11.9.   Job . . . . . . . . . . . . . . . . . . . . .   38
+;       11.10.  File. . . . . . . . . . . . . . . . . . . . .   40
+;  12. Cache management
+;       12.1.   Clear out the cache . . . . . . . . . . . . .   42
+;       12.2.   Map the cache . . . . . . . . . . . . . . . .   43
+;       12.3.   Set up the hash tables and links. . . . . . .   45
+;       12.4.   Set cache size. . . . . . . . . . . . . . . .   46
+;       12.5.   Allocate a chunk for the cache. . . . . . . .   47
+;       12.6.   Deallocate a page from the cache. . . . . . .   48
+;       12.7.   Find an entry in the cache. . . . . . . . . .   49
+;       12.8.   Insert (replace) a new page in the cache. . .   50
+;       12.9.   Move entry to top of list . . . . . . . . . .   51
+;  13. Text I/O
+;       13.1.   Character . . . . . . . . . . . . . . . . . .   52
+;       13.2.   ASCIZ . . . . . . . . . . . . . . . . . . . .   53
+;       13.3.   Sixbit. . . . . . . . . . . . . . . . . . . .   54
+;       13.4.   Octal . . . . . . . . . . . . . . . . . . . .   55
+;       13.5.   Filespec. . . . . . . . . . . . . . . . . . .   56
+;       13.6.   Miscellaneous . . . . . . . . . . . . . . . .   57
+;  14. Paging
+;       14.1.   Check accessibility . . . . . . . . . . . . .   58
+;       14.2.   Create/Destroy. . . . . . . . . . . . . . . .   59
+;       14.3.   SPY page creation . . . . . . . . . . . . . .   60
+;  15. File I/O
+;       15.1.   Open a file . . . . . . . . . . . . . . . . .   61
+;       15.2.   Close a file. . . . . . . . . . . . . . . . .   63
+;       15.3.   Position a file . . . . . . . . . . . . . . .   64
+;       15.4.   Input/Output. . . . . . . . . . . . . . . . .   65
+;       15.5.   Scan a filespec . . . . . . . . . . . . . . .   66
+;  16. EXE file routines
+;       16.1.   Load and validate directory . . . . . . . . .   69
+;       16.2.   Find a file page. . . . . . . . . . . . . . .   71
+;       16.3.   Find a directory block. . . . . . . . . . . .   72
+;  17. FORTRAN interface. . . . . . . . . . . . . . . . . . .   73
+;  18. Context switch . . . . . . . . . . . . . . . . . . . .   74
+;  19. Error handling . . . . . . . . . . . . . . . . . . . .   75
+;  20. AC save routines . . . . . . . . . . . . . . . . . . .   82
+;  21. Literals . . . . . . . . . . . . . . . . . . . . . . .   84
+;  22. Data storage . . . . . . . . . . . . . . . . . . . . .   85
+;  23. End. . . . . . . . . . . . . . . . . . . . . . . . . .   86
+SUBTTL	Revision history
+
+
+; 1	Creation. Map virtual monitor addresses.
+;
+; 2	Map physical monitor addresses.
+;
+; 3	Add job mapping.
+;
+; 4	Start adding code for file mapping.
+;
+; 5	Change calling conventions to always use a single AC. Add
+;	FORTRAN interface.
+;
+; 6	More work on file mapping.  Accept ASCIZ filespecs.
+;
+; 7	Handle multiple directory page EXE files.
+;
+; 10	Implement new page caching routines.
+;
+; 11	Add TITLE. macro.
+;
+; 12	Shuffle lots of code into a more logical organization.  Start
+;	to clean up initialization code.
+;
+; 13	Begin adding intelligent error handling.
+;
+; 14	Edit 10 broke file mapping badly.  Make it work again.  Remove
+;	all references to AC 'I' as well as the old paralell mapping
+;	tables.
+;
+; 15	Finally add code to handle GETTAB immediate of the range table.
+;
+; 16	Add support for pathological names.
+;
+; 17	Attempt to close off old channel from previous call early
+;	in the .MAPI routine.
+;
+; 20	Rewrite the FORTRAN interface.  /WSM
+;
+; 21	Finish adding error handling for all non-I/O errors.
+;
+; 22	Store the CPU and paging type in the data block.
+;
+; 23	Add support for KL paging shared and indirect pointers.
+;
+; 24	Avoid an extra GETTAB simulation by reading low core location 22
+;	to get paging type and APR serial number.  Then convert serial
+;	number to CPU type.  Always use physical addressing when looking
+;	at low core.
+;
+; 25	Redefine all FL.??? and FR.??? flags as 18 bit quantities.  Fix
+;	bug in testing for physical pages that caused CSHFND to never
+;	find a page in the cache sometimes.  Add AC save co-routines.
+; 26	Remove .MPCOR mapping code and add code to handle virtual vs.
+;	physical memory addressing correctly.  If the first 112K of the
+;	monitor is mapped one for one virtual to physical, remember this
+;	so subsequent address calculations can bypass expensive exec
+;	page mapping code.
+;
+; 27	Enhance the FORTRAN interface again by making it type out errors
+;	if the caller doesn't setup a return address.  /WSM
+;
+; 30	Don't terminate text blocks with a NUL.  This confuses FORTRAN.
+;	Zero the blocks instead.  Don't use the caller's stack, set up
+;	an internal one.  Invent a flag word in the data block which is
+;	non-zero if SPYing.  Add flag MP.SPY to require SPYing if so
+;	requested.  Remove the 20 page restriction on cache size.  The
+;	sky's the limit or CORMAX (which ever comes first).  Return the
+;	sixbit prefix so a superior program can do intelligent things.
+;
+; 31	Add support for reading funny space.  Also fix bugs associated
+;	with KL paging indirect pointers.
+;
+; 32	GETTAB values for start and end of funny space, and the highest
+;	unmapped exec address.  Remove code to compute these values and
+;	associated flags.
+;
+; 33	Speed up JOBPEK simulation by doing either a MOVE and MOVEM,
+;	DMOVE and DMOVEM, or a BLT to transfer data from mapped pages
+;	to user pages.  Remove COUNT. macro.
+;
+; 34	Fix up filespec defaulting and better handle sixbit PPNs.
+;	Remove last references to ACs P1 and P2.
+;
+; 35	Incorporate the FORTRAN INCLUDE file in the MACRO sources.
+;
+; 36	Make hardware KI paging work.  It's about time!
+;
+; 37	Make use of new FILOP. function to return the filespec of crash file.
+;
+; 40	Speed up initialization by a factor of two.
+;
+; 41	Edit 15 didn't quite make it.  Teach OCTOUT about negative numbers.
+;	Type negative GETTAB tables as -n.
+;
+; 42	Rework GTBINI extensively by removing old BOOTWD hack to determine
+;	the CPU and paging type.  Use the Exec Data Vector if we can.
+;
+; 43	Rewrite the TITLE. macro, add build string for WSM.  Add symbolic
+;	offsets for initialization block.  Add routine .MAPC to clear
+;	out the mapper statistics block.  Don't set a PATH. block pointer
+;	if there's no directory (default [-] correctly).
+;
+; 44	Add crock to check for monitor's high segment being mapped.  This
+;	will allow GETTABs of values in the high segment to work on unrun
+;	monitors.
+;
+; 45	In file mode, get the returned filespec with one FILOP. UUO, not
+;	two.  Replace MPIFF% (Initialization Failed for File mapping) with
+;	a the more general code MPMIP% (Mapper Initialization failure).
+;
+; 46	Add .MAPI argument .MPDSN to specify the default section number to
+;	use if an address of 400000,,n is given.  This will normally be set
+;	to zero to things don't break.  Also, add an internal argument block
+;	so programs have to assemble in the argument block length.
+;
+; 47	Include cosmetic improvements and KL paging patch supplied by
+;	Joe Smith of the Colorado School of Mines.  The KL paging stuff
+;	fixes an old WHO bug that caused address calculations to fail while
+;	trying to examine non-zero section addresses in a crash file.
+;
+; 50	Add copyrights to .MAC, .REL, and .FOR files.
+;
+; MAP %2(50) released with 7.02
+;
+; 51	Add counter .MPJPU to tally up the number of JOBPEK UUOs executed.
+;
+; 52	Remove references to PAGADR.  It's not needed.
+;
+; 53	During GETTAB initialization, if the highest unmapped exec address
+;	is known, use it instead of defaulting it to DEFUEA.
+;
+; 54	Correct FORTRAN definition of .MPJPU (JOBPEK UUOs executed).
+;
+; 55	Fix typo in error message.  Update copyrights.
+;
+; 56	(RDH) Fix to handle extended/PSECTed monitors - use %CNSUP system
+;	uptime as "mapped" flag for .EXE files.
+;
+; 57	Process entry vector blocks in .EXE directories.
+SUBTTL	Macros
+
+
+; Macros to accumulate text
+;
+DEFINE	INIT.	(ARG),<
+
+DEFINE	ARG'..	(TEXT),<
+	DEFINE	APPND.	(X,Y,Z),<ARG'..	(<TEXT''X'Y'Z>)>
+	DEFINE	ARG'.,<TEXT>
+> ;END ARG'..
+
+	ARG'..
+
+> ;END INIT.
+
+
+; Macro to build a byte pointer to a masked quantity
+;
+DEFINE	POINTR	(A,M),<POINT <^L<-<<M>_<^L<M>>>-1>>,A,<<^L<<M>&<-<M>>>>>>
+
+
+; Macro to generate calls to the error handler
+;
+DEFINE	ERR.	(COD,RET),<
+	PUSHJ	P,[PUSHJ P,ERROR
+		   IFNB <COD>,<MP'COD'%>,,RET]
+>
+
+
+; Macro to generate mapping error table entries
+;
+DEFINE	MERR.	(SYM,TXT),<
+	.XCREF	...ERR, MP'SYM'%
+	...ERR==...ERR+1
+	MP'SYM'%==:...ERR
+	''SYM'',,[ASCIZ |TXT|]
+>
+; Macro to generate a TITLE, build, and version text
+;
+DEFINE	TITLE.	(NAM,ABV,TXT),<
+	MN1==<ABV'MIN/^D26>
+	IFE MN1,<MN2==ABV'MIN>
+	IFG MN1,<MN2=ABV'MIN-<^D26*MN1>>
+	IFE ABV'MIN-^D26,<MN2==<ABV'MIN+<MN1==0>>>
+	IFE ABV'MIN-^D52,<MN2==<<^D26-1>+<MN1==1>>>
+	IFN MN1,<MN1==MN1+"@">
+	IFN MN2,<MN2==MN2+"@">
+	MNV==<<MN1_7>!MN2>
+
+;; Generate TITLE
+	INIT.	(TTL)
+	APPND.	(<TITLE	'NAM %>,\ABV'MAJ,)
+	IFN MNV,<APPND. (,\"MNV,)>
+	APPND.	(<(>,\ABV'EDT,<)>)
+	IFN ABV'WHO,<APPND. (<->,\ABV'WHO,)>
+	APPND.	(< >,'TXT,)
+	TTL.
+
+;; Generate PRINTX
+	INIT.	(PTX)
+	APPND.	(<PRINTX ['NAM %>,\ABV'MAJ,)
+	IFN MNV,<APPND. (,\"MNV,)>
+	APPND.	(<(>,\ABV'EDT,<)>)
+	IFN ABV'WHO,<APPND. (<->,\ABV'WHO,)>
+	APPND.	(< >,'TXT,)
+	IFN FTFORTRAN,<APPND. (< FORTRAN interface>,,)>
+	appnd.	(<]>,,)
+	IF2,<PTX.>
+
+;; Generate build date
+	INIT.	(BLD)
+	APPND.	(<ASCIZ	|'NAM version >,\ABV'MAJ,)
+	IFN MNV,<APPND. (,\"MNV,)>
+	APPND.	(<(>,\ABV'EDT,<)>)
+	IFN ABV'WHO,<APPND. (<->,\ABV'WHO,)>
+	APPND.	(< built on >,\"ABV'DAY,<->)
+	APPND.	(\"ABV'MON,<->,\"ABV'YER)
+	APPND.	(<|>,,)
+
+;; Generate program version
+	INIT.	(VER)
+	APPND.	(<ASCIZ	|'NAM %>,\ABV'MAJ,)
+	IFN MNV,<APPND. (,\"MNV,)>
+	APPND.	(<(>,\ABV'EDT,<)>)
+	IFN ABV'WHO,<APPND. (<->,\ABV'WHO,)>
+	APPND.	(<|>,,)
+
+
+;; Generate copyright text
+	INIT.	(CPY)
+IFE COMPILER,<
+	APPND.	(<ASCIZ |>,\"15,\"12)
+	APPND.	(<'NAM %>,\ABV'MAJ,)
+	IFN MNV,<APPND. (,\"MNV,)>
+	APPND.	(<(>,\ABV'EDT,<)>)
+	IFN ABV'WHO,<APPND. (<->,\ABV'WHO,)>
+	APPND.	(< 'TXT>,\"15,\"12)
+>
+IFN COMPILER,<
+	APPND.	(<ASCIZ |>,,)
+>
+	APPND.	(<COPYRIGHT (C) DIGITAL EQUIPMENT CORPORATION >,,)
+	APPND.	(<1980,1986.  ALL RIGHTS RESERVED.>,,)
+	APPND.	(\"15,\"12,<|>)
+
+>
+	TITLE.	(MAP,MAP,<DECsystem-10 page mapper>)
+DEFINE	STR	(TEXT),<IFN COMPILER,<ASCIZ |TEXT|>>
+DEFINE	CRLF,<IFN COMPILER,<BYTE(7)15,12>>
+
+DEFINE	BLK%	(MAC,FOR,WDS),<
+	MAC==:<FOR==:OFFSET>
+		CRLF
+		STR	<	PARAMETER 'FOR = ">
+		STR	(\OFFSET)
+	OFFSET==OFFSET+WDS
+> ;END DEFINE BLK%
+
+DEFINE	SYM%	(MAC,FOR,VAL),<
+	IFDIF <None><MAC>,<MAC==:VAL>
+	IFDIF <None><FOR>,<
+		CRLF
+		STR	<	PARAMETER 'FOR = "'VAL>
+	> ;END IFDIF
+> ;END DEFINE SYM%
+SUBTTL	MACRO-10/compiler interface setup
+
+
+	OFF==0				;TURNS A FEATURE TEST OFF
+	ON==1				;TURNS A FEATURE TEST ON
+	COMPILER==0			;INITIALLY NO COMPILER CODE
+	HGHORG==400000			;HIGH SEGMENT ORIGIN
+
+
+DEFINE	FT	(FTS,VAL),<
+IFNDEF FT'FTS,FT'FTS==VAL		;;SET DEFAULT VALUE
+IFN FT'FTS,<FT'FTS==FT'FTS&1>		;;NORMALIZE SETTING
+COMPILER==COMPILER+<IFN FT'FTS,<1>>	;;MAYBE TURN ON COMPILER CODE
+> ;END DEFINE FT
+
+	FT	FORTRAN,OFF		;FORTRAN INTERFACE
+
+
+IFG COMPILER-1,<
+	PRINTX ? Multiple interfaces selected
+	PASS2
+	END
+>
+
+IFE COMPILER,<
+	SEARCH	UUOSYM			;FOR TOPS-10 UUO SYMBOLS
+
+	TWOSEG				;MAKE US SHARABLE
+	RELOC	HGHORG			;START LOADING HERE
+
+.MAP::	ENTRY	.MAP,.MAPI,MAPI		;LOAD IF LIBRARY SEARCH
+
+COPYRI:	CPY.				;GENERATE COPYRIGHT TEXT
+BUILD:	BLD.				;GENERATE BUILD TEXT
+VERSIO:	VER.				;GENERATE VERSION TEXT
+
+> ;END IFE COMPILER
+
+IFN COMPILER,<RIM10>
+SUBTTL	Program interface definitions
+
+
+	STR	<
+!		>
+IFN COMPILER,<VER.>
+	STR	<
+!              Definitions for the FORTRAN interface
+!
+!>
+IFN COMPILER,<CPY.>
+	STR	<!
+!	This file should be INCLUDEd any  FORTRAN  program
+!	wanting  to  use  the  MAP subroutine.  Only flag,
+!	constants, and  offset  definitions  are  in  this
+!	file.   Read MAP.MAC for a complete discription of
+!	the calling sequences for the  FORTRAN  and  MACRO
+!	interfaces to MAP.
+>
+	OFFSET==0
+	STR	<
+
+
+!	Initialization block offsets
+>
+BLK%	.MPFNC, MPIFNC, 1		; Flag and function code word
+BLK%	.MPNPC, MPINPC, 1		; Number of pages to cache
+BLK%	.MPSPN, MPISPN, 1		; Starting page number
+BLK%	.MPDSN, MPIDSN, 1		; Default section number
+BLK%	.MPARG, MPIARG, 1		; Function dependant argument
+					; zero for .MPMON
+					; job number for .MPJOB
+					; address of filespec for .MPFIL
+BLK%	.MPMAX,	MPDMAX, 0		; Length of argument block
+
+	STR	<
+
+!	Initialization flags
+>
+SYM%	MP.PPM,	MPFPPM,	200000000000	; Physical page mapping
+SYM%	MP.PAT,	MPFPAT,	100000000000	; Enable patching
+SYM%	MP.EXE,	MPFEXE,	040000000000	; EXE file mapping
+SYM%	MP.PIO,	MPFPIO,	020000000000	; Physical-only OPEN/LOOKUP on file
+SYM%	MP.RTM,	MPFRTM,	010000000000	; Return run time statistics
+SYM%	MP.SIO,	MPFSIO,	004000000000	; Super I/O
+SYM%	MP.JRM,	MPFJRM,	002000000000	; Use JOBPEK UUOs instead of simulation
+SYM%	MP.SPY,	MPFSPY,	001000000000	; Job needs to SPY
+
+	STR	<
+
+!	Mapping functions
+>
+SYM%	.MPMON,	MPFMON,	  0	; Map the running monitor (PEEK)
+SYM%	.MPJOB,	MPFJOB,	  1	; Map a job in the running monitor (JOBPEK)
+SYM%	.MPFIL,	MPFFIL,	  2	; Map a data or EXE file (FILDDT)
+SYM%	.MPFMX,	MPFFMX,	  2	; Highest known mapping code
+
+	STR	<
+
+!	CPU type codes
+>
+SYM%	.PDP6,	PDP6,	  1	; CP166 processor
+SYM%	.KA10,	KA10,	  2	; KA10 processor
+SYM%	.KI10,	KI10,	  3	; KI10 processor
+SYM%	.KL10,	KL10,	  4	; KL10 processor
+SYM%	.KS10,	KS10,	  5	; KS10 processor
+SYM%	.KC10,	KC10,	  6	; KC10 processor
+	STR	<
+
+!	Paging codes
+>
+SYM%	.KARPR,	KARPR,	  1	; KA Relocation & Protection Registers
+SYM%	.KIPAG,	KIPAG,	  2	; KI paging on a KI10, KL10, or KS10
+SYM%	.KLPAG,	KLPAG,	  3	; KL paging on a KL10 or KS10
+SYM%	.KCPAG,	KCPAG,	  4	; KL paging on a KC10
+	STR	<
+
+!	Random constants
+>
+SYM%	.AP,	None,	  1	; MACRO AC for argument passing
+SYM%	.MPEWD,	MPFEWD,	 30	; Length of ASCIZ error buffers
+SYM%	.MPFWD,	MPFFWD,	 21	; Length of ASCIZ filespec in words
+
+	OFFSET==0
+
+	STR	<
+
+!	Data block offsets
+>
+BLK%	.MPDAT,	MPDDAT,	  1	; Count of words in data block
+BLK%	.MPVER,	MPDVER,	  1	; MAP version number
+BLK%	.MPSPY,	MPDSPY,	  1	; Non-zero if SPYing
+BLK%	.MPCPU,	MPDCPU,	  1	; CPU type
+BLK%	.MPPAG,	MPDPAG,	  1	; Paging type
+BLK%	.MPPGS,	MPDPGS,	  1	; Number of pages availble for mapping
+BLK%	.MPCPC,	MPDCPC,	  1	; Cached page count
+BLK%	.MPCPN,	MPDCPN,	  1	; Starting cached page number
+BLK%	.MPSEC,	MPDSEC,	  1	; Default section number
+Z.BSTS==OFFSET
+BLK%	.MPPGC,	MPDPGC,	  1	; Count of mapped page creates
+BLK%	.MPPGD,	MPDPGD,	  1	; Count of mapped page destroys
+BLK%	.MPADR,	MPDADR,	  1	; Count of mapped address computations
+BLK%	.MPEXM,	MPDEXM,	  1	; Count of mapped examines
+BLK%	.MPDEP,	MPDDEP,	  1	; Count of mapped deposits
+BLK%	.MPGTB,	MPDGTB,	  1	; Count of mapped GETTABs
+BLK%	.MPGTU,	MPDGTU,	  1	; Count of GETTAB UUOs executed
+BLK%	.MPJPK,	MPDJPK,	  1	; Count of mapped JOBPEK UUOs
+BLK%	.MPJPU,	MPDJPU,	  1	; Count of JOBPEK UUOs executed
+BLK%	.MPRTM,	MPDRTM,	  1	; Run time
+BLK%	.MPHSF,	MPDHSF,	  1	; Count of hash table searches
+Z.ESTS==OFFSET
+BLK%	.MPHSC,	MPDHSC,	  1	; Count of hash table collisions
+BLK%	.MPAFS,	MPDAFS,  .MPFWD	; Actual filespec
+BLK%	.MPECD,	MPDECD,	  1	; Mapping error code
+BLK%	.MPPFX,	MPDPFX,	  1	; Right justified sixbit prefix
+BLK%	.MPMET,	MPDMET,	 .MPEWD	; Mapping error text
+BLK%	.MPXET,	MPDXET,	 .MPEWD	; Extended error text
+BLK%	.MPLEN,	MPDLEN,	  0	; Length of data block
+
+
+IFN COMPILER,<END>
+SUBTTL	Internal definitions
+
+
+
+
+
+; Accumulators
+;
+	T1==1				;FOUR
+	T2==2				; TEMPORARY
+	T3==3				;  ACS
+	T4==4				;   ...
+
+
+	A1==5				;4 ACS USED FOR
+	A2==6				; MAPPED ADDRESS
+	A3==7				;  CALCULATIONS &
+	A4==10				;   CACHE HANDLING
+
+	VMA==11				;VIRTUAL MEMORY ADDRESS
+	PMA==12				;PHYSICAL MEMORY ADDRESS
+	SPT==13				;SPT BASE ADDRESS
+
+	F==14				;FLAGS
+	P==17				;PDL
+
+	.AP==T1				;USER COMMUMICATES THROUGH THIS AC
+
+
+; Random values
+;
+	PDLSIZ==50			;INTERNAL PDL SIZE
+	PAGSIZ==1000			;SIZE OF A PAGE IN WORDS
+	PAGNUM==^D20			;DEFAULT NUMBER OF PAGES TO MAP
+	HGHPAG==700			;HIGHEST PAGE NUMBER +1 TO USE
+	DEFPAG==HGHPAG-PAGNUM		;DEFAULT STARTING PAGE NUMBER
+	ABSTAB==410			;ADDRESS OF POINTER TO NUMTAB
+	DEFEPT==1000			;DEFAULT EPT ADDRESS
+	DEFUEA==<<^D112*^D1024>-1>	;DEFAULT HIGHEST UNMAPPED EXEC ADDRESS
+	DEFPBA==<^D112*^D1024>		;DEFAULT PER-PROCESS BEGINNING ADDRESS
+	DEFPEA==<<^D112+^D16>*^D1024>	;DEFAULT PER-PROCESS ENDING ADDRESS
+	DEFORG==400000			;DEFAULT MONITOR'S HIGH SEGMENT ORIGIN
+	FOPSIZ==.FOMAX			;SIZE OF A FILOP. UUO BLOCK
+	LERSIZ==.RBMAX			;SIZE OF A LOOKUP/ENTER UUO BLOCK
+	PTHSIZ==.PTLEL			;SIZE OF A PATH. UUO BLOCK
+	FILSIZ==.FOFMX			;SIZE OF A RETURNED FILESPEC BLOCK
+; Cache blocks
+;
+	 ...X==.
+	PHASE	0
+
+.CBNHB:! BLOCK	1	;NEXT HASH BLOCK
+.CBPHB:! BLOCK	1	;PREVIOUS HASH BLOCK
+.CBNAB:! BLOCK	1	;NEXT ACCESSED BLOCK
+.CBPAB:! BLOCK	1	;PREVIOUS ACCESS BLOCK
+.CBPRC:! BLOCK	1	;PROCESS PAGE NUMBER
+.CBUSR:! BLOCK	1	;USER PAGE NUMBER
+.CBFLG:! BLOCK	1	;FLAGS
+   CB.AVA==1B0		   ;CHUNK IS FREE
+   CB.CRE==1B1		   ;USER PAGE HAS BEEN CREATED
+   CB.PHY==1B2		   ;PHYSICAL PAGE (NOT VIRTUAL)
+   CB.UPD==1B3		   ;UPDATE PAGE ON NEXT REPLACE
+.CBLEN:!		;LENGTH
+
+	 DEPHASE
+;	 RELOC	...X
+	 PURGE	...X
+
+
+; Copy block offsets
+;
+	 ...X==.
+	 PHASE	0
+
+.CBWCT:! BLOCK	1	;WORD COUNT
+.CBRAD:! BLOCK	1	;READ ADDRESS (SOURCE)
+.CBWAD:! BLOCK	1	;WRITE ADDRESS (DESTINATION)
+.CBXLN:!		;LENGTH
+
+	 DEPHASE
+;	 RELOC	...X
+	 PURGE	...X
+	SECTAB==540	;OFFSET IN EPT OR UPT OF FIRST SECTION MAP POINTER
+	MXSECN==37	;MAXIMUM NUMBER OF SECTIONS ON A KL10
+
+
+; Flags in AC 'F'
+;
+	FL.XXX==400000			;RESERVED
+	FL.PPM==200000			;.MAPI FLAG - PHYSICAL PAGE MAPPING
+	FL.PAT==100000			;.MAPI FLAG - PATCH
+	FL.EXE== 40000			;.MAPI FLAG - .EXE FILE MAPPING
+	FL.PIO== 20000			;.MAPI FLAG - PHYSICAL FILE I/O
+	FL.RTM== 10000			;.MAPI FLAG - RETURN RUNTIM STATISTICS
+	FL.SIO==  4000			;.MAPI FLAG - SUPER I/O
+	FL.JRM==  2000			;.MAPI FLAG - JOBPEK UUOS ON MONITOR
+	FL.SPY==  1000			;.MAPI FLAG - JOB NEEDS SPY/WE CAN SPY
+	FL.INI==377000			;.MAPI FLAGS
+
+	FL.EPM==   100			;EXEC PHYSICAL PAGE MAPPING
+	FL.TPP==    40			;TEMPORARY PHYSICAL PAGE MAPPING
+	FL.GTS==    20			;GETTAB SIMULATION SETUP
+	FL.DEV==    10			;FILESPEC SCANNER - DEVICE
+	FL.NAM==     4			;FILESPEC SCANNER - FILE NAME
+	FL.EXT==     2			;FILESPEC SCANNER - EXTENSION
+	FL.DIR==     1			;FILESPEC SCANNER - DIRECTORY
+
+	FR.TYP==777777			;MAPPING TYPE
+SUBTTL	.MAPC - Clear out mapper statistics
+
+
+; Routine to clear out the mapper statistics block
+; Call:	PUSHJ	P,.MAPC
+;	  <NON-SKIP>
+;	<SKIP>
+;
+.MAPC::	PUSHJ	P,CONTXT		;CONTEXT SWITCH
+	MOVEI	T1,MAPDAT		;POINT TO START OF MAPPER DATA
+	SETZM	Z.BSTS(T1)		;CLEAR FIRST WORD
+	MOVSI	T2,Z.BSTS(T1)		;GET START ADDRESS
+	HRRI	T2,Z.BSTS+1(T1)		;MAKE A BLT POINTER
+	BLT	T2,Z.ESTS-1(T1)		;CLEAR THE BLOCK
+	JRST	CPOPJ1			;AND RETURN
+SUBTTL	.MAPD - Deposit
+
+
+; Deposit into a mapped location
+; Call:	MOVE	.AP, ADDR
+;	PUSHJ	P,.MAPD
+;	<NON-SKIP>		;FAILED
+;	<SKIP>			;SUCEEDED, ACS UNCHANGED
+;
+; ADDR:	address to deposit into
+;	old contents
+;	new contents
+;
+.MAPD::	PUSHJ	P,CONTXT		;CONTEXT SWITCH
+	MOVEI	T1,3			;3 WORDS IN BLOCK
+	MOVE	T2,USRACS+.AP		;GET ARG POINTER
+	MOVE	T1,0(T2)		;GET WORD 0
+	MOVEM	T1,POKBLK+0		;SAVE
+	MOVE	T1,1(T2)		;GET WORD 1
+	MOVEM	T1,POKBLK+1		;SAVE
+	MOVE	T1,2(T2)		;GET WORD 2
+	MOVEM	T1,POKBLK+2		;SAVE
+	MOVE	T1,POKBLK+0		;GET ADDRESS TO DESPOSIT INTO
+	PUSHJ	P,ADDRESS		;COMPUTE A MAPPED ADDRESS
+	  ERR.	(DAF,CPOPJ)		;DEPOSIT ADDRESS FAILURE
+	MOVE	T2,(T1)			;GET CONTENTS
+	CAME	T2,POKBLK+1		;WHAT THE USER THINKS IT SHOULD BE?
+	  ERR.	(DVM,CPOPJ)		;DEPOSIT VALUE DOESN'T MATCH
+	CAMN	T2,POKBLK+2		;OLD CONTENTS SAME AS NEW CONTENTS?
+	JRST	CPOPJ1			;YES - THEN NOTHING TO DO
+	MOVE	T3,POKBLK+2		;GET WORD TO DEPOSIT
+	PUSHJ	P,@DEPTAB(F)		;DO IT
+	  POPJ	P,			;FAILED
+	AOS	MAPDAT+.MPDEP		;COUNT THE DEPOSIT
+	JRST	CPOPJ1			;RETURN
+SUBTTL	.MAPE - Examine
+
+
+; Examine a mapped location
+; Call:	MOVE	T1, address
+;	PUSHJ	P,.MAPE
+;	<NON-SKIP>		;FAILED
+;	<SKIP>			;SUCEEDED, T1:= C(ADDR)
+;
+.MAPE::	PUSHJ	P,CONTXT		;CONTEXT SWITCH
+	MOVE	T1,USRACS+.AP		;GET REAL T1
+	PUSHJ	P,EXAMINE		;DO THE EXAMINE
+	  POPJ	P,			;CAN'T
+	MOVEM	T1,USRACS+.AP		;STORE IN REAL T1
+	JRST	CPOPJ1			;RETURN
+
+
+PEXAMINE:TLOA	F,FL.TPP		;ALLOW PHYSICAL PAGE MAPPING
+VEXAMINE:TLZ	F,FL.TPP		;ALLOW VIRTUAL PAGE MAPPING
+
+EXAMINE:PUSHJ	P,ADDRESS		;COMPUTE MAPPED ADDRESS
+	  ERR.	(EAF,CPOPJ)		;EXAMINE ADDRESS FAILURE
+	MOVE	T1,(T1)			;GET CONTENTS
+	AOS	MAPDAT+.MPEXM		;COUNT THE EXAMINE
+	JRST	CPOPJ1			;AND RETURN
+SUBTTL	.MAPG - GETTAB UUO simulation
+
+
+; This routine will simulate a GETTAB UUO.  The calling sequence is exactly
+; like a GETTAB UUO.  If the simulation fails, and monitor mapping is being
+; done, a GETTAB UUO will be tried.  A skip return implies the requested
+; monitor information has been retrieved.  A non-skip return means the GETTAB
+; arguments are illegal.
+;
+; Historical note:
+; The GETTAB UUO (CALLI 41) is new with the 3.19 monitor release.  The UUO was
+; implemented to allow unprivileged programs to examine various monitor tables.
+; CALL:	HRROI AC, MONITOR JOB TABLE NUMBER	;NEG. TABLES FOR CUSTOMER
+;	HRLI AC, JOB NUMBER			;LH .EQ. -1 CURRENT JOB
+;						;LH .EQ. -2 CURRENT HIGH-SEG
+;	CALL AC, [SIXBIT /GETTAB/]		;OR CALLI AC,41
+;
+.MAPG::	PUSHJ	P,CONTXT		;CONTEXT SWITCH
+	MOVE	T1,USRACS+.AP		;GET REAL T1
+	PUSHJ	P,GTBSIM		;DO THE GETTAB SIMULATION
+	  SKIPA				;FAILED
+	AOS	(P)			;SKIP
+	MOVEM	T1,USRACS+.AP		;STORE IN REAL T1
+	POPJ	P,			;AND RETURN
+
+GTBSIM:	MOVEM	T1,GTBARG		;SAVE THE ARGUMENT
+	HRRES	T1			;GET THE TABLE NUMBER
+	CAIN	T1,.GTIDX		;RANGE TABLE?
+	HLRE	T1,GTBARG		;YES--GET INDEX (TABLE NUMBER)
+	ADD	T1,NUMTAB		;OFFSET INTO NUMTAB
+	PUSHJ	P,EXAMINE		;READ NUMTAB ENTRY
+	  JRST	GTBS.1			;MAYBE NO PRIVS
+	MOVEM	T1,GTBNUM		;STORE FOR LATER
+	LDB	T1,GTBTYP		;GET TABLE TYPE CODE
+	TLNE	F,FL.GTS		;GETTAB SIMULATION SETUP?
+	CAIL	T1,GTBLEN		;DO WE KNOW ABOUT THIS TABLE?
+
+GTBS.1:	MOVEI	T1,0			;NO--INDEX ZERO TO ATTEMPT GETTAB UUO
+	MOVEM	T1,GTBIDX		;SAVE INDEX FOR LATER
+	HRRZ	T2,GTBARG		;GET THE TABLE NUMBER
+	CAIN	T2,.GTIDX		;THE RANGE TABLE?
+	MOVEI	T1,.SLIXR		;YES
+	PUSHJ	P,@GTBTAB(T1)		;DO SOMETHING
+	  SKIPA	T1,GTBIDX		;GET INDEX IF SIMULATION FAILED
+	JRST	GTBS.2			;GOT IT
+	JUMPN	T1,GTBS.1		;TRY THE UUO IF WE CAN
+	MOVE	T1,GTBARG		;LOST AGAIN--RELOAD THE ARGUMENT
+	ERR.	(GUF,CPOPJ)		;GETTAB UUO/SIMULATION FAILED
+
+GTBS.2:	AOS	MAPDAT+.MPGTB		;COUNT THE GETTAB
+	JRST	CPOPJ1			;RETURN
+
+; GETTAB simulator dispatch table
+;
+GTBTAB:	EXP	UNKNTB			;UNKNOWN TABLE
+	EXP	ITEMTB			;ITEM NUMBER
+	EXP	JOBNTB			;JOB NUMBER
+	EXP	SEGNTB			;SEGMENT NUMBER
+	EXP	JPDBTB			;JOB NUMBER (DATA IN PDB)
+	EXP	RNGETB			;NEGATIVE AND POSITIVE NUMBERS
+GTBLEN==.-GTBTAB			;LENGTH OF TABLE
+; Byte pointers to parts of GETTAB arguments.
+;
+GTBMAX:	POINTR	(GTBNUM,SL.MAX)		;MAXIMUM ITEM NUMBER IN TABLE
+GTBTYP:	POINTR	(GTBNUM,SL.TYP)		;TYPE OF TABLE IDENTIFIER
+GTBMAC:	POINTR	(GTBNUM,SL.MAC)		;A MONITOR AC NUMBER
+GTBADR:	POINTR	(GTBNUM,SL.ADR)		;EXECUTIVE MODE ADDRESS OF TABLE IF
+					; SL.TYP=1,2,3 OR OFFSET TO PDB IF
+					; SL.TYP=4
+
+
+; GETTAB table types. The values here MUST correspond to the order of
+; GTBTAB. They are included for documentation purposes and to force
+; them into the symbol table, but are never referenced directly.
+;
+	.SLNIC==.SLNIC		;(0) NOT INCLUDED IN THIS CONFIGURATION
+	.SLIXI==.SLIXI		;(1) INDEX BY ITEM NUMBER
+	.SLIXJ==.SLIXJ		;(2) INDEX BY JOB NUMBER
+	.SLIXS==.SLIXS		;(3) INDEX BY JOB NUMBER OR SEGMENT NUMBER
+	.SLIXP==.SLIXP		;(4) INDEX BY JOB NUMBER (DATA IN PDB)
+	.SLIXR==.SLIXR		;(5) INDEX BY NEGATIVE AND POSITIVE OFFSETS
+				;    BITS 12,13 RESERVED FOR DEC
+
+
+; Masks of low and high ranges of GETTAB tables indexed by negative and
+; positive numbers (table type SL.IXR).  These are never referenced but
+; are included for documantaion and to force the symbols into the symbol
+; table.
+;
+	ID.MIN==ID.MIN		;LOW RANGE OF TABLE
+	ID.MAX==ID.MAX		;HIGH RANGE OF TABLE
+; Unknown table type
+;
+UNKNTB:	MOVE	T1,GTBARG		;PICK UP USER ARGUMENTS
+	HRRZ	T2,F			;GET JUST THE MAPPING TYPE
+	CAIN	T2,.MPMON		;MAPPING A RUNNING MONITOR?
+	GETTAB	T1,			;YES - TRY THE GETTAB UUO
+	  SOS	(P)			;LOSE
+	AOS	MAPDAT+.MPGTU		;COUNT NUMBER OF GETTAB UUOS EXECUTED
+	JRST	CPOPJ1			;RETURN
+
+
+; Item table type
+;
+ITEMTB:	HLRE	T1,GTBARG		;GET REQUESTED ITEM NUMBER
+	LDB	T2,GTBMAX		;GET MAXIMUM LENGTH OF THE TABLE
+	SKIPL	T1			;NEGATIVE INDEX IS ILLEGAL
+	CAMLE	T1,T2			;WITHIN LEGAL RANGE?
+	  POPJ	P,			;NOPE
+	LDB	T2,GTBADR		;GET TABLE BASE ADDRESS
+	ADD	T1,T2			;OFFSET INTO TABLE
+	PUSHJ	P,EXAMINE		;GET C(T1)
+	  POPJ	P,			;CAN'T
+	JRST	CPOPJ1			;RETURN SUCESSFUL
+
+
+; Job table type
+;
+JOBNTB:	HLRE	T1,GTBARG		;GET JOB NUMBER
+	CAMN	T1,[-1]			;OUR JOB?
+	MOVE	T1,USRJOB		;YES - GET IT
+	SKIPL	T1			;CAN'T HAVE A NEGATIVE JOB NUMBER
+	CAMLE	T1,JOBN			;WITHIN LEGAL RANGE?
+	  POPJ	P,			;NOPE
+	LDB	T2,GTBADR		;GET TABLE BASE ADDRESS
+	ADD	T1,T2			;INDEX INTO TABLE
+	PUSHJ	P,EXAMINE		;GET C(T1)
+	  POPJ	P,			;CAN'T
+	JRST	CPOPJ1			;RETURN SUCESSFUL
+; Segment table type
+;
+SEGNTB:	HLRE	T1,GTBARG		;GET SEGMENT NUMBER
+	CAMN	T1,[-1]			;OUR JOB NUMBER?
+	MOVE	T1,USRJOB		;YES - LOAD OUR JOB NUMBER
+	CAME	T1,[-2]			;OUR SEGMENT NUMBER?
+	JRST	SEGN.1			;NO
+	MOVE	T1,JBTSGN		;GET JOB TO SEG TRANSLATION
+	ADD	T1,USRJOB		;ADD IN OUR JOB NUMBER
+	PUSHJ	P,EXAMINE		;GET C(T1)
+	  POPJ	P,			;CAN'T
+	HRRZS	T1			;KEEP JUST THE SEGMENT NUMBER
+	JUMPE	T1,CPOPJ		;RETURN IF NO HIGH SEGMENT
+
+SEGN.1:	SKIPL	T1			;CAN'T HAVE NEGATIVE JOB OR SEG NUMBERS
+	CAMLE	T1,SEGN			;WITHIN LEGAL RANGE?
+	  POPJ	P,			;NOPE
+	LDB	T2,GTBADR		;GET TABLE BASE ADDRESS
+	ADD	T1,T2			;OFFSET INTO TABLE
+	PUSHJ	P,EXAMINE		;GET C(T1)
+	  POPJ	P,			;CAN'T
+	JRST	CPOPJ1			;RETURN SUCESSFUL
+
+
+; PDB table type
+;
+JPDBTB:	HLRE	T1,GTBARG		;GET INDEX
+	CAMN	T1,[-1]			;IS IT OUR JOB?
+	MOVE	T1,USRJOB		;YES - LOAD JOB NUMBER
+	SKIPL	T1			;CAN'T HAVE NEGATIVE JOB NUMBERS
+	CAMLE	T1,JOBN			;WITHIN LEGAL RANGE?
+	  POPJ	P,			;NOPE
+	ADD	T1,JBTPDB		;OFFSET INTO JBTPDB
+	PUSHJ	P,EXAMINE		;GET C(T1)
+	  POPJ	P,			;CAN'T
+	JUMPE	T1,CPOPJ		;A PDB FOR REQUESTED JOB?
+	HRRZS	T1			;KEEP JUST THE ADDRESS
+	LDB	T2,GTBADR		;GET INDEX INTO THE PDB
+	ADD	T1,T2			;OFFSET INTO THE PDB
+	PUSHJ	P,EXAMINE		;GET C(T1)
+	  POPJ	P,			;CAN'T
+	JRST	CPOPJ1			;RETURN SUCESSFUL
+RNGETB:	LDB	T1,GTBMAX		;GET MAXIMUM LENGTH OF THE TABLE
+	LDB	T2,GTBTYP		;GET TABLE TYPE?
+	CAIE	T2,.SLIXR		;INDEXED BY RANGE?
+	JRST	CPOPJ1			;NO--FAKED OUT BY GTBSIM
+	ADD	T1,RNGTAB		;INDEX INTO RNGTAB
+	PUSHJ	P,EXAMINE		;GET RANGE OF GETTAB TABLE
+	  POPJ	P,			;CAN'T
+	MOVEM	T1,GTBRNG		;SAVE RANGE
+	HLRE	T2,T1			;GET LOWER LIMIT
+	HRRE	T3,T1			;GET UPPER LIMIT
+	HLRE	T1,GTBARG		;GET USER SUPPLIED INDEX
+	CAMG	T1,T3			;GREATER THAN UPPER LIMIT?
+	CAMGE	T1,T2			;GREATER THAN OR EQUAL TO LOWER LIMIT?
+	  POPJ	P,			;NOPE
+	HRRE	T2,GTBARG		;GET SUPPLIED TABLE NUMBER
+	CAIN	T2,.GTIDX		;RANGE TABLE?
+	JRST	RNGE.1			;YES
+	LDB	T2,GTBADR		;GET THE BASE ADDRESS OF THE TABLE
+	ADD	T1,T2			;ADD OFFSET
+	PUSHJ	P,EXAMINE		;GET C(T1)
+	  POPJ	P,			;CAN'T
+	JRST	CPOPJ1			;RETURN SUCESSFUL
+
+RNGE.1:	MOVE	T1,GTBRNG		;GET LOWER,,UPPER LIMITS
+	JRST	CPOPJ1			;AND RETURN
+SUBTTL	.MAPI - Initialization
+
+
+; This routine MUST be called before all others
+; Call:	MOVE	.AP, flags + argument
+;	PUSHJ	P,.MAPI
+;	<NON-SKIP>		;FAILED
+;	<SKIP>			;SUCEEDED
+;
+.MAPI::	PUSH	P,T1			;SAVE T1
+	PUSH	P,FILCHN		;SAVE OLD CHANNEL NUMBER
+	MOVE	T1,[ZBEG,,ZBEG+1]	;SET UP BLT
+	SETZM	ZBEG			;CLEAR FIRST WORD
+	BLT	T1,ZEND-1		;CLEAR OUR DATA STORAGE
+	POP	P,FILCHN		;RESTORE OLD CHANNEL NUMBER
+	POP	P,T1			;RESTORE T1
+	SETOM	CTXFLG			;INIT CONTEXT FLAG
+	PUSHJ	P,CONTXT		;SAVE THE WORLD
+	PUSHJ	P,DATINI		;GET INITIALIZE DATA
+	  JRST	MAPI.E			;CAN'T
+	PUSHJ	P,CSHCLR		;CLEAR OUT THE CACHE
+	PUSHJ	P,CSHMAP		;MAP THE HASH TABLE AND CHUNK PAGES
+	  JRST	MAPI.E			;FAILED
+	PUSHJ	P,FILCLS		;CLOSE OFF CHANNEL FROM PREVIOUS CALL
+	PUSHJ	P,@INITAB(F)		;SETUP MAPPING
+	  JRST	MAPI.E			;FAILED
+	PUSHJ	P,CSHINI		;SET UP HASH TABLE CHUNKS AND LINKS
+	MOVE	A1,PAGCNT		;GET COUNT OF AVAILABLE PAGES
+	SETZM	PAGCNT			;SO WE DON'T CONFUSE THINGS
+	PUSHJ	P,CSHSIZ		;SET UP CACHE SIZE
+	  JRST	MAPI.E			;CAN'T
+	PUSHJ	P,SPYCHK		;SEE IF WE NEED TO SPY
+	  JRST	MAPI.E			;NEED TO BUT CAN'T DO IT
+	PUSHJ	P,GTBINI		;INITIALIZE GETTAB STUFF
+	AOS	(P)			;SKIP
+
+MAPI.E:	MOVEI	T1,MAPDAT		;GET ADDRESS OF DATA BLOCK
+	MOVEM	T1,USRACS+.AP		;GIVE IT TO THE CALLER
+	POPJ	P,			;RETURN
+; Data block setup
+;
+DATINI:	MOVEI	T1,.MPLEN		;GET LENGTH OF DATA BLOCK
+	MOVEM	T1,MAPDAT+.MPDAT	;SAVE IT
+	MOVE	T1,[%%MAP]		;GET OUR VERSION
+	MOVEM	T1,MAPDAT+.MPVER	;SAVE IT
+	MOVE	T2,USRACS+.AP		;GET ARG POINTER
+	MOVE	F,.MPFNC(T2)		;GET FLAGS AND MAPPING TYPE
+	AND	F,[FL.INI,,FR.TYP]	;MAKE SURE THERE'S NO JUNK
+	HRRZ	T1,F			;JUST THE MAPPING TYPE
+	CAILE	T1,.MPFMX		;A GOOD NUMBER?
+	ERR.	(IMC,CPOPJ)		;ILLEGAL MAPPING TYPE
+
+DATI.1:	SKIPN	T1,.MPNPC(T2)		;GET NUMBER OF PAGES TO USE
+	MOVEI	T1,PAGNUM		;NONE--LOAD DEFAULT
+	SKIPE	T3,.MPSPN(T2)		;GET STARTING PAGE NUMBER
+	JRST	DATI.2			;GOT SOMETHING
+	MOVEI	T3,HGHPAG		;GET HIGHEST PAGE TO USE
+	SUBI	T3,(T1)			;T2:= STARTING PAGE NUMBER
+
+DATI.2:	MOVEM	T1,MAPDAT+.MPPGS	;SAVE FOR CURIOUS PROGRAMS
+	MOVEM	T1,PAGCNT		;SAVE PAGE COUNT
+	MOVEM	T3,MAPDAT+.MPCPN	;SAVE FOR CURIOUS PROGRAMS
+	SKIPGE	T1,.MPDSN(T2)		;GET DEFAULT SECTION NUMBER
+	MOVEI	T1,0			;ASSUME ZERO IF CALLER IS STUPID
+	MOVEM	T1,MAPDAT+.MPSEC	;SAVE IT
+	JRST	CPOPJ1			;RETURN
+; See if we can SPY and if it's required
+;
+SPYCHK:	MOVEM	F,MAPFLG		;SAVE THE FLAGS
+	AOS	MAPDAT+.MPSPY		;ASSUME IT'S ALL GONNA WORK
+	TLO	F,FL.SPY		;CHEAT AND PRETEND WE CAN SPY
+	MOVEI	T1,0			;AN ADDRESS TO LOOK AT
+	PUSHJ	P,PADDRESS		;LOAD IT INTO THE CACHE
+	  SKIPA	F,MAPFLG		;CAN'T
+	JRST	CPOPJ1			;GUESS WE CAN SPY
+	SETZM	MAPDAT+.MPSPY		;SO THE CALLER KNOW WHATS GOING ON
+	TLZE	F,FL.SPY		;DO WE NEED TO SPY?
+	ERR.	(ECS,CPOPJ)		;YES--AND WE CAN'T DO IT!
+	JRST	CPOPJ1			;RETURN
+; Determine the environment for GETTABing.  This routine will try
+; to figure out the CPU and paging type by looking at the Exec Data
+; Vector and other data.  If sucessful, some basic GETTABs will be
+; performed for use later during GETTAB simulation.
+;
+GTBINI:	TLNE	F,FL.PPM		;PHYSICAL PAGE MAPPING?
+	POPJ	P,			;THEN GETTABS ARE MEANINGLESS
+	SETZM	HGHUEA			;DON'T KNOW THIS ONE YET
+	PJOB	T1,			;GET OUR JOB NUMBER
+	MOVEM	T1,USRJOB		;SAVE IT
+	SETZ	T2,			;INIT INDEX
+
+GTBI.1:	MOVE	T1,GTBEXT+0(T2)		;GET LOCATION
+	SKIPE	GTBEXT+1(T2)		;HAVE AN OFFSET?
+	ADD	T1,@GTBEXT+1(T2)	;YES--ADD IT IN
+	PUSHJ	P,PEXAMINE		;GET C(T1)
+	  JRST	GTBI.2			;CAN'T
+	MOVEM	T1,@GTBEXT+2(T2)	;STORE RESULT
+	ADDI	T2,3			;ACCOUNT FOR THREE WORD ENTRIES
+	CAIGE	T2,GTBEXL		;OFF THE END OF THE TABLE?
+	JRST	GTBI.1			;NO--LOOP
+	HLRZ	T1,EDVCNT		;GET EDV CODE
+	HRRZ	T2,EDVCNT		;GET WORD COUNT
+	CAIN	T1,'EDV'		;LOOKING AT AN EDV?
+	CAIGE	T2,.EDEPT		;AND DOES THIS EDV CONTAIN NEEDED DATA?
+	JRST	GTBI.2			;NO
+	MOVE	T1,EDVDAT		;GET FLAGS AND CPU DATA
+	TLNE	T1,(ED.KLP)		;THIS A KL PAGING MACHING?
+	SETOM	KLPFLG			;YES
+	HRRZM	T1,MAPDAT+.MPCPU	;SAVE CPU TYPE
+	JRST	GTBI.3			;GO CHECKOUT THE PAGING
+; Determine the CPU type.  Here if the EDV contains junk or unreasonable
+; data.  We know at this point that the monitor is pre-702 because the EDV
+; is invalid.  This implies that the first 112K of the monitor is unmapped
+; (KA10 or KI10), or mapped one-for-one virtual-to-physical (KL10).
+;
+GTBI.2:	MOVE	T1,[%CCTYP]		;ARGUMENT TO RETURN CPU TYPE
+	PUSHJ	P,GTBFRC		;TRY THE BRUTE FORCE METHOD
+	  POPJ	P,			;CAN'T
+	MOVEM	T1,MAPDAT+.MPCPU	;SAVE IT
+	SETZM	EPTADR			;DON'T BELEIVE THE EPT ADDRESS
+	SETZM	KLPFLG			;CLEAR THE KL PAGING FLAG
+
+
+; Get the paging type
+;
+GTBI.3:	SKIPN	T1,MAPDAT+.MPCPU	;GET CPU TYPE CODE
+	POPJ	P,			;UNKNOWN CPU TYPE
+	MOVEI	T2,.KARPR		;KA RELOCATION AND PROTECTION REGISTERS
+	CAIE	T1,.PDP6		;CP166 CPU?
+	CAIN	T1,.KA10		;KA10 CPU?
+	JRST	GTBI.4			;YES TO EITHER
+	CAIE	T1,.KI10		;A KI10 CPU?
+	SKIPN	KLPFLG			;WHAT KIND OF PAGING?
+	SKIPA	T2,[.KIPAG]		;KI10
+	MOVEI	T2,.KLPAG		;KL10
+	CAIN	T1,.KC10		;KC10 CPU?
+	MOVEI	T2,.KCPAG		;A DIFFERENT FLAVOR OF KL PAGING
+
+GTBI.4:	MOVEM	T2,MAPDAT+.MPPAG	;SAVE PAGING TYPE
+	SKIPLE	EPTADR			;HAVE AN EDV?
+	JRST	GTBI.5			;YES--MUST ASSUME THE EPT IS OK
+	MOVE	T1,[%CCTOS]		;ARGUMENT TO RETURN THE EPT ADDRESS
+	PUSHJ	P,GTBFRC		;TRY TO GET IT
+	  POPJ	P,			;LOSE
+	MOVEM	T1,EPTADR		;SET IT
+	JRST	GTBI.5			;GO DO SOME BASIC GETTABS
+; Do some basic GETTABs needed later for GETTAB simulation
+;
+GTBI.5:	TLO	F,FL.GTS		;LET GTBSIM DO IT'S STUFF
+	SETZ	T4,			;CLEAR INDEX
+
+GTBI.6:	MOVE	T1,GTBGTT+0(T4)		;GET A GETTAB ARGUMENT
+	PUSHJ	P,GTBSIM		;SIMULATE A GETTAB
+	  XCT	GTBGTT+1(T4)		;DEFAULT VALUE OR RETURN
+	XCT	GTBGTT+2(T4)		;SAVE VALUE
+	ADDI	T4,2			;ACCOUNT FOR THREE WORD ENTRIES
+	CAIGE	T4,GTBGTL-1		;END OF THE TABLE?
+	AOJA	T4,GTBI.6		;NO--LOOP
+	MOVMS	SEGN			;MAKE SEGN POSITIVE
+	MOVE	T1,JOBN			;GET THE NUMBER OF JOBS
+	ADDM	T1,SEGN			;ADD TO TOTAL OF SEGMENTS
+
+
+; Here to see if the monitor's high segment is mapped yet.  We GETTAB
+; the system uptime.  If it's not equal to zero, then the monitor
+; probably ran for some amount of time and the high segment must have
+; been mapped.
+;
+GTBI.7:	MOVE	T1,[%CNSUP]		;SYSTEM UPTIME IN TICS
+	PUSHJ	P,GTBFRC		;READ FROM MONITOR/.EXE FILE
+	  SETZ	T1,			;CAN'T READ, ASSUME NOT "MAPPED"
+	MOVEM	T1,HIFLAG		;IF .NE. 0 THEN "HISEG MAPPED"
+	POPJ	P,			;RETURN
+; Here to do a GETTAB by the brute force method
+;
+GTBFRC:	SKIPE	HGHUEA			;KNOW THIS ADDR YET?
+	JRST	GTBF.1			;YES
+	MOVEI	T2,DEFUEA		;GET DEFAULT HIGHEST UNMAPPED ADDR
+	MOVEM	T2,HGHUEA		;SAVE TO WE DON'T DO PHYSICAL MAPPING
+	PUSHJ	P,GTBF.1		;DO THE GETTAB
+	  SKIPA				;FAILED
+	AOS	(P)			;SKIP
+	SETZM	HGHUEA			;PUT BACK THE WAY WE FOUND IT
+	POPJ	P,			;AND RETURN
+
+GTBF.1:	TLO	F,FL.GTS		;ALLOW GTBSIM TO DO ITS STUFF
+	PUSHJ	P,GTBSIM		;TRY THE GETTAB
+	  POPJ	P,			;FAILED
+	JRST	CPOPJ1			;RETURN
+
+
+; Here when we can't determine how to do GETTABs
+;
+GTBI.E:	TLZ	F,FL.GTS		;COULDN'T SETUP GETTAB SIMULATION
+	POPJ	P,			;RETURN
+
+
+; Table of locations, offsets, and storage words
+;
+GTBEXT:	EXP	ABSTAB,000000,NUMTAB	;TABLE OF GETTAB TABLE POINTERS
+	EXP	.JBEDV,000000,EDVADR	;EDV ADDRESS
+	EXP	.EDCNT,EDVADR,EDVCNT	;EDV CODE AND WORD COUNT
+	EXP	.EDDAT,EDVADR,EDVDAT	;FLAGS AND CPU DATA
+	EXP	.EDEPT,EDVADR,EPTADR	;EPT ADDRESS
+	EXP	.EDSPT,EDVADR,SPTADR	;SPT ADDRESS
+GTBEXL==<.-GTBEXT>			;LENGTH OF TABLE
+
+
+; Table of GETTAB arguments, defaults, and storage words
+;
+GTBGTT:
+EXP <%VMHUA>,<MOVEI T1,DEFUEA>,<MOVEM T1,HGHUEA>;HIGHEST UNMAPPED EXEC ADDRESS
+EXP <%VMPPB>,<MOVEI T1,DEFPBA>,<MOVEM T1,PPABEG>;BEGINING PER-PROCESS ADDRESS
+EXP <%VMPPE>,<MOVEI T1,DEFPEA>,<MOVEM T1,PPAEND>;END PER-PROCESS ADDRESS
+EXP <%CNSJN>,<POPJ P,>,<HRRZM T1,JOBN>		;HIGHEST LEGAL JOB
+EXP <%CNSJN>,<POPJ P,>,<HLREM T1,SEGN>		;HIGHEST LEGAL SEGMENT
+EXP <%CNPDB>,<POPJ P,>,<HRRZM T1,JBTPDB>	;JBTPDB POINTER
+EXP <%CNVSH>,<MOVEI T1,DEFORG>,<MOVEM T1,HIORG>	;HIGH SEGMENT ORIGIN
+EXP <.GTSGN,,.GTSLF>,<POPJ P,>,<HRRZM T1,JBTSGN>;JBTSGN POINTER
+EXP <.GTIDX,,.GTSLF>,<POPJ P,>,<HRRZM T1,RNGTAB>;RNGTAB POINTER
+EXP <.GTADR,,.GTSLF>,<POPJ P,>,<HRRZM T1,JBTADR>;JBTADR POINTER
+EXP <.GTUPM,,.GTSLF>,<POPJ P,>,<HRRZM T1,JBTUPM>;JBTUPM POINTER
+GTBGTL==.-GTBGTT				;LENGTH OF TABLE
+SUBTTL	.MAPJ - JOBPEK UUO simulation
+
+
+; Simulate the JOBPEK UUO by by actually tracing down section and
+; page maps for all types of paging.
+; Call:	MOVE	.AP, argument address
+;	PUSHJ	P,.MAPJ
+;	<NON-SKIP>			;FAILED
+;	<SKIP>				;SUCEEDED
+;
+; Arg + 0/ <flags>B9+<job>B17+<wordcount>B35
+; Arg + 1/ read address,,write address
+;
+; All legal JOBPEK flags are valid
+;
+.MAPJ::	PUSHJ	P,CONTXT		;CONTEXT SWITCH
+	MOVE	T2,USRACS+.AP		;GET ARG POINTER
+	HRRZ	T3,F			;GET MAPPING CODE
+	CAIN	T3,.MPMON		;MAPPING THE RUNNING MONITOR?
+	TLNN	F,FL.JRM		;JOBPEK UUOS ON THE RUNNING MONITOR?
+	SKIPA	T1,.MPFNC(T2)		;NO--GET FLAG WORD
+	JRST	[JOBPEK	T2,		;DO THE UUO
+		   ERR.	(JRW,CPOPJ)	;JOBPEK FAILED TO READ/WRITE JOB
+		 AOS	MAPDAT+.MPJPU	;COUNT THE JOBPEK UUO EXECUTION
+		 JRST	CPOPJ1]		;RETURN
+	MOVEM	T1,JPKFLG		;SAVE
+	HRRZM	T1,CPYBLK+.CBWCT	;SAVE WORD COUNT
+	HLRZ	T1,1(T2)		;GET THE READ ADDRESS
+	MOVEM	T1,CPYBLK+.CBRAD	;SAVE IT
+	HRRZ	T1,1(T2)		;GET THE WRITE ADDRESS
+	MOVEM	T1,CPYBLK+.CBWAD	;SAVE IT
+	PUSHJ	P,JPKSIM		;SIMULATE A JOBPEK UUO
+	  POPJ	P,			;CAN'T
+	JRST	CPOPJ1			;AND RETURN
+
+
+; Here on internal calls
+;
+JPKSIM:	MOVE	T1,JPKFLG		;GET FLAG WORD
+	TLNE	T1,(JK.UPM)		;READ A UPMP?
+	JRST	JPKUPM			;YES
+	TLNE	T1,(JK.EVA)		;READ EVM?
+	JRST	JPKEVA			;YES
+	JRST	JPKRED			;GO READ
+
+
+; All sucessful JOBPEK code should exit through here
+;
+JPKXIT:	AOS	MAPDAT+.MPJPK		;COUNT THE JOBPEK SIMULATION
+	JRST	CPOPJ1			;RETURN
+; JOBPEK read
+;
+JPKRED:	LDB	T1,[POINT 9,JPKFLG,17]	;GET JOB NUMBER
+	PUSHJ	P,PHYUPT		;GET UPT ADDRESS
+	  POPJ	P,			;CAN'T
+	MOVE	VMA,CPYBLK+.CBRAD	;GET READ ADDRESS
+	PUSHJ	P,PHYADR		;MAKE IT ADDRESSIBLE
+	  ERR.	(JNA,CPOPJ)		;JOB NOT ADDRESSABLE
+	MOVEM	PMA,CPYBLK+.CBRAD	;SAVE READ ADDRESS
+	MOVEI	T1,CPYBLK		;POINT TO COPY BLOCK
+	PUSHJ	P,ADRCPY		;MOVE SOME DATA
+	SKIPE	.CBWCT(T1)		;MORE WORDS TO PROCESS?
+	JRST	JPKRED			;YES--LOOP BACK FOR MORE
+	JRST	JPKXIT			;FINISH UP
+
+
+; JOBPEK UPMP read
+;
+JPKUPM:	TLNE	T1,(JK.WRT)		;WANT TO WRITE THE UPMP?
+	  ERR.	(IWU,CPOPJ)		;ILLEGAL TO WRITE THE UPMP
+	HLRZS	T1			;GET HALF WORD WITH JOB NUMBER
+	ANDI	T1,777			;KEEP JUST THE JOB NUMBER
+	PUSHJ	P,PHYUPT		;GET THE UPT ADDRESS
+	  POPJ	P,			;CAN'T
+	MOVE	T1,PMA			;GET UPMP ADDRESS
+	PUSHJ	P,PADDRESS		;MAKE IT ADDRESSABLE
+	  ERR.	(JNA,CPOPJ)		;JOB NOT ADDRESSABLE
+	MOVEM	T1,CPYBLK+.CBRAD	;SAVE READ ADDRESS
+	MOVEI	T1,CPYBLK		;POINT TO COPY BLOCK
+	PUSHJ	P,ADRCPY		;MOVE SOME DATA
+	SKIPE	.CBWCT(T1)		;MORE WORDS TO PROCESS?
+	JRST	JPKUPM			;YES--LOOP BACK FOR MORE
+	JRST	JPKXIT			;FINISH UP
+
+
+; JOBPEK exec virtual address read
+;
+JPKEVA:	TLNE	T1,(JK.WRT)		;WANT TO WRITE EVM?
+	  ERR.	(IWE,CPOPJ)		;ILLEGAL TO WRITE EVM
+
+JPKE.1:	LDB	T1,[POINT 9,JPKFLG,17]	;GET JOB WE'RE GONNA LOOK AT
+	PUSHJ	P,PHYUPT		;GET IT'S UPT ADDRESS
+	  POPJ	P,			;CAN'T
+	MOVE	VMA,CPYBLK+.CBRAD	;GET ADDRESS TO CONVERT
+	PUSHJ	P,PHYFUN		;COMPUTE MAPPED PHYSICAL FUNNY ADDRESS
+	  POPJ	P,			;CAN'T
+	MOVEM	PMA,CPYBLK+.CBRAD	;SAVE READ ADDRESS
+	MOVEI	T1,CPYBLK		;POINT TO COPY BLOCK
+	PUSHJ	P,ADRCPY		;MOVE SOME DATA
+	SKIPE	.CBWCT(T1)		;MORE WORDS TO PROCESS?
+	JRST	JPKE.1			;YES--LOOP BACK FOR MORE
+	JRST	JPKXIT			;FINISH UP
+SUBTTL	Address mapping -- Compute a mapped address
+
+
+; Call:	MOVE	T1, address
+;	PUSHJ	P,ADDRESS
+;	<return>
+;
+PADDRESS:TLOA	F,FL.TPP		;ALLOW PHYSICAL PAGE MAPPING
+VADDRESS:TLZ	F,FL.TPP		;ALLOW VIRTUAL PAGE MAPPING
+
+ADDRESS:TLZE	T1,400000		;CLEAR "SECTION RELATIVE" REFERENCES
+	HRL	T1,MAPDAT+.MPSEC	;LOAD DEFAULT SECTION NUMBER
+	TLNN	F,FL.SPY		;CAN WE SPY?
+	ERR.	(ECS,CPOPJ)		;NO
+	TLNN	F,FL.PPM!FL.TPP		;PHYSICAL PAGE MAPPING?
+	PUSHJ	P,@CVTTAB(F)		;SEE IF NECESSARY TO CONVERT ADDRESS
+	  JRST	ADDR.1			;NO ADDRESS FIXUP NECESSARY
+	PUSHJ	P,SAVEF			;SAVE F
+	PUSHJ	P,PHYEPT		;GET PHYSICAL EPT ADDRESS
+	  POPJ	P,			;CAN'T
+	MOVE	VMA,T1			;GET ADDRESS TO CONVERT
+	PUSHJ	P,PHYADR		;COMPUTE MAPPED PHYSICAL ADDRESS
+	  POPJ	P,			;CAN'T
+	MOVE	T1,PMA			;GET ADDRESS OF MAPPED PHYSICAL ADDRESS
+	AOS	MAPDAT+.MPADR		;COUNT ADDRESS COMPUTATIONS
+	JRST	CPOPJ1			;AND RETURN
+
+ADDR.1:	MOVE	A1,T1			;GET ADDRESS TO MAP
+	LSH	A1,-11			;CONVERT TO A PAGE NUMBER
+	PUSHJ	P,CSHFND		;SEE IF PAGE IN CACHE
+	  JRST	ADDR.2			;NOT FOUND
+	PUSHJ	P,CSHMRU		;MOVE TO TOP OF LIST
+	JRST	ADDR.4			;ONWARD
+
+ADDR.2:	PUSHJ	P,CSHINS		;INSERT PAGE IN CACHE
+	MOVSI	A3,(CB.CRE)		;GET A BIT
+	TDNN	A3,.CBFLG(A2)		;PAGE ALREADY EXIST?
+	JRST	ADDR.3			;NO
+	PUSHJ	P,@DESTAB(F)		;DESTROY THE PAGE
+	  POPJ	P,			;CAN'T
+	AOS	MAPDAT+.MPPGD		;COUNT PAGE DESTROY
+
+ADDR.3:	MOVE	A1,T1			;GET ADDRESS WE'RE GOING TO MAP
+	LSH	A1,-11			;KEEP JUST THE PAGE NUMBER
+	MOVEM	A1,.CBPRC(A2)		;STORE NEW PROCESS PAGE NUMBER
+	PUSHJ	P,@CRETAB(F)		;CREATE THE PAGE
+	  POPJ	P,			;CAN'T
+	AOS	MAPDAT+.MPPGC		;COUNT PAGE CREATE
+
+ADDR.4:	MOVE	A1,.CBUSR(A2)		;GET USER PAGE NUMBER
+	LSH	A1,11			;CONVERT TO AN ADDRESS
+	ANDI	T1,PAGSIZ-1		;KEEP JUST THE OFFSET INTO THE PAGE
+	IOR	T1,A1			;FORM THE MAPPED ADDRESS
+	AOS	MAPDAT+.MPADR		;COUNT ADDRESS COMPUTATIONS
+	JRST	CPOPJ1			;AND RETURN
+SUBTTL	Address mapping -- Convert virtual to physical addresses
+
+
+; Convert an exec virtual "funny" address to a mapped physical address
+; Call:	MOVE	PMA, physcial address of UPT
+;	MOVE	VMA, exec virtual "funny" address
+;	PUSHJ	P,PHYFUN
+;	<NON-SKIP>			;FAILED
+;	<SKIP>				;PMA:= MAPPED PHYSICAL ADDRESS
+;
+PHYFUN:	CAML	VMA,PPABEG		;RANGE CHECK IT
+	CAML	VMA,PPAEND		;MUST BE A "FUNNY PAGE" ADDRESS
+	  ERR.	(IAD,CPOPJ)		;ILLEGAL ADDRESS
+	MOVEM	T1,PAGFUN		;SAVE T1
+	MOVE	T1,MAPDAT+.MPPAG	;GET PAGING TYPE
+	MOVE	T1,FUNTAB-1(T1)		;GET FUNNY PAGE POINTER OFFSET IN UPT
+	EXCH	T1,PAGFUN		;SAVE IT AND RESTORE T1
+	JRST	PHYCOM			;ENTER COMMON PHYSICAL ADDRESS CODE
+
+; KA rel/prot:	No per-process space to map.
+; KI paging:	The pointer to the first age of funny space (340) comes
+;		immediately after the pointer for the user's page 777.
+; KL paging:	The ADDI T1,SECTAB(T4) has to be cancelled, since
+;		the pointer to page 340 is the 340th word in the
+;		UPT.  TOPS-10 changes the first (and only) word of
+;		the SPT to contain the address of the UPT whenever
+;		a context switch occurs.
+FUNTAB:	EXP	0			;KA RELOCATION AND PROTECTION REGISTERS
+	EXP	<777+1>-340		;KI PAGING ON A KI10, KL10 OR KS10
+	EXP	-SECTAB			;KL PAGING ON A KL10 OR KS10
+	EXP	-SECTAB			;KL PAGING ON A KC10
+
+
+; Convert a virtual address to a mapped physical address
+; Call:	MOVE	PMA, physical address of EPT or UPT
+;	MOVE	VMA, virtual address
+;	PUSHJ	P,PHYADR
+;	<NON-SKIP>			;FAILED
+;	<SKIP>				;PMA:= MAPPED PHYSICAL ADDRESS
+;
+PHYADR:	SETZM	PAGFUN			;CLEAR FUNNY PAGE UPT OFFSET
+PHYCOM:	PUSHJ	P,SAVT4			;SAVE T1, T2, T3, AND T4
+	MOVE	T1,PMA			;GET EPT OR UPT ADDRESS
+	MOVE	T2,VMA			;GET VIRTUAL ADDRESS TO CONVERT
+	MOVE	T3,T2			;COPY ADDRESS
+	LSH	T3,-11			;CONVERT TO PAGE NUMBER
+	MOVE	T4,MAPDAT+.MPPAG	;GET PAGING TYPE
+	PUSHJ	P,@PHYTAB-1(T4)		;DISPATCH TO THE PROPER PAGING ROUTINES
+	  POPJ	P,			;CAN'T CONVERT VRT TO PHY ADDRESS
+	MOVE	PMA,T1			;GET PHYSICAL ADDRESS
+	JRST	CPOPJ1			;AND RETURN
+
+PHYTAB:	EXP	KARPR			;KA RELOCATION AND PROTECTION REGISTERS
+	EXP	KIPAG			;KI PAGING ON A KI10, KL10 OR KS10
+	EXP	KLPAG			;KL PAGING ON A KL10 OR KS10
+;	EXP	KCPAG			;KL PAGING ON A KC10
+; Return the physical address of the boot CPU's EPT
+; Call:	PUSHJ	P,PHYEPT
+;	<NON-SKIP>			;FAILED
+;	<SKIP>				;PMA:= PHYSICAL ADDRESS, SPT:= SPT BASE
+;
+PHYEPT:	MOVE	PMA,EPTADR		;GET THE EPT ADDRESS
+	MOVE	SPT,PMA			;HACK FOR TOPS-10 ONE WORD SPT
+	TLO	F,FL.EPM		;FLAG EXEC MAPPING TO TAKE PLACE
+	JRST	CPOPJ1			;RETURN
+
+
+; Return the physical address of a UPT
+; Call:	MOVE	T1, job number
+;	PUSHJ	P,PHYUPT
+;	<NON-SKIP>			;FAILED
+;	<SKIP>				;PMA:= PHYSICAL ADDRESS, SPT:= SPT BASE
+;
+PHYUPT:	CAMLE	T1,JOBN			;RANGE CHECK
+	ERR.	(IJN,CPOPJ)		;ILLEGAL JOB NUMBER
+	PUSHJ	P,SAVT1			;SAVE T1
+	ADD	T1,JBTUPM		;OFFSET TO THE JOB'S UPMP ENTRY
+	PUSHJ	P,EXAMINE		;READ IT
+	  ERR.	(JNA,CPOPJ)		;JOB NOT ADDRESSABLE
+	HRRZ	PMA,T1			;UPMP PAGE NUMBER IS A RH QUANTITY
+	JUMPE	PMA,[ERR. (JSO,CPOPJ)]	;JOB SWAPPED OUT
+	LSH	PMA,11			;CONVERT TO AN ADDRESS
+	MOVE	SPT,PMA			;HACK FOR TOPS-10 ONE WORD SPT
+	JRST	CPOPJ1			;AND RETURN
+SUBTTL	Address mapping -- Copy a block of mapped data
+
+
+; Copy a mapped block of data
+; Call:	MOVE	T1, copy-block-address
+;	PUSHJ	P,ADRCPY
+;
+ADRCPY:	SKIPN	A1,.CBWCT(T1)		;GET NUMBER OF WORDS TO MOVE
+	POPJ	P,			;NOTHING TO DO
+	CAIG	A1,2			;MOVING A WORD OR TWO?
+	JRST	@[EXP	ADRC.1		;1 WORD
+		  EXP	ADRC.2]-1(A1)	;2 WORDS
+	JRST	ADRC.3			;MORE THAN 2 WORDS
+
+ADRC.1:	MOVE	A2,@.CBRAD(T1)		;GET A WORD
+	MOVEM	A2,@.CBWAD(T1)		;PUT A WORD
+	JRST	ADRC.4			;UPDATE ADDRESSES AND RETURN
+
+ADRC.2:	MOVE	A2,.CBRAD(T1)		;GET ADDRESS
+	ADDI	A2,1			;PLUS ONE
+	TRNN	A2,PAGSIZ-1		;OVERFLOW TO THE NEXT PAGE?
+	SOJA	A1,ADRC.1		;YES--JUST MOVE A SINGLE WORD
+	DMOVE	A2,@.CBRAD(T1)		;GET TWO WORDS
+	DMOVEM	A2,@.CBWAD(T1)		;PUT TWO WORDS
+	JRST	ADRC.4			;UPDATE ADDRESSES AND RETURN
+
+ADRC.3:	HRLZ	A2,.CBRAD(T1)		;GET READ ADDRESS
+	HRR	A2,.CBWAD(T1)		;GET WRITE ADDRESS
+	MOVE	A3,.CBRAD(T1)		;GET READ ADDRESS AGAIN
+	ADDI	A3,PAGSIZ		;ROUND UP A PAGE
+	TRZ	A3,PAGSIZ-1		; BUT NOT BEYOND A PAGE BOUNDRY
+	SUB	A3,.CBRAD(T1)		;GET MAXIMUM WORDS WE CAN BLT
+	CAMLE	A3,A1			;TRYING TO MOVE TOO MANY WORDS?
+	SKIPA	A3,A1			;YES--ONLY COPY AS MANY AS REQUESTED
+	MOVE	A1,A3			;MAKE SURE THE COUNTS AGREE
+	ADD	A3,.CBWAD(T1)		;COMPUTE LAST ADDRESS +1
+	BLT	A2,-1(A3)		;COPY DATA
+
+ADRC.4:	EXCH	A1,.CBWCT(T1)		;SWAP WORDS XFERED AND REQUESTED NUMBER
+	SUBM	A1,.CBWCT(T1)		;UPDATE COUNT
+	ADDM	A1,.CBRAD(T1)		;ADJUST SOURCE ADDRESS
+	ADDM	A1,.CBWAD(T1)		;ADJUST DESTINATION ADDRESS
+	POPJ	P,			;RETURN
+SUBTTL	Address mapping -- KA relocation and protection
+
+
+KARPR:	MOVE	T3,T1			;SAVE THE JOB NUMBER
+	ADD	T1,JBTADR		;OFFSET INTO THE RELOC AND PROT TABLE
+	TLNN	T2,777777		;256K ADDRESS LIMITATION ON A KA10
+	PUSHJ	P,EXAMINE		;READ THE ENTRY FOR JOB'S LOW SEGMENT
+	  ERR.	(JNA,CPOPJ)		;JOB NOT ADDRESSABLE
+	HLRZ	T4,T1			;GET PROTECTION
+	CAMG	T2,T4			;WITHIN THE LOW SEGMENT?
+	JRST	KARPR3			;YES
+
+KARPR1:	SKIPN	T1,JBTUPM		;HAVE THIS TABLE?
+	JRST	KARPR2			;NO
+	ADD	T1,T3			;INDEX TO THE LOW SEG ENTRY
+	ADD	T1,JOBN			;INDEX TO THE HIGH SEG ENTRY
+	PUSHJ	P,EXAMINE		;READ THAT WORD
+	  SETZ	T1,			;CAN'T
+	JUMPE	T1,[ERR. (JNA,CPOPJ)]	;JOB NOT ADDRESSABLE
+	HLRZ	T4,T1			;GET THE HIGH SEGMENT ORIGIN
+	TRZA	T4,PAGSIZ-1		;CLEAR ANY JUNK
+
+KARPR2:	MOVEI	T4,400000		;USE DEFAULT HIGH SEG ORIGIN
+	MOVE	T1,T3			;GET THE JOB NUMBER BACK AGAIN
+	ADD	T1,JBTADR		;OFFSET INTO THE RELOC AND PROT TABLE
+	ADD	T1,JOBN			;PLUS JOBN TO GET SEGMENT ENTRY
+	PUSHJ	P,EXAMINE		;READ THE ENTRY FOR JOB'S HIGH SEGMENT
+	  ERR.	(JNA,CPOPJ)		;JOB NOT ADDRESSABLE
+	HLRZ	T3,T1			;GET HIGH SEGMENT LENGTH (PROTECTION)
+	ADDI	T3,(T4)			;COMPUTE THE END OF THE SEGMENT
+	CAMG	T2,T3			;ADDRESS WITHIN THE BOUNDS
+	CAMGE	T2,T4			; OF THE HIGH SEGMENT?
+	  ERR.	(IAD,CPOPJ)		;ILLEGAL ADDRESS
+	SKIPA				;JOIN COMMON CODE
+
+KARPR3:	MOVEI	T4,0			;LOW SEG ORIGIN IS ZERO
+	TLZ	T1,777777		;KEEP ONLY PHYSICAL RELOCATION ADDRESS
+	SUB	T2,T4			;SUBTRACT SEGMENT ORIGIN
+	ADDI	T1,(T2)			;OFFSET TO DESIRED VIRTUAL ADDRESS
+	PUSHJ	P,PADDRESS		;MAKE IT ADDRESSIBLE
+	  ERR.	(JNA,CPOPJ)		;JOB NOT ADDRESSABLE
+	JRST	CPOPJ1			;AND RETURN
+SUBTTL	Address mapping -- KI paging
+
+
+KIPAG:	TLZN	F,FL.EPM		;DOING EXEC PHYSICAL MAPPING?
+	JRST	KIPAG1			;NO--UPMP DECODING
+	CAIGE	T2,^D112*^D1024		;IS THE ADDRESS IN THE LOWER 112K?
+	JRST	KIPAG2			;YES--THAT'S EASY
+	CAIGE	T2,^D128*^D1024		;BETTER NOT BE IN FUNNY SPACE
+	ERR.	(IAD,CPOPJ)		;BECAUSE THATS AN ILLEGAL ADDRESS
+
+KIPAG1:	LDB	T3,[POINT 9,T2,26]	;GET THE TARGET PAGE NUMBER
+	ADD	T3,PAGFUN		;INCLUDE FUNNY PAGE OFFSET (IF ANY)
+	LSHC	T3,-1			;DIVIDE BY TWO
+	ADDI	T1,(T3)			;COMPUTE UPMP INDEX
+	PUSHJ	P,PEXAMINE		;READ THE UPMP ENTRY FOR THAT PAGE
+	  ERR.	(JNA,CPOPJ)		;JOB NOT ADDRESSABLE
+	TLNN	T4,400000		;ODD PAGE?
+	MOVSS	T1			;NO--SWAP HALVES SO LDB GETS RIGHT PAGE
+	LDB	T1,[POINT 13,T1,35]	;GET PAGE NUMBER OF TARGET PAGE
+	LSH	T1,11			;CONVERT TO AN ADDRESS
+	TDZA	T2,[-1-<PAGSIZ-1>]	;GET OFFSET INTO THE PAGE
+
+KIPAG2:	SKIPA	T1,T2			;GET PHYSICAL EXEC ADDRESS
+	ADDI	T1,(T2)			;COMPUTE PHYSICAL TARGET ADDRESS
+	PUSHJ	P,PADDRESS		;MAKE IT ADDRESSIBLE
+	  ERR.	(IAD,CPOPJ)		;ILLEGAL ADDRESS
+	JRST	CPOPJ1			;AND RETURN
+SUBTTL	Address mapping -- KL paging
+
+
+KLPAG:	MOVNI	T4,2			;GET INITIAL VALUE FOR POINTER FLAG
+	MOVEM	T4,PAGFLG		;SET IT
+	HLRZ	T4,T2			;GET SECTION NUMBER
+	CAILE	T4,MXSECN		;RANGE CHECK SECTION NUMBER
+	ERR.	(IAD,CPOPJ)		;ILLEGAL ADDRESS
+	ADDI	T1,SECTAB(T4)		;INDEX INTO SECTION MAP POINTERS
+	SKIPN	T4,PAGFUN		;HAVE A FUNNY PAGE OFFSET?
+	JRST	KLPAGM			;NO--ONWARD
+	ADD	T1,PAGFUN		;INCLUDE FUNNY PAGE OFFSET (IF ANY)
+	ADDI	T1,(T3)			;AND OFFSET BY THE FUNNY PAGE NUMBER
+	SETZ	T3,			;SO WE DON'T DO USE IT TWICE
+	AOS	PAGFLG			;SAY WE'RE POINTING TO A PAGE MAP NOW
+
+; Decode a map entry
+; If PAGFLG = -2, T1 has addr in the section map part of EPT/UPT
+; If PAGFLG = -1, T1 has addr of entry in the page map for this section
+; If PAGFLG =  0, T1 had the mapping for the page in question
+;
+; T2 has virtual address
+; T3 has virtual page number
+;
+KLPAGM:	PUSHJ	P,PADDRESS		;COMPUTE THE ADDRESS OF A MAP ENTRY
+	  ERR.	(JNA,CPOPJ)		;JOB NOT ADDRESSABLE
+	AOSLE	PAGFLG			;FLAG WHAT WE'RE LOOKING AT
+	JRST	 KLPAGX			;FOUND THE PAGE WE'RE LOOKING FOR
+	LDB	T4,[POINT 3,(T1),2]	;GET THE ENTRY TYPE
+	JRST	@KLPAGT(T4)		;DISPATCH BASED ON POINTER TYPE
+
+KLPAGT:	EXP	KLPAG0			;(0) NO ACCESS
+	EXP	KLPAG1			;(1) IMMEDIATE
+	EXP	KLPAG2			;(2) SHARED
+	EXP	KLPAG3			;(3) INDIRECT
+	EXP	KLPAGE			;(4) ILLEGAL
+	EXP	KLPAGE			;(5) ILLEGAL
+	EXP	KLPAGE			;(6) ILLEGAL
+	EXP	KLPAGE			;(7) ILLEGAL
+
+
+KLPAGX:	ANDI	T2,PAGSIZ-1		;GET JUST THE INDEX INTO THE PAGE
+	ADDI	T1,(T2)			;GET TARGET ADDRESS TO EXAMINE
+	JRST	CPOPJ1			;RETURN
+
+
+KLPAGE:	ERR.	(UPC,CPOPJ)		;UNIMPLEMENTED KL PAGING CODE
+; KL paging code 0 - No access
+;
+KLPAG0:	ERR.	(NAP,CPOPJ)		;NO ACCESS TO REQUESTED PAGE
+
+
+; KL paging code 1 - Immediate
+;
+KLPAG1:	MOVE	T1,(T1)			;GET POINTER
+	TLNE	T1,77			;STORAGE MEDIUM NON-ZERO? (TOPS20)
+	ERR.	(PNC,CPOPJ)		;PAGE NOT IN CORE
+	ANDI	T1,17777		;KEEP JUST THE PAGE MAP PAGE NUMBER
+	LSH	T1,11			;CONVERT TO AN ADDRESS
+	SKIPN	PAGFLG			;POINTING TO A PAGE MAP FOR A SECTION?
+	JRST	KLPAGM			;NO--LOOP BACK AND DECODE MAP POINTER
+	ANDI	T3,777			;KEEP ONLY RELATIVE PAGE # IN SECTION
+	ADDI	T1,(T3)			;INDEX INTO PAGE MAP FOR TARGET PAGE
+	SETZ	T3,			;CLEAR FOR NEXT TIME
+	JRST	KLPAGM			;LOOP BACK AND DECODE MAP POINTER
+
+
+; KL paging code 2 - Shared
+;
+KLPAG2:	HRRZ	T1,(T1)			;GET INDEX INTO THE SPT
+	CAIE	T1,0			;RANGE CHECK
+	ERR.	(SIR,CPOPJ)		;SPT INDEX OUT OF RANGE
+	ADD	T1,SPT			;OFFSET
+	SETOM	PAGFLG			;STILL LOOKING AT A PAGE MAP
+	JRST	KLPAGM			;LOOP BACK AND DECODE MAP POINTER
+
+
+; KL paging code 3 - Indirect
+;
+KLPAG3:	LDB	T4,[POINT 9,(T1),17]	;GET INDEX INTO SECONDARY PAGE MAP
+	HRRZ	T1,(T1)			;GET INDEX INTO THE SPT
+	CAIE	T1,0			;RANGE CHECK
+	ERR.	(SIR,CPOPJ)		;SPT INDEX OUT OF RANGE
+	ADD	T1,SPT			;OFFSET
+	ADDI	T1,(T4)			;OFFSET INTO THE SECONDARY PAGE MAP
+	SETOM	PAGFLG			;STILL LOOKING AT A PAGE MAP
+	JRST	KLPAGM			;LOOP BACK AND DECODE MAP POINTER
+SUBTTL	Address mapping -- Dispatch tables
+
+
+; Initialization
+;
+INITAB:	EXP	MONINI			;MONITOR 
+	EXP	JOBINI			;JOB 
+	EXP	FILINI			;FILE 
+
+
+; Page creation
+;
+CRETAB:	EXP	MONCRE			;MONITOR
+	EXP	JOBCRE			;JOB
+	EXP	FILCRE			;FILE
+
+
+; Page destruction
+;
+DESTAB:	EXP	MONDES			;MONITOR
+	EXP	JOBDES			;JOB
+	EXP	FILDES			;FILE
+
+
+; Deposit
+;
+DEPTAB:	EXP	MONDEP			;MONITOR
+	EXP	JOBDEP			;JOB
+	EXP	FILDEP			;FILE
+
+
+; Mapping code names
+;
+CODTAB:	[ASCIZ	|monitor|]		;MONITOR
+	[ASCIZ	|job|]			;JOB
+	[ASCIZ	|file|]			;FILE
+
+
+; Convert virtual to physical address
+;
+CVTTAB:	EXP	MONCVT			;MONITOR
+	EXP	JOBCVT			;JOB
+	EXP	FILCVT			;FILE
+SUBTTL	Address mapping -- Monitor
+
+
+; Here at initialization to setup the page tables
+;
+MONINI:	TLNE	F,FL.EXE		;CHECK FOR ILLEGAL FLAGS
+	ERR.	(CMF,CPOPJ)		;CONFLICTING MAPPING CODE AND FLAGS
+	JRST	CPOPJ1			;RETURN
+
+
+; Here to create a SPY page
+; Call:	MOVE	A2, cache chunk address
+;	PUSHJ	P,MONCRE
+;	<NON-SKIP>			;SPY PAGE CREATE FAILED
+;	<SKIP>				;PAGE CREATED
+;
+MONCRE:	PUSHJ	P,SAVT2			;SAVE T1 AND T2
+	MOVE	T1,.CBPRC(A2)		;GET PROCESS PAGE NUMBER TO MAP
+	MOVE	T2,.CBUSR(A2)		;GET USER PAGE NUMBER TO MAP INTO
+	PUSHJ	P,PAGSPY		;CREATE A SPY PAGE
+	  POPJ	P,			;CAN'T
+	MOVE	T1,.CBFLG(A2)		;GET FLAGS
+	TLO	T1,(CB.CRE)		;PAGE WAS JUST CREATED
+	TLNE	F,FL.PPM!FL.TPP		;PHYSICAL PAGE MAPPING?
+	TLO	T1,(CB.PHY)		;YES
+	MOVEM	T1,.CBFLG(A2)		;UPDATE FLAGS
+	JRST	CPOPJ1			;RETURN
+; Here to destroy a page
+; Call:	MOVE	A2, cache chunk address
+;	PUSHJ	P,MONDES
+;	<NON-SKIP>			;DESTROY FAILED
+;	<SKIP>				;USER PAGE DESTROYED
+;
+MONDES:	PUSHJ	P,SAVT2			;VE T1 AND T2
+	MOVSI	T2,(CB.CRE)		;GET PAGE CREATED BIT
+	TDNN	T2,.CBFLG(A2)		;HAVE A PAGE THERE?
+	POPJ	P,			;NO
+	MOVE	T1,.CBUSR(A2)		;GET THE USER PAGE NUMBER
+	PUSHJ	P,PAGDES		;DESTROY IT
+	  POPJ	P,			;CAN'T
+	MOVSI	T2,(CB.CRE!CB.PHY)	;GET SOME BITS
+	ANDCAM	T2,.CBFLG(A2)		;CLEAR THEM
+	JRST	CPOPJ1			;RETURN
+
+
+; Here to deposit a word in the running monitor. The arguments are
+; nicely setup for the POKE. UUO and validity checking has already
+; been done, so there's little to do.
+; Call:	MOVE	T1, mapped address
+;	MOVE	T2, old contents
+;	MOVE	T3, new contents
+;	PUSHJ	P,MONDEP
+;
+MONDEP:
+; *** TURN OFF PHYSICAL POKE FOR NOW ***
+;	TLNN	F,FL.PPM		;PHYSICAL PAGE MAPPING?
+	TDZA	T2,T2			;MONITOR VIRTUAL ADDRESSING
+	MOVEI	T2,UU.PHY		;PHYSICAL CORE ADDRESSING
+	MOVE	T1,[3,,POKBLK]		;SET UP UUO
+	TLNE	F,FL.PAT		;PATCHING?
+	POKE.	T1,(T2)			;WRITE A WORD
+	  ERR.	(,CPOPJ)		;POKE. UUO FAILURE
+	JRST	CPOPJ1			;RETURN
+
+
+; Test if conversion from virtual to physical address is needed
+; Call:	PUSHJ	P,MONCVT
+;	<NON-SKIP>			;NO CONVERSION NECESSARY
+;	<SKIP>				;CONVERT
+;
+MONCVT:	POPJ	P,			;NEVER CONVERT
+SUBTTL	Address mapping -- Job
+
+
+; Here at initialization to validate arguments and pick up the
+; job number.
+;
+JOBINI:	TLNN	F,FL.PPM!FL.EXE		;CHECK FOR ILLEGAL FLAGS
+	ERR.	(CMF,CPOPJ)		;CONFLICTING MAPPING CODE AND FLAGS
+	MOVE	T1,USRACS+.AP		;GET ARGUMENT
+	SKIPG	T1,.MPARG(T1)		;GET JOB NUMBER
+	ERR.	(IJN,CPOPJ)		;ILLEGAL JOB NUMBER
+	MOVEM	T1,USRJOB		;WHICH IS THE JOB NUMBER FOR JOB MODE
+	JRST	CPOPJ1			;RETURN
+
+
+; Here to create a page and map in one page from the target job
+; Call:	MOVE	A2, index into page tables
+;	PUSHJ	P,JOBCRE
+;	<NON-SKIP>		;COULDN'T MAP PAGE
+;	<SKIP>			;PAGE MAPPED
+;
+JOBCRE:	TLNE	F,FL.PPM!FL.TPP		;PHYSICAL PAGE MAPPING?
+	POPJ	P,			;CAN'T DO THAT FOR A JOB
+	PUSHJ	P,SAVT2			;SAVE T1 AND T2
+	MOVSI	T1,(CB.CRE)		;GET A BIT
+	TDNE	T1,.CBFLG(A2)		;HAS A PAGE BEEN CREATED?
+	JRST	JOBC.1			;YES
+	MOVE	T1,.CBUSR(A2)		;GET A OUR PAGE NUMBER
+	PUSHJ	P,PAGACC		;CHECK PAGE ACCESSIBILITY
+	  SKIPA				;NOT THERE
+	JRST	JOBC.1			;ONWARD
+	PUSHJ	P,PAGCRE		;DO IT
+	  POPJ	P,			;CAN'T
+
+JOBC.1:	MOVSI	T2,(CB.CRE)		;GET A BIT
+	IORM	T2,.CBFLG(A2)		;MARK PAGE AS BEING CREATED
+
+JOBC.2:	HRLZ	T1,USRJOB		;GET JOB NUMBER
+	HRRI	T1,PAGSIZ		;WANT A WHOLE PAGE
+	MOVEM	T1,UUOARG+0		;SAVE IT
+	MOVE	T1,.CBUSR(A2)		;GET OUR PAGE NUMBER
+	HRL	T1,.CBPRC(A2)		;GET PAGE WE'RE MAPPING
+	LSH	T1,11			;CONVERT TO MAPPED ADDR,,USER ADDR
+	MOVEM	T1,UUOARG+1		;SAVE IT
+	MOVEI	T1,UUOARG		;SET UP UUO
+	JOBPEK	T1,			;MAP THE JOB'S PAGE INTO OURS
+	  ERR.	(,CPOPJ)		;JOBPEK UUO FAILURE
+	PUSHJ	P,JOBDES		;ZAP THE PAGE TABLE ENTRIES
+	  JFCL				;CAN'T FAIL
+	JRST	CPOPJ1			;RETURN
+; All that is needed to invalidate a mapped job page is to
+; zap a couple of entries. It would be counterproductive
+; to actually destroy the pages in question.
+;
+JOBDES:	PUSHJ	P,SAVT1			;SAVE T1
+	MOVSI	T1,(CB.CRE)		;GET THE CREATED BIT
+	ANDCAM	T1,.CBFLG(A2)		;CLEAR IT
+	JRST	CPOPJ1			;RETURN
+
+
+JOBDEP:	TLNN	F,FL.PAT		;PATCHING?
+	POPJ	P,			;NO
+	HRLZ	T4,USRJOB		;GET THE JOB NUMBER
+	TLO	T4,(JK.WRT)		;LITE THE WRITE BIT
+	HRRI	T4,1			;WRITE ONLY ONE WORD
+	MOVEM	T4,UUOARG+0		;SAVE FLAG WORD
+	MOVSI	T4,POKBLK+2		;WORD TO WRITE IS IN POKBLK+2
+	HRR	T4,POKBLK+0		;GET USER VIRTUAL ADDRESS FOR JOB
+	MOVEM	T4,UUOARG+1		;SAVE IT
+	MOVEI	T4,UUOARG		;SET UP UUO
+	JOBPEK	T4,			;WRITE THAT JOB'S CORE IMAGE
+	  ERR.	(,CPOPJ)		;JOBPEK UUO FAILURE
+	JRST	JOBDES			;INVALIDATE THAT PAGE AND RETURN
+
+
+; Test if conversion from virtual to physical address is needed
+; Call:	PUSHJ	P,JOBCVT
+;	<NON-SKIP>			;NO CONVERSION NECESSARY
+;	<SKIP>				;CONVERT
+;
+JOBCVT:	POPJ	P,			;NEVER CONVERT
+SUBTTL	Address mapping -- File
+
+
+FILINI:	MOVE	T1,USRACS+.AP		;GET USER'S ARG POINTER
+	MOVE	T1,.MPARG(T1)		;GET ADDRESS OF FILESPEC
+	PUSHJ	P,FILOPN		;OPEN THE FILE
+	  ERR.	(MIF,CPOPJ)		;MAPPER INITIALIZATION FAILURE
+	TLNN	F,FL.EXE		;EXE FILE MAPPING?
+	JRST	CPOPJ1			;NO - ALL DONE
+	PUSHJ	P,EXEDIR		;LOAD .EXE DIRECTORY INTO CORE
+	  ERR.	(MIF,CPOPJ)		;MAPPER INITIALIZATION FAILURE
+	JRST	CPOPJ1			;RETURN
+
+
+; Here to create a page and map in one page from a file
+; Call:	MOVE	A2, index into page tables
+;	PUSHJ	P,FILCRE
+;	<NON-SKIP>		;COULDN'T MAP PAGE
+;	<SKIP>			;PAGE MAPPED
+;
+FILCRE:	PUSHJ	P,SAVT4			;SAVE T1, T2, T3, AND T4
+	MOVSI	T1,(CB.PHY)		;GET PHYSICAL BIT
+	TLNE	F,FL.PPM!FL.TPP		;DOING SOME FLAVOR OF PHYSICAL MAPPING?
+	IORM	T1,.CBFLG(A2)		;YES
+	TLZ	F,FL.TPP		;CLEAR TEMPORARY PHYSICAL PAGE MAPPING
+	MOVE	T1,.CBUSR(A2)		;GET PAGE IN QUESTION
+	PUSHJ	P,PAGCHK		;DOES IT EXIST
+	  POPJ	P,			;NO--AND WE CAN'T CREATE IT
+	MOVSI	T1,(CB.CRE)		;GET A BIT
+	IORM	T1,.CBFLG(A2)		;REMEMBER WE JUST CREATED THE PAGE
+	MOVE	T1,.CBPRC(A2)		;GET PROCESS PAGE NUMBER
+	PUSHJ	P,EXEPAG		;FIND THE FILE PAGE NUMBER
+	  POPJ	P,			;CAN'T
+	LSH	T1,2			;MULTIPLY TIMES 4 TO GET BLOCK NUMBER
+	TLNN	F,FL.SIO		;SUPER I/O?
+	ADDI	T1,1			;NO - ADJUST BLOCK NUMBER
+	PUSHJ	P,FILIPS		;POSITION FOR INPUT
+	  POPJ	P,			;CAN'T
+	MOVE	T1,.CBUSR(A2)		;GET OUR PAGE NUMBER
+	LSH	T1,11			;COMVERT TO AN ADDRESS
+	SUBI	T1,1			;-1
+	HRLI	T1,-PAGSIZ		;MAKE AN IOWD
+	MOVEM	T1,IOLIST		;SAVE IT
+	PUSHJ	P,FILRED		;READ THE PAGE
+	  POPJ	P,			;CAN'T
+	JRST	CPOPJ1			;RETURN
+; Here to destroy a page
+; Call:	MOVE	A2, index into page tables
+;	PUSHJ	P,MONDES
+;	<NON-SKIP>		;DESTROY FAILED
+;	<SKIP>			;USER PAGE DESTROYED
+;
+FILDES:	PUSHJ	P,SAVT1			;SAVE T1
+	MOVSI	T1,(CB.CRE)		;GET A BIT
+	TDNN	T1,.CBFLG(A2)		;PAGE MUST EXIST
+	  POPJ	P,			;LOSE
+	MOVE	T1,.CBUSR(A2)		;GET OUR PAGE NUMBER
+	PUSHJ	P,PAGDES		;DESTROY IT
+	  POPJ	P,			;CAN'T
+	MOVSI	T1,(CB.CRE)		;GET THE CREATED BIT
+	ANDCAM	T1,.CBFLG(A2)		;CLEAR IT
+	JRST	CPOPJ1			;RETURN
+
+
+FILDEP:	TLNN	F,FL.PAT		;PATCHING?
+	POPJ	P,			;NO
+	HALT	.
+
+
+; Test if conversion from virtual to physical address is needed
+; Call:	PUSHJ	P,FILCVT
+;	<NON-SKIP>			;NO CONVERSION NECESSARY
+;	<SKIP>				;CONVERT
+;
+FILCVT:	TLNN	F,FL.GTS		;GETTABS SETUP?
+	POPJ	P,			;NOT A MONITOR IF NO GETTABS SIMULATION
+	SKIPE	HIORG			;SKIP IF WE DON'T KNOW THE HISEG ORIGIN
+	CAMGE	T1,HIORG		;BELOW THE HIGH SEG ORIGIN?
+	JRST	FILC.1			;YES
+	SKIPE	HIFLAG			;HIGH SEGMENT MAPPED?
+	AOS	(P)			;YES--DECODE PAGE MAP
+	POPJ	P,			;ELSE TREAT AS A PHYSICAL REFERENCE
+
+FILC.1:	CAMLE	T1,HGHUEA		;BEYOND HIGHEST UNMAPPED EXEC ADDRESS?
+	AOS	(P)			;NEED TO CONVERT
+	POPJ	P,			;RETURN
+SUBTTL	Cache management -- Clear out the cache
+
+
+; This routine must be called at the start of cache initialization.
+; It will attempt to destroy any pages available for caching so
+; we can get a fresh start.
+;
+CSHCLR:	MOVE	A1,MAPDAT+.MPCPN	;GET FIRST PAGE NUMBER
+	MOVE	A2,PAGCNT		;GET COUNT OF AVAILABLE PAGES
+
+CSHC.1:	MOVE	T1,A1			;LOAD A PAGE NUMBER
+	PUSHJ	P,PAGACC		;DOES THE PAGE EXIST?
+	  SKIPA				;NO
+	PUSHJ	P,PAGDES		;DESTROY IT
+	  JFCL				;MAYBE THE PAGE WASN'T THERE
+	ADDI	A1,1			;ADVANCE PAGE NUMBER
+	SOJG	A2,CSHC.1		;LOOP FOR ALL PAGES
+	POPJ	P,			;AND RETURN
+SUBTTL	Cache management -- Map the cache
+
+
+; This routine will dynamically allocate the hash table
+; and chunks out of the pages allotted for mapping.  It is
+; also responsible for setting and/or adjusting the count
+; of available pages for caching and the starting page to
+; cache.
+;
+CSHMAP:	MOVE	A1,MAPDAT+.MPCPN	;GET FIRST PAGE NUMBER TO USE
+	LSH	A1,11			;CONVERT TO AN ADDRESS
+	MOVEM	A1,HASHTA		;SAVE HASH TABLE ADDRESS
+	MOVE	A1,PAGCNT		;GET NUMBER OF PAGES TO CACHE
+	LSH	A1,2			;MULTIPLY BY 4 TO GET HASH TABLE SIZE
+	MOVEM	A1,HASHTL		;SAVE LENGTH OF HASH TABLE
+	ADD	A1,HASHTA		;GET LAST ADDRESS IN HASH TABLE
+	MOVEM	A1,HASHCA		;SAVE AS ADDRESS OF FIRST CHUNK
+
+	MOVE	A2,PAGCNT		;GET NUMBER OF PAGES TO CACHE
+	IMULI	A2,.CBLEN		;GET WORDS NEEDED FOR CHUNKS
+	ADDI	A1,(A2)			;TOTAL UP WORDS NEEDED
+	MOVE	A2,A1			;COPY NUMBER OF WORDS
+	SUB	A1,HASHCA		;GET LENGTH OF CHUNK AREA
+	MOVEM	A1,HASHCL		;SAVE IT
+
+	TRZE	A2,PAGSIZ-1		;ON A PAGE BOUNDRY?
+	ADDI	A2,PAGSIZ		;ROUND UP
+	LSH	A2,-11			;GET FIRST AVAILABLE PAGE FOR MAPPING
+	MOVEM	A2,CSHPAG		;SAVE IT
+	SUB	A2,MAPDAT+.MPCPN	;GET PAGES USED FOR TABLE AND CHUNKS
+	MOVN	A3,A2			;GET NEGATIVE COUNT
+	CAML	A2,PAGCNT		;HAVE ENOUGH AVAILABLE?
+	ERR.	(HAF,CPOPJ)		;HASH TABLE ALLOCATION FAILURE
+	EXCH	A2,PAGCNT		;SWAP
+	SUBM	A2,PAGCNT		;UPDATE NEW NUMBER OF PAGES AVAILABLE
+	IMULI	A3,.CBLEN		;GET WORDS TO TRIM
+	ADDM	A3,HASHCL		;ADJUST LENGTH OF CHUNK AREA
+	MOVE	A1,HASHTA		;GET ADDRESS OF HASH TABLE
+	LSH	A1,-11			;CONVERT TO A PAGE NUMBER
+	MOVE	A2,CSHPAG		;GET FIRST PAGE TO CACHE
+	SUB	A2,A1			;GET NUMBER OF PAGES TO CREATE
+
+CSHM.1:	MOVE	T1,A1			;GET A PAGE NUMBER
+	PUSHJ	P,PAGACC		;DOES THE PAGE ALREADY EXIST?
+	  SKIPA				;NOT THERE
+	JRST	CSHM.2			;ON TO THE NEXT PAGE
+	PUSHJ	P,PAGCRE		;CREATE IT
+	  ERR.	(HAF,CPOPJ)		;HASH TABLE ALLOCATION FAILURE
+
+CSHM.2:	ADDI	A1,1			;POINT TO NEXT PAGE
+	SOJG	A2,CSHM.1		;LOOP FOR ALL PAGES
+	JRST	CPOPJ1			;RETURN
+SUBTTL	Cache management -- Set up the hash tables and links
+
+
+;Call:	PUSHJ	P,CSHINI
+;	<return>
+;
+CSHINI:	MOVE	A1,HASHTA		;GET STARTING ADDRESS OF HASH TABLE
+	SKIPA	A2,HASHTL		;GET LENGTH OF HASH TABLE
+
+; Link all hash entries to themselves
+CSHI.1:	ADDI	A1,2			;ADDRESS OF SELF
+	MOVEM	A1,.CBNHB(A1)		;STORE NEXT
+	MOVEM	A1,.CBPHB(A1)		;AND PREVIOUS TO SELF
+	SUBI	A2,1			;ADVANCE TO NEXT
+	SOJG	A2,CSHI.1		;AND LOOP FOR ALL
+
+; Link header entry links to themselves
+	MOVEI	A1,CBHEAD		;ADDRESS OF HEADER
+	MOVEM	A1,CBHEAD+.CBNAB	;STORE NEXT
+	MOVEM	A1,CBHEAD+.CBPAB	;AND PREVIOUS TO SELF
+	MOVEM	A1,CBHEAD+.CBNHB	;STORE NEXT IN INVALID LIST
+	MOVEM	A1,CBHEAD+.CBPHB	;AND PREVIOUS TO SELF
+
+	MOVE	A1,HASHCA		;POINT TO START OF CHUNKS
+	MOVE	A2,CSHPAG		;GET STARTING PAGE FOR CACHING
+	MOVE	A3,PAGCNT		;GET COUNT OF PAGES TO CACHE
+	MOVSI	A4,(CB.AVA)		;GET CHUNK AVAILABLE BIT
+
+CSHI.2:	MOVEM	A2,.CBUSR(A1)		;SAVE PAGE NUMBER FOR THIS CHUNK
+	MOVEM	A4,.CBFLG(A1)		;MARK CHUNK AVAILABLE
+	MOVE	T1,.CBUSR(A1)		;GET A PAGE NUMBER
+	ADDI	A1,.CBLEN		;POINT TO NEXT CHUNK
+	ADDI	A2,1			;ADVANCE TO NEXT PAGE NUMBER
+	SOJG	A3,CSHI.2		;LOOP
+	POPJ	P,			;RETURN
+SUBTTL	Cache management -- Set cache size
+
+
+; Change the cache size.  This routine will increase
+; or decrease the size of the cache on the fly.
+; Call:	MOVE	A1, size of cache
+;	PUSHJ	P,CSHSIZ
+;	  <error>			;Cant allocate more space
+;	<normal>			;cache expanded/contracted
+;
+CSHSIZ:	SKIPGE	A1			;NEGATIVE SIZE IS BAD
+	ERR.	(ICS,CPOPJ)		;ILLEGAL CACHE SIZE REQUESTED
+	PUSHJ	P,SAVT1			;SAVE T1
+	MOVE	T1,A1			;COPY SIZE
+	SUB	T1,PAGCNT		;MINUS CURRENT SIZE
+	JUMPE	T1,CPOPJ1		;RETURN IF NO CHANGE
+	JUMPG	T1,CSHS.2		;EXPAND CACHE
+
+CSHS.1:	PUSHJ	P,CSHDEA		;DEALLOCATE A CHUNK
+	AOJL	T1,CSHS.1		;LOOP FOR ALL
+	JRST	CSHS.3			;AND EXIT
+
+CSHS.2:	PUSHJ	P,CSHALC		;ALLOCATE A CHUNK
+	  ERR.	(NFC,CPOPJ)		;NO FREE CHUNKS FOR CACHE
+	SOJG	T1,CSHS.2		;LOOP FOR ALL
+
+CSHS.3:	MOVE	T1,PAGCNT		;GET UPDATED CACHED PAGE COUNT
+	MOVEM	T1,MAPDAT+.MPCPC	;TELL THE CALLER
+	JRST	CPOPJ1			;RETURN
+SUBTTL	Cache management -- Allocate a chunk for the cache
+
+
+; Call:	PUSHJ	P,CSHALC
+;	 <error>			;Cant allocate another chunk
+;	<normal>			;another chunk allocated
+;
+CSHALC:	MOVE	A2,HASHCA		;POINT TO START OF CHUNKS
+	MOVE	A3,HASHCL		;GET LENGTH OF CHUNK AREA
+	MOVSI	A4,(CB.AVA)		;GET THE AVAILABLE CHUNK BIT
+
+CSHA.1:	TDNE	A4,.CBFLG(A2)		;CHUNK FREE?
+	JRST	CSHA.2			;YES
+	ADDI	A2,.CBLEN		;POINT TO NEXT CHUNK
+	SUBI	A3,.CBLEN		;COUNT
+	JUMPG	A3,CSHA.1		;LOOP 'TIL WE FIND ONE
+	POPJ	P,			;LOSE
+
+CSHA.2:	ANDCAM	A4,.CBFLG(A2)		;NO LONGER FREE
+	AOS	PAGCNT			;COUNT CHUNKS INSERTED
+
+;Link new chunk at beginning of "free" hash list
+	MOVE	A3,CBHEAD+.CBNHB	;GET FORWARD FROM HEADER
+	MOVE	A4,.CBPHB(A3)		;AND PREVIOUS FROM TOP
+	MOVEM	A2,CBHEAD+.CBNHB	;INSERT US AT THE TOP
+	MOVEM	A2,.CBPHB(A3)		;PREVIOUS OF OLD TOP IS US
+	MOVEM	A3,.CBNHB(A2)		;NEXT OF US IS OLD TOP
+	MOVEM	A4,.CBPHB(A2)		;PREVIOUS OF US IS HEADER
+
+;Clear out any trash
+	SETZM	.CBPRC(A2)		;CLEAR PROCESS PAGE NUMBER
+
+;Link new chunk at end of accessed list
+	MOVE	A3,CBHEAD+.CBPAB	;GET FORWARD FROM HEADER
+	MOVE	A4,.CBNAB(A3)		;AND NEXT FROM TOP
+	MOVEM	A2,CBHEAD+.CBPAB	;INSERT US AT THE TOP
+	MOVEM	A2,.CBNAB(A3)		;NEXT OF OLD TOP IS US
+	MOVEM	A3,.CBPAB(A2)		;PREVIOUS OF US IS OLD TOP
+	MOVEM	A4,.CBNAB(A2)		;NEXT OF US IS HEADER
+
+	JRST	CPOPJ1			;AND SKIP RETURN
+SUBTTL	Cache management -- Deallocate a page from the cache
+
+
+; Call:	PUSHJ	P,CSHDEA
+;	<return>
+;
+CSHDEA:
+
+; Delete from access chunk chain
+	MOVE	A2,CBHEAD+.CBPAB	;LAST CHUNK IN CACHE
+	MOVE	A3,.CBNAB(A2)		;GET NEXT
+	MOVE	A4,.CBPAB(A2)		;GET PREVIOUS
+	MOVEM	A3,.CBNAB(A4)		;REMOVE FROM FORWARD CHAIN
+	MOVEM	A4,.CBPAB(A3)		;REMOVE FROM PREVIOUS CHAIN
+
+;Delete from hash chain
+	MOVE	A3,.CBNHB(A2)		;GET NEXT
+	MOVE	A4,.CBPHB(A2)		;GET PREVIOUS
+	MOVEM	A3,.CBNHB(A4)		;REMOVE FROM FORWARD CHAIN
+	MOVEM	A4,.CBPHB(A3)		;REMOVE FROM PREVIOUS CHAIN
+
+;Return core, fix up cache size
+	MOVE	A3,.CBFLG(A2)		;GET THE FLAG WORD
+	TLZE	A3,(CB.CRE)		;PAGE REALLY EXIST?
+	PUSHJ	P,@DESTAB(F)		;YES--DESTROY IT
+	  JFCL
+	TLO	A3,(CB.AVA)		;MARK CHUNK AVAILABLE
+	MOVEM	A3,.CBFLG(A2)		;UPDATE FLAG WORD
+	SOS	PAGCNT			;CACHE IS 1 CHUNK SMALLER
+	POPJ	P,			;AND RETURN
+SUBTTL	Cache management -- Find an entry in the cache
+
+
+; Call:	MOVE	A1, page number
+;	PUSHJ	P,CSHFND
+;	 <error>		;page not in cache T2/ address to insert
+;	<normal>		;page in cache     T2/ address of entry
+;
+CSHFND:	
+
+; Hash page number to initial entry in table
+	MOVE	A4,HASHTL		;GET HASH TABLE LENGTH
+	LSH	A4,-1			;DIVIDE BY 2
+	MOVE	A2,A1			;COPY PAGE NUMBER
+	IDIV	A2,A4			;HASH INTO TABLE
+	LSH	A3,1			;DOUBLE REMAINDER
+	MOVE	A4,HASHTA		;GET HASH TABLE ADDRESS
+	ADDI	A4,(A3)			;INDEX INTO IT
+	MOVE	A2,A4			;COPY POINTER TO START
+	AOS	MAPDAT+.MPHSF		;COUNT HASH TABLE SEARCHES
+	TLNN	F,FL.PPM!FL.TPP		;PHYSICAL PAGE MAPPING?
+	SKIPA	A3,[TDNN A3,.CBFLG(A2)]	;GET TEST IF PHYSICAL BIT MUST BE OFF
+	MOVE	A3,[TDNE A3,.CBFLG(A2)]	;GET TEST IF PHYSICAL BIT MUST BE ON
+	MOVEM	A3,CSHXCT		;SAVE IT
+	MOVSI	A3,(CB.PHY)		;GET THE PHYSICAL BIT
+
+; Loop through hash chain from initial probe
+;
+CSHF.1:	CAMN	A4,.CBNHB(A2)		;SEE IF LOOPED AROUND
+	POPJ	P,			;YES--NOT IN TABLE
+	MOVE	A2,.CBNHB(A2)		;COPY CURRENT PAGE
+	XCT	CSHXCT			;TEST FOR PHYSICAL PAGE
+	CAME	A1,.CBPRC(A2)		;MATCH THE PROCESS PAGE NUMBER?
+	SKIPA
+	JRST	CPOPJ1			;FOUND IT--RETURN
+	AOS	MAPDAT+.MPHSC		;WRONG PAGE--COUNT COLLISIONS
+	JRST	CSHF.1			;AND LOOP
+SUBTTL	Cache management -- Insert (replace) a new page in the cache
+
+
+; Call:	MOVE	A1, page number
+;	MOVE	A2, entry to add after
+;	PUSHJ	P,CSHINS
+;	<return>
+;
+CSHINS:	CAMN	A2,CBHEAD+.CBPAB	;SAME AS ENTRY WE FIDDLE
+	JRST	[MOVEM	A1,.CBPRC(A2)	;SAVE NEW PROCESS PAGE NUMBER
+		 JRST	CSHMRU]		;AND MOVE TO TOP
+
+; Store page number, replace last page in access chain
+	PUSH	P,A2			;SAVE ENTRY TO ADD
+	MOVE	A2,CBHEAD+.CBPAB	;GET LAST IN CHAIN
+
+;Unlink from old hash chain
+	MOVE	A3,.CBNHB(A2)		;GET NEXT
+	MOVE	A4,.CBPHB(A2)		;GET PREVIOUS
+	MOVEM	A3,.CBNHB(A4)		;REMOVE FROM FORWARD CHAIN
+	MOVEM	A4,.CBPHB(A3)		;REMOVE FROM PREVIOUS CHAIN
+
+;Link this chunk into correct hash chain
+	MOVE	A1,A2
+	POP	P,A2			;RESTORE ENTRY TO ADD
+	MOVE	A4,.CBNHB(A2)		;AND NEXT LINK
+	MOVEM	A1,.CBNHB(A2)		;INSERT AFTER PREVIOUS
+	MOVEM	A1,.CBPHB(A4)		;AND AS PREVIOUS OF OLD
+	MOVEM	A2,.CBPHB(A1)		;STORE PREVIOUS OF OLD AS OURS
+	MOVEM	A4,.CBNHB(A1)		;STORE NEXT OF OLD AS OURS
+	MOVE	A2,A1
+
+	JRST	CSHMRU			;AND MOVE ENTRY TO TOP OF LIST
+SUBTTL	Cache management -- Move entry to top of list
+
+
+; Call:	MOVE	A2, entry to move
+;	PUSHJ	P,CSHMRU
+;	<return>
+;
+CSHMRU:	CAMN	A2,CBHEAD+.CBNAB	;WE AT THE TOP?
+	 POPJ	P,			;YES--SAVE SOME WORK
+
+; Delete from current access chain position
+	MOVE	A3,.CBNAB(A2)		;GET NEXT
+	MOVE	A4,.CBPAB(A2)		;GET PREVIOUS
+	MOVEM	A3,.CBNAB(A4)		;REMOVE FROM FORWARD CHAIN
+	MOVEM	A4,.CBPAB(A3)		;REMOVE FROM PREVIOUS CHAIN
+
+; Relink into "most recently used" position
+	MOVE	A3,CBHEAD+.CBNAB	;GET FORWARD FROM HEADER
+	MOVE	A4,.CBPAB(A3)		;AND PREVIOUS FROM TOP
+	MOVEM	A2,CBHEAD+.CBNAB	;INSERT US AT THE TOP
+	MOVEM	A2,.CBPAB(A3)		;PREVIOUS OF OLD TOP IS US
+	MOVEM	A3,.CBNAB(A2)		;NEXT OF US IS OLD TOP
+	MOVEM	A4,.CBPAB(A2)		;PREVIOUS OF US IS HEADER
+
+	POPJ	P,			;AND RETURN
+SUBTTL	Text I/O -- Character
+
+
+; Input a character converting tabs to spaces and lower to upper case
+; Call:	PUSHJ	P,TYI
+;	<RETURN>			;T1:= CHARACTER
+;
+TYI:	ILDB	T1,BYTPTR		;GET A CHARACTER
+	CAIN	T1,"I"-100		;TAB?
+	MOVEI	T1," "			;YES - CONVERT TO A SPACE
+	CAIG	T1,"Z"+40		;CHECK FOR A LOWER CASE
+	CAIGE	T1,"A"+40		; CHARACTER THAT NEEDS TO BE
+	  SKIPA				;  CONVERTED TO AN UPPER CASE
+	TRZ	T1," "			;   CHARACTER
+	POPJ	P,			;RETURN
+
+
+; Output a character
+; Call:	MOVE	T1, character
+;	PUSHJ	P,TYO
+;	<RETURN>
+;
+TYO:	SKIPN	BYTPTR			;OUTPUT TO TTY?
+	JRST	[OUTCHR T1		;YES
+		 POPJ	P,]		;RETURN
+	SOSLE	BYTCNT			;COUNT CHARACTERS
+	IDPB	T1,BYTPTR		;SAVE CHARACTER
+	POPJ	P,			;RETURN
+SUBTTL	Text I/O -- ASCIZ
+
+
+; Output an ASCIZ string
+; Call:	MOVE	T1, string address
+;	PUSHJ	P,TSTRG
+;	<RETURN>
+;
+TSTRG:	HRLI	T1,(POINT 7,)		;MAKE A BYTE POINTER
+	PUSH	P,T1			;SAVE IT
+
+TSTR.1:	ILDB	T1,(P)			;GET A CHARACTER
+	JUMPE	T1,TSTR.2		;DONE?
+	PUSHJ	P,TYO			;TYPE IT
+	JRST	TSTR.1			;LOOP
+
+TSTR.2:	POP	P,T1			;PHASE STACK
+	POPJ	P,			;RETURN
+SUBTTL	Text I/O -- Sixbit
+
+
+; Input a possibly quoted sixbit word
+; Call:	PUSHJ	P,SIXIN
+;	<RETURN>			;T1:= WORD, T2:= TERMINATING CHARACTER
+;
+SIXIN:	MOVE	T2,[POINT 6,T3]		;GET BYTE POINTER TO ATOM BUFFER
+	PUSH	P,[0]			;RESERVE A WORD
+	SETZ	T3,			;CLEAR RESULT
+	PUSHJ	P,FLUSH			;FLUSH LEADING SPACES AND TABS
+	CAIN	T1,"#"			;WANTS TO INPUT IN OCTAL?
+	JRST	OCTIN			;YES
+	SKIPA				;ANALYZE CHARACTER
+
+SIXI.1:	PUSHJ	P,TYI			;GET A CHARACTER
+	CAIN	T1,""""			;QUOTE CHARACTER?
+	JRST	SIXI.2			;YES
+	SKIPE	(P)			;QUOTING?
+	JUMPN	T1,SIXI.4		;ALL CHARACTERS ARE LEGAL
+	JRST	SIXI.3			;NO
+
+SIXI.2:	PUSHJ	P,TYI			;GET NEXT CHARACTER
+	CAIN	T1,""""			;ANOTHER QUOTE?
+	JRST	SIXI.4			;SAVE IT
+	SETCMM	(P)			;NO - TOGGLE QUOTE FLAG
+	SKIPE	(P)			;QUOTING?
+	JRST	SIXI.4			;YES
+
+SIXI.3:	CAIL	T1,"0"			;RANGE
+	CAILE	T1,"9"			; CHECK
+	CAIL	T1,"A"			;  THE
+	CAILE	T1,"Z"			;   CHARACTER
+	JRST	SIXI.5			;NOT A GOOD CHARACTER
+
+SIXI.4:	TLNE	T2,77			;WORD FULL YET?
+	JRST	SIXI.1			;YES - IGNORE CHARACTER
+	SUBI	T1," "			;CONVERT ASCII TO SIXBIT
+	IDPB	T1,T2			;SAVE THE CHARACTER
+	JRST	SIXI.1			;GET ANOTHER ONE
+
+SIXI.5:	MOVE	T2,T1			;GET TERMINATING CHARACTER
+	MOVE	T1,T3			;GET RESULT
+	POP	P,(P)			;TRIM STACK
+	POPJ	P,			;RETURN
+
+
+; Output a sixbit word
+; Call:	MOVE	T1, word
+;	PUSHJ	P,SIXOUT
+;	<RETURN>
+;
+SIXOUT:	SKIPN	T2,T1			;COPY WORD TO OUTPUT
+	POPJ	P,			;NOTHING TO DO
+
+SIXO.1:	LSHC	T1,6			;SHIFT IN A CHARACTER
+	ANDI	T1,77			;NO JUNK
+	ADDI	T1," "			;CONVERT TO ASCII
+	PUSHJ	P,TYO			;OUTPUT IT
+	JUMPN	T2,SIXO.1		;LOOP
+	POPJ	P,			;RETURN
+SUBTTL	Text I/O -- Octal
+
+
+; Input an octal word
+; Call:	PUSHJ	P,OCTIN
+;	<RETURN>			;T1:= WORD, T2:= TERMINATING CHARACTER
+;
+OCTIN:	SETZ	T2,			;CLEAR RESULT AND MASK
+	PUSHJ	P,FLUSH			;EAT LEADING SPACES AND TABS
+	CAIL	T1,"A"			;CHECK FOR
+	CAILE	T1,"Z"			; A LETTER
+	JRST	OCTI.2			;ASSUME A DIGIT
+	PUSHJ	P,BACKUP		;BACKUP THE BYTE POINTER
+	JRST	SIXIN			;GO INPUT SIXBIT
+
+OCTI.1:	PUSHJ	P,TYI			;GET A CHARACTER
+
+OCTI.2:	CAIL	T1,"0"			;RANGE CHECK
+	CAILE	T1,"7"			; FOR AN OCTAL DIGIT
+	JRST	OCTI.3			;NO GOOD - FINISH UP
+	LSH	T2,3			;SHIFT RESULT
+	SUBI	T1,"0"			;CONVERT ASCII TO OCTAL
+	IOR	T2,T1			;INCLUDE THE DIGIT
+	JRST	OCTI.1			;LOOP
+
+OCTI.3:	EXCH	T1,T2			;SWAP RESULT AND TERMINATING CHARACTER
+	POPJ	P,			;RETURN
+
+
+; Output an octal word
+; Call:	MOVE	T1, word
+;	PUSHJ	P,OCTOUT
+;
+OCTOUT:	SKIPL	T1			;NEGATIVE?
+	JRST	OCTO.1			;NO
+	PUSH	P,T1			;SAVE NUMBER
+	MOVEI	T1,"-"			;GET MINUS SIGN
+	PUSHJ	P,TYO			;OUTPUT IT
+	POP	P,T1			;GET NUMBER
+	MOVMS	T1			;MAKE IT POSITIVE
+
+OCTO.1:	IDIVI	T1,10			;DIVIDE BY RADIX
+	PUSH	P,T2			;SAVE REMAINDER
+	SKIPE	T1			;DONE?
+	PUSHJ	P,OCTO.1		;RECURSE
+	POP	P,T1			;GET A DIGIT
+	ADDI	T1,"0"			;CONVERT TO ASCII
+	JRST	TYO			;OUTPUT CHARACTER AND RETURN
+
+
+; Output a CRLF
+; Call:	PUSHJ	P,TCRLF
+;
+TCRLF:	MOVEI	T1,15			;GET A <CR>
+	PUSHJ	P,TYO			;TYPE IT
+	MOVEI	T1,12			;GET A <LF>
+	JRST	TYO			;TYPE IT AND RETURN
+
+
+; Output a PC
+; Call:	MOVE	T1, PC
+;	PUSHJ	P,PCOUT
+;
+PCOUT:	TLNN	T1,-1			;A SECTION NUMBER?
+	JRST	PCOU.1			;NO
+	PUSH	P,T1			;SAVE PC
+	HLRZS	T1			;GET SECTION
+	PUSHJ	P,OCTOUT		;TYPE IT
+	MOVEI	T1,","			;GET SEPARATOR
+	PUSHJ	P,TYO			;TYPE IT
+	PUSHJ	P,TYO			;AGAIN
+	POP	P,T1			;RESTORE PC
+	HRRZS	T1			;GET RELATIVE PC
+
+PCOU.1:	HRLO	T2,T1			;MAKE IT PC,,-1
+
+PCOU.2:	LSHC	T1,3			;SHIFT IN A DIGIT
+	ANDI	T1,7			;STRIP OFF JUNK
+	ADDI	T1,"0"			;MAKE IT ASCII
+	PUSHJ	P,TYO			;TYPE IT
+	TRNE	T2,-1			;DONE SIX DIGITS YET?
+	JRST	PCOU.2			;NO--LOOP
+	POPJ	P,			;RETURN
+SUBTTL	Text I/O -- Filespec
+
+
+; Output a filespec
+; Call:	PUSHJ	P,FILOUT
+;	<RETURN>
+;
+FILOUT:	MOVE	T1,FOPBLK+.FODEV	;GET DEVICE
+	PUSHJ	P,SIXOUT		;OUTPUT IT
+	MOVEI	T1,":"			;GET SEPARATOR
+	PUSHJ	P,TYO			;TYPE COLON
+	MOVE	T1,LERBLK+.RBNAM	;GET NAME
+	PUSHJ	P,SIXOUT		;OUTPUT IT
+	MOVEI	T1,"."			;GET SEPARATOR
+	PUSHJ	P,TYO			;OUTPUT PERIOD
+	HLLZ	T1,LERBLK+.RBEXT	;GET EXTENSION
+	PUSHJ	P,SIXOUT		;OUTPUT IT
+	MOVEI	T1,"["			;GET PATH DELIMITER
+	PUSHJ	P,TYO			;OUTPUT
+	SKIPGE	T1,PTHBLK+.PTPPN	;GET PPN
+	JRST	FILO.1			;IT'S SIXBIT
+	HLRZS	T1			;GET PROJECT NUMBER
+	PUSHJ	P,OCTOUT		;OUTPUT IT
+	MOVEI	T1,","			;GET SEPARATOR
+	PUSHJ	P,TYO			;OUTPUT IT
+	HRRZ	T1,PTHBLK+.PTPPN	;GET PROGRAMMER NUMBER
+	PUSHJ	P,OCTOUT		;OUTPUT
+	JRST	FILO.2			;ONWARD
+
+FILO.1:	PUSHJ	P,SIXOUT		;OUTPUT IT
+
+FILO.2:	MOVEI	T3,PTHBLK+.PTSFD	;POINT TO START OF SFDS
+
+FILO.3:	SKIPN	(T3)			;HAVE AN SFD
+	JRST	FILO.4			;END OF PATH
+	MOVEI	T1,","			;GET SEPARATOR
+	PUSHJ	P,TYO			;OUTPUT IT
+	MOVE	T1,(T3)			;GET AN SFD
+	PUSHJ	P,SIXOUT		;OUTPUT IT
+	AOJA	T3,FILO.3		;LOOP
+
+FILO.4:	MOVEI	T1,"]"			;GET END OF PATH
+	JRST	TYO			;OUTPUT IT AND RETURN
+SUBTTL	Text I/O -- Miscellaneous
+
+
+; Set up byte pointer and count
+; Call:	MOVE	T1, address to store text or 0 for TTY output
+;	MOVE	T2, character count
+;	PUSHJ	P,TXTSET
+;
+TXTSET:	SKIPE	T1			;OUTPUT TO TTY?
+	HRLI	T1,(POINT 7,)		;NO--MAKE A BYTE POINTER
+	MOVEM	T1,BYTPTR		;SAVE IT
+	MOVEM	T2,BYTCNT		;SAVE CHARACTER COUNT
+	POPJ	P,			;RETURN
+
+
+; Flush leading spaces and tabs
+; Call:	PUSHJ	P,FLUSH
+;	<RETURN>			;T1:= FIRST NON-BLANK CHARACTER
+;
+FLUSH:	PUSHJ	P,TYI			;GET A CHARACTER
+	CAIN	T1," "			;A SPACE?
+	JRST	FLUSH			;YES - EAT IT
+	POPJ	P,			;RETURN
+
+
+; Back up the text byte pointer 1 character
+; Call:	PUSHJ	P,BACKUP
+;
+; On return, T1 has been updated with the current character
+;
+BACKUP:	MOVE	T1,BYTPTR		;GET THE BYTE POINTER
+	ADD	T1,[70000,,0]		;BACKUP 1 CHARACTER
+	SKIPG	T1			;OVER A WORD BOUNDRY?
+	SUB	T1,[430000,,1]		;YES - BACKUP A WORD
+	MOVEM	T1,BYTPTR		;SAVE UPDATED POINTER
+	LDB	T1,BYTPTR		;LOAD THE PREVIOUS CHARACTER
+	POPJ	P,			;RETURN
+SUBTTL	Paging -- Check accessibility
+
+
+; Check accessibility of a page in our address space
+; Call:	MOVE	T1, page number
+;	PUSHJ	P,PAGACC
+;	<NON-SKIP>		;PAGE DOES NOT EXIST
+;	<SKIP>			;PAGE EXISTS
+;
+PAGACC:	MOVEM	T1,UUOARG		;SAVE PAGE NUMBER
+	HRLI	T1,.PAGCA		;LOAD A FUNCTION CODE
+	PAGE.	T1,			;READ ACCESS BITS
+	  SETO	T1,			;ASSUME PAGE NOT THERE
+	TLNN	T1,(PA.GNE)		;NON-EXISTANT PAGE?
+	AOS	(P)			;NO
+	MOVE	T1,UUOARG		;RELOAD PAGE NUMBER
+	POPJ	P,			;RETURN
+
+
+; Check to see if the a reference to a page will cause
+; an illegal memory reference.  If so, create it.
+; Call:	MOVE	T1, page number
+;	PUSHJ	P,PAGCHK
+;	<NON-SKIP>			;PAGE CREATE FAILED
+;	<SKIP>				;PAGE EXISTS
+;
+PAGCHK:	PUSHJ	P,PAGACC		;CHECK ACCESSIBILITY
+	  JRST	PAGCRE			;CREATE IT AND RETURN
+	JRST	CPOPJ1			;IT ALREADY EXISTS
+SUBTTL	Paging -- Create/Destroy
+
+
+; Create or destroy a page in our address space
+; Call:	MOVE	T1, page number
+;	PUSHJ	P,PAGCRE/PAGDES
+;	<NON-SKIP>			;FAILED
+;	<SKIP>				;SUCEEDED
+;
+PAGDES:	TLO	T1,(PA.GAF)		;LITE THE DESTROY BIT
+PAGCRE:	MOVEM	T1,UUOARG+1		;SAVE IT
+	MOVEI	T1,1			;ONE WORD
+	MOVEM	T1,UUOARG+0		;SAVE WORD COUNT
+	MOVE	T1,[.PAGCD,,UUOARG]	;SET UP UUO
+	PAGE.	T1,			;CREATE OR DESTROY A PAGE
+	  ERR.	(,.+2)			;CAN'T
+	AOS	(P)			;FORCE SKIP RETURN
+	MOVE	T1,UUOARG+1		;RELOAD THE PAGE NUMBER
+	TLZ	T1,(PA.GAF)		;TURN OFF THE ALTERNATE FUNCTION BIT
+	POPJ	P,			;RETURN
+SUBTTL	Paging -- SPY page creation
+
+
+; Create a SPY page using physical or virtual mapping
+; Call:	MOVE	T1, monitor page
+;	MOVE	T2, user page
+;	PUSHJ	P,PAGSPY
+;	<NON-SKIP>			;FAILED
+;	<SKIP>				;SUCEEDED
+;
+PAGSPY:	HRLZM	T1,UUOARG+1		;SAVE MONITOR PAGE NUMBER
+	HRRM	T2,UUOARG+1		;SAVE USER PAGE NUMBER
+	MOVEI	T1,1			;ONE WORD
+	MOVEM	T1,UUOARG+0		;SAVE WORD COUNT
+	MOVE	T1,[.PAGSP,,UUOARG]	;SET UP UUO
+	TLNN	F,FL.PPM!FL.TPP		;PHYSICAL PAGE MAPPING?
+	TDZA	T2,T2			;NO
+	MOVEI	T2,UU.PHY		;YES
+	PAGE.	T1,(T2)			;CREATE A SPY PAGE
+	  ERR.	(,.+2)			;CAN'T
+	AOS	(P)			;FORCE SKIP RETURN
+	TLZ	F,FL.TPP		;CLEAR TEMPORARY PHYSICAL PAGE MAPPING
+	HLRZ	T1,UUOARG+1		;RELOAD MONITOR PAGE NUMBER
+	HRRZ	T2,UUOARG+2		;RELOAD USER PAGE NUMBER
+	POPJ	P,			;RETURN
+SUBTTL	File I/O -- Open a file
+
+
+; Open a file pointer to by the calling program
+; Call:	MOVE	T1, address of ASCIZ filespec
+;	PUSHJ	P,FILOPN
+;
+FILOPN:	PUSHJ	P,SCAN			;SCAN FILESPEC AND LOAD UUO BLOCKS
+	  POPJ	P,			;CAN'T
+	TLNE	F,FL.SIO		;SUPER I/O?
+	TLNN	F,FL.EXE		;AND .EXE FILE?
+	  SKIPA				;OK
+	ERR.	(CMF,CPOPJ)		;CONFLICTING MAPPING CODE AND FLAGS
+	MOVEI	T1,.FORED		;ASSUME ONLY READING
+	TLNE	F,FL.PAT		;PATCHING?
+	MOVEI	T1,.FOSAU		;YES - USE UPDATE MODE
+	TLNE	F,FL.SIO		;SUPER I/O?
+	MOVEI	T1,.FOSIO		;YES - USE SUPER I/O MODE
+	TLO	T1,(FO.ASC)		;ASSIGN A CHANNEL
+	MOVEM	T1,FOPBLK+.FOFNC	;SAVE FUNCTION WORD
+	MOVEI	T1,.IODMP		;DUMP MODE
+	TLNE	F,FL.PIO		;PHYSICAL ONLY LOOKUP/ENTER?
+	TLO	T1,(UU.PHS)		;YES
+	MOVEM	T1,FOPBLK+.FOIOS	;SAVE IT
+	MOVEI	T1,LERBLK		;GET LOOKUP/ENTER BLOCK ADDRESS
+	MOVEM	T1,FOPBLK+.FOLEB	;SAVE IT
+	MOVEI	T1,LERSIZ		;GET SIZE OF LOOKUP/ENTER BLOCK
+	MOVEM	T1,LERBLK+.RBCNT	;SAVE IT
+	MOVE	T1,[PTHSIZ,,PTHBLK]	;GET PATH BLOCK ADDRESS
+	MOVEM	T1,FOPBLK+.FOPAT	;SAVE FOR READING PATH BACK
+	SKIPE	PTHBLK+.PTPPN		;HAVE A DIRECTORY?
+	HRRZM	T1,LERBLK+.RBPPN	;YES--SAVE FOR LOOKUP/ENTER
+	MOVE	T1,[FILSIZ,,FILBLK]	;POINT TO THE BLOCK
+	MOVEM	T1,FOPBLK+.FOFSP	;SAVE RETURNED FILESPEC POINTER
+	MOVE	T1,[FOPSIZ,,FOPBLK]	;SET UP UUO
+	FILOP.	T1,			;OPEN THE FILE
+	  ERR.	(,CPOPJ)		;FILOP. UUO FAILURE
+	MOVE	T1,FOPBLK+.FOFNC	;GET FUNCTION CODE WORD
+	AND	T1,[FO.CHN]		;KEEP JUST THE CHANNEL NUMBER
+	MOVEM	T1,FILCHN		;SAVE IT
+	PUSHJ	P,FILXTR		;EXTRACT THE FULL FILESPEC
+	JRST	CPOPJ1			;RETURN
+; Here to extract the actual filespec and return it
+; to the caller.
+;
+FILXTR:	MOVE	T1,PTHBLK+.PTSTR	;GET DEVICE NAME
+	MOVEM	T1,FOPBLK+.FODEV	;SET IT JUST INCASE PATH. UUO FAILS
+	MOVEI	T1,FILTAB		;POINT TO TABLE
+	SKIPE	FILBLK+.FOFDV		;HAVE A RETURNED FILESPEC?
+
+FILX.1:	SKIPN	(T1)			;END OF TABLE?
+	JRST	FILX.2			;YES
+	HLRZ	T2,(T1)			;GET SOURCE ADDRESS
+	HRRZ	T3,(T1)			;GET DESTINATION ADDRESS
+	SKIPE	T4,(T2)			;GET A WORD
+	MOVEM	T4,(T3)			;PUT A WORD
+	AOJA	T1,FILX.1		;LOOP
+
+FILX.2:	SETZM	MAPDAT+.MPAFS		;CLEAR FIRST WORD
+	MOVE	T1,[MAPDAT+.MPAFS,,MAPDAT+.MPAFS+1] ;SET UP BLT
+	BLT	T1,MAPDAT+.MPAFS+.MPFWD	;CLEAR BLOCK
+	MOVEI	T1,MAPDAT+.MPAFS	;POINT TO ACTUAL FILESPEC STORAGE
+	MOVEI	T2,<.MPFWD*5>-1		;GET MAXIMUM BYTE COUNT
+	PUSHJ	P,TXTSET		;SETUP BYTE POINTER AND COUNT
+	PUSHJ	P,FILOUT		;OUTPUT FILESPEC
+	POPJ	P,			;RETURN
+
+
+; Translation table
+;
+FILTAB:	FILBLK+.FOFDV,,FOPBLK+.FODEV	;DEVICE
+	FILBLK+.FOFFN,,LERBLK+.RBNAM	;FILE NAME
+	FILBLK+.FOFEX,,LERBLK+.RBEXT	;EXTENSION
+	FILBLK+.FOFPP,,PTHBLK+.PTPPN	;PPN
+	FILBLK+.FOFSF+0,,PTHBLK+.PTSFD+0;SFD #1
+	FILBLK+.FOFSF+1,,PTHBLK+.PTSFD+1;SFD #2
+	FILBLK+.FOFSF+2,,PTHBLK+.PTSFD+2;SFD #3
+	FILBLK+.FOFSF+3,,PTHBLK+.PTSFD+3;SFD #4
+	FILBLK+.FOFSF+4,,PTHBLK+.PTSFD+4;SFD #5
+	EXP	0			;TERMINATE TABLE
+SUBTTL	File I/O -- Close a file
+
+
+; Close a file
+; Call:	PUSHJ	P,FILCLS
+;
+FILCLS:	SKIPN	T1,FILCHN		;WE ONLY USE EXTENDED CHANNELS
+	POPJ	P,			;DON'T ZAP CHANNEL ZERO
+	IORI	T1,.FOREL		;INCLUDE THE FUNCTION CODE
+	MOVEM	T1,FOPBLK+.FOFNC	;SAVE IT
+	MOVE	T1,[1,,FOPBLK]		;SET UP UUO
+	FILOP.	T1,			;CLOSE THE FILE
+	  JFCL				;IGNORE ERRORS
+	SETZM	FILCHN			;SO WE DON'T TRY THIS AGAIN
+	POPJ	P,			;RETURN
+SUBTTL	File I/O -- Position a file
+
+
+; Position file for input or output
+; Call:	MOVE	T1, block number
+;	PUSHJ	P,FILIPS		;INPUT
+;	PUSHJ	P,FILOPS		;OUTPUT
+;
+FILIPS:	MOVEM	T1,FOPBLK+.FOIOS	;SAVE BLOCK NUMBER
+	MOVEI	T1,.FOUSI		;USETI FUNCTION
+	JRST	FILPOS			;CONTINUE
+FILOPS:	MOVEM	T1,FOPBLK+.FOIOS	;SAVE BLOCK NUMBER
+	MOVEI	T1,.FOUSO		;USETO FUNCTION
+FILPOS:	IOR	T1,FILCHN		;INCLUDE THE CHANNEL NUMBER
+	MOVEM	T1,FOPBLK+.FOFNC	;SAVE FUNCTION WORD
+	MOVE	T1,[2,,FOPBLK]		;SET UP UUO
+	FILOP.	T1,			;POSITION FOR INPUT OR OUTPUT
+	  POPJ	P,			;CAN'T
+	JRST	CPOPJ1			;RETURN
+SUBTTL	File I/O -- Input/Output
+
+
+FILRED:	SKIPA	T1,[.FOINP]		;INPUT FUNCTION
+FILWRT:	MOVEI	T1,.FOOUT		;OUTPUT FUNCTION
+	SETZM	IOLIST+1		;TERMINATE LIST
+	IOR	T1,FILCHN		;INCLUDE THE CHANNEL NUMBER
+	MOVEM	T1,FOPBLK+.FOFNC	;SAVE FUNCTION WORD
+	MOVEI	T1,IOLIST		;POINT TO THE I/O COMMAND LIST
+	MOVEM	T1,FOPBLK+.FOIOS	;TELL THE MONITOR
+	MOVE	T1,[2,,FOPBLK]		;SET UP UUO
+	FILOP.	T1,			;READ OR WRITE THE FILE
+	  POPJ	P,			;CAN'T
+	JRST	CPOPJ1			;RETURN
+SUBTTL	File I/O -- Scan a filespec
+
+
+; This routine will scan off a filespec and load the appropriate
+; locations in the FILOP., LOOKUP/ENTER and PATH. UUO blocks
+; Call:	MOVE	T1, address of ASCIZ filespec
+;	PUSHJ	P,SCAN
+;
+SCAN:	HRLOI	T2,377777		;A LARGE NUMBER
+	PUSHJ	P,TXTSET		;SET UP FOR TEXT I/O
+	SETZM	FOPBLK			;CLEAR THE FIRST WORD
+	MOVE	T1,[FOPBLK,,FOPBLK+1]	;SET UP BLT
+	BLT	T1,FOPBLK+FOPSIZ-1	;CLEAR THE FILOP. UUO BLOCK
+	SETZM	LERBLK			;CLEAR THE FIRST WORD
+	MOVE	T1,[LERBLK,,LERBLK+1]	;SET UP BLT
+	BLT	T1,LERBLK+LERSIZ-1	;CLEAR THE LOOKUP/ENTER UUO BLOCK
+	SETZM	PTHBLK			;CLEAR THE FIRST WORD
+	MOVE	T1,[PTHBLK,,PTHBLK+1]	;SET UP BLT
+	BLT	T1,PTHBLK+PTHSIZ-1	;CLEAR THE PATH. UUO BLOCK
+	GETPPN	T1,			;GET OUR PPN
+	  JFCL				;INCASE OF JACCT
+	MOVEM	T1,FILPPN		;SAVE IT
+	TLZ	F,FL.DEV!FL.NAM!FL.EXT!FL.DIR ;CLEAR SCANNER FLAGS
+SCAN.1:	PUSHJ	P,SIXIN			;GET A FILESPEC PART
+	JUMPN	T1,SCAN.4		;SEE WHAT WE GOT
+
+SCAN.2:	CAIN	T2,"."			;AN EXTENSION?
+	JRST	SCAN.5			;YES
+	CAIE	T2,"["			;A PATH?
+	CAIN	T2,"<"			;2741 STYLE?
+	JRST	SCAN.6			;YES TO EITHER
+	CAIN	T2," "			;SPACE?
+	JRST	SCAN.1			;KEEP SCANNING
+	PUSHJ	P,BACKUP		;BACKUP TO THE TERMINATING CHARACTER
+	JRST	SCNDEF			;CHECK LEGALITY AND DO DEFAULTING
+
+; Device
+;
+SCAN.3:	TLOE	F,FL.DEV		;ALREADY HAVE A DEVICE?
+	ERR.	(DDI,CPOPJ)		;DOUBLE DEVICE ILLEGAL
+	MOVEM	T1,FOPBLK+.FODEV	;SAVE DEVICE
+	JRST	SCAN.1			;KEEP SCANNING
+
+; File name
+;
+SCAN.4:	CAIN	T2,":"			;A DEVICE?
+	JRST	SCAN.3			;YES
+	TLOE	F,FL.NAM		;ALREADY HAVE A FILE NAME?
+	ERR.	(DFI,CPOPJ)		;DOUBLE FILE NAME ILLEGAL
+	MOVEM	T1,LERBLK+.RBNAM	;SAVE FILE NAME
+	JRST	SCAN.2			;GO EXAMINE TERMINATOR
+
+; Extension
+;
+SCAN.5:	TLOE	F,FL.EXT		;ALREADY HAVE AN EXTENSION
+	ERR.	(DEI,CPOPJ)		;DOUBLE EXTENSION ILLEGAL
+	PUSHJ	P,SIXIN			;GET A WORD
+	HLLZM	T1,LERBLK+.RBEXT	;SAVE EXTENSION
+	JRST	SCAN.2			;GO EXAMINE TERMINATOR
+
+; Path
+;
+SCAN.6:	TLOE	F,FL.DIR		;ALREADY HAVE A DIRECTORY?
+	ERR.	(DPI,CPOPJ)		;DOUBLE PATH ILLEGAL
+	PUSHJ	P,SCNPTH		;SCAN A PATH
+	  POPJ	P,			;FAILED
+	CAIE	T2,"]"			;END OF PATH?
+	CAIN	T2,">"			;2741 STYLE?
+	JRST	SCAN.1			;YES - LOOP BACK FOR MORE
+	JRST	SCAN.2			;NO - CHECK OTHER TERMINATORS
+; Scan a path
+;
+SCNPTH:	PUSHJ	P,FLUSH			;EAT LEADING SPACES AND TABS
+	CAIN	T1,"-"			;WANT DEFAULT PATH?
+	JRST	SCNP.4			;YES
+	PUSHJ	P,BACKUP		;BACKUP THE BYTE POINTER
+	PUSHJ	P,OCTIN			;GET PROJECT NUMBER
+	TLNN	T1,777777		;SIXBIT PPN?
+	HRLZS	T1			;NO
+	TLNN	T1,777777		;HAVE A PROJECT NUMBER?
+	HLL	T1,FILPPN		;NO
+	IORM	T1,PTHBLK+.PTPPN	;SAVE IT
+	TRNE	T1,777777		;SIXBIT PPN?
+	JRST	SCNP.1			;YES
+	CAIE	T2,","			;MUST HAVE A COMMA HERE
+	ERR.	(PSE,CPOPJ)		;PATH SYNTAX ERROR
+	PUSHJ	P,OCTIN			;GET PROGRAMMER NUMBER
+	TLNE	T1,777777		;SIXBIT PPN?
+	HLRZS	T1			;YES--TRUNCATE TO 18 BITS
+	TRNN	T1,777777		;HAVE A PROGRAMMER NUMBER?
+	HRR	T1,FILPPN		;NO
+	IORM	T1,PTHBLK+.PTPPN	;SAVE IT
+
+SCNP.1:	MOVEI	T4,PTHBLK+.PTSFD	;POINT TO START OF SFDS
+	HRLI	T4,-<PTHSIZ-.PTSFD-1>	;MAKE AN AOBJN POINTER
+
+SCNP.2:	CAIE	T2,","			;LEGAL SEPARATOR?
+	JRST	CPOPJ1			;NO--DONE
+	PUSHJ	P,SIXIN			;GET AN SFD
+	JUMPE	T1,[ERR. (NSI,CPOPJ)]	;NULL SFDS ARE ILLEGAL
+	MOVEM	T1,0(T4)		;SAVE IT
+	AOBJN	T4,SCNP.2		;LOOP
+	ERR.	(SND,CPOPJ)		;SFDS NESTED TOO DEEP
+
+SCNP.4:	SETOM	PTHBLK+.PTFCN		;SET FUNCTION CODE
+	MOVE	T1,[PTHSIZ,,PTHBLK]	;SET UP UUO
+	PATH.	T1,			;READ OUR DEFAULT PATH
+	  ERR.	(CRP,CPOPJ)		;UUO FAILED--CAN'T READ PATH
+	PUSHJ	P,FLUSH			;EAT SPACES AND TABS
+	JRST	CPOPJ1			;AND RETURN
+
+
+; Check for a legal filespec and do extension defaulting
+;
+SCNDEF:	MOVSI	T1,'DSK'		;GET A DEVICE
+	TLNN	F,FL.DEV		;ONE SPECIFIED?
+	MOVEM	T1,FOPBLK+.FODEV	;DEFAULT TO DSK
+	TLNN	F,FL.NAM!FL.EXT!FL.DIR	;ANY FILESPEC PARTS?
+	JRST	CPOPJ1			;NO
+	TLNN	F,FL.EXE		;.EXE FILE?
+	JRST	CPOPJ1			;A DATA FILE
+	MOVSI	T1,'EXE'		;GET AN EXTENSION
+	TLNN	F,FL.EXT		;EXTENSION SPECIFIED?
+	MOVEM	T1,LERBLK+.RBEXT	;DEFAULT IT
+	JRST	CPOPJ1			;RETURN
+SUBTTL	EXE file routines -- Load and validate directory
+
+
+; Read an .EXE file directory into core
+; Call:	PUSHJ	P,EXEDIR
+;	<NON-SKIP>			;BAD DIRECTORY OR I/O ERROR
+;	<SKIP>				;DIRECTORY IN CORE
+;
+EXEDIR:	MOVEI	T1,1			;GET STARTING BLOCK NUMBER OF DIRECTORY
+	PUSHJ	P,FILIPS		;POSITION FOR INPUT
+	  POPJ	P,			;CAN'T
+	MOVE	T2,CSHPAG		;GET STARTING PAGE NUMBER IN CACHE
+	LSH	T2,11			;CONVERT TO AN ADDRESS
+	MOVEM	T2,DIRADR		;SAVE IT
+	MOVE	T3,T2			;COPY IT
+	SETZM	DIRPGS			;CLEAR COUNT OF DIRECTORY PAGES
+
+EXED.1:	MOVE	T1,DIRADR		;GET DIRECTORY BASE ADDRESS
+	MOVE	T4,DIRPGS		;GET EXISTING COUNT OF DIRECTORY PAGES
+	CAIL	T4,PAGCNT		;ENOUGH FREE PAGES LEFT FOR MAPPING?
+	ERR.	(NRE,CPOPJ)		;NO ROOM TO CACHE .EXE FILE DIRECTORY
+	LSH	T4,-11			;CONVERT TO ADDRESS OFFSET
+	ADDI	T1,-1(T4)		;GET ADDRESS OF AVAILABLE BUFFER
+	HRLI	T1,-PAGSIZ		;MAKE AN IOWD
+	MOVEM	T1,IOLIST		;SAVE IT
+	MOVEI	T1,1(T1)		;GET ADDRESS ON NEW PAGE
+	LSH	T1,-11			;CONVERT TO A PAGE NUMBER
+	PUSHJ	P,PAGCHK		;MAKE SURE THE PAGE IS THERE
+	  POPJ	P,			;CAN'T CREATE IT
+	PUSHJ	P,FILRED		;READ A PAGE
+	  ERR.	(EIE,CPOPJ)		;.EXE FILE DIRECTORY INPUT ERROR
+	AOS	DIRPGS			;COUNT DIRECTORY PAGES READ INTO CORE
+	TRZ	T3,PAGSIZ-1		;STRIP OFF INDEX INDEX INTO PAGE
+	ADDI	T3,PAGSIZ		;ROUND UP A PAGE
+
+EXED.2:	SKIPE	T1,(T2)			;END OF DIRECTORY?
+	JRST	EXED.3			;NO
+	MOVN	T1,DIRPGS		;GET -NUMBER OF DIRECTORY PAGES
+	ADDM	T1,PAGCNT		;ADJUST COUNT OF FREE PAGES
+	MOVNS	T1			;GET +NUMBER OF DIRECTORY PAGES
+	ADDM	T1,CSHPAG		;UPDATE FIRST FREE PAGE FOR CACHING
+	JRST	CPOPJ1			;AND RETURN
+EXED.3:	HLRZS	T1			;KEEP JUST THE BLOCK TYPE
+	MOVE	T4,[-EXELEN,,EXETAB]	;AOBJN POINTER TO EXE BLOCK TYPES
+	CAME	T1,(T4)			;A MATCH?
+	AOBJN	T4,.-1			;LOOP
+	JUMPGE	T4,[ERR. (BED,CPOPJ)]	;BAD EXE FILE DIRECTORY
+	HRRZ	T1,(T2)			;GET OFFSET TO NEXT BLOCK
+	ADD	T2,T1			;POINT TO IT
+	CAMGE	T2,T3			;NEED ANOTHER DIRECTORY PAGE?
+	JRST	EXED.2			;CHECK OUT ALL BLOCKS
+	JRST	EXED.1			;GO READ ANOTHER PAGE INTO CORE
+SUBTTL	EXE file routines -- Find a file page
+
+
+; Search a directory for a page
+; Call:	MOVE	T1, page number
+;	PUSHJ	P,EXEPAG
+;	<NON-SKIP>			;PAGE NOT FOUND, I/O ERROR
+;	<SKIP>				;PAGE FOUND, T1:= FILE PAGE NUMBER
+;
+EXEPAG:	TLNN	F,FL.EXE		;MAPPING AN .EXE FILE?
+	JRST	CPOPJ1			;NO - THEN ITS A DATA FILE
+	MOVE	T4,T1			;SAVE PAGE NUMBER
+	MOVEI	T1,.SVDIR		;GET DESIRED BLOCK TYPE
+	PUSHJ	P,EXEBLK		;SEARCH FOR IT
+	  ERR.	(BED,CPOPJ)		;BAD EXE FILE DIRECTORY
+	MOVE	T1,T4			;GET PAGE NUMBER BACK AGAIN
+	ADDI	T2,1			;POINT TO NEXT WORD
+
+EXEP.1:	HLRZ	T3,.SVFPF(T2)		;GET POSSIBLE BLOCK TYPE
+	CAIN	T3,.SVEND		;END OF DIRECTORY?
+	  ERR.	(NXA,CPOPJ)		;NON-EXISTANT ADDRESS IN FILE
+	LDB	T3,EXEREP		;GET REPEAT COUNT
+	LDB	T4,EXEPPN		;GET PROCESS PAGE NUMBER
+	ADD	T4,T3			;GET ENDING PAGE NUMBER
+	CAMGE	T4,T1			;HIGH PAGE LESS THAN TARGET PAGE?
+	JRST	EXEP.3			;YES
+
+EXEP.2:	CAMN	T4,T1			;FOUND THE PAGE WE WANT?
+	JRST	EXEP.4			;YES
+	SUBI	T4,1			;DECREMENT PAGE NUMBER
+	SOJGE	T3,EXEP.2		;LOOP
+
+EXEP.3:	ADDI	T2,2			;POINT TO NEXT DIRECTORY PAGE ENTRY
+	JRST	EXEP.1			;TRY AGAIN
+
+EXEP.4:	LDB	T1,EXEFPN		;GET FILE PAGE NUMBER
+	ADD	T1,T3			;ADD REPEAT COUNT
+	JRST	CPOPJ1			;AND RETURN
+
+
+; Byte pointers to directory entry parts
+;
+EXEREP:	POINTR	(.SVPPC(T2),SV%REP)	;REPEAT COUNT
+EXEPPN:	POINTR	(.SVPPC(T2),SV%PPN)	;PROCESS PAGE NUMBER
+EXEFPN:	POINTR	(.SVFPF(T2),SV%FPN)	;FILE PAGE NUMBER
+SUBTTL	EXE file routines -- Find a directory block
+
+
+; Find a block in an .EXE directory
+; Call:	MOVE	T1, block type
+;	PUSHJ	P,EXEBLK
+;	<NON-SKIP>		;CAN'T FIND IT
+;	<SKIP>			;BLOCK FOUND
+;
+; On sucessful return, T1:= block type,,length and T2:= directory address
+;
+EXEBLK:	MOVE	T2,[-EXELEN,,EXETAB]	;AOBJN POINTER TO EXE BLOCK TYPES
+	CAME	T1,(T2)			;A MATCH?
+	AOBJN	T2,.-1			;LOOP
+	JUMPGE	T2,[ERR. (BED,CPOPJ)]	;BAD EXE FILE DIRECTORY
+	MOVE	T2,DIRADR		;GET STARTING ADDRESS OF DIRECTORY
+
+EXEB.1:	SKIPN	T3,(T2)			;END OF DIRECTORY?
+	ERR.	(BED,CPOPJ)		;BAD EXE FILE DIRECTORY
+	HLRZS	T3			;PUT IN RH
+	CAMN	T3,T1			;A MATCH?
+	JRST	EXEB.2			;YES
+	HRRZ	T3,(T2)			;GET LENGTH
+	ADD	T2,T3			;POINT TO NEXT BLOCK
+	JRST	EXEB.1			;LOOP
+
+EXEB.2:	MOVE	T1,(T2)			;GET BLOCK TYPE,,LENGTH
+	JRST	CPOPJ1			;AND RETURN
+
+
+; Table of legal .EXE file directory block types
+;
+EXETAB:	EXP	.SVDIR			;START OF FILE TO CORE MAP
+	EXP	.SVEND			;END OF EXE FILE DIRECTORY
+	EXP	.SVSTA			;ENTRY VECTOR
+EXELEN==.-EXETAB			;LENGTH OF TABLE
+SUBTTL	FORTRAN interface
+
+
+MAPD::	MOVEI	.AP,@0(16)		;GET ARGUMENT POINTER
+	PUSHJ	P,.MAPD			;DO A DEPOSIT
+	 JRST	MAPFER			;ERROR
+	POPJ	P,			;AND RETURN
+
+MAPE::	MOVE	.AP,@0(16)		;GET ARG
+	PUSHJ	P,.MAPE			;EXAMINE
+	 JRST	MAPFER			;ERROR
+	MOVE	0,.AP			;INTO 0 FOR FORTRAN FUNCTION
+	POPJ	P,			;AND RETURN
+
+MAPG::	MOVE	.AP,@0(16)		;GET ARG
+	PUSHJ	P,.MAPG			;GETTAB SIMULATION
+	 JRST	MAPFER
+	MOVE	0,.AP			;INTO 0 FOR FORTRAN FUNCTION
+	POPJ	P,			;AND RETURN
+
+MAPI::	MOVEI	.AP,@0(16)		;ADDRESS OF ARG BLOCK
+	PUSHJ	P,.MAPI			;INITIALIZE
+	 JRST	MAPFER			;ERROR
+	POPJ	P,			;AND RETURN
+
+MAPJ::	MOVEI	.AP,@0(16)		;ADDRESS OF ARG BLOCK
+	PUSHJ	P,.MAPJ			;DO A JOBPEK
+	 JRST	MAPFER			;ERROR
+	POPJ	P,			;AND RETURN
+
+
+; Here on an error. See if error dispatch provided on call
+;
+MAPFER:	HLRE	T1,-1(16)		;GET ARG COUNT
+	CAMLE	T1,[-2]			;TWO OR MORE?
+	 JRST	MAPFE1			;NO
+	MOVEI	T1,@1(16)		;YES--GET DISPATCH
+	HRRM	T1,(P)			;STUFF ON STACK
+	POPJ	P,			;AND DISPATCH
+
+MAPFE1:	OUTSTR	[ASCIZ/?Unhandled MAP error: /]
+	OUTSTR	MAPDAT+.MPMET
+	OUTSTR	[BYTE(7) 15,12,0]
+	OUTSTR	MAPDAT+.MPXET
+	EXIT
+SUBTTL	Context switch
+
+
+; Here to save the user's ACs and set up a new stack. This is a
+; co-routine that may NOT be called recursively to save 'n' sets
+; of ACs. Skip returns are handled.
+; Call:	PUSHJ	P,CONTXT
+;
+CONTXT:	AOSE	CTXFLG			;ALREADY CONTEXT SWITCHED?
+	POPJ	P,			;YES - THEN DO NOTHING
+	MOVEM	0,USRACS+0		;SAVE AC 0
+	MOVE	0,[1,,USRACS+1]		;SET UP BLT
+	BLT	0,USRACS+17		;SAVE ACS 1 - 17
+	MOVE	P,[IOWD	PDLSIZ,MAPPDL]	;SETUP INTERNAL PDL
+	MOVE	F,MAPFLG		;GET MAPPING FLAGS
+	TLNE	F,FL.RTM		;WANT TO ACCUMLATE RUNTIME?
+	PUSHJ	P,GETRTM		;YES
+	SETZM	MAPDAT+.MPECD		;CLEAR OUT ANY OLD ERROR CODE
+	SETZM	MAPDAT+.MPMET		;INSURE NO JUNK MAPPING ERROR TEXT
+	SETZM	MAPDAT+.MPXET		;INSURE NO JUNK EXTENDED ERROR TEXT
+	MOVE	T2,USRACS+P		;GET OLD PDL POINTER
+	MOVEI	T2,@0(T2)		;GET CALLER'S ADDRESS
+	PUSHJ	P,(T2)			;CALL THE CALLER
+	  TDZA	T1,T1			;INDICATE NON-SKIP RETURN
+	HRROI	T1,-1			;INDICATE SKIP RETURN
+	MOVEM	T1,TFFLAG		;SET TRUE OR FALSE
+	TLNE	F,FL.RTM		;WANT TO ACCUMLATE RUNTIME?
+	PUSHJ	P,GETRTM		;YES
+	MOVEM	F,MAPFLG		;UPDATE MAPPING FLAGS
+	MOVE	0,[USRACS+1,,1]		;SET UP BLT
+	BLT	0,17			;RESTORE THE ACS
+	MOVE	0,USRACS+0		;RELOAD AC 0
+	POP	P,(P)			;PRUNE STACK
+	SETOM	CTXFLG			;RESET CONTEXT FLAG
+	SKIPGE	TFFLAG			;FUNCTION FAIL?
+CPOPJ1:	AOS	(P)			;NO - THEN SKIP
+CPOPJ:	POPJ	P,			;RETURN
+
+
+GETRTM:	MOVSI	T2,(RN.PCN)		;RETURN PRECISION RUNTIME
+	RUNTIM	T2,			;GET IT
+	EXCH	T2,CPUTIM		;SAVE IT AND GET PREVIOUS
+	JUMPE	T2,CPOPJ		;RETURN IF CALLED AT CONTEXT ENTRY
+	SETZ	T3,			;CLEAR FOR NEXT TIME
+	EXCH	T3,CPUTIM		;AND GET OUR RUNTIME NOW
+	SUB	T3,T2			;COMPUTE IMCREMENTAL
+	ADDM	T3,MAPDAT+.MPRTM	;ACCUMULATE IT
+	POPJ	P,			;AND RETURN
+SUBTTL	Error handling
+
+
+ERROR:	DMOVEM	T1,ERRACS+0		;SAVE T1 & T2
+	DMOVEM	T3,ERRACS+2		;SAVE T3 & T4
+
+	MOVEI	T1,@(P)			;GET ADDRESS OF ARGUMENTS
+	MOVE	T1,(T1)			;GET ERROR CODE,,RETURN ADDRESS
+	POP	P,(P)			;TRIM STACK
+	SKIPN	MAPDAT+.MPECD		;NESTED ERRORS?
+	HLRZM	T1,MAPDAT+.MPECD	;STORE NEW ERROR CODE
+	HLL	T1,(P)			;GET PC FLAGS OR SECTION NUMBER
+	EXCH	T1,(P)			;SET RETURN PC AND GET PC OF ERROR
+
+	MOVEI	T1,@T1			;EXTRACT JUST THE PC
+	SUBI	T1,2			;POINT TO OFFENDING INSTRUCTION
+	MOVEM	T1,ERRPC		;SAVE IT
+	LDB	T1,[POINT 9,@ERRPC,8]	;GET THE OPCODE
+	SKIPE	T1			;OPCODE ZERO IS MEANINGLESS
+	CAILE	T1,100			;A UUO?
+	SKIPA
+	PUSHJ	P,ERRUUO		;GENERATE UUO ERROR TEXT
+	PUSHJ	P,ERRMAP		;DO THE MAPPING ERROR
+
+	DMOVE	T1,ERRACS+0		;RESTORE T1 & T2
+	DMOVE	T3,ERRACS+2		;RESTORE T3 & T4
+	POPJ	P,			;AND RETURN
+; Here to type specific mapping errors
+;
+ERRMAP:	SETZM	MAPDAT+.MPMET		;CLEAR THE FIRST WORD
+	MOVE	T1,[MAPDAT+.MPMET,,MAPDAT+.MPMET+1] ;SET UP BLT
+	BLT	T1,MAPDAT+.MPMET+.MPEWD-1 ;CLEAR ENTIRE BLOCK
+	SKIPN	T3,MAPDAT+.MPECD	;HAVE AN ERROR?
+	POPJ	P,			;NO
+	HLLZ	T1,MAPERR-1(T3)		;GET PREFIX
+	HLRZM	T1,MAPDAT+.MPPFX	;SAVE FOR CALLER
+	MOVEI	T1,MAPDAT+.MPMET	;STORE TEXT HERE
+	MOVEI	T2,<.MPEWD*5>-1		;MAX NUMBER OF CHARACTERS
+	PUSHJ	P,TXTSET		;SET IT UP
+	HRRZ	T1,MAPERR-1(T3)		;GET ASSOCIATED ERROR TEXT
+	PUSHJ	P,TSTRG			;TYPE IT
+
+ERRM.1:	CAIE	T3,MPGUF%		;GETTAB UUO FAILURE?
+	JRST	ERRM.2			;NO
+	MOVEI	T1,[ASCIZ |; table = |]	;GET TEXT
+	PUSHJ	P,TSTRG			;TYPE IT
+	HRRE	T1,USRACS+.AP		;GET TABLE NUMBER
+	PUSHJ	P,OCTOUT		;TYPE IT
+	MOVEI	T1,[ASCIZ |, index = |]	;GET TEXT
+	PUSHJ	P,TSTRG			;TYPE IT
+	HLRE	T1,USRACS+.AP		;GET INDEX
+	PUSHJ	P,OCTOUT		;TYPE IT
+	JRST	ERRM.X			;FINISH UP
+
+ERRM.2:	CAIE	T3,MPDAF%		;DEPOSIT ADDRESS FAILURE?
+	CAIN	T3,MPEAF%		;EXAMINE ADDRESS FAILURE?
+	SKIPA	T1,USRACS+.AP		;YES--GET ARGUMENT
+	JRST	ERRM.3			;NO
+	CAIN	T3,MPDAF%		;DEPOSIT?
+	MOVE	T1,0(T1)		;GET ADDRESS
+	PUSH	P,T1			;SAVE IT
+	MOVEI	T1,[ASCIZ |; address = |]	;GET TEXT
+	PUSHJ	P,TSTRG			;TYPE IT
+	POP	P,T1			;RESTORE ADDRESS
+	PUSHJ	P,PCOUT			;TYPE IT
+	JRST	ERRM.X			;FINISH UP
+
+ERRM.3:	CAIE	T3,MPMIF%		;MAPPER INITIALIZATION FAILURE
+	JRST	ERRM.X			;NO
+	HRRZ	T3,F			;GET MAPPING CODE
+	CAIE	T3,.MPFIL		;FILE MODE?
+	JRST	ERRM.X			;NO
+	MOVEI	T1,[ASCIZ |; file = |]	;GET TEXT
+	PUSHJ	P,TSTRG			;TYPE IT
+	MOVE	T1,USRACS+.AP		;GET ARGUMENT ADDRESS
+	MOVE	T1,.MPARG(T1)		;GET ADDRESS OF FILESPEC ADDRESS
+	SKIPE	MAPDAT+.MPAFS		;HAVE ACTUAL FILESPEC YET?
+	MOVEI	T1,MAPDAT+.MPAFS	;YES--USE THAT
+	PUSHJ	P,TSTRG			;TYPE IT
+	JRST	ERRM.X			;FINISH UP
+
+ERRM.X:	POPJ	P,			;AND RETURN
+; Table of mapping errors
+;
+	...ERR==0
+MAPERR:	MERR.	(BED,<Bad EXE file directory>)
+	MERR.	(CMF,<Conflicting mapping code and flags>)
+	MERR.	(CRP,<Cannot read default path>)
+	MERR.	(DAF,<Deposit address failure>)
+	MERR.	(DDI,<Double device illegal>)
+	MERR.	(DEI,<Double extension illegal>)
+	MERR.	(DFI,<Double file name illegal>)
+	MERR.	(DPI,<Double path illegal>)
+	MERR.	(DVM,<Deposit value doesn't match existing word>)
+	MERR.	(EAF,<Examine address failure>)
+	MERR.	(ECS,<Left eye can't SPY>)
+	MERR.	(EIE,<EXE file directory input error>)
+	MERR.	(GUF,<GETTAB UUO/simulation failure>)
+	MERR.	(HAF,<Hash table/chunk allocation failure>)
+	MERR.	(IAD,<Illegal address>)
+	MERR.	(ICS,<Illegal cache size requested>)
+	MERR.	(IJN,<Illegal job number>)
+	MERR.	(IMC,<Illegal mapping code>)
+	MERR.	(IWE,<Illegal to write Exec Virtual Memory>)
+	MERR.	(IWU,<Illegal to write the UPMP>)
+	MERR.	(JNA,<Job not addressable>)
+	MERR.	(JRW,<JOBPEK UUO failed to read/write another job>)
+	MERR.	(JSO,<Job swapped out>)
+	MERR.	(MIF,<Mapper initialization failure>)
+	MERR.	(NAP,<No access to requested page>)
+	MERR.	(NEB,<No EPT for boot CPU>)
+	MERR.	(NFC,<No free chunks for cache>)
+	MERR.	(NRE,<No room to cache EXE file directory>)
+	MERR.	(NSI,<Null SFD illegal>)
+	MERR.	(NXA,<Non-existant address in file>)
+	MERR.	(PNC,<Page not in core>)
+	MERR.	(PSE,<Path syntax error>)
+	MERR.	(SIR,<SPT index out of range>)
+	MERR.	(SND,<SFDs nested too deep>)
+	MERR.	(UPC,<Unimplemented KL paging code>)
+; Here to type specific UUO error text
+;
+ERRUUO:	PUSHJ	P,UUOERR		;TRANSLATE ERROR CODE
+	SETZM	MAPDAT+.MPXET		;CLEAR THE FIRST WORD
+	MOVE	T1,[MAPDAT+.MPXET,,MAPDAT+.MPXET+1] ;SET UP BLT
+	BLT	T1,MAPDAT+.MPXET+.MPEWD-1 ;CLEAR ENTIRE BLOCK
+	MOVEI	T1,MAPDAT+.MPXET	;STORE TEXT HERE
+	MOVEI	T2,<.MPEWD*5>-1		;MAX NUMBER OF CHARACTERS
+	PUSHJ	P,TXTSET		;SET IT UP
+	MOVEI	T1,11			;GET A <TAB>
+	PUSHJ	P,TYO			;TYPE IT
+	MOVE	T1,ERRNAM		;GET UUO NAME
+	PUSHJ	P,SIXOUT		;TYPE IT
+	MOVEI	T1,[ASCIZ | UUO error |] ;GET TEXT
+	PUSHJ	P,TSTRG			;TYPE IT
+	LDB	T1,[POINT 4,@ERRPC,12]	;GET UUO AC
+	CAIG	T1,T4			;WITHIN THE RANGE
+	CAIGE	T1,T1			;OF T1 - T4?
+	SKIPA	T1,(T1)			;NO--GET THE ERROR CODE
+	MOVE	T1,ERRACS-T1(T1)	;YES--RELOCATE AND GET THE CODE
+	PUSHJ	P,OCTOUT		;TYPE IT
+	MOVEI	T1,[ASCIZ | at PC |]	;GET TEXT
+	PUSHJ	P,TSTRG			;TYPE IT
+	MOVE	T1,ERRPC		;GET PC WHERE UUO FAILED
+	PUSHJ	P,PCOUT			;TYPE IT
+	MOVEI	T1,[ASCIZ |; |]		;GET SEPARATOR
+	PUSHJ	P,TSTRG			;TYPE IT
+	MOVE	T1,ERRTXT		;GET ADDRESS OF TEXT FOR THIS ERROR
+	PUSHJ	P,TSTRG			;TYPE IT
+	PUSHJ	P,TCRLF			;TYPE A CRLF
+	MOVEI	T1,11			;GET A TAB
+	PUSHJ	P,TYO			;TYPE IT
+	MOVEI	T1,VERSIO		;POINT TO OUR VERSION
+	PUSHJ	P,TSTRG			;TYPE IT
+	MOVEI	T1,[ASCIZ | called from PC |]
+	PUSHJ	P,TSTRG			;TYPE TEXT
+	MOVE	T1,USRACS+P		;GET CALLER'S STACK POINTER
+	MOVEI	T1,@-1(T1)		;GET CALLER'S PC +1
+	SUBI	T1,1			;ADJUST IT
+	PUSHJ	P,PCOUT			;TYPE THE PC
+	MOVEI	T1,[ASCIZ |, Mode = |]	;GET TEXT
+	PUSHJ	P,TSTRG			;TYPE IT
+	MOVE	T1,CODTAB(F)		;GET MAPPING CODE NAME
+	PUSHJ	P,TSTRG			;TYPE IT
+	MOVEI	T1,[ASCIZ | (physical)|] ;MORE CHATTER
+	TLNE	F,FL.PPM		;PHYSICAL PAGE MAPPING?
+	PUSHJ	P,TSTRG			;YES
+	POPJ	P,			;RETURN
+; Translate UUO error code to text
+; Note: GETTAB failures are not trapped here
+;
+UUOERR:	MOVE	T1,[-UUOTSZ,,UUOTAB]	;AOBJN POINTER
+	MOVE	T2,@ERRPC		;GET UUO IN QUESTION
+	TDZ	T2,[Z 17,@UU.PHY(17)]	;CLEAR OUT JUNK
+
+UUOE.1:	CAMN	T2,0(T1)		;A MATCH?
+	JRST	UUOE.2			;YES
+	ADD	T1,[2,,2]		;ACCOUNT FOR THREE WORD ENTRIES
+	AOBJN	T1,UUOE.1		;TRY THE NEXT ONE
+	MOVE	T2,['??????']		;DON'T KNOW THAT ONE
+	JRST	UUOE.4			;STRANGE
+
+UUOE.2:	MOVE	T2,1(T1)		;GET UUO NAME
+	MOVE	T1,2(T1)		;AOBJN POINTER TO UUO SPECIFIC TABLE
+	LDB	T3,[POINT 4,@ERRPC,12]	;GET UUO AC
+	CAIG	T3,T4			;WITHIN THE RANGE
+	CAIGE	T3,T1			;OF T1 - T4?
+	SKIPA	T3,(T3)			;NO--GET THE ERROR CODE
+	MOVE	T3,ERRACS-T1(T3)	;YES--RELOCATE AND GET THE CODE
+
+UUOE.3:	HLRZ	T4,(T1)			;GET AN ERROR CODE
+	CAMN	T3,T4			;A MATCH?
+	JRST	UUOE.5			;YES
+	AOBJN	T1,UUOE.3		;LOOP
+
+UUOE.4:	SKIPA	T3,[[ASCIZ |Unknown UUO error code|]]
+
+UUOE.5:	HRRZ	T3,(T1)			;GET ERROR TEXT
+	MOVEM	T2,ERRNAM		;SAVE UUO NAME
+	MOVEM	T3,ERRTXT		;SAVE ERROR TEXT
+	POPJ	P,			;RETURN
+
+UUOTAB:	EXP	<FILOP.>,<SIXBIT /FILOP./>,<-FOPESZ,,FOPERR>
+	EXP	<JOBPEK>,<SIXBIT /JOBPEK/>,<-JPKESZ,,JPKERR>
+	EXP	<PAGE. >,<SIXBIT /PAGE. />,<-PAGESZ,,PAGERR>
+	EXP	<PATH. >,<SIXBIT /PATH. />,<-PATESZ,PATERR>
+	EXP	<POKE. >,<SIXBIT /POKE. />,<-POKESZ,,POKERR>
+UUOTSZ==.-UUOTAB
+; FILOP. UUO errors
+;
+FOPERR:	ERFNF%,,[ASCIZ |File not found|]
+	ERIPP%,,[ASCIZ |Incorrect PPN|]
+	ERPRT%,,[ASCIZ |Protection failure|]
+	ERFBM%,,[ASCIZ |File being modified|]
+	ERDNA%,,[ASCIZ |Device not available|]
+	ERNSD%,,[ASCIZ |No such device|]
+	ERWLK%,,[ASCIZ |Write-locked|]
+	ERSNF%,,[ASCIZ |SFD not found|]
+	ERSLE%,,[ASCIZ |Search list empty|]
+	ERLVL%,,[ASCIZ |SFD nest level too deep|]
+	ERNCE%,,[ASCIZ |No-creates allowed in search list|]
+	ERFCU%,,[ASCIZ |Can't update file|]
+	ERENQ%,,[ASCIZ |File has outstanding locks set|]
+	ERDDU%,,[ASCIZ |Device "down" and unusable|]
+	ERDRS%,,[ASCIZ |Device is restricted|]
+	ERDCM%,,[ASCIZ |Device controlled by MDA|]
+	ERDAJ%,,[ASCIZ |Device allocated to another job|]
+	ERIDM%,,[ASCIZ |Illegal I/O data mode|]
+	ERNPC%,,[ASCIZ |No per-process space for extended channel|]
+	ERNFC%,,[ASCIZ |No free channels available|]
+	ERACR%,,[ASCIZ |Address check reading arguments|]
+	ERACS%,,[ASCIZ |Address check storing answer|]
+FOPESZ==.-FOPERR
+
+; JOBPEK UUO errors
+;
+JPKERR:	JKNPV%,,[ASCIZ |No privileges|]
+	JKIJN%,,[ASCIZ |Illegal job number|]
+	JKSWP%,,[ASCIZ |Job swapped out or in transit|]
+	JKIAD%,,[ASCIZ |Illegal address|]
+	JKDNA%,,[ASCIZ |Data not addressable|]
+	JKPNC%,,[ASCIZ |Page not in core|]
+	JKIOE%,,[ASCIZ |I/O error|]
+	JKABZ%,,[ASCIZ |Allocated but zero page|]
+JPKESZ==.-JPKERR
+
+; PAGE. UUO errors
+;
+PAGERR:	PAGUF%,,[ASCIZ |Unimplemented function|]
+	PAGIA%,,[ASCIZ |Illegal argument|]
+	PAGIP%,,[ASCIZ |Illegal page number|]
+	PAGCE%,,[ASCIZ |Page can't exist but does|]
+	PAGME%,,[ASCIZ |Page must exist but doesn't|]
+	PAGMI%,,[ASCIZ |Page must be in core but isn't|]
+	PAGCI%,,[ASCIZ |Page can't be in core but is|]
+	PAGSH%,,[ASCIZ |Page is in a sharable high segment|]
+	PAGIO%,,[ASCIZ |Paging I/O error|]
+	PAGNS%,,[ASCIZ |No swapping space available|]
+	PAGLE%,,[ASCIZ |Core limit exceeded|]
+	PAGIL%,,[ASCIZ |Illegal if locked|]
+	PAGNX%,,[ASCIZ |Cannot create allocated but zero page|]
+	PAGNP%,,[ASCIZ |Not privileged|]
+PAGESZ==.-PAGERR
+; PATH. UUO errors
+;
+PATERR:	PTNSJ%,,[ASCIZ |No such job|]
+	PTNAI%,,[ASCIZ |Number of arguments illegal|]
+PATESZ==.-PATERR
+
+; POKE. UUO errors
+;
+POKERR:	PKNPV%,,[ASCIZ |No privileges|]
+	PKDIF%,,[ASCIZ |Old value doesn't match existing word|]
+	PKBAD%,,[ASCIZ |Illegal address|]
+POKESZ==.-POKERR
+SUBTTL	AC save routines
+
+
+; Save T1
+;
+SAVT1:	PUSH	P,T1			;SAVE T1
+	PUSHJ	P,@-1(P)		;CALL THE CALLER
+	  SKIPA				;NON-SKIP RETURN
+	AOS	-2(P)			;ADJUST RETURN PC
+	POP	P,T1			;RESTORE T1
+	SUB	P,[1,,1]		;ADJUST STACK
+	POPJ	P,			;RETURN
+
+
+; Save T1 and T2
+;
+SAVT2:	ADD	P,[2,,2]		;ADJUST STACK
+	DMOVEM	T1,-1(P)		;SAVE T1 AND T2
+	PUSHJ	P,@-2(P)		;CALL THE CALLER
+	  SKIPA				;NON-SKIP RETURN
+	AOS	-3(P)			;ADJUST RETURN PC
+	DMOVE	T1,-1(P)		;RESTORE T1 AND T2
+	SUB	P,[3,,3]		;ADJUST STACK
+	POPJ	P,			;RETURN
+
+
+; Save T1, T2, and T3
+;
+SAVT3:	ADD	P,[3,,3]		;ADJUST STACK
+	DMOVEM	T1,-2(P)		;SAVE T1 AND T2
+	MOVEM	T3,0(P)			;SAVE T3
+	PUSHJ	P,@-3(P)		;CALL THE CALLER
+	  SKIPA				;NON-SKIP RETURN
+	AOS	-4(P)			;ADJUST RETURN PC
+	DMOVE	T1,-2(P)		;RESTORE T1 AND T2
+	MOVE	T3,0(P)			;RESTORE T3
+	SUB	P,[4,,4]		;ADJUST STACK
+	POPJ	P,			;RETURN
+; Save T1, T2, T3, and T4
+;
+SAVT4:	ADD	P,[4,,4]		;ADJUST STACK
+	DMOVEM	T1,-3(P)		;SAVE T1 AND T2
+	DMOVEM	T3,-1(P)		;SAVE T3 AND T4
+	PUSHJ	P,@-4(P)		;CALL THE CALLER
+	  SKIPA				;NON-SKIP RETURN
+	AOS	-5(P)			;ADJUST RETURN PC
+	DMOVE	T1,-3(P)		;RESTORE T1 AND T2
+	DMOVE	T3,-1(P)		;RESTORE T3 AND T4
+	SUB	P,[5,,5]		;ADJUST STACK
+	POPJ	P,			;RETURN
+
+
+; Save F
+;
+SAVEF:	PUSH	P,F			;SAVE F
+	PUSHJ	P,@-1(P)		;CALL THE CALLER
+	  SKIPA				;NON-SKIP RETURN
+	AOS	-2(P)			;ADJUST RETURN PC
+	POP	P,F			;RESTORE F
+	SUB	P,[1,,1]		;ADJUST STACK
+	POPJ	P,			;RETURN
+SUBTTL	Literals
+
+
+	LIT
+
+MPHEND::!				;END OF THE HIGH SEGMENT
+HGHSIZ==MPHEND-HGHORG			;LENGTH OF THE HIGH SEGMENT
+SUBTTL	Data storage
+
+
+	RELOC	0			;LOW SEGMENT
+
+MAPARG::BLOCK	.MPMAX			;PLACE FOR PEOPLE TO PUT ARG BLOCKS
+
+ZBEG:!					;START OF DATA TO ZERO
+
+MAPDAT::BLOCK	.MPLEN			;DATA TABLE
+CTXFLG:	BLOCK	1			;CONTEXT FLAG
+USRACS:	BLOCK	20			;USER'S ACS
+MAPPDL:	BLOCK	PDLSIZ			;INTERNAL PDL
+TFFLAG:	BLOCK	1			;TRUE/FALSE FLAG
+CPUTIM:	BLOCK	1			;USED FOR RUNTIM ACCUMULATION
+ERRACS:	BLOCK	4			;ERROR ACS (T1 - T4)
+ERRPC:	BLOCK	1			;ERROR PC
+ERRNAM:	BLOCK	1			;NAME OF UUO
+ERRTXT:	BLOCK	1			;ADDRESS OF UUO ERROR TEXT
+POKBLK:	BLOCK	3			;POKE. UUO BLOCK
+CPYBLK:	BLOCK	.CBXLN			;COPY BLOCK
+JPKFLG:	BLOCK	1			;JOBPEK FLAG WORD
+
+MAPFLG:	BLOCK	1			;MAPPING FLAGS
+USRJOB:	BLOCK	1			;USER JOB NUMBER
+UUOARG:	BLOCK	2			;UUO ARGUMENTS
+
+HASHTA:	BLOCK	1			;HASH TABLE ADDRESS
+HASHTL:	BLOCK	1			;HASH TABLE LENGTH
+HASHCA:	BLOCK	1			;ADDRESS OF FIRST CHUNK
+HASHCL:	BLOCK	1			;LENGTH OF CHUNK AREA
+PAGCNT:	BLOCK	1			;COUNT OF AVAILABLE PAGES FOR MAPPING
+CSHXCT:	BLOCK	1			;INSTRUCTION TO TEST PHYSICAL PAGE BIT
+CSHPAG:	BLOCK	1			;FIRST PAGE NUMBER FOR MAPPING
+CBHEAD:	BLOCK	.CBLEN			;CACHE BLOCK LIST HEADER
+PAGFUN:	BLOCK	1			;FUNNY PAGE UPT OFFSET
+PAGFLG:	BLOCK	1			;PAGE MAP ENTRY FLAG
+PAGIDX:	BLOCK	1			;SECONDARY PAGE MAP INDEX
+
+JOBN:	BLOCK	1			;NUMBER OF JOBS IN THE SYSTEM
+SEGN:	BLOCK	1			;NUMBER OF SEGMENTS IN THE SYSTEM
+KLPFLG:	BLOCK	1			;KL PAGING FLAG
+EDVADR:	BLOCK	1			;EDV ADDRESS
+EDVCNT:	BLOCK	1			;EDV COUNT WORD
+EDVDAT:	BLOCK	1			;EDV FLAGS AND CPU DATA WORD
+EPTADR:	BLOCK	1			;EPT ADDRESS
+SPTADR:	BLOCK	1			;SPT ADDRESS
+NUMTAB:	BLOCK	1			;POINTER TO NUMTAB IN THE MONITOR
+RNGTAB:	BLOCK	1			;POINTER TO RNGTAB IN THE MONITOR
+JBTSGN:	BLOCK	1			;POINTER TO JBTSGN IN THE MONITOR
+JBTPDB:	BLOCK	1			;POINTER TO JBTPDB IN THE MONITOR
+JBTADR:	BLOCK	1			;POINTER TO JBTADR IN THE MONITOR
+JBTUPM:	BLOCK	1			;POINTER TO JBTUPM IN THE MONITOR
+HIORG:	BLOCK	1			;MONITOR'S HIGH SEGMENT ORIGIN
+HIFLAG:	BLOCK	1			;HIGH SEGMENT MAPPED FALG
+HGHUEA:	BLOCK	1			;HIGHEST UNMAPPED EXEC ADDRESS
+PPABEG:	BLOCK	1			;BEGINING PER-PROCESS ADDRESS
+PPAEND:	BLOCK	1			;ENDING PER-PROCESS ADDRESS +1
+GTBARG:	BLOCK	1			;GETTAB ARGUMENT
+GTBNUM:	BLOCK	1			;NUMTAB ENTRY FOR CURRENT GETTAB
+GTBIDX:	BLOCK	1			;INDEX INTO GETTAB DISPATCH TABLE
+GTBRNG:	BLOCK	1			;LOWER,,UPPER LIMIT FOR RANGE
+
+BYTPTR:	BLOCK	1			;BYTE POINTER
+BYTCNT:	BLOCK	1			;BYTE COUNT
+FILCHN:	BLOCK	1			;FILE CHANNEL NUMBER
+IOLIST:	BLOCK	2			;IOWD
+DIRADR:	BLOCK	1			;.EXE DIRECTORY ADDRESS
+DIRPGS:	BLOCK	1			;NUMBER OF PAGES IN .EXE DIRECTORY
+FOPBLK:	BLOCK	FOPSIZ			;FILOP. UUO BLOCK
+LERBLK:	BLOCK	LERSIZ			;LOOKUP/ENTER UUO BLOCK
+PTHBLK:	BLOCK	PTHSIZ			;PATH. UUO BLOCK
+FILBLK:	BLOCK	FILSIZ			;BLOCK TO RETURN FULL FILESPEC
+FILPPN:	BLOCK	1			;DEFAULT PPN
+
+ZEND:!					;END OF DATA TO ZERO
+
+SUBTTL	End
+
+
+	END

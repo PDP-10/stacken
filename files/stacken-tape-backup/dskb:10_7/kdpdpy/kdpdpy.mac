@@ -1,0 +1,526 @@
+	title KDPDPY -- DPY program to display KMC/DUP status
+
+	sall
+	search	jobdat		;get job-data area definitions
+	search	dpydef		;get dbell's dpy definitions
+	search	uuosym		;get tops-10's uuo definitions
+	search	netprm		;get kmc/dup block offsets
+	search	macten		;get macro definitions
+
+	.text	"/locals/symseg:high"	;keep symbols around
+	.require dpy		;make sure dpy gets loaded
+
+	twoseg	600000		;two segment assembly
+
+	kdywho==0		;who edited kld.mac last
+	kdyver==1		;major version number
+	kdymin==0		;minor version number
+	kdyedt==12		;edit number
+
+	loc	<.jbver>	;go to the version number
+	vrsn.	kdy		;assemble in the version number
+
+	purge	kdywho, kdyver, kdymin, kdyedt
+
+	reloc	600000		;start in the high seg.
+
+	radix	10		;beware...
+
+
+;registers
+
+	p=15			;required by dpy
+
+	t1=1			;temporary registers
+	t2=2			;  ususally used by the
+	t3=3			;  print routines
+	t4=4
+
+	num=5			;number to print for "outnum"
+	bas=6			;base for "outnum" to print number in
+	wid=7			;width of field for outnum. zero = any,
+				;  minus means left justify.
+	fil=8			;char to use for filler.
+
+	kdl=9			;pointer to the "kdl page" (ala netprm)
+
+	pdllen==100		;use a big stack
+	$tty==2			;tty's I/O channel
+	tyobsz==400		;tty's output buffer size
+
+
+;character definitions
+
+	$cr==^o15		;carriage return
+	$lf==^o12		;line feed
+	$sp==^o40		;space
+	$zr==^o60		;zero
+
+
+	subttl macros
+
+define text(string)< str$ [asciz |string|] >
+
+define crlf<
+	chi$ ^o15		;;cr
+	chi$ ^o12		;;lf
+>
+
+define number(qnum,qbas,qwid,qfil)<
+    ifnb <qnum>,<move num,qnum>	;;use number only if specified
+    ifb  <qbas>,<movei bas,10>	;;default base to 10 (decimal)
+    ifnb <qbas>,<movei bas,qbas>
+    ifb  <qwid>,<movei wid,0>	;;default width to "any"
+    ifnb <qwid>,<movei wid,qwid>
+    ifb  <qfil>,<movei fil,$sp>	;;default filler to "spaces"
+    ifnb <qfil>,<movei fil,qfil>
+	pushj p,outnum		;;call outnum with args set up
+>
+
+define goto(pos)<		;;go to line position "pos"
+	movei	t1,pos-1	;;get position to "go to" (1 origioned)
+	pushj	p,pgoto		;;call "goto" routine to get there
+>
+
+define err(text)<		;;call if fatal error (no kdp. uuo etc.)
+	jrst	[outstr [asciz |text|]
+		 exit]
+>
+	subttl byte pointers into the kdl block
+
+define xbyte(bp)<		;;routine to translate the index field
+kdl'bp:	exp <<^-<15_18>>&kd%'bp>+<kdl_18>
+>
+	xbyte	sta		;line state
+	xbyte	tim		;line timer (rep & start/stack)
+	xbyte	xnk		;last nak sent
+	xbyte	rpc		;rep counter
+	xbyte	rmn		;receive message number
+	xbyte	lmx		;last message xmitted (assigned)
+	xbyte	lma		;last message ack'ed
+
+;this is the konstant that determines how long we sleep
+
+sltime:	exp	10		;ten seconds
+	subttl screen layout
+
+                           Comment @
+
+         1111111111222222222233333333334444444444555555555566666666667777777777
+1234567890123456789012345678901234567890123456789012345678901234567890123456789
+===============================================================================
+1Line #9, State = INITED, Last Zeroed - HH:MM:SS
+2                                                             KMC CONTROL OUTS
+3         MESSAGES  RCVD   SENT      NAKS    RCVD  SENT    ABORT    (06) 99999
+4LMX 777   START  9999999 9999999  HDR BCC  99999 99999    BAD HDR  (10) 99999
+5LMA 777   STACK  9999999 9999999  DATA BCC 99999 99999    BAD CRC  (12) 99999
+6RMN 777   ACK    9999999 9999999  REP RESP 99999 99999    NO RBUF  (14) 99999
+7          NAK    9999999 9999999  NO RCVBF 99999 99999    DSR CHNG (16) 99999
+8RPC 999   REP    9999999 9999999  RCV OVER 99999 99999    KMC NXM  (20) 99999
+9TIM 999   DATA   9999999 9999999  MSG2LONG 99999 99999    XMT UNDR (22) 99999
+0          MAINT  9999999 9999999  BAD HDR  99999 99999    RCV OVER (24) 99999
+1                                  RANDOM   99999 99999    BFR KILL (26) 99999
+2------------------------------------------------------------------------------
+3Line #9, State = INITED, Last Zeroed - HH:MM:SS
+4                                                             KMC CONTROL OUTS
+5         MESSAGES  RCVD   SENT      NAKS    RCVD  SENT    ABORT    (06) 99999
+6LMX 777   START  9999999 9999999  HDR BCC  99999 99999    BAD HDR  (10) 99999
+7LMA 777   STACK  9999999 9999999  DATA BCC 99999 99999    BAD CRC  (12) 99999
+8RMN 777   ACK    9999999 9999999  REP RESP 99999 99999    NO RBUF  (14) 99999
+9          NAK    9999999 9999999  NO RCVBF 99999 99999    DSR CHNG (16) 99999
+0RPC 999   REP    9999999 9999999  RCV OVER 99999 99999    KMC NXM  (20) 99999
+1TIM 999   DATA   9999999 9999999  MSG2LONG 99999 99999    XMT UNDR (22) 99999
+2          MAINT  9999999 9999999  BAD HDR  99999 99999    RCV OVER (24) 99999
+3                                  RANDOM   99999 99999    BFR KILL (26) 99999
+4
+
+                         End Comment @
+
+
+	msgcol==12		;column to start message counts in
+	nakcol==36		;column to start nak counts in
+	ctocol==60		;column to start control out info in
+	subttl	initialization
+
+go:	jfcl
+	reset			;close all dev's
+	move	p,[iowd pdllen,pdl] ;set up stack pointer
+	move	t1,[pushj p,dpyuuo]	;pushj to the uuo handler
+	movem	t1,.jb41	;set up the uuo  handler
+
+	pushj	p,ttyini	;initialize the tty.
+
+	ini$	[exp 2		;2 more args
+		 exp 0		;use dpy's impure storage
+		 exp dpyerr]	;here if dpy screws up
+	set$	[xwd $sechr,ttyouc] ;use our character output routine
+	set$	[xwd $seuda,1]	;have dpy not save it's ac's when it calls
+	siz$			;use full screen
+	ref$	re$clr		;clear the screen
+
+
+loop:	movei	kdl,kdlpag	;get address of the kdl page
+	movei	t1,0		;get line #0
+	movem	t1,kdline(kdl)	;set the line for kdldpy
+	pushj	p,kdldpy	;go output the first line
+	  err	? KDL. Read status failed for line #0.
+	movei	t1,79		;output a dividing line of 79 dashes
+	sojge	t1,[chi$ "-"	;output a dash
+		    jrst .]	;do all 79 of them
+	crlf			;go to next line
+	aos	kdline(kdl)	;increment the line number
+	pushj	p,kdldpy	;output the next dup's data
+	  text	No line #1.
+	dpy$	dp$noh		;update the screen, but don't home up
+	pushj	p,ttyfrc	;force out any buffered chars
+	move	t1,sltime	;get number of seconds to sleep
+	imuli	t1,1000		; and convert to ms
+	skipg	t1		;if time is unreasonable,
+	movei	t1,1		; then be as quick as possible.
+	tlo	t1,(hb.rtc)	;wake on char ready from tty
+	hiber	t1,		;now go to sleep
+	  err	? KDL. Hiber UUO failed.
+	inchrs	t1		;see if the user typed a char
+	jrst	loop		;if no char, do it again
+	andi	t1,^O177		;mask of parity
+	caie	t1,"Z"-^O100	;if it's an ^Z, or
+	cain	t1,"C"-^O100	; an ^c,
+	caia			; then exit
+	jrst	loop		;other wise just refresh the screen
+	ini$	[exp 0]		;clean up & clear the screen
+	monrt.			;exit if a char was typed
+	jrst	go		;re-start on a "continue"
+	subttl	kdldpy -- routine to output 11 lines of kdl information
+
+;kdldpy
+;call	kdl := pointer to block with line number filled in
+;	screen at upper left hand corner of region to fill
+;return	cpopj	if no such line.
+;	cpopj1	with 11 lines of kdl data output
+
+kdldpy:	movei	t1,1(p)		;address of uuo arguments
+	hrli	t1,4		;there are 4 args to status function
+	push	p,[exp .kdlrs]	;fcn: get dup-11's status
+	push	p,[exp 0]	;arg1: kdp #0 (others aren't supported)
+	push	p,kdline(kdl)	;arg2: kdl line number
+	push	p,[xwd <kdlest-kdlsts>+1,kdlpag+kdlsts] ;leng,addr of rtn area
+	kdp.	t1,		;get the status
+	  jrst	[adjsp p,-4	;if no DMC-11, fixup the stack
+		 popj p,]	;  and give an error return
+	adjsp	p,-4		;pop off the 4 arguments
+
+	subttl	line 1.
+
+					;line
+line1:	text	<Line #>
+	number	kdline(kdl)		;output the line number
+					;state
+	text	<,  State = >
+	ldb	t1,kdlsta		;get the state
+	setz	t2,			;get a "zero"
+	cain	t1,kd%dwn		;if it's down
+	movei	t2,[asciz |Down|]	;  then get that "state"
+	cain	t1,kd%ini
+	movei	t2,[asciz |Initial|]
+	cain	t1,kd%fls
+	movei	t2,[asciz |Flushing|]
+	cain	t1,kd%mai
+	movei	t2,[asciz |Maint|]
+	cain	t1,kd%str
+	movei	t2,[asciz |Starts|]
+	cain	t1,kd%stk
+	movei	t2,[asciz |Stacks|]
+	cain	t1,kd%run
+	movei	t2,[asciz |Running|]
+	skipn	t2			;make sure we got a valid state
+	movei	t2,[asciz |?????|]
+	hrli	t2,(str$)		;make it a "str$ uuo)
+	xct	t2			;output the string
+					;up-time
+	text	<,  Last zeroed - >
+	move	t1,kdlztm(kdl)		;get uptime
+	idivi	t1,3600			;get "hours"
+	number	t1,10,2,$zr		;2 digits long, fill with zero's
+	chi$	":"			;output the colon
+	move	t1,t2			;get the remainder
+	idivi	t1,60			;get "minutes"
+	number	t1,10,2,$zr		;output the minutes
+	chi$	":"			;output the colon
+	number	t2,10,2,$zr		;output the seconds
+	crlf				;end of the first line.
+
+	subttl	Line 2.
+
+line2:	goto	ctocol+2		;go to the 62nd column
+	text	<KMC Control Outs>	;write header
+	crlf				;end of line 2
+	subttl	Line 3.
+
+line3:	goto	msgcol-2		;message column 
+	text	<Messages   Rcvd    Sent>
+	goto	nakcol+2
+	text	<Naks    Rcvd  Sent>
+	goto	ctocol			;go to control out column
+	text	<Abort    (06) >	;abort message counts
+	number	kdlcto+0(kdl),10,5	;5 char number right justify
+	crlf				;end of line 3
+
+
+	subttl	Line 4.
+
+line4:	text	<LMX >			;last message assigned
+	ldb	t1,kdllmx		;get the byte
+	number	t1,8,3,$zr	;output in octal for debugging
+
+	goto	msgcol			;messages counts next
+	text	<Start  >		;first is "start count"
+	number	kdlctr+5(kdl),10,7	;seven digit field.  left justified
+	chi$	$sp			;one space
+	number	kdlctx+5(kdl),10,7	;get the xmit field too.
+
+	goto	nakcol			;nak counts now
+	text	<Random   >		;first type is "random"
+	number	kdlnkr+0(kdl),10,5	;5 digit field left justified
+	chi$	$sp			;output the space
+	number	kdlnkx+0(kdl),10,5	;output the xmit field too
+
+	goto	ctocol			;control out's now.
+	text	<Bad Hdr  (10) >	;illegal header is next
+	number	kdlcto+1(kdl),10,5	;5 digits
+	crlf
+	subttl	line 5.
+
+line5:	text	<LMA >			;last message assigned
+	ldb	t1,kdllma		;get the value
+	number	t1,8,3,$zr		;three digit octal
+
+	goto	msgcol			;message counts next
+	text	<Stack  >		;stack counts
+	number	kdlctr+6(kdl),10,7	;7 digit number (received)
+	chi$	$sp			;space
+	number	kdlctx+6(kdl),10,7	;xmitted
+
+	goto	nakcol			;nak counts
+	text	<Hdr BCC  >
+	number	kdlnkr+1(kdl),10,5	;received header bcc naks
+	chi$	$sp			;space
+	number	kdlnkx+1(kdl),10,5	;xmitted header bcc naks
+
+	goto	ctocol			;control out column
+	text	<Bad CRC  (12) >	;data or header crc error
+	number	kdlcto+2(kdl),10,5	;count of crc control outs
+	crlf				;end of line 5
+	subttl	line 6.
+
+line6:	text	<RMN >			;last message received
+	ldb	t1,kdlrmn		;get the byte
+	number	t1,8,3,$zr		;octal 3 chars zero filled
+
+	goto	msgcol			;messages next
+	text	<Ack    >		;ack message count
+	number	kdlctr+0(kdl),10,7	;output received ack count
+	chi$	$sp			;space
+	number	kdlctx+0(kdl),10,7	;output xmitted ack count
+
+	goto	nakcol			;nak counts next
+	text	<Data BCC >		;data crc error
+	number	kdlnkr+2(kdl),10,5	;output receive counts
+	chi$	$sp			;space
+	number	kdlnkx+2(kdl),10,5	;output xmit count
+
+	goto	ctocol			;control outs next
+	text	<No Rbuf  (14) >	;no receive buffer
+	number	kdlcto+3(kdl),10,5	;output control out count
+	crlf				;end of line 6
+	subttl	Line 7.
+
+line7:	goto	msgcol			;start with message column this time
+	text	<Nak    >
+	number	kdlctr+1(kdl),10,7	;received naks
+	chi$	$sp			;space
+	number	kdlctx+1(kdl),10,7	;sent naks
+
+	goto	nakcol			;specific nak counts
+	text	<Rep resp >		;rep response nak
+	number	kdlnkr+3(kdl),10,5	;received rep naks
+	chi$	$sp			;space
+	number	kdlnkx+3(kdl),10,5	;sent naks
+
+	goto	ctocol			;control outs
+	text	<DSR chng (16) >	;dataset ready changed
+	number	kdlcto+4(kdl),10,5	;output transition count
+	crlf				;end of line 7
+	subttl line 8.
+
+line8:	text	<RPC >			;rep counter
+	ldb	t1,kdlrpc		;get the count
+	number	t1			;output it
+
+	goto	msgcol			;messages next
+	text	<Rep    >		;rep counts
+	number	kdlctr+2(kdl),10,7	;received reps
+	chi$	$sp			;space
+	number	kdlctx+2(kdl),10,7	;xmitted reps
+
+	goto	nakcol			;nak's next
+	text	<No Rcvbf >		;no receive buffer nak
+	number	kdlnkr+4(kdl),10,5	;received
+	chi$	$sp			;space
+	number	kdlnkx+4(kdl),10,5	;sent
+
+	goto	ctocol			;control out's last
+	text	<Kmc NXM  (20) >	;we screwed the kmc?
+	number	kdlcto+5(kdl),10,5	;output nxm count
+	crlf				;end of line 8
+	subttl	Line 9.
+
+line9:	text	<TIM >			;the line's timer
+	ldb	t1,kdltim		;get the time
+	number	t1			;decimal
+
+	goto	msgcol			;message counts
+	text	<Data   >		;data messages
+	number	kdldtr(kdl),10,7	;received
+	chi$	$sp			;space
+	number	kdldtx(kdl),10,7	;sent
+
+	goto	nakcol			;nak count
+	text	<Rcv over >		;receiver over run
+	number	kdlnkr+5(kdl),10,5	;received
+	chi$	$sp			;space
+	number	kdlnkx+5(kdl),10,5	;and sent
+
+	goto	ctocol			;control outs last
+	text	<Xmt undr (22) >	;transmitter under-run
+	number	kdlcto+6(kdl),10,5	;output that
+	crlf				;end of line 9
+	subttl	Line 10.
+
+line10:	goto	msgcol			;start with messages
+	text	<Maint  >		;maintenance messages
+	number	kdlmar(kdl),10,7	;received
+	chi$	$sp			;space
+	number	kdlmax(kdl),10,7	;and sent
+
+	goto	nakcol			;nak counts next
+	text	<Msg2long >		;message too long naks
+	number	kdlnkr+6(kdl),10,5	;received
+	chi$	$sp			;space
+	number	kdlnkx+6(kdl),10,5	;and sent
+
+	goto	ctocol			;control out
+	text	<Rcv over (24) >	;receiver over runs
+	number	kdlcto+7(kdl),10,5	;output that
+	crlf				;end of line 10
+	subttl	Line 11.
+
+line11:	goto	nakcol			;no messages. start with nak's
+	text	<Bad hdr  >		;header naks
+	number	kdlnkr+7(kdl),10,5	;received
+	chi$	$sp			;space
+	number	kdlnkx+7(kdl),10,5	;and sent
+
+	goto	ctocol			;control out column
+	text	<Bfr kill (26) >	;buffer kill
+	number	kdlcto+8(kdl),10,5	;output that
+	crlf				;end of line 11
+
+cpopj1:	aos	(p)			;give good return
+cpopj:	popj	p,			;end of display
+
+	subttl utility routines called by macros
+
+;pgoto	moves forward to approiate horizontal position.
+;call	t1 := position to go to
+;return	cpopj
+pgoto:	loc$	t2		;get our current "xwd line,pos"
+	subi	t1,(t2)		;get number of characters to go
+	skiple	t1		;always print at least one space
+	sojl	t1,cpopj	;exit if we've got there
+	chi$	$sp		;print a space
+	jrst	.-2		;loop till all characters are out
+
+
+;outnum	prints a number.  Called by the "number" macro
+;call	num := number to print
+;	bas := base to print number in
+;	wid := width of field. (- means left justify, 0 means any width)
+;	fil := char to use to fill out the field
+
+outnum:	push	p,t1		;save the t's
+	push	p,t2
+	push	p,t3
+	move	t1,num		;copy the number
+	movei	t3,1		;initialize the count of digits in number
+outnu1:	idivi	t1,(bas)	;get the next digit in t1+1
+	addi	t1+1,$zr	;make remainder a digit
+	push	p,t1+1		;save the next digit
+	skipe	t1		;skip if all digits printed
+	aoja	t3,outnu1	;loop taking number apart. exit with t3 = count
+	jumple	wid,outnu2	;if not right justified, don't pad beginning
+
+	movei	t2,(wid)	;get the "width"
+	subi	t2,(t3)		;subtract the "size"
+	sojge	t2,[chr$ fil	;loop outputting "fill"
+		    jrst .]	;  until t2 counted down
+
+outnu2:	movei	t2,(t3)		;get the "length" of the number
+	sojge	t2,[pop p,t1	;get the next digit to output
+		    chr$ t1	;output it
+		    jrst .]	;loop over all digits
+	jumpge	wid,cpopj3	;exit if not left justified
+
+	add	t3,wid		;get minus the number of fill chars
+	aojge	t3,[chr$ fil	;output the fill
+		    jrst .]	;output all the fill
+cpopj3:	pop	p,t3		;restore callers t's
+	pop	p,t2
+	pop	p,t1
+	popj	p,		;all done.
+
+
+
+;dpyerr	here on a error from dpy
+dpyerr:	err	? Random dpyerr.
+
+	subttl	terminal handling routines
+
+ttyini:	open	$tty,[exp .iopim
+		      sixbit /TTY/
+		      xwd ttyobf,0] ;open tty in packed image mode.
+	  err	? Open of TTY failed.
+	move	t1,[xwd ^O400000,obf1+1] ;get the "magic" to set
+	movem	t1,ttyobf+0	;  and set up the first word of the header
+	move	t1,[point 8,0,35] ;get the pattern byte pointer
+	movem	t1,ttyobf+.bfptr  ;  and set up the pointer
+	setzm	ttyobf+.bfcnt	;clear the count
+
+
+	setzm	obf1		;clear first word of the output buffer
+	move	t1,[xwd obf1,obf1+1] ;get blt pointer to the rest
+	blt	t1,obf1+tyobsz+2;clear the buffer
+	move	t1,[xwd tyobsz+1,obf1+1]
+	movem	t1,obf1+1	;set up the ring buffer pointer
+	popj	p,		;all done
+
+ttyouc:	exch	t1,(p)		;get the char, save t1
+ttyou1:	sosge	ttyobf+.bfctr	;count out the next character
+	jrst	[pushj p,ttyfrc	;if no room, force out the current buffer
+		 jrst ttyou1]	;  and try again
+	idpb	t1,ttyobf+.bfptr;store the character
+	pop	p,t1		;restore DPY's ac
+	popj	p,		;  and return
+
+ttyfrc:	out	$tty,		;do the output
+	popj	p,		;return if successful
+	err	? TTY output I/O error.
+	subttl impure storage
+
+	reloc	0		;go to the low seg
+
+pdl:	block	pdllen+1	;our stack
+kdlpag:	block	kdlest+1	;just long enough to hold status
+ttyobf:	block	3		;tty output buffer control block
+obf1:	block	tyobsz+3	;tty output buffer
+
+	end	go

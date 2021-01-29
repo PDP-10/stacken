@@ -1,0 +1,160 @@
+! [Beginning of MCBSTS]
+!
+! COPYRIGHT (C) 1980
+! DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASSACHUSETTS  01754
+!
+! THIS SOFTWARE IS FURNISHED  UNDER A LICENSE FOR USE ONLY ON A SINGLE
+! COMPUTER  SYSTEM AND  MAY BE  COPIED ONLY WITH  THE INCLUSION OF THE
+! ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE, OR ANY OTHER COPIES  THEREOF
+! MAY NOT BE PROVIDED OR  OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON
+! EXCEPT FOR USE ON SUCH SYSTEM AND TO ONE WHO AGREES TO THESE LICENSE
+! TERMS.  TITLE TO AND  OWNERSHIP OF THE  SOFTWARE  SHALL AT ALL TIMES
+! REMAIN IN DEC.
+!
+! THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT NOTICE
+! AND SHOULD  NOT BE CONSTRUED  AS A COMMITMENT  BY DIGITAL  EQUIPMENT
+! CORPORATION.
+!
+! DEC ASSUMES  NO  RESPONSIBILITY  FOR  THE USE OR  RELIABILITY OF ITS
+! SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DEC.
+!
+
+!++
+! FACILITY: MCB User's Library
+!
+! ABSTRACT:
+!
+!	This file contains the common MCB status codes.
+!
+! ENVIRONMENT:
+!
+! AUTHOR: Alan D. Peckham, CREATION DATE: 9-Sep-1980
+!
+! MODIFIED BY:
+!
+! 	Alan D. Peckham, 10-Sep-80: VERSION 1
+! 01	- Created for commonality between the 16 and 36 bit MCBLIB libraries.
+! 02	- Change CE$SUC to MCB$_NORMAL to conform to MCBLIB macros.
+! 03	- New signal status names for process activation to avoid conflicts.
+! 04	- Convert to macro to allow access to set of codes.
+! 05    - Add call tracing signal status codes.
+! 06    - Update for pre-MCB V3.2
+! 07    - Add status codes for CEX X3(30).
+! 08    - Get synchronized with MCBLIB.M11 and add synonyms.
+!--
+
+
+compiletime
+    $MCB$NEXT_CODE = 0,
+    $RSX$NEXT_CODE = 0;
+
+macro
+    $MCB_DF (CODE, SEVERITY, TEXT) =
+	(CODE, SEVERITY, %number ($MCB$NEXT_CODE), TEXT)
+	%assign ($MCB$NEXT_CODE, $MCB$NEXT_CODE + 1) %,
+    $RSX_DF (CODE, SEVERITY, TEXT) =
+	(CODE, SEVERITY, %number ($RSX$NEXT_CODE), TEXT)
+	%assign ($RSX$NEXT_CODE, $RSX$NEXT_CODE + 1) %,
+    $MCB_STATUS = %assign ($MCB$NEXT_CODE, 0)
+
+! Communications Executive status codes
+
+$MCB_DF (CS$SUC, STS$K_SUCCESS, 'normal completion'),
+
+$MCB_DF (SS$BPT, STS$K_SEVERE, 'BPT instruction'),
+$MCB_DF (SS$DTE, STS$K_SEVERE, 'Master DTE "magic finger"'),
+$MCB_DF (SS$EMT, STS$K_SEVERE, 'EMT instruction'),
+$MCB_DF (SS$FPU, STS$K_SEVERE, 'Floating point error'),
+$MCB_DF (SS$INS, STS$K_SEVERE, 'Illegal instruction'),
+$MCB_DF (SS$IOT, STS$K_SEVERE, 'IOT instruction'),
+$MCB_DF (SS$MMU, STS$K_SEVERE, 'Segment fault'),
+$MCB_DF (SS$MPE, STS$K_SEVERE, 'Memory parity error'),
+$MCB_DF (SS$NXM, STS$K_SEVERE, 'Odd or non-existant address'),
+$MCB_DF (SS$PRQ, STS$K_SEVERE, 'Program interrupt request'),
+$MCB_DF (SS$PWF, STS$K_SEVERE, 'Power failure'),
+$MCB_DF (SS$STK, STS$K_SEVERE, 'Stack overflow'),
+$MCB_DF (SS$STP, STS$K_SEVERE, 'Continue from SIGNAL_STOP'),
+$MCB_DF (SS$TRP, STS$K_SEVERE, 'TRAP instruction'),
+
+$MCB_DF (CE$EVT, STS$K_INFO, 'Network Management Event'),
+$MCB_DF (CE$RCL, STS$K_INFO, 'Routine being called'),
+$MCB_DF (CE$RRT, STS$K_INFO, 'Routine returning'),
+
+$MCB_DF (CE$CCF, STS$K_WARNING, 'CCB allocation failure'),
+$MCB_DF (CE$CBF, STS$K_WARNING, 'CCB/buffer allocation failure'),
+$MCB_DF (CE$RBF, STS$K_WARNING, 'RDB allocation failure'),
+$MCB_DF (CE$BFF, STS$K_WARNING, 'buffer allocation failure'),
+$MCB_DF (CE$CQE, STS$K_WARNING, 'CCB queue is empty'),
+$MCB_DF (CE$PRF, STS$K_WARNING, 'process name is not in system'),
+$MCB_DF (CE$PRU, STS$K_WARNING, 'process name is in use'),
+
+$MCB_DF (CE$ACV, STS$K_ERROR, 'resource access violation'),
+$MCB_DF (CE$BFI, STS$K_SEVERE, 'the CEXBUF partition is invalidly defined'),
+$MCB_DF (CE$BFP, STS$K_SEVERE, 'the CEXBUF partition does not exist'),
+$MCB_DF	(CE$BFR, STS$K_ERROR, 'buffer address invalid'),
+$MCB_DF (CE$BFS, STS$K_SEVERE, 'the CEXBUF partition is mapped on nonexistant core'),
+$MCB_DF (CE$CBA, STS$K_SEVERE, 'insufficient DSR to allocate CCBs'),
+$MCB_DF (CE$CBB, STS$K_ERROR, 'RDB being returned as CCB'),
+$MCB_DF	(CE$CBR, STS$K_ERROR, 'CCB address invalid'),
+$MCB_DF (CE$CPY, STS$K_SEVERE, 'the length of a buffer copy is too long'),
+$MCB_DF (CE$DDO, STS$K_SEVERE, 'a DDM database is being accessed by a foreigner'),
+$MCB_DF (CE$DLO, STS$K_SEVERE, 'a DLC database is being accessed by a foreigner'),
+$MCB_DF (CE$DSP, STS$K_SEVERE, 'no dispatch address for CCB dispatch'),
+$MCB_DF (CE$DSR, STS$K_ERROR, 'a DSR address is invalid'),
+$MCB_DF (CE$EXV, STS$K_WARNING, 'Invalid exception vector'),
+$MCB_DF (CE$FRE, STS$K_ERROR, 'free resource being returned'),
+$MCB_DF (CE$IBR, STS$K_WARNING, 'RDB recovery request made when RDB is available'),
+$MCB_DF (CE$ILV, STS$K_SEVERE, 'call must be made from device interrupt'),
+$MCB_DF (CE$IPR, STS$K_ERROR, 'a device has interrupted at a priority higher than provided'),
+$MCB_DF (CE$LEN, STS$K_ERROR, 'resource length invalid'),
+$MCB_DF (CE$LIX, STS$K_SEVERE, 'invalid line index'),
+$MCB_DF (CE$OWN, STS$K_ERROR, 'resource being returned by a foreign process'),
+$MCB_DF (CE$PIX, STS$K_SEVERE, 'invalid process index'),
+$MCB_DF (CE$PLV, STS$K_SEVERE, 'call must be made from process'),
+$MCB_DF (CE$PRI, STS$K_ERROR, 'invalid interrupt priority'),
+$MCB_DF (CE$RBA, STS$K_SEVERE, 'insufficient DSR to allocate RDBs'),
+$MCB_DF (CE$RBB, STS$K_ERROR, 'CCB being returned as RDB'),
+$MCB_DF (CE$RBC, STS$K_SEVERE, 'insufficient CEXBUF to allocate RDBs'),
+$MCB_DF	(CE$RBR, STS$K_ERROR, 'RDB bias/address invalid'),
+$MCB_DF (CE$RES, STS$K_ERROR, 'insufficient resources'),
+$MCB_DF (CE$RLV, STS$K_SEVERE, 'call must be made from RSX driver'),
+$MCB_DF (CE$RND, STS$K_ERROR, 'invalid random number interval'),
+$MCB_DF (CE$RPX, STS$K_SEVERE, 'UCB contains invalid process index'),
+$MCB_DF (CE$SYN, STS$K_ERROR, 'SYNCH block already active'),
+$MCB_DF (CE$TMB, STS$K_SEVERE, 'invalid timer block specified'),
+$MCB_DF (CE$UCB, STS$K_SEVERE, 'process does not have UCB'),
+$MCB_DF (CE$VEC, STS$K_ERROR, 'invalid interrupt vector'),
+$MCB_DF (CE$VCF, STS$K_ERROR, 'interrupt vector already free'),
+$MCB_DF (CE$VCU, STS$K_ERROR, 'interrupt vector already in use'),
+$MCB_DF (CE$TMU, STS$K_ERROR, 'invalid short timer time unit'),
+$MCB_DF (CE$PRM, STS$K_ERROR, 'Invalid parameter in CEX request'),
+$MCB_DF (CE$PRA, STS$K_ERROR, 'Process to kill still active'),
+$MCB_DF (CE$SLF, STS$K_ERROR, 'System line has no processes') %,
+
+! Synonyms
+
+MCB$_NORMAL = CS$SUC %,
+MCB$_NO_CCB = CE$CCF %,
+MCB$_NO_CSB = CE$CBF %,
+MCB$_NO_RDB = CE$RBF %,
+MCB$_NO_CORE = CE$BFF %,
+MCB$_QUEUE_EMPTY = CE$CQE %,
+MCB$_UNKNOWN_PROCESS = CE$PRF %,
+MCB$_BUSY_NAME = CE$PRU %,
+MCB$_PARAMETER_ERROR = CE$PRM %,
+MCB$_PROCESS_STILL_ACTIVE = CE$PRA %,
+MCB$_UNASSIGNED_LINE = CE$SLF %,
+MCB$_INVALID_TIME_UNIT = CE$TMU %,
+
+    $RSX_STATUS = %assign ($RSX$NEXT_CODE, 0)
+
+$RSX_DF (RSX$_NORMAL, STS$K_SUCCESS, 'normal completion'),
+
+$RSX_DF (RSX$_INVALID_ADDRESS, STS$K_WARNING, 'memory specified not in user address space'),
+$RSX_DF (RSX$_NO_MEMORY, STS$K_WARNING, 'insufficient DSR to satisfy request'),
+$RSX_DF (RSX$_NO_PACKET, STS$K_WARNING, 'no packets available'),
+$RSX_DF (RSX$_NO_TASK, STS$K_WARNING, 'task not found'),
+$RSX_DF (RSX$_QUEUE_EMPTY, STS$K_WARNING, 'packet queue is empty') %;
+
+!
+! [End of MCBSTS]

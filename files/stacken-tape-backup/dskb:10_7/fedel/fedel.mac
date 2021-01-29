@@ -1,0 +1,436 @@
+	TITLE	FEDEL -- Delete tracks of front-end file system
+	SUBTTL	G.M. Uhler/GMU  17-Jul-80
+
+;This program zeroes the words in both HOM blocks of a disk containing
+;information about the RSX20F front-end file system and then zeroes
+;every 400 blocks on the pack starting at block 0 to destroy the
+;front-end HOM block.  This action removes all tracks that a front-end
+;file system ever existed on the pack and allows a new one to be built.
+
+
+;Copyright (C) 1980,1981,1982,1983 by
+;Digital Equipment Corporation, Maynard, Mass.
+;
+;
+;This software is furnished under a license and may be used and copied
+;only  in  accordance  with  the  terms  of  such license and with the
+;inclusion of the above copyright notice.  This software or any  other
+;copies thereof may not be provided or otherwise made available to any
+;other person.  No title to and ownership of the  software  is  hereby
+;transferred.
+;
+;The information in this software is subject to change without  notice
+;and  should  not  be  construed  as a commitment by Digital Equipment
+;Corporation.
+;
+;Digital assumes no responsibility for the use or reliability  of  its
+;software on equipment which is not supplied by Digital.
+
+
+	SEARCH	JOBDAT,MACTEN,UUOSYM
+	SALL
+
+
+	FDLVER==1		;Major version number
+	FDLMIN==0		;Minor version number
+	FDLEDT==6		;Edit number
+	FDLWHO==0		;Who last edited
+
+
+	TWOSEG
+	RELOC	400000
+	LOC	.JBVER
+	VRSN.	(FDL)
+	RELOC
+;AC Definitions
+
+	T1==1			;First of 4 temporaries
+	T2==2
+	T3==3
+	T4==4
+	P1==5			;First of 4 preserved
+	P2==6
+	P3==7
+	P4==10
+	P==17			;PDL pointer
+
+;Miscelaneous definitions
+
+	PDLLEN==10		;Length of PDL
+	BLKINC==400		;Stomp every this many blocks on the disk
+	BLKSIZ==200		;Size of a disk block
+	DSK==1			;Disk channel
+	DEL==2			;Channel to delete FE.SYS
+	HOM1==1			;Block address of first HOM block
+	HOM2==12		;Block address of second HOM block
+	HOMHID==1		;Unit ID in HOM block
+	HOMFEB==61		;HOM block offset of pointer to FE
+	HOMFEL==62		;HOM block offset of length of FE
+	RIBSTS==17		;RIB offset of status bits
+	RIPNDL==1B19		;No delete bit in RIB
+	RIBSLF==177		;RIB offset of RIB block number
+	EO.ERR==1		;Error message
+	EO.WRN==2		;Warning message
+	EO.STP==4		;Stop program on this error
+	EO.NCR==10		;No CRLF at the end of this error
+
+
+	DEFINE	ERROR(MSG,OPT,LABEL),<
+	  PUSHJ	P,ERRMSG
+	  XLIST
+	  ..OPT==EO.ERR		;Initialize type
+	  IRP OPT,<
+	    IFIDN <OPT>,<STOP>,<..OPT==..OPT!EO.STP>
+	    IFIDN <OPT>,<NOCRLF>,<..OPT==..OPT!EO.NCR>
+	  >
+	  IFB <LABEL>,<
+	    CAI	..OPT,[ASCIZ/?'MSG/]
+	  >
+	  IFNB <LABEL>,<
+	    CAIA ..OPT,[ASCIZ/?'MSG/]
+	    JRST LABEL
+	  >
+	  LIST
+	>
+
+
+	DEFINE	WARN(MSG,OPT,LABEL),<
+	  PUSHJ	P,ERRMSG
+	  XLIST
+	  ..OPT==EO.WRN		;Initialize type
+	  IRP OPT,<
+	    IFIDN <OPT>,<STOP>,<..OPT==..OPT!EO.STP>
+	    IFIDN <OPT>,<NOCRLF>,<..OPT==..OPT!EO.NCR>
+	  >
+	  IFB <LABEL>,<
+	    CAI	..OPT,[ASCIZ/%'MSG/]
+	  >
+	  IFNB <LABEL>,<
+	    CAIA ..OPT,[ASCIZ/%'MSG/]
+	    JRST LABEL
+	  >
+	  LIST
+	>
+FEDEL:	JFCL			;Ignore CCL entry
+	RESET			;Stop the world
+	GETPPN	T1,		;GET OUR PPN
+	  JFCL			;AVOID STUPID SKIP
+	CAME	T1,[1,,2]	;Privileged?
+	  ERROR	<Job not privileged, must be run as [1,2]>,STOP
+	OUTSTR	[ASCIZ/
+***********************************************************************
+* This program deletes all traces of an RSX20F front-end file system. *
+*      In doing so, it destroys the ENTIRE contents of the pack.      *
+*         DO NOT CONTINUE if this is not what you want to do.         *
+***********************************************************************
+
+/]
+	MOVE	P,[IOWD PDLLEN,PDL] ;Setup PDL
+	OUTSTR	[ASCIZ/
+Physical unit name: /]
+	PUSHJ	P,GETNAM	;Get name of unit, return in P1
+	  JRST	NOTPHY		;Give error message
+	MOVEM	P1,DSCBLK+.DCNAM ;Store name in DSKCHR block
+	MOVE	P2,[.DCUSZ+1,,DSCBLK] ;Point at the block
+	DSKCHR	P2,		;See what the monitor thinks
+	  JRST	NOTPHY		;It doesn't
+	LDB	T2,[POINTR P2,DC.TYP] ;Get type of unit
+	CAXE	T2,.DCTPU	;Must be physical unit
+NOTPHY:	  ERROR	<Not a physical unit>,STOP
+	LDB	T1,[POINTR P2,DC.CNT] ;Get type of controller
+	LDB	T2,[POINTR P2,DC.UNT] ;Get type of drive
+	CAXN	T1,.DCCRP	;RH10/RH20?
+	CAXLE	T2,.DCUR6	;Yes, RP04 or RP06?
+	  ERROR	<Not an RP04 or RP06>,STOP
+	OUTSTR	[ASCIZ/
+You have specified unit /]
+	MOVE	T2,P1		;Get unit name
+	PUSHJ	P,PRTNAM	;Print it
+	SKIPN	T2,DSCBLK+.DCSNM ;Get STR name if any
+	  JRST	FEDEL1		;None, skip it
+	OUTSTR	[ASCIZ/
+Structure ID for the pack mounted on this unit is /]
+	PUSHJ	P,PRTNAM	;PRINT STR NAME
+FEDEL1:	MOVX	T1,UU.PHS!.IODMP ;Need a physical device in dump mode
+	MOVE	T2,P1		;Get device name
+	MOVX	T3,0		;No buffers in dump mode
+	OPEN	DSK,T1		;OPEN the channel
+	  ERROR	<Can't OPEN specified unit>,STOP
+	MOVX	T1,HOM1		;Point at first HOM block
+	PUSHJ	P,REDBLK	;Read it
+	  ERROR	<Read error on first HOM block>,NOCRLF,IOEPRT
+	MOVE	T2,BUF+HOMHID	;Get unit ID from HOM block
+	OUTSTR	[ASCIZ/
+HOM block unit ID for this unit is /]
+	PUSHJ	P,PRTNAM	;Print it
+	OUTSTR	[ASCIZ/
+Continuing will destroy the ENTIRE contents of this pack.
+Do you wish to continue? /]
+	PUSHJ	P,YESNO		;Ask for YES or NO
+	  JRST	FEDEL3		;No
+	PUSHJ	P,DELFIL	;Delete FE.SYS
+	  WARN	<Delete of FE.SYS failed>
+	SETZM	BUF+HOMFEB	;Clear pointer to FE
+	SETZM	BUF+HOMFEL	;Plus length
+	MOVX	T1,HOM1		;Get back address
+	PUSHJ	P,WRTBLK	;Write it back
+	  ERROR	<Write error on first HOM block>,NOCRLF,IOEPRT
+	MOVX	T1,HOM2		;Point at second HOM block
+	PUSHJ	P,REDBLK	;Read it
+	  ERROR	<Read error on second HOM block>,NOCRLF,IOEPRT
+	SETZM	BUF+HOMFEB	;Clear pointer to FE
+	SETZM	BUF+HOMFEL	;Plus length
+	MOVX	T1,HOM2		;Get back address
+	PUSHJ	P,WRTBLK	;Write it back
+	  ERROR	<Write error on second HOM block>,NOCRLF,IOEPRT
+	SETZM	BUF		;Clear first word of buffer
+	MOVE	T1,[BUF,,BUF+1] ;Setup BLT pointer
+	BLT	T1,BUF+177	;Clear entire buffer
+	MOVX	P3,0		;Init block pointer
+FEDEL2:	MOVE	T1,P3		;Transfer block address
+	CAML	T1,DSCBLK+.DCUSZ ;Still on unit?
+	  JRST	FEDEL3		;No, quit
+	PUSHJ	P,WRTBLK	;Write zeros into that block
+	  ERROR	<Write error zeroing block>,NOCRLF,IOEPRT
+	ADDI	P3,BLKINC	;Bump to next block to zero
+	JRST	FEDEL2		;  and loop
+
+FEDEL3:	RELEAS	DSK,		;Release channel
+	MONRT.			;Exit quietly
+	JRST	FEDEL		;Loop if CONT
+;Routine to process the ERROR and WARN macros.
+;Return+2 always unless EO.STP is set
+
+ERRMSG:	OUTSTR	CRLF		;Start on a new line
+	MOVE	T1,@0(P)	;Get CAI word
+	OUTSTR	(T1)		;Put out the message
+	TXNN	T1,<<EO.NCR>B12> ;No CRLF wanted?
+	  OUTSTR CRLF		;No, add one
+	TXNN	T1,<<EO.STP>B12> ;Stop on this error?
+	  JRST	CPOPJ1		;No, return
+	JRST	KILL		;Stop the program
+
+
+;Here on I/O errors from the disk to print the block number and
+;status and give up
+
+IOEPRT:	OUTSTR	[ASCIZ/, block = /]
+	MOVE	T1,LSTBLK	;Get block number
+	PUSHJ	P,PRTOCT	;Print it
+	OUTSTR	[ASCIZ/, status = /]
+	MOVE	T1,ERRSTS	;Get status
+	PUSHJ	P,PRTOCT	;Print it
+	OUTSTR	CRLF
+KILL:	RESET			;Insure all is stopped
+	EXIT			;  and give up
+;Routine to delete FE.SYS from the pack selected in the startup
+;dialog.  Call with:
+;	P1/Device name
+;Return+1 if couldn't delete the file
+;Return+2 if file was deleted
+
+DELFIL:	MOVX	T1,UU.PHS!.IODMP ;Physical device in dump mode
+	MOVE	T2,P1		;Get device name
+	MOVX	T3,0		;No buffers
+	OPEN	DEL,T1		;Open channel
+	  POPJ	P,		;Failed
+	MOVE	T4,[DELBLK,,T1] ;Setup to move LOOKUP block
+	BLT	T4,T4		;Move it
+	LOOKUP	DEL,T1		;LOOKUP FE.SYS
+	  JRST	[TRNE  T2,-1	;File not found?
+		 POPJ  P,	;No, give non-skip return
+		 JRST  CPOPJ1]	;Yes, give skip return
+	USETI	DEL,0		;Set to read RIB
+	STATZ	DEL,IO.ERR	;Any errors?
+	  POPJ	P,		;Yes, return
+	INPUT	DEL,DSKIOW	;Read the RIB of the file
+	STATZ	DEL,IO.ERR	;Any errors?
+	  POPJ	P,		;Yes, return
+	MOVEI	T1,DEL		;Get the channel
+	MOVEM	T1,DSCBLK+.DCNAM ;Store for DSKCHR
+	MOVE	T1,[.DCUPN+1,,DSCBLK] ;Setup for DSKCHR
+	DSKCHR	T1,		;Find out where the RIB is
+	  POPJ	P,		;Failed
+	CLOSE	DEL,CL.DAT	;Close and toss monitor core blocks
+	MOVX	T1,UU.PHS!.IODMP ;Physical device in dump mode
+	MOVE	T2,DSCBLK+.DCUPN ;Get physical unit name
+	MOVEI	T3,0		;No buffers
+	OPEN	DEL,T1		;Open the channel
+	  POPJ	P,		;Failed
+	MOVX	T1,RIPNDL	;Get no delete bit
+	ANDCAM	T1,BUF+RIBSTS	;Clear it in RIBSTS
+	USETO	DEL,BUF+RIBSLF	;Set to write block back
+	STATZ	DEL,IO.ERR	;Errors?
+	  POPJ	P,		;Yes, return
+	OUTPUT	DEL,DSKIOW	;Rewrite RIB
+	STATZ	DEL,IO.ERR	;Errors?
+	  POPJ	P,		;Yes
+	MOVE	T4,[DELBLK,,T1] ;Setup to move LOOKUP block
+	BLT	T4,T4		;Move it
+	LOOKUP	DEL,T1		;LOOKUP file again
+	  POPJ	P,		;Failed
+	SETZB	T1,T2		;Clear name and extension for delete
+	RENAME	DEL,T1		;Delete it
+	  POPJ	P,		;Failed
+	CLOSE	DEL,		;Close the file
+	RELEAS	DEL,		;Release channel
+	JRST	CPOPJ1		;Give skip return
+;Routine to read a command from the terminal.  Store the command
+;in CMDBUF and a byte pointer in CMDB.
+;Return+1 always
+
+REDCMD:	MOVE	T2,[POINT 7,CMDBUF] ;Get pointer to buffer
+	MOVEM	T2,CMDB		;Save for caller
+	MOVX	T3,^D80		;Allow only 80 chars
+REDCM1:	PUSHJ	P,GETCHR	;Get next character
+	PUSHJ	P,CHKBRK	;Break?
+	  SKIPA			;No
+	JRST	REDCM2		;Yes, finish up
+	SOJL	T3,REDCM1	;Loop if too many
+	IDPB	T1,T2		;Store in buffer
+	JRST	REDCM1		;  and loop
+REDCM2:	MOVEI	T1,0		;Terminate buffer
+	IDPB	T1,T2		;  with two
+	IDPB	T1,T2		;  zeros
+	POPJ	P,		;  and return
+
+
+;Routine to read one character from the TTY.  Ignores nulls and
+;carriage returns, maps lower to upper case.
+;Return+1 always with
+;	T1/Character
+
+GETCHR:	INCHWL	T1		;Get character
+	JUMPE	T1,GETCHR	;Loop if null
+	CAXN	T1,.CHCRT	; or if CR
+	  JRST	GETCHR		;...
+	CAIL	T1,"a"		;Lower case character?
+	 CAILE	T1,"z"		;...
+	  POPJ	P,		;No, just return it
+	SUBI	T1,"a"-"A"	;Fold to upper case
+	POPJ	P,		;  and return
+
+
+;Routine to check for break character. Call with:
+;	T1/Character
+;Return+1 if not a break character
+;Return+2 if a break character
+
+CHKBRK:	PUSH	P,T2		;Destroy no ACs
+	MOVX	T2,1		;Get a bit to shift
+	LSH	T2,(T1)		;Shift by value of character
+	TDNE	T2,BRKTBL	;This a break character?
+	  AOS	-1(P)		;Yes, bump return point
+	POP	P,T2		;Restore T2
+	POPJ	P,		;  and return
+
+BRKTBL:	1_.CHBEL!1_.CHVTB!1_.CHFFD!1_.CHCNZ!1_.CHESC!1_.CHLFD
+;Routine to print a SIXBIT name on the TTY.  Stops on the first
+;space.  Call with:
+;	T2/SIXBIT word
+;Return+1 always
+
+PRTNAM:	LSHC	T1,^D36		;Move to T1, clear T2
+	LSHC	T1,-<5*6>	;Right justify char in T1
+	JUMPE	T1,CPOPJ	;Return on first null
+	MOVEI	T1,"0"-'0'(T1)	;Convert to ASCII
+	OUTCHR	T1		;Output it
+	PJRST	PRTNAM		;Loop for all chars
+
+
+;Routine to get a SIXBIT name from the terminal.
+;Return+1 if bad name typed
+;Return+2 with SIXBIT name in P1
+
+GETNAM:	PUSHJ	P,REDCMD	;Read in the command
+	MOVX	P1,0		;Init name
+	MOVE	T2,[POINT 6,P1]	;Build byte pointer to P1
+GETNA1:	ILDB	T1,CMDB		;Get next character
+	JUMPE	T1,CPOPJ1	;Return at end of line
+	CAIN	T1,":"		;Specify a colon?
+	  JRST	GETNA2		;Yes
+	SUBI	T1,"A"-'A'	;Convert to SIXBIT
+	TLNE	T2,770000	;Done more than 6?
+	  IDPB	T1,T2		;Store in next slot in P1
+	JRST	GETNA1		;Loop for more
+GETNA2:	ILDB	T1,CMDB		;Get next char
+	SKIPN	T1		;Must be a break here
+CPOPJ1:	AOS	(P)		;Give skip return
+CPOPJ:	POPJ	P,		;  and return
+;Routine to check for a YES/NO response.
+;Return+1 if no
+;Return+2 if yes
+
+YESNO:	PUSHJ	P,REDCMD	;Read in a line
+	ILDB	T1,CMDB		;Get character
+	CAIE	T1,"Y"		;Must be a YES
+	 CAIN	T1,"N"		;  or a NO
+	  JRST	YESNO1		;It is
+	OUTSTR	[ASCIZ/
+%Please respond with a Y or N: /]
+	JRST	YESNO		;  and loop
+YESNO1:	CAIN	T1,"Y"		;If a Y,
+	  AOS	(P)		;  we must give a skip return
+	POPJ	P,		;Return
+
+
+;Standard routine to print an octal number.  Call with:
+;	T1/Number
+;Return+1 always
+
+PRTOCT:	IDIVI	T1,^D8		;Divide by radix, remainder in T2
+	HRLM	T2,0(P)		;Store remainder on stack
+	SKIPE	T1		;Done yet?
+	PUSHJ	P,PRTOCT	;No, do next digit
+	HLRZ	T1,0(P)		;Get next digit back from stack
+	ADDI	T1,"0"		;Convert to ASCII
+	OUTCHR	T1		;Output it
+	POPJ	P,		;Return to caller
+;Routine to read a block from the disk into BUF.  Call with
+;	T1/Block number to read
+;Return+1 if errors detected
+;Return+2 if no errors and block in BUF
+
+REDBLK:	MOVEM	T1,LSTBLK	;Save for error messages
+	USETI	DSK,T1		;Setup to read that block
+	STATZ	DSK,IO.ERR	;Any errors?
+	  JRST	IOERR		;Yes
+	INPUT	DSK,DSKIOW	;Read the block
+	STATO	DSK,IO.ERR	;Any errors?
+	  JRST	CPOPJ1		;No, give skip
+	JRST	IOERR		;Get status and return non-skip
+
+
+;Routine to write a block from BUF to the disk.  Call with:
+;	T1/Block number to write
+;Return+1 if errors detected
+;Return+2 if no errors and block written
+
+WRTBLK:	MOVEM	T1,LSTBLK	;Save for messages
+	USETO	DSK,T1		;Setup to write specified block
+	STATZ	DSK,IO.ERR	;Any errors?
+	  JRST	IOERR		;Yes
+	OUTPUT	DSK,DSKIOW	;Do the output
+	STATO	DSK,IO.ERR	;Any errors?
+	  JRST	CPOPJ1		;No, give skip return
+IOERR:	GETSTS	DSK,ERRSTS	;Get status for message
+	POPJ	P,		;Give non-skip return
+	RELOC
+CMDB:	BLOCK	1		;Command buffer byte pointer
+CMDBUF:	BLOCK	<^D80/5>+2	;Command buffer
+LSTBLK:	BLOCK	1		;Last block read/written
+ERRSTS:	BLOCK	1		;Status on last error
+CRLF:	ASCIZ/
+/
+DELBLK:	SIXBIT/FE/		;LOOKUP block for FE.SYS
+	SIXBIT/SYS/
+	EXP	0
+	XWD	1,4
+PDL:	BLOCK	PDLLEN		;PDL
+DSCBLK:	BLOCK	.DCUPN+1	;DSKCHR block
+DSKIOW:	IOWD	BLKSIZ,BUF	;IOWD to BUF
+	EXP	0
+BUF:	BLOCK	BLKSIZ		;Buffer
+
+
+	END	FEDEL

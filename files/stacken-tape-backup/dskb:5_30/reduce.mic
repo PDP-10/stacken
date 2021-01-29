@@ -1,0 +1,94 @@
+.r reduce
+INTEGER PROCEDURE FACTORIAL N;
+   FOR I:= 1:N PRODUCT I;
+
+
+FACTORIAL 50;
+
+MATRIX M(3,3);
+
+FOR I:=1:3 DO FOR J:=1:3 DO M(I,J):=1/(X-I-J);
+
+DET M;
+
+ON GCD;
+
+!*ANS;
+
+1/M;
+
+EXP1 := A**2*(B**2+2*B)+A*(B**2+2*C)/(2*D);
+
+SYMBOLIC !*ANS;
+
+FACTOR A;
+
+EXP1;
+
+ON DIV;
+
+EXP1;
+
+OFF DIV;
+ON RAT;
+EXP1;
+
+ON FORT;
+
+EXP1;
+
+OFF FORT,RAT;
+REMFAC A;
+UP D;
+
+EXP1;
+DOWN A;
+EXP1;
+
+
+
+LET EXP2 = 2+3*(2-X)/(Y-1)**3 - 3*Y/(X-1)**3;
+
+
+EXP2;
+
+SYMBOLIC !*ANS;
+
+DF(!*ANS,X);
+
+OFF MCD;
+
+EXP2;
+
+SYMBOLIC !*ANS;
+
+DF(EXP2,X);
+
+OPERATOR INT;
+LINEAR INT;
+
+LET INT(1,X)=X,
+    INT(X,X)=X**2/2;
+FOR ALL K LET INT(X**K,X)=X**(K+1)/(K+1);
+LET INT(E**(-X),X)=-E**(-X),
+    INT(X*E**(-X),X)=-X*E**(-X)-E**(-X);
+FOR ALL K LET INT(X**K*E**(-X),X)=
+	-X**K*E**(-X)+K*INT(X**(K-1)*E**(-X),X);
+
+EXP:= X**3*E**(-X)-2*X+3;
+
+INT(EXP,X);
+
+INT(!*ANS,X);
+
+DF(!*ANS,X,2);
+
+SYMBOLIC CAR ''(X Y Z);
+
+SYMBOLIC PROCEDURE CONSZ U;
+   IF NULL U THEN NIL ELSE (''Z . CAR U) . CONSZ CDR U;
+
+SYMBOLIC;
+CONSZ ''(X Y Z);
+CAR A;
+

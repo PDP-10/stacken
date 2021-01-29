@@ -1,0 +1,320 @@
+	TITLE	QSRCVT - Convert master queues
+	SUBTTL	Universals
+
+	SEARCH	GLXMAC
+
+
+	PROLOG	QSRCVT			; Generate GLXLIB info
+
+; Parameters
+
+	IDXSIZ==PAGSIZ			; Index is one page
+	IDXCNT==PAGSIZ-6		; Number of entries per index block
+	SECSIZ==200*PAGSIZ		; Number of words per section
+
+	PDLLEN==^D100			; Stack length
+	SUBTTL	Initialization block
+
+CVTINI:	$BUILD	IB.SZ			; Start the block
+	$SET	IB.PIB,,PIB		; Address of PIB
+	$SET	IB.PRG,,%%.MOD		; Program name
+	$EOB				; End of block
+
+PIB:	$BUILD	PB.MNS			; Smallest possible PIB
+	$SET	PB.HDR,PB.LEN,PB.MNS	; Length of PIB
+	$EOB				; End of PIB
+
+FILFOB:	$BUILD	FOB.MZ			; Build the FOB
+	$SET	FOB.FD,,FILFD		; Address of the FD
+	$SET	FOB.CW,FB.BSZ,^D36	; Byte size
+	$EOB				; End of block
+
+FILFD:	$BUILD	FDMSIZ			; Minimum size FD
+	$SET	.FDLEN,FD.LEN,FDMSIZ	; Size
+	$SET	.FDLEN,FD.TYP,.FDNAT	; Native FD
+	$SET	.FDSTR,,<SIXBIT |DSK|>	; Device
+	$SET	.FDNAM,,<SIXBIT |QSRMS1|> ; File name
+	$SET	.FDEXT,,<SIXBIT |QSR|>	; Extension
+	$SET	.FDPPN,,<0-0>		; PPN (default path)
+	$EOB				; End of FD
+
+QSRSAB::$BUILD	SAB.SZ			; Build an SAB
+	$SET	SAB.SI,SI.FLG,1		; Use SI.IDX field
+	$SET	SAB.SI,SI.IDX,SP.QSR	; Send to [SYSTEM]QUASAR
+	$EOB				; End of block
+	SUBTTL	Start-up
+
+; After initializing GLXLIB, we will make sure QUASAR is running, and
+;determine which version is running by checking if the PID for
+;[SYSTEM]MDA is in use.  We will then open the copy of QUASAR's master
+;queue on our default path, and proceed to read the requests and
+;send them to the running QUASAR.
+
+	QSRV2==0			; Version 2 is index 0
+	QSRV4==1			; Version 4 is index 1
+
+QSRCVT:	JFCL				; Ignore CCL entry
+	RESET				; Clear the world
+	MOVE	P,[IOWD	PDLLEN,PDL]	; Get the stack pointer
+
+	MOVX	S1,IB.SZ		; Get the size of our IB
+	MOVEI	S2,CVTINI		; And the address
+	$CALL	I%INIT			; And initialize GLXLIB
+
+	MOVX	S1,SP.QSR		; Get the PID to find
+	$CALL	C%RPRM			; Get it
+	JUMPT	QSRC.1			; Got it, check if MDA is there
+	$FATAL	<QUASAR not running, no conversion possible>
+
+QSRC.1:	MOVX	S1,SP.MDA		; Get the MDA's PID
+	$CALL	C%RPRM			;  .  .  .
+	MOVX	S1,QSRV2		; Assume version 2 GALAXY
+	SKIPF				; Is the MDA running?
+	 MOVX	S1,QSRV4		; Yes, must be version 4.1
+	MOVEM	S1,QSRVER		; Save the index
+
+; Now open the file and determine which version it is.
+
+	MOVX	S1,FOB.MZ		; Get the FOB size
+	MOVEI	S2,FILFOB		; And the address
+	$CALL	F%IOPN			; Open it
+	JUMPT	QSRC.2			; Did we get it?
+	$FATAL	<Cannot open master file ^F/FILFD/ - ^E/S1/>
+
+QSRC.2:	MOVEM	S1,FILIFN		; Save the IFN
+	MOVEI	S2,200			; Position to first block of indices
+	$CALL	F%POS			; Position it
+	JUMPF	FILERR			; Error, punt
+
+	MOVE	S1,FILIFN		; Get the IFN back
+	$CALL	F%IBYT			; And get the word
+	JUMPF	FILERR			; Bad?
+	HLRZ	S1,S2			; Get the version of the protocol
+	MOVSI	S2,-QVRLEN		; Get the pointer into the table
+
+QSRC.3:	CAME	S1,QVRTBL(S2)		; Is this the version?
+	 AOBJN	S2,QSRC.3		; No, loop
+	JUMPL	S2,QSRC.4		; Did we get a valid version number?
+	$FATAL	<File format version number (^O/S1/) is unknown.>
+
+QSRC.4:	HRRZM	S2,FILVER		; Save the version of the file
+	SUBTTL	Main loop
+
+; This is the main loop. It will read in each index page in succession,
+;and then process the requests in that section.
+
+	MOVE	S1,FILIFN		; Get the IFN
+	MOVX	S2,FI.SIZ		; Get the size of the file
+	$CALL	F%INFO			; Get it
+	IDIVX	S1,SECSIZ		; Get the number of sections
+	MOVNI	S1,1(S1)		; Make it negative
+	MOVSI	P1,(S1)			; Get the counter set up
+
+MAIN:	MOVE	S1,FILIFN		; Get the IFN
+	MOVEI	S2,(P1)			; Get the section number
+	IMULX	S2,SECSIZ		; Convert to byte number
+	ADDI	S2,200			; Plus offset for first empty block
+	$CALL	F%POS			; Position the file
+	JUMPF	FILERR			; Bad?
+	MOVE	S1,FILIFN		; Get the IFN again
+	MOVE	S2,[XWD -IDXSIZ,IDXBLK]	; Get the pointer
+	$CALL	REDBLK			; And read the block
+	 JUMPF	FILERR			; Bad?
+
+	MOVSI	T1,-IDXCNT		; Get the pointer to the entries
+
+MAIN.0:	SKIPN	S1,IDXENT(T1)		; Get an entry
+	 JRST	MAIN.1			; None here, try the next
+	HLRZ	S2,S1			; Get the entry type
+	CAXE	S1,-1			; Is it a -1?
+	 CAIE	S2,1			; Want this type of entry?
+	  JRST	MAIN.1			; No, skip it
+	MOVNI	S2,(S1)			; Get the length of the request
+	CAXGE	S2,-MXEQSZ		; Will it fit?
+	 $FATAL	<Entry in ^F/FILFD/ is too large (^D/S1,RHMASK/)>
+	MOVSI	S2,(S2)			; Put in left half
+	HRRI	S2,EQBUFF		; Get the buffer address
+	PUSH	P,S2			; Save the pointer
+	MOVX	S1,MXEQSZ		; Get the max EQ size
+	MOVEI	S2,EQBUFF		; And the address
+	$CALL	.ZCHNK			; Clear the block
+	MOVEI	S1,DATSIZ		; Get the independent data size
+	MOVEI	S2,DATA			; Get the address of the interface data
+	$CALL	.ZCHNK			; Clear the block
+	MOVEI	S2,(P1)			; Get the section number
+	IMULX	S2,SECSIZ		; Convert to word offset to first
+	MOVEI	S1,(T1)			; Get the index
+	IMULX	S1,200			; Make it the word offset
+	ADDI	S2,5*200(S1)		; Get the overall word address
+	MOVE	S1,FILIFN		; Get the IFN
+	$CALL	F%POS			; Position the file
+	POP	P,S2			; Restore the pointer
+	JUMPF	FILERR			; Position fail?
+	MOVE	S1,FILIFN		; Get the IFN
+	$CALL	REDBLK			; Read the block
+	 JUMPF	FILERR			; Couldn't
+	SKIPN	S1,CURPAG		; Get the page address (if any)
+	 $CALL	M%GPAG			; No, get one
+	MOVEM	S1,CURPAG		; Save it
+	MOVE	S1,FILVER		; Get the version index
+	$CALL	@REDEQT(S1)		; And call correct routine
+	 JUMPF	MAIN.1			; Couldn't, try the next
+	MOVE	T2,S1			; Get the pointer to the FD's
+	MOVE	S1,CURPAG		; Save the page address for later send
+	MOVE	S2,QSRVER		; Get QUASAR's version
+	$CALL	@WRTEQT(S2)		; And send the request
+	 JUMPF	MAIN.1			; Punt if bad
+	MOVE	T3,S1			; Get the pointer for writing the FD's
+MAIN.2:	MOVEI	S1,FPFDLN		; Get the length of the FP/FD data
+	MOVEI	S2,FPFDAT		; And the address
+	$CALL	.ZCHNK			; Clear it
+	MOVE	S1,T2			; Get the pointer for the next FD
+	MOVE	S2,FILVER		; Get the version
+	$CALL	@REDFDT(S2)		; Read the FD
+	 JUMPF	MAIN.1			; Error?
+	JUMPE	S1,MAIN.3		; All of the FD's finished?
+	MOVE	T2,S1			; Get the updated pointer
+	MOVE	S1,T3			; No, get the pointer for where to write
+	MOVE	S2,QSRVER		; Get QUASAR's version
+	$CALL	@WRTFDT(S2)		; Write it
+	 JUMPF	MAIN.1			; Couldn't
+	MOVE	T3,S1			; Get the updated pointer
+	JRST	MAIN.2			; Try again
+
+; Here when we have run out of FD's
+
+MAIN.3:	MOVE	S1,T3			; Get the last pointer
+	MOVE	S2,QSRVER		; And the version of QUASAR
+	$CALL	@ENDFDT(S2)		; End the request
+
+MAIN.1:	AOBJN	T1,MAIN.0		; Loop for all entries in the index
+	AOBJN	P1,MAIN			; And all indicies
+
+	$TEXT	(,<All jobs converted>)
+	MOVE	S1,FILIFN		; Get the IFN
+	$CALL	F%REL			; Release the file
+	$CALL	I%EXIT			; And exit
+	JRST	.-1			; Shouldn't reall get here
+
+
+; Here on a read error
+
+FILERR:	$FATAL	<Error reading ^F/FILFD/ - ^E/S1/>
+	SUBTTL	REDBLK - Read a block
+
+; This routine will read a block from the file
+;call:
+;	MOVE	S1,IFN for file
+;	MOVE	S2,[XWD -num words,address]
+;	$CALL	REDBLK
+;	 False return if error
+;	True return if successful
+;
+
+REDBLK:	$SAVE	<P1>			; Save P1
+	MOVE	P1,S2			; Get the pointer
+
+REDB.1:	$CALL	F%IBYT			; Get a word
+	 $RETIF				; Punt if bad
+	MOVEM	S2,(P1)			; Store it
+	AOBJN	P1,REDB.1		; Loop for all of the block
+	$RETT				; And return
+	SUBTTL	Tables
+
+; Table of file version numbers to convert to GALAXY version index
+
+QVRTBL:	EXP	%%.QV2##		; Version of QSRMAC for release 2
+	EXP	%%.QV4##		; Version for releae 4.1
+QVRLEN==.-QVRTBL
+
+REDEQT:	EXP	REDQV2##		; Read a version 2 EQ
+	EXP	REDQV4##		; Read a version 4.1 EQ
+
+WRTEQT:	EXP	WRTQV2##		; Send a version 2 EQ
+	EXP	WRTQV4##		; Send a version 4 EQ
+
+REDFDT:	EXP	RFDQV2##		; Read version 2 FP/FD
+	EXP	RFDQV4##		; Read version 4 FP/FD
+
+WRTFDT:	EXP	WFDQV2##		; Write version 2 FP/FD
+	EXP	WFDQV4##		; Write version 4 FP/FD
+
+ENDFDT:	EXP	ENDQV2##		; End version 2 FD list
+	EXP	ENDQV4##		; End version 4 FD list
+	SUBTTL	Storage
+
+PDL:	BLOCK	PDLLEN			; Stack
+FILIFN:	BLOCK	1			; IFN for QSRMS1.QSR
+QSRVER:	BLOCK	1			; Version of QUASAR running
+FILVER:	BLOCK	1			; Version of file
+CURPAG::BLOCK	1			; Address of page for building new EQ
+
+IDXBLK:	BLOCK	IDXSIZ			; Block for storing the index
+IDXENT==IDXBLK+6			; First real entry
+
+EQBUFF::BLOCK	PAGSIZ			; EQ block buffer
+MXEQSZ==.-EQBUFF			; Max size of EQ block read in
+
+DATA:!
+EQITN::	BLOCK	1			; Internal task name
+EQRDV::	BLOCK	1			; Request device (INP, LPT, ...)
+EQJOB::	BLOCK	1			; Job name
+EQSEQ::	BLOCK	1			; External sequence number
+EQDSN::	BLOCK	1			; Default station number
+EQPRV::	BLOCK	1			; Creator was priveleged
+EQSPL::	BLOCK	1			; Request contains spooled files
+EQPRI::	BLOCK	1			; External priority
+EQPRO::	BLOCK	1			; Request protection
+EQNUM::	BLOCK	1			; Number of files
+EQAFT::	BLOCK	1			; After param
+EQNRS::	BLOCK	1			; Non-restartable bit
+EQDEP::	BLOCK	1			; Dependency count
+EQUNI::	BLOCK	1			; Uniqueness
+EQOUT::	BLOCK	1			; /OUTPUT: value
+EQFRM::	BLOCK	1			; Forms type
+EQNBL::	BLOCK	1			; Number of blocks in request
+EQPGS::	BLOCK	1			; Page limit (output)
+EQCOR::	BLOCK	1			; Core limit (pages)
+EQTIM::	BLOCK	1			; Time limit (seconds)
+EQLPT::	BLOCK	1			; Page limit (input)
+EQCDP::	BLOCK	1			; Card limit (input)
+EQPTP::	BLOCK	1			; Tape limit (input)
+EQPLT::	BLOCK	1			; Plotter limit (input)
+EQNOT::	BLOCK	2			; /NOTE value
+EQACT::	BLOCK	10			; Account string
+EQUSR::	BLOCK	2			; User name
+EQOWN::	BLOCK	1			; Owners PPN
+EQSCN::	BLOCK	1			; /SCAN should be set on login
+EQPAT::	BLOCK	6			; Default path for login
+DATSIZ==.-DATA
+
+; FP data
+
+FPFDAT:!
+
+FPFFF::	BLOCK	1			; File format
+FPFPF::	BLOCK	1			; Paper format
+FPFSP::	BLOCK	1			; Spacing code
+FPDEL::	BLOCK	1			; Delete flag
+FPFLG::	BLOCK	1			; Log file flag
+FPNFH::	BLOCK	1			; No headers flag
+FPSPL::	BLOCK	1			; Spooled file flag
+FPIGN::	BLOCK	1			; Ignore flag
+FPFCY::	BLOCK	1			; Copy count
+FPFST::	BLOCK	1			; Starting point info
+FPFR1::	BLOCK	1			; Report word 1
+FPFR2::	BLOCK	1			; Report word 2
+
+; FD info
+
+FDSTR::	BLOCK	1			; Structure
+FDNAM::	BLOCK	1			; File name
+FDEXT::	BLOCK	1			; Extension
+FDPPN::	BLOCK	1			; PPN
+FDPAT::	BLOCK	5			; Path
+
+FPFDLN==.-FPFDAT			; Length of FP/FD data
+	SUBTTL	End of QSRCVT
+
+	END	QSRCVT			; End of program
+              

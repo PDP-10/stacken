@@ -1,0 +1,123 @@
+P} GAM:-arean ligger en del spel- och demonstrationsprogram. Du
+startar vanligen ett program med kommandot "R GAM:programnamn".
+Exempel: "R GAM:ADVENT". En del program startas dock med kommandot
+"DO GAM:programnamn". Dessa {r markerade med en asterisk (*)
+nedan. F|r m}nga av programmen finns det en hj{lpfil. Ge kommandot
+"HELP programnamn" f|r att f} hj{lp utskriven p} terminalen.
+Program som har hj{lpfil {r markerade <Hj{lpfil> nedan.
+Denna fil kan skrivas p} radskrivaren med kommandot "PRINT GAM:GAM.HLP".
+
+ADD	;Drill|vning i de fyra r{knes{tten f|r barn.
+ADVENT	;Adventure - {ventyr i magisk grotta. <Hj{lpfil>
+ANIMAL	;Kunskapsuppbyggande program. Gissar p} djur.
+ASTROL	;S{tter samman ditt horoskop. <Hj{lpfil>
+B1	;Krigsspel, du {r kapten p} bombplanet B1. <Hj{lpfil>
+BEMARK	;Ber{kning av bem{rkelsedagar
+BIGWAR	;Galaktiskt krigsspel. <Hj{lpfil>
+BIOTHM	;Biorytmer utskrives. <Hj{lpfil>
+BKG	;Backgammon-spel. <Hj{lpfil>
+BOGGLE	;Terminalspel, Flest bildade ord vinner. <Hj{lpfil>
+CAT	;Katt och r}tta-spel (endast p} alfanumerisk sk{rmterminal).
+CHESS	;Spela schack med datorn. <Hj{lpfil>
+CHURCH	;Grafiskt exempel (endast p} Tektronix-sk{rm). <Hj{lpfil>
+CICERO *;Ciceron f|r Uppsala gatun{t. <Hj{lpfil>
+COFEE	;Sifferspel.
+COOKIE	;Skriver dagens sentens p} terminalen.
+DECWAR	;Galaktiskt krig mellan flera terminaler i realtid. <Hj{lpfil>
+DIAGRAM	;Visar stapeldiagram. Kr{ver sk{rmterminal med "reverse video".
+DOTS	;Spel. <Hj{lpfil>
+DRIVE	;Spelprogram f|r bilk|rning p} textsk{rmterminaler. <Hj{lpfil>
+EDITH	;Demo-program fr}n IBM 1401-tiden (numera cencurerat).
+ELIZA  *;Dialog mellan psykoanalytiker och patient. <Hj{lpfil>
+EMPIRE  ;]rhundradets krigsspel. <Hj{lpfil>
+ENTERP	;Tysktalande version av Star Trek.
+EXCUSE	;Skriver ut dagens urs{kt p} din terminal.
+FEST	;Hj{lper till att sammanst{lla s}ngh{fte f|r festen.
+FLIPPER	;Flipper-spel p} textsk{rmsterminal. <Hj{lpfil>
+FOOT	;Fotbollsspel mellan tv} textsk{rmsterminaler. <Hj{lpfil>
+FORMT	;Visar formul{rifyllning p} textsk{rmterminal.
+FOTAB	;Skapar serietabell f|r fotbollslag. <Hj{lpfil>
+GEOGRA	;Kunskapsuppbyggande program. Gissar p} platser.
+GLAS	;Patientintervju.
+GULD	;H{mta guldtackor. Endast via textsk{rmsterminal. <Hj{lpfil>
+HIDE	;Demonstration av "g|mda linjer" p} grafisk sk{rm.
+HUS	;Barn bygger hus.
+JOKE    ;Dagens budskap. (engelska)
+KATT	;Svenskspr}kig version av katt & r}tta-spelet CAT
+KUB	;Ungerska kuben. <Hj{lpfil>
+KUB4	;Ungerska kuben. <Hj{lpfil>
+KONSUP *;Exempel p} datorst|dd konsumentupplysning. <Hj{lpfil>
+LIFE	;Tillv{xt i bakterieodling.
+LISA   *;Svenskspr}kig version av ELIZA (se ovan). <Hj{lpfil>
+LJUS	;Ritar brinnande ljus p} alfanumeriska sk{rmterminaler. <Hj{lpfil>
+LOTTO	;Ger f|rslag till LOTTO-rad genom slumpning av tal.
+LUFFAR	;Luffarschack (20*20 rutor). <Hj{lpfil>
+MIL    *;L{karutbildning
+MASKEN	;J{mf|r programmet ORM. <Hj{lpfil>
+MASTER	;Master mind-spel. Datorn t{nker p} ett tal som du ska gissa.
+MAZE	;Utskrift av labyrinter.
+MATTAC	;Luffarschack (10*10 rutor). <Hj{lpfil>
+MIRR	;Spegelv{nder ord. (Barnprogram)
+NIM	;Nim-spel. <Hj{lpfil>
+NUMERO	;\vers{tter tal till franska. Skrivande terminal f|r accenter.
+ORM	;Skicklighetsspel f|r fingerf{rdiga p} sk{rmterminal. <Hj{lpfil>
+OTHELL	;Othello-spel. F|r pappersskrivande terminal samt VT05, VT50 o VT52.
+OTELLO	;Othello-spel. F|r flertalet sk{rmterminaler.
+PEBBEL	;Ritar Pebble Flintstone p} grafisk bildsk{rm.
+PLOTn	;Demo-program p} Tektronix-sk{rm av DTPLOT-paketet. (n=1,2,3,4,5)
+POLAB	;Utskrift av labyrinter.
+POLY   *;Ritar polygon p} grafisk sk{rm. <Hj{lpfil>
+STUGA	;Stugforskning mm - ett svenskt {ventyr. <Hj{lpfil>
+QSIM	;Simulering av l{karmottagning (endast p} alfanumerisk sk{rmterminal).
+QZDRO	;Ordspel. Datorn t{nker p} ett ord som du ska gissa.
+QZORD	;Ordspel. T{nk p} ett ord. Datorn gissar. <Hj{lfil>
+REDUCE *;Demonstration av formelmanipulering med Reduce.
+SHIP	;Simulering av trupptransporter (endast p} alfanumerisk sk{rmterminal)
+SPORTS	;Fr}get{vling i sportkunskap.
+STARTR	;Star-trek, galaktiskt krigsspel.
+STAVA	;Stav|vning f|r barn.
+STRTRK	;Star-trek, galaktiskt krigsspel. <Hj{lpfil>
+TABLE   ;Demonstrerar tabellifyllnad via dator.
+TECH2	;Spela schack med datorn. <Hj{lpfil>
+TORN	;Slutspel i schack (endast p} alfanumeriska sk{rmterminaler).
+TTT3D	;Tredimensionellt tic-tac-toe-spel
+U	;Ub}tsjakt - finn och tvinga upp en fr{mmande ub}t! <Hj{lpfil>
+WORDS   ;Skriver ut dagens visdomsord (p} engelska). <Hj{lpfil>
+WUMPUS	;Jakt p} farligt djur i grotta. <Hj{lpfil>
+
+
+P} GAM:-arean finns dessutom ett antal filer som kan tas ut som
+bilder p} radskrivaren. Beg{r utskrift med monitorkommandot:
+"PRINT/NOHEADER GAM:namn.ext", exempel: "PRINT/NOHEADER GAM:ASTERX.DAT".
+
+ALMA.DAT	;V{ggalmanacka med snobbenbild (1984)
+ALMA10.DAT	;V{ggalmanacka med snobbenbild (1984) i 10 ex.
+ASTERX.DAT	;Asterix
+ASTRIX.DAT	;Asterix
+MICKY.DAT	;Musse Pigg
+MIRCUL.DAT	;Miraculix-bild
+SKELET.DAT	;Skelett
+SNOOPY.DAT	;Snobben-hunden
+SNUPY.DAT	;Snobben-hunden
+BFLY.DAT	;Fj{ril
+TIGER.DAT	;Tiger
+HAPPY.DAT	;Lycklig Snobben 
+
+N}gra bilder {r {ven anpassade f|r att kunna tas ut p} en
+pappersskrivande terminal. Ge kommandot "TYPE GAM:namn.TTY",
+exempel: "TYPE GAM:SNOBB.TTY".
+
+SKELET.TTY	;Skelett
+SNOBB.TTY	;Snobben-hunden
+SNUPI.TTY	;Snobben-hunden
+SNUPY.TTY	;Snobben-hunden
+
+Filer som inneh}ller text och kan skrivas ut med PRINT eller TYPE-
+kommando:
+
+LAWS.DOC	;Lagar skapade efter erfarenhet (engelska).
+HACKER.JAR	;Uttydningar av vissa f|rkortningar (engelska).
+HACKER.SWE	;Ordlista |ver svensk "hacker-slang".
+REAL.DOC	;Real Programmers Don't Use PASCAL.
+
+	<Slut p} GAM:GAM.HLP - 1983-11-10/SO>

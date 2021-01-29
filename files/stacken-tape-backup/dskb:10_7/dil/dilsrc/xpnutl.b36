@@ -1,0 +1,431 @@
+%TITLE 'XPNUTL - Utility routines for BLISSnet-10'
+MODULE XPNUTL (
+               ENTRY ( XPN$$VALID_NLB,
+                       XPN$$LINK_STATUS,
+                       XPN$$NEW_BUFFER,
+                       XPN$$INT_SET,
+                       XPN$$SLEEP,
+                       XPN$$UUO_ERROR
+                     ),
+               IDENT = '2'
+              ) =
+BEGIN
+!  COPYRIGHT (C) DIGITAL EQUIPMENT CORPORATION 1986.
+!  ALL RIGHTS RESERVED.
+!  
+!  THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED  AND
+!  COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE AND WITH
+!  THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS  SOFTWARE  OR
+!  ANY  OTHER  COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE
+!  AVAILABLE TO ANY OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE
+!  SOFTWARE IS HEREBY TRANSFERRED.
+!  
+!  THE INFORMATION IN THIS SOFTWARE IS  SUBJECT  TO  CHANGE  WITHOUT
+!  NOTICE  AND  SHOULD  NOT  BE CONSTRUED AS A COMMITMENT BY DIGITAL
+!  EQUIPMENT CORPORATION.
+!  
+!  DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF
+!  ITS SOFTWARE ON EQUIPMENT THAT IS NOT SUPPLIED BY DIGITAL.
+
+!++
+! FACILITY:
+!   Transportable BLISS interface to DECNET, TOPS10 implementation.
+!
+! ABSTRACT:
+!   This module contains various utility routines called by more then
+!   one module in the interface.
+!
+! ENVIRONMENT:
+!   TOPS10 user mode, with XPORT.
+!
+! AUTHOR: Larry Campbell, CREATION DATE: November 3, 1981
+!
+! MODIFIED BY: Andrew Nourse
+!
+! 02 - Start TOPS-10 support [Doug Rayner]
+! 01 - End-of-file is an abort condition, not a bug.
+!
+! Start using the DIL standard edit history format.
+!
+! Edit (%O'2', '12-Apr-84', 'Sandy Clemens')
+!  %( Add the TOPS-10 BLISSnet sources for DIL V2.  )%
+!
+! Edit (%O'6', '5-Oct-84', 'Sandy Clemens')
+!  %( Add new format of COPYRIGHT notice.  FILES:  ALL )%
+!--
+
+!
+! TABLE OF CONTENTS:
+!
+FORWARD ROUTINE
+    xpn$$valid_nlb,                     ! Validate an NLB
+    xpn$$link_status,                   ! Return status of a link
+    xpn$$new_buffer : NOVALUE,          ! Allocate new input buffer
+    xpn$$int_set : NOVALUE,             ! Set up interrupts for a link
+    xpn$$sleep : NOVALUE,               ! Sleep until interrupted
+    xpn$$uuo_error;                    ! Handle NSP. failure
+!
+! INCLUDE FILES:
+!
+LIBRARY 'BLI:XPORT';                    ! XPORT definitions
+LIBRARY 'BLI:TENDEF';			! Machine dependant MACRO's
+LIBRARY 'BLI:UUOSYM';                   ! Monitor symbol definitions
+LIBRARY 'BLISSNET';                     ! Transportable BLISSnet stuff
+LIBRARY 'BLSN10';			! TOPS-10 BLISSnet specific stuff
+LIBRARY 'UUODEF';			! TOPS-10 UUO definitions
+!
+! MACROS:
+!
+
+!
+! EQUATED SYMBOLS:
+!
+
+!
+! OWN STORAGE:
+!
+OWN
+    nsp_arg_blk : MONBLOCK[$NSAA1+1] INITIAL (0);
+
+!
+! BUILTIN's
+!
+BUILTIN
+    LSH;
+
+
+!
+! EXTERNAL REFERENCES:
+!
+EXTERNAL ROUTINE
+    XPN$DPSI;			!Macro routine to handle initial PSI interrupt
+
+
+GLOBAL ROUTINE xpn$$valid_nlb (nlb) =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   This routine checks a Network Link Block for validity
+!
+! FORMAL PARAMETERS:
+!   nlb         - address of the Network Link Block
+!
+! IMPLICIT INPUTS:
+!	NONE
+!
+! IMPLICIT OUTPUTS:
+!	NONE
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   XPN$_NORMAL         - NLB is OK
+!   XPN$_BAD_SIZE       - length is wrong
+!   XPN$_VERSION        - version skew
+!   XPN$_BAD_FLAGS      - inconsistent flags setting
+!
+! SIDE EFFECTS:
+!
+!	NONE
+!
+!--
+    BEGIN
+
+    MAP
+        nlb : REF $XPN_NLB();
+
+    nlb_binds;
+    IF .nlb[NLB$H_LENGTH] NEQ NLB$K_LENGTH
+    THEN
+        RETURN (XPN$_BAD_SIZE);
+    IF .nlb[NLB$B_VERSION] NEQ NLB$K_VERSION
+        OR .nlb[NLB$B_LEVEL] NEQ NLB$K_LEVEL
+    THEN
+        RETURN (XPN$_VERSION);
+    IF active AND passive
+    THEN
+        RETURN (XPN$_BAD_FLAGS);
+    RETURN (XPN$_NORMAL)
+    END;                                !End of xpn$$valid_nlb
+
+GLOBAL ROUTINE xpn$$link_status (nlb) =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   Returns the link status word returned by the NSP. UUO
+!
+! FORMAL PARAMETERS:
+!   nlb         - address of the Network Link Block
+!
+! IMPLICIT INPUTS:
+!   NLB$H_JFN   - Channel for the network link
+!
+! IMPLICIT OUTPUTS:
+!   NONE
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   One fullword of link status as returned by the NSP. status function.
+!   If there is no JFN, or the NSP. fails, zero is returned.
+!
+! SIDE EFFECTS:
+!	NONE
+!
+!--
+    BEGIN
+
+    MAP
+        nlb : REF $XPN_NLB();
+
+    REGISTER
+	t1;
+
+    IF .nlb[NLB$H_JFN] EQL 0
+    THEN
+        RETURN (0)
+    ELSE
+	BEGIN
+	nsp_arg_blk[$NSAFN,NS$AFN] = $NSFRS;			!function
+	nsp_arg_blk[$NSAFN,NS$ALN] = $NSACH + 1;		!size of block
+	nsp_arg_blk[$NSACH,-1] = .nlb[NLB$H_JFN];		!channel number
+	t1 = nsp_arg_blk[0,-1];
+
+	IF NSP$_UUO(t1)
+	THEN
+		RETURN (.nsp_arg_blk[$NSACH,-1])
+	ELSE
+		BEGIN
+		nlb[NLB$G_2ND_CODE] = .t1<rh>;
+		RETURN (0)
+		END;
+	END;
+    END;                                ! End of xpn$$link_status
+
+GLOBAL ROUTINE xpn$$new_buffer (buffer_descriptor, byte_count) : NOVALUE =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   This routine releases any previous buffer associated with an NLB
+!   and allocates a new buffer with room for .byte_count bytes.  We
+!   have to fudge with the descriptor because XPORT binary data descriptors
+!   want to put one 8-bit byte per addressable unit (word), which is incredibly
+!   inefficient on 36-bit machines.  We set up the descriptors to point to
+!   real strings of 8-bit bytes, so all the CH$xxx functions can work.
+!
+! FORMAL PARAMETERS:
+!   buffer_descriptor   - address of the descriptor for the buffer
+!   byte_count          - how many bytes to allocate space for
+!
+! IMPLICIT INPUTS:
+!   Buffer descriptor   - memory pointed to is freed
+!
+! IMPLICIT OUTPUTS:
+!   Buffer descriptor   - updated to point to new buffer
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   NONE
+!
+! SIDE EFFECTS:
+!   NONE
+!
+!--
+    BEGIN
+
+    MAP
+        buffer_descriptor : REF $XPO_DESCRIPTOR (CLASS = DYNAMIC);
+    !
+    ! Release stale previous buffer if necessary
+    !
+    IF .buffer_descriptor[XPO$A_ADDRESS] NEQ 0
+    THEN
+	BEGIN
+        LOCAL
+            buffer_address;
+	buffer_descriptor[XPO$H_LENGTH] =
+            (.buffer_descriptor[XPO$H_LENGTH] + 3) / 4;
+        !
+        ! XPO$A_ADDRESS really contains a byte pointer, which we must first
+        ! convert to an address for $XPO_FREE_MEM's sake.  BLISS character
+        ! pointers point to <byte - 1> (for ILDB's sake) so we have to
+        ! increment the pointer first.
+        !
+        buffer_address = CH$PLUS (.buffer_descriptor[XPO$A_ADDRESS], 1);
+        buffer_address = .buffer_address<rh>;
+        buffer_descriptor[XPO$A_ADDRESS] = .buffer_address;
+	$XPO_FREE_MEM (BINARY_DATA = .buffer_descriptor)
+	END;
+    !
+    ! Allocate string space for this data, fudge the descriptor
+    ! to point to string of 8-bit bytes rather than string of
+    ! addressable units.
+    !
+    $XPO_DESC_INIT (DESCRIPTOR = .buffer_descriptor,
+                    CLASS = DYNAMIC);
+    $XPO_GET_MEM (FULLWORDS = ((.byte_count + 3) / 4),
+		  DESCRIPTOR = .buffer_descriptor);
+    buffer_descriptor[XPO$H_LENGTH] = .byte_count;
+    buffer_descriptor[XPO$A_ADDRESS] =
+        CH$PTR (.buffer_descriptor[XPO$A_ADDRESS], 0, 8);
+
+    END;                                !End of xpn$$new_buffer
+
+GLOBAL ROUTINE xpn$$int_set (nlb_vector) : NOVALUE =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   Sets up to receive interrupts for connect events on any JFN for any
+!   link specified by NLBs given.  The first time this routine is called,
+!   it initializes the software interrupt system and assigns an unused
+!   channel for the interface's use.
+!
+! FORMAL PARAMETERS:
+!   nlb_vector  - counted vector of addresses of Network Link Blocks
+!
+! IMPLICIT INPUTS:
+!   NONE
+!
+! IMPLICIT OUTPUTS:
+!   NONE
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   NONE
+!
+! SIDE EFFECTS:
+!   An unassigned interrupt channel is assigned.
+!
+!--
+    BEGIN
+
+    MAP
+        nlb_vector : REF VECTOR[0];
+
+    OWN
+        once_only_flag : INITIAL (0);
+
+    !
+    ! Assign an unused interrupt channel if we haven't already done so.
+    !
+    IF NOT (.once_only_flag)
+    THEN
+        BEGIN
+	XPN$DPSI(0);
+        once_only_flag = 1
+        END;
+    !
+    ! For each NLB specified, request the monitor to interrupt us on any events
+    !
+    INCR i FROM 1 TO .nlb_vector[0]
+    DO
+        BEGIN
+        BIND
+            nlb = .nlb_vector[.i] : $XPN_NLB();
+        IF NOT .nlb[NLB$V_INT_SET]
+        THEN
+            BEGIN
+	    REGISTER
+		t1;
+
+		nsp_arg_blk[$NSAFN,NS$AFN] = $NSFPI;	!function
+		nsp_arg_blk[$NSAFN,NS$ALN] = $NSAA1 + 1;!size of block
+		nsp_arg_blk[$NSACH,-1] = .nlb[NLB$H_JFN];!channel number
+		nsp_arg_blk[$NSAA1,-1] =
+			LSH((NS$STA OR NS$IDA OR NS$NDA),-18);
+							!all reason codes
+		t1 = nsp_arg_blk[0,-1];
+
+		IF NOT NSP$_UUO(t1)
+		THEN
+			xpn$$bug ('Cannot set interrupt assignments')
+		ELSE
+			nlb[NLB$V_INT_SET] = 1;
+            END;
+        END;
+    END;
+
+GLOBAL ROUTINE xpn$$sleep (msec) : NOVALUE =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   Sleep the specified number of milliseconds.  An interrupt on any
+!   link will cause a premature wakeup, giving the program the opportunity
+!   to service the condition more quickly.  Requesting a sleep of zero
+!   length causes an infinite sleep.
+!
+! FORMAL PARAMETERS:
+!   msec        - number of milliseconds to sleep
+!
+! IMPLICIT INPUTS:
+!   NONE
+!
+! IMPLICIT OUTPUTS:
+!   NONE
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   NONE
+!
+! SIDE EFFECTS:
+!   NONE
+!
+!--
+    BEGIN
+
+    REGISTER
+	t1;
+
+    t1 = .msec OR HB$RIO;
+
+    HIBER_UUO(t1);
+
+    END;                                ! End of xpn$$sleep
+
+GLOBAL ROUTINE xpn$$uuo_error (nlb, nsp_error_code) =
+!++
+! FUNCTIONAL DESCRIPTION:
+!   Handles unexpected failure of a NSP..
+!
+! FORMAL PARAMETERS:
+!   nlb            - address of the Network Link Block involved
+!   nsp_error_code - NSP. UUO returned error code
+!
+! IMPLICIT INPUTS:
+!   NONE
+!
+! IMPLICIT OUTPUTS:
+!   NONE
+!
+! ROUTINE VALUE and
+! COMPLETION CODES:
+!   This routine attempts to return a "reasonable" error code depending
+!   on the nature of the NSP. error.  For example, %NERNS (remote node shut
+!   down) will return XPN$_ABORTED, while %NECBL (connect block length
+!   error) almost certainly is the result of a bug and will result
+!   in XPN$_BUG.
+!
+!   XPN$_ABORTED        - link was apparently aborted
+!   XPN$_BUG            -
+!
+! SIDE EFFECTS:
+!   NONE
+!
+!--
+    BEGIN
+
+    MAP
+        nlb : REF $XPN_NLB ();
+
+     	nlb[NLB$G_2ND_CODE] = .nsp_error_code;
+	SELECTONE .nsp_error_code OF
+	SET
+	    [NSABE_, NSCFE_, NSILF_, NSBCF_, NSBCN_,NSADE_, NSCBL_ TO NSSBL_,
+		 NSWNA_] : xpn$$bug ('Unrecoverable NSP. error codes');
+	    [NSALF_] : RETURN(XPN$_RESALLOC);
+	    [NSBFT_, NSIOF_] : RETURN(XPN$_IVFORMAT);
+	    [NSLQX_, NSJQX_] : RETURN(XPN$_NO_LINKS);
+	    [NSPRV_] : RETURN(XPN$_NO_PRIV);
+	    [NSUKN_, NSUNN_] : RETURN(XPN$_NOSUCHNODE);
+	    [NSRBO_, NSACR_, NSREJ_] : RETURN(XPN$_REJECTED);
+	    [NSURO_] : RETURN(XPN$_NOSUCHOBJ);
+	    [NSNUR_] : RETURN(XPN$_UNREACH);
+	    [OTHERWISE] : RETURN(XPN$_ABORTED);
+	TES
+    END;                                ! End of xpn$$uuo_error
+
+END                                     ! End of module XPNUTL
+ELUDOM

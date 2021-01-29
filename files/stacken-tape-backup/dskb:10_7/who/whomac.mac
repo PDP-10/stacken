@@ -1,0 +1,988 @@
+	UNIVERSAL WHOMAC -- Parameter file for WHO
+
+	.DIRECT	.NOBIN			;NO REL FILE NEEDED
+;               TABLE OF CONTENTS FOR WHOMAC
+;
+;
+;                        SECTION                                   PAGE
+;    1. MACROS - $SETUP - Setup globals and libraries..............   3
+;    2. OPDEFS....................................................   4
+;    3. Parameters................................................   4
+;    4. Extra AC definitions......................................   4
+;    5. I/O channels..............................................   4
+;    6. FLAGS
+;         6.1   Global in LH of F.................................   4
+;         6.2   Local in RH of F..................................   4
+;    7. Assembly switches.........................................   5
+;    8. Monitor Parameters (mostly from S.MAC)....................   6
+;    9. SCAN interface tables
+;         9.1   Monitor commands..................................   7
+;         9.2   Summary keywords and actions......................   8
+;         9.3   State keywords and actions........................   9
+;   10. Format descriptors........................................  10
+	SUBTTL	Macros -- $SETUP - Setup globals and libraries
+
+DEFINE	$SETUP(NAME),<
+
+	SALL			;;FOR CLEAN LISTINGS
+	.DIREC	 FLBLST		;;FOR CLEANER LISTINGS
+
+	SEARCH	JOBDAT		;;JOB DATA AREA SYMBOLS
+	SEARCH	MACTEN		;;TOPS-10 MACROS
+	SEARCH	SCNMAC		;;TOPS-10 COMMAND SCANNER
+	SEARCH	UUOSYM		;;TOPS-10 UUO SYMBOLS
+
+	%%JOBD==%%JOBD		;;SHOW JOBDAT VERSION
+	%%MACT==%%MACT		;;SHOW MACTEN VERSION
+	%%UUOS==%%UUOS		;;SHOW UUOSYM VERSION
+
+IFN FTIPC,<SEARCH TSGSYM>	;;INFORMATION PROCESSING CENETER DEFINITIONS
+IFN FTMDC,<SEARCH MDCSYM>	;;MANUFACTURING DATA CENTER DEFINITIONS
+IFN FTTUFTS,<SEARCH TCSSYM>	;;TUFTS UNIVERSITY DEFINITIONS
+
+	TWOSEG	.JBHGH		;;DEFINE HIGH SEGMENT ORIGIN
+	..H%%==.JBHGH		;;SET INITIAL HIGH SEG RELOCATION COUNTER
+	..L%%=0			;;SET INITIAL LOW SEG RELOCATION COUNTER
+
+	DEFINE	$HIGH,<
+		IFL .-.JBHGH,<
+			VAR
+			..L%%==.
+			RELOC	..H%%
+		>;END IFL
+	>;END DEFINE $HIGH
+
+	DEFINE	$LOW,<
+		IFGE .-.JBHGH,<
+			XLIST
+			LIT
+			LIST
+			..H%%==.
+			RELOC	..L%%
+		>;END IFGE
+	>;END DEFINE $LOW
+
+
+>;END DEFINE $SETUP
+
+	$SETUP	(WHOMAC)
+	SUBTTL	Macros -- $TYPE - Type text
+
+
+; Type a string via .TCHAR
+
+DEFINE	$TYPE(STRING),<
+	PUSHJ	P,.TSTRM##
+	XLIST
+	ASCIZ\STRING\
+	LIST
+>;END DEFINE $TYPE
+	SUBTTL	Macros -- $TYPEL - Type text and a CRLF
+
+
+; Type a string followed by a CRLF via .TCHAR
+
+DEFINE	$TYPEL(STRING),<
+	PUSHJ	P,.TSTRM##
+	XLIST
+	ASCIZ\STRING
+\
+	LIST
+>;END DEFINE $TYPEL
+	SUBTTL	Macros -- CHKSWT - See if switch given
+
+DEFINE CHKSWT(SWT,NAME,%OK),<
+	XLIST
+	MOVE	T2,.FZ'SWT##(I)		;;Get switch value
+	CAME	T1,T2			;;See if same value
+	 CAMN	T2,[-1]			;;Or switch not given
+	  JRST	%OK			;;Yes--Thats OK
+IFB <NAME>,	MOVX	T1,<SIXBIT/SWT/>	;;No--Load switch
+IFNB <NAME>,	MOVX	T1,<SIXBIT/NAME/>	;;No--Load switch
+	JRST	E$$DSI##		;;And issue error
+%OK:	MOVEM	T1,.FZ'SWT##(I)		;;Store new switch value
+	LIST
+>;END DEFINE CHKSWT
+	SUBTTL	Macros -- FT - Feature test definition
+
+; Macro to globally define and print a feature test switch
+;
+; FT(SYM,VAL,TXT)
+;
+; SYM=feature test symbol (macro adds FT in front of it)
+; VAL=value (0=off, non-zero=on)
+; TXT=Text to form PRINTX message (blank if none desired)
+
+DEFINE FT(SYM,VAL,TXT),<
+	ND(FT'SYM,VAL)
+	INTERNAL FT'SYM
+	IF1,IFNB <TXT>,IFE FT'SYM,PRINTX [Assembling with TXT off]
+	IF1,IFNB <TXT>,IFN FT'SYM,PRINTX [Assembling with TXT on]
+>;END DEFINE FT
+	SUBTTL	Macros -- LOAD and STORE - Byte manipulation
+
+
+DEFINE	LOAD(A,B,C),<.LDST.(A,B,C,HRRZ,HLRZ,LDB,MOVE)>
+
+DEFINE	STORE(A,B,C),<.LDST.(A,B,C,HRRM,HRLM,DPB,MOVEM)>
+
+
+DEFINE	.LDST.(A,B,C,D,E,F,G),<
+	IFNB	<C>,<..T==0
+		IFE	C-777777,<..T==1
+			D	A,B>
+		IFE	C-777777000000,<..T==1
+			E	A,B>
+		IFE	C-777777777777,<..T==1
+			G	A,B>
+		IFE	..T,<F	A,[POINTR(B,C)]>>
+	IFB	<C>,<G	A,B>
+>  ;END OF DEFINE .LDST.
+JWW.FL==2
+
+;ERROR TYPES
+	.ERHLT==0		;HALT AFTER ERROR
+	.ERINF==1		;INFORMATIONAL MESSAGE (STARTS WITH [)
+	.EROPR==2		;OPERATOR MESSAGE (STARTS WITH $)
+	.ERWRN==3		;WARNING MESSAGE (STARTS WITH %)
+	.ERFAT==4		;FATAL MESSAGE (STARTS WITH ?)
+	.ERSTP==5		;STOP MESSAGE (FATAL) (STARTS WITH ?)
+;ERROR BITS
+	ER.HLT==1B0		;HALT
+	ER.INF==1B1		;INFORMATIONAL
+	ER.OPR==1B2		;OPERATOR
+	ER.WRN==1B3		;WARNING
+	ER.FAT==1B4		;FATAL
+	ER.STP==1B5		;STOP
+
+	ER.ALL=ER.HLT!ER.INF!ER.OPR!ER.WRN!ER.FAT!ER.STP	;ALL
+
+	$MXTYP==:6		;NUMBER OF DIFFERENT ERROR TYPES
+	$MXERR==:3		;MAX LENGTH OF ERROR BLOCK (SEE BELOW)
+
+;DEFINE ERROR BLOCK OFFSETS
+	.ERPFX==0		;TYPE,,PREFIX
+	.ERTXT==1		;CONT,,[ASCIZ/TEXT/]
+	.ERTYP==2		;TYPEOUT ADDR,,DISPATCH ADDR
+	.ERSER==3		;SEVERITY,,SEVERITY TEST ADDR
+
+;FORMAT:
+;	THE BASIC ERROR MSG CONSISTS OF
+;1)	LEAD CHAR (MAY BE ?,%,$,OR [)
+;2)	3 CHAR MODULE NAME (XXX)
+;3)	3 CHAR ERROR CODE (YYY)
+;4)	ASCIZ ERROR TEXT 
+;5)	CONTINUATION ADDR FOR ERROR TYPEOUT
+;
+;THE MACROS GENERATE A CALL OF THE FORMAT:
+;	PUSHJ	P,.ERROR##
+;	  CAIA	TYPE,'YYY'
+;	-N,,ADDR
+;
+;WHERE N IS THE LENGHT OF THE ERROR ARGUMENT BLOCK
+;
+;ERROR ARGUMENT BLOCK DESCRIPTION (MAY BE EXPANDED)
+;
+;BLOCK+0	CONT. ADDR,,[ASCIZ/TEXT STRING/]
+;BLOCK+1	TYPEOUT ADDR,,FINAL DISPATCH ADDR
+;BLOCK+2	SEVERITY,,ADDR TO PROCESS SEVERITY LEVEL
+;
+;THE BLOCK MAY BE EXPANDED AS NEEDED
+
+	DEFINE	$STOP(A1,A2,A3,A4,A5,A6,A7),<%%ERR(.ERSTP,A1,<A2>,A3,A4,A5,A6,A7)>
+
+	DEFINE	$FATAL(A1,A2,A3,A4,A5,A6,A7),<%%ERR(.ERFAT,A1,<A2>,A3,A4,A5,A6,A7)>
+
+	DEFINE	$WARN(A1,A2,A3,A4,A5,A6,A7),<%%ERR(.ERWRN,A1,<A2>,A3,A4,A5,A6,A7)>
+
+	DEFINE	$OPR(A1,A2,A3,A4,A5,A6,A7),<%%ERR(.EROPR,A1,<A2>,A3,A4,A5,A6,A7)>
+
+	DEFINE	$INFO(A1,A2,A3,A4,A5,A6,A7),<%%ERR(.ERINF,A1,<A2>,A3,A4,A5,A6,A7)>
+
+	DEFINE	$HALT(A1,A2,A3,A4,A5,A6,A7),<%%ERR(.ERHLT,A1,<A2>,A3,A4,A5,A6,A7)>
+
+	DEFINE	%%ERR($TYPE,$PFX,$TEXT,A$CONT,A$DISP,A$TYPE,N$SEVER,A$SEVER),<
+E$$'$PFX:PUSHJ P,.ERROR##
+	XLIST
+ER'$PFX'$==E$$'$PFX
+	  CAIA	$TYPE,''$PFX''
+	.N.==1
+	IFNB A$TYPE,<.N.==2>
+	IFNB A$DISP,<.N.==2>
+	IFNB N$SEVER,<.N.==3>
+	IFNB A$SEVER,<.N.==3>
+	XWD	-.N.,[E%%'$PFX:  A$CONT,,[ASCIZ\$TEXT\]
+IFG .N.-1,<XWD A$TYPE,A$DISP>
+IFG .N.-2,<XWD N$SEVER,A$SEVER>
+	]
+IFE $TYPE-.ERHLT,<
+	SKIPA
+	HALT	E$$'$PFX
+>
+	LIST>
+	SUBTTL	OPDEFS
+
+;The following are OPDEFed so as not to be confused with the monitor
+;DDB symbols DEVNAM and DEVCHR (see WHOUUO).
+
+	OPDEF	DVCHR.	[CALLI 4]	;DEVCHR
+	OPDEF	DVNAM.	[CALLI 64]	;DEVNAM
+
+	SUBTTL	Parameters
+
+	ND	LN$PDL,100		;LENGTH OF PUSH DOWN LIST
+	ND	LN$OBJ,15		;LENGTH OF ANF10 OBJECT TABLE
+	ND	LN$INI,^D52		;LENGTH OF INITIALIZATION TEXT
+	ND	LN$SCB,^D200		;LENGTH OF SERVER COMMAND BUFFER
+	ND	LN$SBT,^D3		;LENGTH OF SERVER BUFFER TABLES
+	ND	LN$SMB,^D30		;LENGTH OF SERVER MESSAGE BUFFER
+	ND	LN$LEN,.RBSPL+1		;LENGTH OF LIST FILE L/E/R BLOCKS
+	ND	LN$SND,^D132/^D5+1	;LENGTH OF SEND STRING
+	ND	LN$SET,^D30		;MAX ARG BLOCK FOR ALL SETUUO FNCS
+	ND	LN$UNI,^D100		;LENGTH OF UNIT TABLES
+	ND	MX$FMT,^D40		;MAX NUMBER OF FORMAT SWITCH ARGUMENTS
+	SUBTTL	AC Definitions
+
+
+	F=:0		;FLAG AC
+
+	T1=:1		;TEMPORARY AC'S (NOT PRESERVED)
+	T2=:2
+	T3=:3
+	T4=:4
+
+	P1=:5		;PERMANENT AC'S (PRESERVED)
+	P2=:6
+	P3=:7
+	P4=:10
+
+	I=:11		;CURRENT SCAN BLOCK
+	O=:12		;CURRENT OBJECT
+	JP=:13		;ADDRESS OF CURRENT OBJECT DATA STORAGE
+	L=:14		;FORMATTER COUNTER
+	D=:15		;DDB ADDRESS
+	M=:16		;MODE INDEX
+
+	P=:17		;PUSH-DOWN LIST POINTER
+
+; Extra ACs
+	N==P3		;SCAN'S "NUMBER"
+	C==P4		;SCAN'S "CHARACTER"
+	SUBTTL	I/O channels
+
+	LST==1
+	SWP==2
+	INI==3
+	TSK==4
+	SUBTTL	FLAGS -- Global in LH of F
+
+
+	FL.SPY==	1B0	;WE ARE SPYING
+	FL.LOGIN==	1B1	;WE ARE LOGGED IN
+	FL.GOD==	1B2	;WE ARE OPR
+	FL.PEEK==	1B3	;WE HAVE PEEK PRIVS
+	FL.POKE==	1B4	;WE HAVE POKE PRIVS
+	FL.JACCT==	1B5	;WE HAVE JACCT
+	FL.BATCH==	1B6	;WE ARE A BATCH JOB
+	FL.WATCH==	1B7	;WE HAVE SOME WATCH BITS SET
+	FL.WHOSRV==	1B8	;WE ARE THE WHOSRVER
+	FL.CRASH==	1B9	;READING CRASH FILES
+	FL.CHARGE==	1B10	;CHARGE NUMBER SUPPORT
+	FL.ANF10==	1B11	;ANF-10 NETWORK SUPPORT IN MONITOR
+	FL.DECNET==	1B12	;DECNET-10 NETWORK SUPPORT IN MONITOR
+	FL.SMP==	1B13	;SMP SUPPORT IN MONITOR
+	FL.LGNQ==	1B14	;LOGIN QUEUE SUPPORT IN MONITOR
+
+	FL.SRVFLG==FL.SPY!FL.LOGIN!FL.GOD!FL.PEEK!FL.POKE!FL.JACCT
+	FL.NETWORKS==FL.ANF10!FL.DECNET
+	FL.FEATURES==FL.CHARGE!FL.ANF10!FL.DECNET!FL.SMP!FL.LGNQ
+	SUBTTL	FLAGS-- Local in RH of F
+
+
+	FR.OPEN==	1B18	;FILE HAS BEEN OPENED
+	FR.TASK==	1B19	;OUTPUT TO AN OPENED TASK
+	FR.HEAD==	1B20	;HEADER PRINTED
+	FR.ABORT==	1B21	;FORMAT PRINT ABORT NOW
+	FR.MYTTY==	1B22	;OUTPUT DEVICE IS MY TERMINAL
+	FR.DPY==	1B23	;DPY HAS BEEN INITED
+	FR.TYPE==	1B24	;A CHARACTER HAS BEEN OUTPUT
+	FR.APPEND==	1B25	;USE APPEND WHEN OPENING OUTPUT FILE
+	FR.COMMA==	1B26	;COMMA NEEDED IN OUTPUT OF LISTS
+	FR.TRMOP==	1B27	;TRMOP. UUO FAILURE FOR SEND
+	FR.FRCUUO==	1B28	;FRCUUO FAILED FOR FORCE
+	FR.SETUUO==	1B29	;SETUUO FAILED
+	FR.DSKDDB==	1B30	;LISTING A DSK DDB
+	FR.MTADDB==	1B31	;LISTING A MTA DDB
+	FR.NETDDB==	1B32	;LISTING A NETWORK DDB
+	FR.TTYDDB==	1B33	;LISTING A TTY DDB
+	SUBTTL	Version control
+
+
+DEFINE	$MONVER(VER),<
+	%VER=='VER
+	IF1,<PRINTX [Assembling WHO for VER monitors]>
+> ;END DEFINE $MONVER
+
+	$MONVER	(704)
+	SUBTTL	Assembly switches
+
+; Special UUOSYM symbols that determine feature test settings
+
+FTLGNQ==:0+<IFDEF %LQCNT!%LQPTL!%LQQUE,<1>> ;GETTABS FOR LOGIN QUEUE
+
+
+; Define the feature test switches
+
+	FT	IPC,0,<IPC/TSG features>
+	FT	MDC,0,<MDC features>
+	FT	TUFTS,0,<TUFTS features>
+	FT	LGNQ,0,<LOGIN queue support>
+	FT	SERV,1,<Server support>
+	FT	UUO,1,<UUO simulation>
+	FT	DDB,1,<DDB scanning>
+	FT	POWER,0,<POWERed on terminal detection>
+
+IFN FTTUFTS,<
+	ND	CL$SYS,0	;SYSTEM=0
+	ND	CL$ADM,1	;ADMINISTRATION=1
+	ND	CL$ACAD,2	;ACADEMIC=2
+>
+	SUBTTL	Monitor Parameters (mostly from S.MAC)
+
+
+;Bits in JBTSCD (.GTJTC)
+
+	JS.PQ2==1B0		;ON IF JOB IN PQ2
+	JS.CLS==37B17
+	JS.TYP==777B35
+
+;Bits in JBTSTS (.GTSTS)
+
+	JS.RUN==1B0
+	JS.CMW==1B1
+	JS.JNA==1B3
+	JS.ERR==1B4
+	JS.NSW==1B5
+	JS.SWP==1B7
+	JS.COD==37B14
+	JS.LOG==1B15
+	JS.JAC==1B17
+	JS.CLK==1B18
+	JS.JDC==1B20
+	JS.OPR==1B22
+	JS.XOY==1B25
+	JS.RUU==1B26
+	JS.DFP==1B33
+
+;Bits in JBTST2
+
+	J2.IGS==1B10
+	J2.HIB==1B15
+	J2.EWC==37B24
+	J2.EWS==1B25
+
+;Bits in JBTDDB
+	JD.LCR==777777B17	;CORE LIMIT (FORMERLY IN JBTLIM)
+	JD.DDB==777777B35	;I/O ACTIVE DDB ADDRESS
+
+;ESLEEP codes
+
+;Bits in JBTSWP (.GTSWP)
+
+	JS.SPY==1B0		;SPYING (MUST BE SIGN BIT)
+	JS.SHR==1B1		;HIGH SEG SHAREBLE
+	JS.SMP==77B8		;# SECTION MAP PAGES (NOT INCLUDING SEC 0 MAP)
+
+;Bits in JBTVRT (.GTVRT)
+
+	JS.LOW==777B35		;LOW SEG SIZE
+	JS.HGH==777B26		;HIGH SEG SIZE
+	JS.PGR==777777B17	;PAGE RATE UNITS
+
+;BITS IN JBTRTD (.GTRTD)
+
+	JS.HPQ==17B9		;HPQ VALUE
+
+;Bits in JBTSGN (.GTSGN)
+
+	SG.SPY==1B0
+	SG.SHR==1B1
+
+;Bits in JBTPC
+
+	JS.DDB==-1,,0		;I/O WAIT DDB
+
+;Bits in JBTPDB
+
+	JS.FUN==37B17		;PAGES OF FUNNY SPACE
+
+;Values from GTXTN.
+
+	GX.NOD==-1,,0		;NODE
+	GX.LIN==0,,-1		;LINE
+
+;Values in .TOBCT
+
+	LS.CMD==-1,,0		;Count of commands processed
+	LS.BRK==0,,-1		;Count of break characters typed
+
+	LS.CAR==1B0		;TRMOP. .TODSS carrier bit
+
+;IN CASE NOT IN UUOSYM YET
+
+	ND	.PFHOR,7	;PFH ORIGINAL RUNTIME
+	ND	.PFHLR,10	;PFH LAST RUNTIME
+	ND	.PFHCR,11	;PFH CUMULATIVE RUNTIME
+	SUBTTL	SCAN interface -- Opdefs
+
+
+	OPDEF	SKPON	[SKIPG]
+	OPDEF	SKPYES	[SKIPG]
+	OPDEF	SKPOFF	[SKIPE]
+	OPDEF	SKPNO	[SKIPE]
+	OPDEF	SKPSWT	[SKIPGE]
+
+	.NODDT	SKPON,	SKPYES
+	.NODDT	SKPOFF,	SKPNO
+	.NODDT	SKPSWT
+
+	YES==<ON==1>
+	NO==<OFF==0>
+
+	SUBTTL	SCAN interface -- Special definitions
+
+; WHO uses the MACLIB subroutine library.  Part of that package
+; includes a copy of SCAN with additions and features not found in
+; the field image version.  To avoid conflicts with field image
+; SCNMAC, the following definitions have been extracted from the
+; extended version of SCNMAC.
+
+
+FX.SCN==1B12	;/SCAN
+FS.STK==1B14	;DON'T APPLY STICKY STUFF IN ALPSTK
+FS.IFL==1B13	;INDIRECT FILE ILLEGAL IN COMMAND IF NOT LOGGED IN
+
+
+; The OKEYS macro is similar to the KEYS macro except value is a bit
+; position for "or bit value" use.
+;
+	DEFINE	OKEYS(NAME,LST),<
+NAME'.L==0
+NAME'.T:	IRP	(LST)<EXP SIXBIT/LST/
+	NAME'.L==NAME'.L+1
+	..TEMP==0
+	IRPC	(LST)<IFIDN <LST><*>,<..TEMP==1>
+		STOPI>
+	IFE ..TEMP,<NAME'LST==1_<NAME'.L-1>>
+	>
+	PURGE	..TEMP
+>
+;DEFINE THE ABOVE BUT WITH GLOBAL NAMES
+;AND FINALLY, THE KEY-WORD VALUES
+
+	DEFINE	GKEYS(NAME,LST),<
+NAME'.L==:0
+NAME'.T:: IRP	(LST)<EXP  SIXBIT /LST/
+			NAME'.L==:NAME'.L+1
+			..TEMP==0
+			IRPC (LST)<IFIDN <LST><*>,<..TEMP==1>
+					STOPI>
+			IFE ..TEMP,<NAME'LST==:NAME'.L>
+		>
+	PURGE	..TEMP
+	>
+
+
+; A version of OKEYS that generates global symbols.
+;
+	DEFINE	GOKEYS(NAME,LST),<
+NAME'.L==:0
+NAME'.T:: IRP	(LST)<EXP SIXBIT/LST/
+	NAME'.L==:NAME'.L+1
+	..TEMP==0
+	IRPC	(LST)<IFIDN <LST><*>,<..TEMP==1>
+		STOPI>
+	IFE ..TEMP,<NAME'LST==:1_<NAME'.L-1>>
+	>
+	PURGE	..TEMP
+>
+	SUBTTL	SCAN interface -- DOFSWT macro
+
+
+	DEFINE	DOFSWT,<
+
+	XLIST
+
+DEFINE	FS(NAME,OFFSET,DEFAULT,INITIAL),<
+S.'NAME:
+	IRP	OFFSET,<
+		.FZ'OFFSET==:.FZLEN
+		.FZLEN==:.FZLEN+1
+		BLOCK	1		;Storage for /'NAME
+	>;END IRP
+>;END DEFINE FS
+
+	.FZLEN==:.FXLEN
+
+	$LOW
+FSWT.S::FSWTCH				;BUILD SWITCH STORAGE
+FSWT.L==:.-FSWT.S
+
+DEFINE	FS(NAME,OFFSET,DEFAULT,INITIAL),<
+	IRP	OFFSET,<
+		IFB <INITIAL>,<EXP -1		;Initial value for /'NAME(.FZ'OFFSET)>
+		IFNB <INITIAL>,<EXP INITIAL		;Initial value for /'NAME(.FZ'OFFSET)>
+	>;END IRP
+>;END DEFINE FS
+
+	$HIGH
+FSWT.I::FSWTCH				;BUILD INITIAL VALUES
+
+DEFINE	FS(NAME,OFFSET,DEFAULT,INITIAL),<
+	IRP	OFFSET,<
+		IFB <DEFAULT>,<EXP -1		;Default value for /'NAME('.FZ'OFFSET)>
+		IFNB <DEFAULT>,<EXP DEFAULT		;Default value for /'NAME('.FZ'OFFSET)>
+	>;END IRP
+>;END DEFINE FS
+
+FSWT.D::FSWTCH				;BUILD DEFAULT VALUES
+
+	$LOW
+FSWT.P::BLOCK	FSWT.L			;BUILD STICKY SWITCH STORAGE
+	$HIGH
+
+	LIST
+
+>;END DEFINE DOFSWT
+	SUBTTL	SCAN interface -- DOGSWT macro
+
+
+	DEFINE	DOGSWT,<
+
+	XLIST
+
+DEFINE	GS(NAME,LEN,DEFAULT,INITIAL),<
+	..TEMP==1
+	IFNB <LEN>,<..TEMP==LEN>
+	S.'NAME:: BLOCK ..TEMP
+>;END DEFINE GS
+
+	$LOW
+GSWT.S::GSWTCH				;GLOBAL SWITCH STORAGE
+GSWT.L==:.-GSWT.S
+
+DEFINE	GS(NAME,LEN,DEFAULT,INITIAL),<
+	..TEMP==1
+	IFNB <LEN>,<..TEMP==LEN>
+	REPEAT	..TEMP,<
+		IFB <INITIAL>,<EXP -1		;Initial value for /'NAME('.FZ'OFFSET)>
+		IFNB <INITIAL>,<EXP INITIAL		;Initial value for /'NAME('.FZ'OFFSET)>
+	>;END REPEAT
+>;END DEFINE GS
+
+	$HIGH
+GSWT.I::GSWTCH				;GLOBAL SWITCH INITIAL VALUES
+
+DEFINE	GS(NAME,LEN,DEFAULT,INITIAL),<
+	..TEMP==1
+	IFNB <LEN>,<..TEMP==LEN>
+	IFB <DEFAULT>,<REPEAT ..TEMP,<EXP -1>>
+	IFNB <DEFAULT>,<
+		..TEMR==0
+		IRP DEFAULT,<
+			EXP DEFAULT
+			..TEMR==..TEMR+1
+		>;END IRP DEFAULT
+		IFN ..TEMR-1,<REPEAT ..TEMP-..TEMR,<EXP -1>>
+		IFE ..TEMR-1,<REPEAT ..TEMP-..TEMR,<EXP DEFAULT>>
+	>;END IFNB <DEFAULT>
+>;END DEFINE GS
+
+GSWT.D::GSWTCH				;GLOBAL SWITCH DEFAULT VALUES
+
+	$HIGH
+	LIST
+
+>;END DEFINE DOGSWT
+	SUBTTL	SCAN interface -- Monitor commands
+
+DEFINE	MODES,<
+XX	JOB		,JOB	,LINE	,job		,<Job not assigned>
+XX	LINE		,LIN	,JOB	,line		,<Line not connected>
+XX	NODE		,NOD	,LINE	,node		,<Node not online>
+XX	STRUCTURE	,STR	,UNIT	,structure	,<Structure not found>
+XX	UNIT		,UNI	,STRUCT	,unit		,<Disk unit not found>
+>
+	SUBTTL	SCAN interface -- Summary keywords and actions
+
+DEFINE SUMMARY,<
+	XLIST
+
+START JOB
+X  ACCOUNT	,Account		,JB$AC1	,.TASCW	,8
+IFN FTIPC,<
+X  BADGE	,Badge			,JB$BDG ,.TDECJ ,6
+>;END IFN FTIPC
+X  BATCH	,Batch			,JB$BJB	,YESNO	,6
+X  BATCORE	,Batch core		,JB$BCL	,.TDECJ	,11
+IFN FTIPC,<
+X  CATEGORY	,Category		,JB$CAT	,.TOCTJ	,9
+>;END IFN FTIPC
+X  CHARGE	,Charge			,JB$CNO	,CHGTYO	,6
+IFN FTIPC,<
+X  CID		,Charge ID		,JB$CID ,.TSIXN ,9
+>;END IFN FTIPC
+X  CLASS	,Class			,JB$CLS	,.TDECJ	,7
+X  CORE		,Core			,CCORE	,.TDECJ	,6,10
+X  CPL		,Current physical limit	,JB$CPL	,.TDECJ ,22 ,5
+X  CTLJOB	,CTLJOB			,JB$CJN	,.TDECJ	,7
+X  CTLPRG	,CTLPRG			,JB$CPN	,.TSIXN	,6
+X  CVL		,Current virtual limit	,JB$CVL	,.TDECJ ,21 ,5
+X  DEFATTACH	,Attach jobs		,JB$DAD	,ATTYES	,13
+X  DEFBIGBUF	,Default BIGBUF		,JB$DBB ,.TDECJ ,14
+X  DEFBUFFER	,Default buffers	,JB$DNB	,.TDECJ	,17
+X  DEFPROTECT	,Default protection	,JB$DPV	,.TPROT,21
+X  APC		,Asynchronous port characteristic	,JB$APC	,TAPC	,32
+X  DSKPRIORITY	,Disk priority		,JB$DPR	,.TDECJ	,14
+X  FUNNY	,Funny			,JB$PFS	,.TDECJ	,6
+X  GLXOPR	,Galaxy operator	,JB$GOP	,TGOP	,15
+X  HPQ		,HPQ			,JB$HPQ	,.TDECJ	,5
+X  IPCFORECEIVE	,IPCF receives outstanding,JB$IOR,.TDECJ	,26
+X  IPCFOSEND	,IPCF sends outstanding	,JB$IOS	,.TDECJ	,23
+X  IPCFQRECEIVE	,IPCF receive quota	,JB$IQR	,.TDECJ	,19
+X  IPCFQSEND	,IPCF send quota	,JB$IQS	,.TDECJ	,16
+X  IPCFRECEIVE	,IPCF receives		,JB$IMR	,.TDECJ	,14,100
+X  IPCFSEND	,IPCF sends		,JB$IMS	,.TDECJ	,11,100
+X  JLT		,JLT			,JB$IJL	,.TUFTM	,8,<400000/^D24+1>
+X  KCS		,KCS			,JB$KCM	,.TDECJ	,6,10000
+X  LIMIT	,Limit			,JB$BTL	,.TTIME	,8,60000
+X  LINE		,Line			,JB$NLN	,.TOCTJ	,6
+X  LOCATION	,Location		,JB$LOC	,.TOCTJ	,9
+X  LPPN		,LPPN			,JB$LPN	,.TPPNW	,15
+X  LPRGNUM	,Lprogrammer		,JB$LPG	,.TOCTJ	,11
+X  LPRJNUM	,Lproject		,JB$LPJ	,.TOCTJ	,9
+X  MPL		,Maximum physical limit	,JB$MPL	,.TDECJ ,22 ,5
+X  MVL		,Maximum virtual limit	,JB$MVL	,.TDECJ ,21 ,5
+X  NAME		,Name			,JB$NM1	,.TSIXN	,6
+X  NODE		,Node			,JB$NNM	,.TSIXN	,6
+X  NODENAME	,Node			,JB$NNM	,.TSIXN	,6
+X  NODENUMBER	,Node number		,JB$NNU	,.TOCTJ	,12
+X  PAGERATE	,Paging rate		,JB$PGR	,TPGR	,12,50
+X  PC		,PC			,JB$PC	,.TOCTZ	,6,512
+X  PHYHIGH	,Physical high segment size,JB$PPH,.TDECJ,26 ,5
+X  PHYLOW	,Physical low segment size,JB$PPL,.TDECJ,25 ,5
+X  PPN		,PPN			,JB$PPN	,.TPPNW	,15
+X  PRGNUMBER	,Programmer		,JB$PPG	,.TOCTJ	,11
+X  PRGRUN	,Program to run		,JB$PTR	,.TSIXN	,14
+X  PRJNUMBER	,Project		,JB$PPJ	,.TOCTJ	,9
+X  PROJECT	,Project		,JB$PPJ	,.TOCTJ ,9
+X  PROGRAM	,Program		,JB$PRG	,.TSIXN	,7
+X  PROSET	,Default protection set	,JB$DPS	,ONOFF	,25
+X  READS	,Reads			,JB$DBR	,.TDECJ	,8,1000
+X  REMOTE	,Remote			,JB$RMT	,YESNO	,7
+X  RESET	,Reset			,JB$ITR	,.TUFTM	,8,<400000/^D24+1>
+X  RUNTIME	,Runtime		,JB$TIM	,.TTIME	,8,30000
+X  SEGMENT	,Segment		,JB$HSN	,.TSIXN	,7
+IFN FTIPC,<
+X  SLOT		,Slot			,JB$SLT	,.TOCTJ	,6
+>;END IFN FTIPC
+X  TTY		,TTY			,JB$TLN	,.TOCTJ	,6
+X  UUOS		,UUOs			,JB$UUC	,.TDECJ	,8,10000
+X  VCORE	,VCore			,VCORE	,.TDECJ	,6,10
+X  VIRHIGH	,Virtual high segment size,JB$PVH,.TDECJ,25 ,5
+X  VKCS		,VKCS			,JB$VKM	,.TDECJ	,6,10000
+X  VIRLOW	,Virtual low segment size,JB$PVL,.TDECJ	,24 ,5
+X  WRITES	,Writes			,JB$DBW	,.TDECJ	,8,1000
+X  WSCODE	,Wait state code	,JB$WSC	,.TSIXN	,15
+X  WTO		,WTO privileges		,JB$WTO	,TWTO	,15
+LEN JOB
+
+START LIN
+X  ASSIGN	,Assigned		,LB$TAC	,YESNO	,9
+X  BREAK	,Break chars		,LB$BCC	,.TDECJ	,12,100
+X  CARRIER	,Carrier		,LB$DSC	,YESNO	,8
+X  COMMANDS	,Commands		,LB$CMD	,.TDECJ	,9,100
+X  APC		,Asynchronous port characteristic	,LB$APC	,TAPC	,32
+X  INITED	,Inited			,LB$TAP	,YESNO	,7
+X  INPUT	,Input chars		,LB$ICT	,.TDECJ	,12,1000
+X  JOB		,Job			,LB$JOB	,.TDECJ	,4
+X  LINE		,Line			,LB$NLN	,.TOCTJ	,5
+IFN FTLGNQ,<
+X  LOGINQ	,Login queue		,LB$LQP	,TLGNQ	,12
+>;END IFN FTLGNQ
+X  MIC		,Mic			,LB$MCL	,YESNO	,3
+X  NODE		,Node			,LB$NNM	,.TSIXN	,6
+X  NODENAME	,Node			,LB$NNM	,.TSIXN	,6
+X  NODENUMBER	,Node number		,LB$NNU	,.TOCTJ	,11
+X  OUTPUT	,Output chars		,LB$OCT	,.TDECJ	,13,1000
+X  RCVSPEED	,RCVspeed		,LB$RBD	,.TDECJ	,9
+X  REMOTE	,Remote			,LB$RMT	,YESNO	,7
+X  SLAVE	,Slave			,LB$SLV	,YESNO	,6
+X  TYPE		,Type			,LB$TYP	,.TSIXN	,6
+X  USERS	,Users			,LB$TCJ	,YESNO	,6
+X  XMTSPEED	,XMTspeed		,LB$TBD	,.TDECJ	,9
+LEN LIN
+
+START NOD
+X  CDP		,Card punches		,NB$CDP ,.TDECJ ,12
+X  CDR		,Card readers		,NB$CDR ,.TDECJ ,12
+X  CONFIGURATION,Configuration		,NB$CNF ,.TASCW ,13
+X  DATE		,Date			,NB$DAT ,.TASCW ,4
+X  DDP		,DDCMP devices		,NB$DDP ,.TDECJ ,13
+X  DTA		,DECtapes		,NB$DTA ,.TDECJ ,8
+X  LPT		,Line printers		,NB$LPT ,.TDECJ ,13
+X  MCR		,MCRs			,NB$MCR ,.TDECJ ,4
+X  MTA		,Magtapes		,NB$MTA ,.TDECJ ,8
+X  NAME		,Name			,NB$NNM	,.TSIXN ,4
+X  NODE		,Node			,NB$NNM	,.TSIXN	,6
+X  NODENAME	,Node			,NB$NNM	,.TSIXN	,6
+X  NODENUMBER	,Node number		,NB$NNU	,.TOCTJ	,11
+X  NUMBER	,Node number		,NB$NNU ,.TOCTW ,6
+X  PLT		,Plotters		,NB$PLT	,.TDECJ ,8
+X  PTP		,Paper tape punches	,NB$PTP ,.TDECJ ,18
+X  PTR		,Paper tape readers	,NB$PTR ,.TDECJ ,18
+X  RDA		,Remote data entry	,NB$RDA ,.TDECJ ,17
+X  TSK		,Tasks			,NB$TSK ,.TDECJ ,5
+X  TTY		,Terminals		,NB$TTY ,.TDECJ ,9
+X  TYPE		,Type			,NB$TYP ,.TSIXN ,6
+
+LEN NOD
+
+START STR
+X  FSNUMBER	,FS number		,SB$MTC ,.TDECW ,9
+X  MOUNT	,Mount count		,SB$MTC ,.TDECW ,11
+X  NAME		,Name			,SB$STN ,.TSIXN ,6
+X  OWNER	,Owner			,SB$OWN ,TOWNER ,13
+LEN STR
+
+START UNI
+X  1CONI	,CONI before retry	,UB$SOF ,.TOCTW ,17
+X  2CONI	,CONI after retry	,UB$ERR ,.TOCTW ,16
+X  1DATAI	,DATAI before retry	,UB$SDI ,.TOCTW ,18
+X  2DATAI	,DATAI after retry	,UB$HDI ,.TOCTW ,17
+X  ALTERNATE	,Alternate port		,UB$ALT ,.TSIXN ,14
+X  BREADS	,Buffered reads		,UB$BRC ,.TDECW ,14
+X  BWRITES	,Buffered writes	,UB$BWC ,.TDECW ,15
+X  CBLOCKS	,Cached blocks		,UB$CBK ,.TDECW ,13
+X  CHKERRORS	,Checksum errors	,UB$CER ,.TDECW ,15
+X  CRCALLS	,Cache read calls	,UB$CRC ,.TDECW ,16
+X  CRHITS	,Cache read hits	,UB$CRH ,.TDECW ,15
+X  CWCALLS	,Cache write calls	,UB$CWC ,.TDECW ,17
+X  CWHITS	,Cache write hits	,UB$CWH ,.TDECW ,16
+X  DETACHED	,Detached port		,UB$DET ,.TSIXN ,13
+X  DREADS	,Dump reads		,UB$DRC ,.TDECW ,10
+X  DWRITES	,Dump writes		,UB$DWC ,.TDECW ,11
+X  FREEBLOCKS	,Free blocks		,UB$FRB ,.TDECW ,11
+X  FREESWAPPING	,Free swapping blocks	,UB$FRB ,.TDECW ,20
+X  HARDDATA	,Hard data errors	,UB$HDT ,.TDECW ,16
+X  HARDDEVICE	,Hard device errors	,UB$HDV ,.TDECW ,18
+X  LBN		,Logical block number	,UB$HBN ,.TOCTW ,20
+X  LOGICAL	,Logical unit name	,UB$LOG ,.TSIXN ,17
+X  MREADS	,Monitor reads		,UB$MRC ,.TDECW ,13
+X  MSEEKS	,Monitor seeks		,UB$MSC ,.TDECW ,13
+X  MWRITES	,Monitor writes		,UB$MWC ,.TDECW ,14
+X  NAME		,Name			,UB$UNN ,.TSIXN ,6
+X  NEXTUNIT	,Next unit in structure	,UB$NUS ,.TSIXN ,22
+X  PREADS	,Paging reads		,UB$PRC ,.TDECW ,12
+X  PWRITES	,Paging writes		,UB$PWC ,.TDECW ,13
+X  RIBERRORS	,RIB errors		,UB$RER ,.TDECW ,10
+X  SATERRORS	,SAT errors		,UB$RER ,.TDECW ,10
+X  SEEKS	,Seeks			,UB$TSC ,.TDECW ,5
+X  SOFTDATA	,Soft data errors	,UB$SDT ,.TDECW ,16
+X  SOFTDEVICE	,Soft device errors	,UB$SDV ,.TDECW ,18
+X  STRUCTURE	,Structure		,UB$STR ,.TSIXN ,9
+X  SREADS	,Swapping reads		,UB$SRC ,.TDECW ,14
+X  SWRITES	,Swapping writes	,UB$SWC ,.TDECW ,15
+X  UNITID	,Unit-Id		,UB$UID ,.TSIXN ,7
+X  USEEKS	,User seeks		,UB$USC ,.TDECW ,10
+X  XREADS	,Extended RIB reads	,UB$XRC ,.TDECW ,18
+X  XWRITES	,Extended RIB writes	,UB$XWC ,.TDECW ,19
+LEN UNI
+
+	LIST
+>;END DEFINE SUMMARY
+	SUBTTL	SCAN interface -- State keywords and actions
+
+DEFINE	STATES,<
+	XLIST
+	X	ACTIVE
+	X	SWAP	
+	X	LOCK
+	X	STOP
+	X	RUN
+	X	EVENTWAIT
+	X	IOWAIT
+	X	SLEEP
+	X	CODES
+	X	RWAITS
+	X	QUEUES
+	LIST
+>
+	SUBTTL	SCAN interface -- OBJECT definitions
+
+DEFINE OBJECTS,<
+	XX	MCR
+	XX	TTY
+	XX	CDR
+	XX	LPT
+	XX	PTR
+	XX	PTP
+	XX	PLT
+	XX	MTA
+	XX	DTA
+	XX	TSK
+	XX	RDA
+	XX	CDP
+	XX	DDP
+>
+	SUBTTL	Format descriptors
+
+	PHASE	0
+
+.FMFMT: BLOCK	1	;FORMAT FIELDWIDTH DESCRIPTORS
+  FM.USR==1B0		;USER SPECIFIED
+  FM.FMT==3B2		;FORMAT TYPE
+   .FMFIX==1		;FIXED
+   .FMFLT==2		;FLOATING
+   .FMBLK==3		;FIXED WITH BLANK FIELD SUPPRESS
+  FM.JUS==3B4		;JUSTIFY FIELD
+   .FMLEF==0		;LEFT
+   .FMCEN==1		;CENTER
+   .FMRIG==2		;RIGHT
+  FM.SPC==17B8		;SPACE COUNT IF FORFLOAT TO TRAIL
+  FM.STR==1B9		;FORMAT IS A STRING (LEAVE BLANKS)
+  FM.WID==377B17	;FIELDWIDTH
+  FM.PRT==777777B35	;ADDR TO PUSHJ TO PRINT FIELD
+.FMLOD:	BLOCK	1	;INSTR TO XCT TO LOAD FIELD
+.FMLEN:			;LENGTH OF BLOC
+
+	DEPHASE
+	SUBTTL	Check block description
+
+	PHASE	0
+
+.CKSWT:! BLOCK	1		;ADDRESS OF SWITCH VALUE
+.CKMSK:! BLOCK	1		;ADDRESS OF SWITCH VALUE MASK
+.CKINI:! BLOCK	1		;DEFAULT INITIAL SWITCH VALUE
+.CKLOD:! BLOCK	1		;ADDRESS OF ROUTINE TO LOAD VALUE
+.CKCHK:! BLOCK	1		;ADDRESS OF ROUTINE TO CHECK VALUE
+.CKLEN:!
+
+	DEPHASE
+	SUBTTL	PSI definitions
+
+
+; Macro to count up and assign interrupt vector block offsets
+DEFINE	$PSI	(NAM),<
+	.IV'NAM==VECNUM*4	;;ASSIGN INTERRUPT VECTOR OFFSET
+	VECNUM==VECNUM+1	;;COUNT VECTORS
+> ;END $PSI MACRO
+
+	VECNUM==0		;INITIALIZE COUNTER
+
+	$PSI	(DET)		;ATTACH/DETACH
+	$PSI	(STP)		;CONTROL-C TRAP
+IFN FTSERV,<$PSI (IPC)>		;IPCF
+IFN FTSERV,<$PSI (ANF)>		;ANF10
+IFN FTSERV,<$PSI (DCN)>		;DECNET
+	SUBTTL	Task I/O and server definitions
+
+
+; Task dispatch vector offsets
+	.TSNAM==0		;NAME
+	.TSTYP==1		;TYPE
+	.TSNET==2		;NETWORK TYPE
+	.TSTIM==3		;DEFAULT TIMEOUT
+	.TSFET==4		;FEATURE FLAG
+	.TSOPN==5		;OPEN TASK
+	.TSCLS==6		;CLOSE TASK
+	.TSINP==7		;INPUT A BUFFER
+	.TSOUT==10		;OUTPUT A BUFFER
+	.TSIBR==11		;ADDR OF INPUT BUFFER RING HEADER
+	.TSOBR==12		;ADDR OF OUTPUT BUFFER RING HEADER
+	.TSPRV==13		;SET/CLEAR PRIV AND JOB FLAGS
+
+
+; Macro to build a dispatch vector
+DEFINE	TASK	(NAM,PFX,TYP,NET,TIM,FET),<
+PFX'TSK::
+	XLIST
+	EXP	[ASCIZ	|NAM|]		;;NAME
+	EXP	TYP			;;TASK TYPE
+	EXP	NET			;;NETWORK TYPE
+	EXP	^D<TIM>			;;TIMEOUT
+	EXP	FET			;;FEATURE
+	EXP	PFX'OPN			;;OPEN TASK
+	EXP	PFX'CLS			;;CLOSE TASK
+	EXP	PFX'INP			;;INPUT A BUFFER
+	EXP	PFX'OUT			;;OUTPUT A BUFFER
+	EXP	PFX'IBR			;;ADDRESS OF INPUT BUFFER RING HEADER
+	EXP	PFX'OBR			;;ADDRESS OF OUTPUT BUFFER RING HEADER
+	EXP	PFX'PRV			;;SET/CLEAR PRIV AND JOB FLAGS
+	LIST
+> ;END TASK MACRO
+
+
+; Task open definitions
+	TS.ACT==1B0		;ACTIVE
+	TS.TYP==177B8		;TYPE OF CONNECT
+	   .TSIPC==0		   ;IPCF
+	   .TSANF==1		   ;ANF10
+	   .TSDCN==2		   ;DECNET
+	   .TSNUM==3		   ;NUMBER OF DEFINED TASK TYPES
+	TS.TIM==777B17		;TIMEOUT IN SECONDS
+	   .TSTMN==0		   ;MINIMUM TIMEOUT VALUE
+	   .TSTMX==<TS.TIM_-<ALIGN.(TS.TIM)>> ;MAXIMUM TIMEOUT VALUE
+; The /SERVER switch has the format:
+;
+;		/SERVE:node-string:connect-type:timeout
+;
+; Where	"node-string"	One node name or a quoted string of node names.
+;			This argument occupies .SVMAX-.SVNOD words.
+;	connect-type	Defines the connect type (IPCF, ANF10, DECNET).
+;			This field occupies one word.
+;	timeout		The maximum number of seconds to wait.
+;			This field occupies one word.
+;
+; Offsets into /SERVER storage block
+	.SVFLG==0		;NON-NEGATIVE IF ARGUMENTS TYPED
+	.SVTYP==1		;CONNECT TYPE
+	.SVTIM==2		;TIMEOUT VALUE IN SECONDS
+	.SVNOD==3		;START OF NODE TEXT (MUST BE AT END)
+	.SVMAX==^D28		;LENGTH OF BLOCK
+
+	.SVWDS==.SVMAX-.SVNOD	;LENGTH OF NODE STRING TEXT IN WORDS
+	.SVCHR==<.SVWDS*5>-1	;LENGTH OF NODE STRING TEXT IN CHARACTERS
+	SUBTTL	Mount count flags and fields
+
+
+	MC.SYS==1B0			;STR IN SSL
+	MC.SDL==1B1			;STR IN SDL
+	MC.ASL==1B2			;STR HAS UNITS IN ASL
+	MC.TMC==777777B35		;TOTAL MOUNT COUNT
+
+	MC.PAS==777777B17		;PASSIVE S/L COUNT
+	MC.ACT==777777B35		;ACTIVE S/L COUNT
+	SUBTTL	Network data
+
+
+; Network type codes
+	.NTNON==0			;NO NETWORK SUPPORT
+	.NTANF==1			;ANF10
+	.NTDCN==2			;DECNET
+
+
+; Network flags
+	NT.ONL==1B0			;ON-LINE
+	NT.KNO==1B1			;KNOWN
+
+
+; NRTSER information block offsets
+	.NRTFL==0			;LINE FLAG (0=NOT NRT, -1=NRT)
+	.NRTNM==1			;NODE NAME
+	.NRTNN==2			;NODE NUMBER
+	.NRTCH==3			;NRTSER CHANNEL NUMBER
+	.NRTLN==.NRTCH+1		;LENGTH OF NRTSER BLOCK
+	SUBTTL	END
+
+	END

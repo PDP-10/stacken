@@ -1,0 +1,692 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+                 Beware file for TOPS-10 Version 7.04
+
+
+
+
+
+                            Revision:  14
+
+                        Date:  October 4, 1988
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1987,  1988.   ALL  RIGHTS
+RESERVED.
+
+
+THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND  COPIED
+ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH  LICENSE AND WITH THE
+INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR  ANY  OTHER
+COPIES  THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF  THE  SOFTWARE  IS  HEREBY
+TRANSFERRED.
+
+THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE  WITHOUT  NOTICE
+AND  SHOULD  NOT  BE  CONSTRUED  AS  A COMMITMENT BY DIGITAL EQUIPMENT
+CORPORATION.
+
+DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR  RELIABILITY  OF  ITS
+SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+Beware file for TOPS-10 Version 7.04                            Page 2
+
+
+                          Table of Contents
+
+
+This file contains the following information concerning  this  release
+of the TOPS-10 operating system.
+
+
+     1.0        Introduction
+
+
+     2.0        List of distributed files
+
+
+     3.0        Installation instructions
+
+
+     4.0        Known deficiencies
+
+
+     5.0        Major differences from previous releases
+
+
+     6.0        Unbundled software
+Beware file for TOPS-10 Version 7.04                            Page 3
+
+
+1.0  INTRODUCTION
+
+The primary reason for this release is to provide  the  customer  base
+with  a  stable,  reliable, and maintainable monitor for the remaining
+years of committed support by Digital.  In addition, emphasis has been
+placed  on  correcting  chronic problems that have existed for several
+years.  There are few functional enhancements, an  approach  that  has
+been taken at the request of the customers.
+
+Installation of this release  is  similar  to  that  of  the  previous
+release.   This  distribution  also  contains software such as ANF-10,
+CUSPs, and GALAXY that has been put into "maintenance mode".  That is,
+bug  fixes  and  functional  changes  to  the  software have been made
+available on Autopatch tapes.  This eliminates the  need  for  special
+drop-back  procedures for this software.  Drop-back procedures for new
+software are discussed in the section on operator  differences  below.
+DECnet  monitor  sources  are  included with the standard distribution
+kit.  The DECnet-10 option contains only the MCB and NML software.
+
+Particular attention should be paid  to  the  section  describing  the
+changes to the MONGEN dialogue.  While it has been greatly simplified,
+the changes are major.
+Beware file for TOPS-10 Version 7.04                            Page 4
+
+
+2.0  LIST OF DISTRIBUTED FILES
+
+This release of the TOPS-10 operating system consists of the following
+media:
+
+     1.  The distribution tape with 2 save sets:
+
+         A.  Monitor files
+
+         B.  ANF-10 network files
+
+     2.  MPE - (CPNSER) - an unbundled product
+
+     3.  DECnet-10 - an unbundled product
+
+     4.  Digital-supported CUSP distribution (2 tapes)
+
+     5.  Customer-supported tape with 2 save sets
+
+         A.  Customer-supported utilities
+
+         B.  Customer-supported monitor files
+
+
+     6.  Customer-Supported Tools tape
+
+     7.  RSX20F - DECtapes (KL10-D sites)
+
+     8.  RSX20F - Floppy diskettes (KL10-E/R sites)
+
+Beware file for TOPS-10 Version 7.04                            Page 5
+
+
+2.1  Required New CUSPs And Utilities
+
+The following versions of CUSPs and utilities  are  required  for  use
+with this release of TOPS-10.
+
+     BOOT     4 - DECsystem-10 bootstrap
+
+     DAEMON  23 - Supports device error logging
+
+     MONGEN  57 - Required to create configuration files
+
+     UUOSYM  20 - Updated symbols
+
+
+
+2.2  Monitor Documentation
+
+The following documentation files have been included  in  the  monitor
+save-set:
+
+     MONTAB.MEM - Monitor tables description
+
+     STOPCD.MEM - Stopcode listing
+
+
+
+2.3  ANF-10 Documentation
+
+The following documentation files have been  included  in  the  ANF-10
+save-set:
+
+     DN8TSK.MEM - DN87 specification
+Beware file for TOPS-10 Version 7.04                            Page 6
+
+
+3.0  INSTALLATION INSTRUCTIONS
+
+For normal installation, refer to the  TOPS-10  Software  Installation
+Guide.
+
+For sites that have ANF-10  networks,  read  and  follow  the  TOPS-10
+ANF-10 Networks Software Installation Guide.
+
+For sites that have DECnet-10 networks, read and  follow  the  TOPS-10
+DECnet and PSI Installation Guide.
+Beware file for TOPS-10 Version 7.04                            Page 7
+
+
+4.0  KNOWN DEFICIENCIES
+
+This section  describes  problems  discovered  during  the  course  of
+testing  the  monitor  which  were not addressed at the close of field
+test.  It is expected that solutions to these problems will appear  on
+a future Autopatch tape.
+
+
+
+4.1  DTEs Protocol Detection
+
+Although DTESER is coded to detect the protocol running in a front end
+during  system initialiation, a CPU restart or front end reload, there
+are cases where it appears to DTESER that there is no code running  in
+a  front  end.  The problem is most noticable when DN60s are involved,
+but has also been seen with ANF-10 front ends as well.   This  problem
+may  be  avoided  by appending the /APROTOCOL or /PROTOCOL switches to
+the DTELDR command lines whenever default parameters are being set  or
+reload  commands  are  issued.   These  switches  take  the  following
+keywords:
+
+          ANF10  - ANF-10 DN87s or DN20
+
+          DECNET - MCB
+
+          IBM    - DN60
+
+          RSX20F - Console Front End
+
+
+
+4.2  KS10 Autobaud
+
+Problems exist with autobauding  lines  on  KS10s.   Initially,  DZINT
+reports  the  wrong  baud  rate  to SCNSER, but eventually detects and
+reports the correct  baud  rate.   It  is  most  visible  when  INITIA
+terminal  type  checking is enabled on these lines.  INITIA will often
+report the line as having an unknown terminal  type.   Typically,  the
+user must type 3 carriage returns to correctly autobaud the line.
+Beware file for TOPS-10 Version 7.04                            Page 8
+
+
+5.0  MAJOR DIFFERENCES FROM PREVIOUS RELEASES
+
+The intent of this section is to detail those aspects of the operating
+system  which have differed from the previous release in such a way as
+to affect the packaging of the  operating  system,  the  installation,
+system maintenance, operations, or the running of user programs.
+
+
+
+5.1  Packaging
+
+A new DECnet V4.0 tape has been submitted to SDC, but it will  not  be
+distributed with this release of TOPS-10.  The DECnet monitor modules,
+previously shipped on this tape, have been moved to the monitor  tape:
+DNADLL.MAC, D36COM.MAC, D36PAR.MAC, LLINKS.MAC, NRTSER.MAC, NTMAN.MAC,
+ROUTER.MAC, SCLINK.MAC, SCMUUO.MAC and SCPAR.MAC.
+
+The DECnet CUSPs, with the exception of NML, have moved  to  the  CUSP
+tape.  Please refer to the CUSP.BWR file for details.
+
+The versions of NML and MCB being distributed have  not  changed  from
+the  versions  shipped with previous monitors.  Some edits to MCB have
+been distributed on Autopatch tapes since the release of 7.03.
+
+The DECnet-10 source tapes have  not  changed.   Should  you  need  to
+rebuild  NML  from  sources,  please use the TOPS-10 7.03 distribution
+tapes as you will not be able to rebuild NML using later  versions  of
+UUOSYM.
+
+
+
+5.2  Installation
+
+The monitor requires a minimum of 768K of  physical  memory.   Monitor
+module   load  order  dependencies  have  been  minimized.   The  only
+requirements are that the COMMON, COMDEV, and COMMOD modules  must  be
+loaded first, and the PATCH, EDDT, and USRONC modules must be last (in
+that order).
+
+
+
+5.3  System Maintenance
+
+Extensive use has been made of PSECTs, more so than  in  any  previous
+release.   A substantial amount of code now runs in section two.  This
+includes DECnet, KLPSER, and SCASER.  Other monitor services have been
+made  to  run  in  section  one.   This  includes  portions of magtape
+service, DIAG., RECON.,  and  several  other  UUOs.   Care  should  be
+exercised  when  making modifications to any part of the monitor.  The
+systems programmer should be always be aware  of  extended  addressing
+constraints with respect to code and data sections.
+
+The following microcode (firmware) versions are required:
+
+          CI20      - 1A(733)
+Beware file for TOPS-10 Version 7.04                            Page 9
+
+
+          DX10      - 15
+
+          DX20/disk - 3(1)
+
+          DX20/tape - 10(74)
+
+          HSC50     - CRONIC 350
+
+          KL10      - 2.1(442)
+
+          KS10      - 2.0(130)
+
+          NIA20     - 1(172)
+
+
+
+5.3.1  BOOT - BOOT Version 4 must be used with  this  release  of  the
+monitor.  It has been made available on Autopatch tapes in addition to
+being included on the standard distribution tapes.  Previous  versions
+of  BOOT  may  not be used to bootstrap monitors later than 7.03.  The
+new BOOT will successfully load a 7.03 or later  monitor.   Therefore,
+you  should ensure that a copy of the new BOOT has been placed on your
+front end file system.   When  this  is  done,  no  special  drop-back
+procedures will be necessary with respect to BOOT.
+
+
+
+5.3.2  Chronic CI Disk Problems - Since the initial release of the  CI
+disk hardware and software, a problem has existed which has often been
+refered to as the "LDMP" bug.  It was beleived this bug  occured  only
+when  large  dump  transfers  were  done.   In  reality, any large I/O
+transfer, dump or buffered mode  aggrivated  the  problem.   When  the
+problem  occured,  it  appeared  as  KLPSWO events, DI hangs, and/or a
+marked decrease in CI disk throughput.  The solution was a combination
+of  hardware  ECOs,  CI20  microcode  changes,  and a monitor MCO.  To
+completely elimiante this  problem,  the  following  changes  must  be
+present:
+
+
+     1.  All CI20s must include link modules L100-E2 or L118
+
+     2.  All HSCs must include link modules L100-E2 or L118
+
+     3.  All  CI20s  must  run  microcode  version  1A(733)  or  later
+         (included with this release)
+
+     4.  The monitor  must  contain  MCO  14112  (included  with  this
+         release)
+
+Beware file for TOPS-10 Version 7.04                           Page 10
+
+
+5.3.3  Controller Microcodes - The latest versions of  the  controller
+microcodes  have  been  included  in  this  release of TOPS-10.  These
+microcodes will function correctly for any 7.03 or later monitor, thus
+eliminating special drop-back procedures.
+
+
+
+5.3.4  DAEMON - The DAEMON on the distribution tape will only run with
+this  monitor.  It will not function correctly with previous monitors.
+The previous version of DAEMON should be renamed to DAE???.EXE  (where
+???  is 703 if 7.03 is the previous monitor version) on SYS as part of
+the installation.  When DAEMON is started, it  determines  if  it  can
+function  under  the current monitor and will run the previous version
+of DAEMON if necessary.
+
+
+
+5.3.5  Module Changes - KLSER and KSSER have been merged  into  a  new
+module  called  APRSER.   The  universal  ICHPRM  has been replaced by
+DEVPRM.  DEVPRM is intended  to  contain  parameters  common  to  many
+devices.   MONEND  has  been  replaced by USRONC, the monitor-resident
+user-mode disk initialization dialogue.  See the section on TWICE  for
+more details.  COMDEV has undergone extensive revisions as a result of
+the  AUTCON  rewrite.   Nearly  all  of  the  prototype  device   data
+structures  have  been  moved  into  the  respective device drivers or
+service routines.  COMNET has been  eliminated;   its  contents  moved
+mainly  into  COMDEV.   Because  KNISER  is  the only module to search
+KNIPRM, KNIPRM has been merged into KNISER.  MSGSER has  been  renamed
+to  MPXSER,  a  name  which  is  more  indicative  of the functions it
+performs.
+
+
+
+5.3.6  MONGEN Dialogue - MONGEN contains only two  dialogues.   HDWGEN
+(hardware)  and  NETGEN  (networks)  have  been  merged into SYS.  The
+resulting output  file  defaults  to  SYSCNF.MAC.   The  questions  to
+control the inclusion of unsupported options (MUNGEN) have been merged
+into the main dialogue.
+
+The FGEN dialogue has been completely rewritten.   This  was  done  to
+eliminate  skews which resulted when the incorrect version of FGEN.HLP
+was  used  to  generate  F.MAC.   The   skews   were   eliminated   by
+incorporating  the  feature  test definitions into MONGEN itself.  All
+existing FGEN dialogue functionality  was  retained  except  that  one
+cannot change all features.  That is, MONGEN will not step through the
+list of features, prompting with each feature and asking for  its  new
+value.  Note that when entering feature test names to MONGEN, only the
+name itself  need  be  specified.   The  "FT"  prefix  should  not  be
+included.
+
+MONGEN now has the  latent  capability  of  producing  a  .MIC  format
+typescript  of your session.  MONGEN will ask if a .MIC file should be
+written at the  start  of  the  dialogue.   See  MCO  12959  for  more
+information.
+Beware file for TOPS-10 Version 7.04                           Page 11
+
+
+Due to changes imposed by the rewrite of AUTCON and the  autoconfigure
+portions  of the device drivers, portions of the MONGEN dialogue which
+allow the selection of device drivers has changed radically.  For each
+driver,  there  are  three  options:   1) exclude  driver,  2) include
+driver, and 3) include  driver  and  prompt  for  non-standard  device
+features.   Nearly  all  devices,  including  I/O  bus devices, can be
+autoconfigured by the monitor.  In MONGEN, you usually  only  need  to
+answer  YES  or  NO  to  the  driver questions.  The external channels
+option has been removed.   All  disk  and  tape  drivers  can  now  be
+autoconfigured.  See MCO 13257 for more information.
+
+It is no longer necessary to  provide  entries  (CPnNRP,  CPnNRN,  and
+CPnNTP)  in  the  octal symbols section of the dialogue to control the
+controller numbers for AUTCON.  This information may be  specified  by
+typing  "PROMPT"  in  response  to  an autoconfigured device question.
+MONGEN will then prompt for the number of devices to be reserved on  a
+per-CPU basis.
+
+The DK10 clock option has been removed from the dialogue.  The monitor
+has no use for this feature.  This has no impact on customers who want
+to want to use a DK10 for performance analysis with the SNOOPY program
+or for any real time timing functions.
+
+
+
+
+5.3.7  Address Space Reorganization - The free core pool  consists  of
+all  addresses  from the end of the monitor's assembled-in low segment
+to the beginning of the PSECT called ".CSUB.".  The  starting  address
+for  .CSUB.   is  stored  in  LOWLIM.   You  can specify the amount of
+address space reserved for EVM using the MONGEN dialog.   Please  note
+that the symbol EXTRAW is no longer defined.
+
+The GETWDS and GIVWDS routines are now used exclusively for allocating
+space  within  the section zero free core pool.  Note that the GET4WDS
+and GIV4WDS routines no longer exist.  GETWDS controls  the  space  in
+the  free  core pool and can be used anytime after the monitor reaches
+HIGHIN during system initialization.
+
+The common subroutine PSECT .CSUB.  contains the routines used by both
+.HIGH.   (traditional   high   segments)  and  .XHGH.  (extended  high
+segments).  It is dangerous to  call  .HIGH.  and  .XHGH.  outside  of
+sections  0  and  1.  Because the monitor no longer requires .XHGH. to
+overlap portions of .HIGH., code that calls .HIGH. from inside  .XHGH.
+can  transfer  control back to an inappropriate location in the .XHGH.
+section, which can cause IME or EUE stopcodes.
+
+The PSECTs are:
+
+     1.  .LOW.    - Low segment
+
+     2.  .HIGH.   - Traditional high segment
+Beware file for TOPS-10 Version 7.04                           Page 12
+
+
+     3.  .CSUB.   - Common subroutines
+
+     4.  .INIT.   - Initialization code
+
+     5.  .TWIC.   - User-mode ONCE dialogue
+
+     6.  .XHGH.   - Extended high segment
+
+     7.  .SYMS.   - Symbol table
+
+
+The origin of .LOW. and .TWIC.  cannot  be  changed.   The  origin  of
+.INIT. cannot directly be changed.  This PSECT is defined to origin at
+the start of funny space.  Funny  space  is  located  at  the  top  of
+section 0.  Its origin is defined in S.MAC.  Once changed, ALL monitor
+modules must be reassembled, however, it is not  necessary  to  change
+this definition.  The .CSUB., .HIGH. and .XHGH. origins may be changed
+by defining CSBORG, MONORG, and/or XHIORG respectively in the optional
+symbol definition portion of MONGEN.
+
+AUTCON will no longer allocate core  from  above  the  monitor's  high
+segment, but instead will utilize monitor free core.
+
+
+
+5.3.8  CDB Lengths - Computing an offset into a CPU Data  Block  (CDB)
+is  now  done using IMULIs of .CPLEN rather than LSHs of .CPSOF.  This
+is to facilitate increasing the length of the CDB in the future.   See
+MCO 13330 for more information.
+
+
+
+5.3.9  Command Line Editing - The monitor  contains  unsupported  code
+which  implements  a  simple  command line editor.  The feature may be
+enabled by setting the symbol M.EDIT to 1  in  the  octal  definitions
+section  of  the MONGEN dialogue.  The editor works only in line mode.
+When a program enters  character  mode  or  utilizes  the  break  mask
+feature,  the  editor  is  automatically disabled.  It will be enabled
+again when the program enters line mode or  when  the  user  exits  to
+monitor   level.   The  editor  has  a  simple  one-character  command
+interface.  The Control-F is the search command character.
+
+Suppose a user  types  "COPY FOO.MAC-FOO.OLD<RETURN>".   Clearly,  the
+intended  command was "COPY FOO.MAC=FOO.OLD<RETURN>".  The user merely
+needs to change the "-" to an "=".  To correct the mistake,  the  user
+starts  by typing "^F-".  The "^F" invokes the search command, and the
+"-" tells the command what character to search for.  The monitor  then
+copies  all  the  characters  up  to  and  including  the "-" from the
+previous line to the current line (and they echo as they are  copied).
+Thus the current line now contains "COPY FOO.MAC-".  The user may then
+type <RUBOUT>.  This deletes the  "-"  from  the  current  line.   The
+current  line  now  contains "COPY FOO.MAC".  The user then types "=".
+This  inserts  an  "="  into  the  line.   The   line   now   contains
+"COPY FOO.MAC=".   The  user  then  types "^F^F".  This re-invokes the
+search command and tells the monitor to search for a "^F".  The search
+Beware file for TOPS-10 Version 7.04                           Page 13
+
+
+picks  up where the earlier one left off.  Note that the previous line
+did not contain a "^F".  The monitor now searches all the way  to  the
+end  of the line (copying characters as it goes) but fails to find the
+"^F".  Thus the current line now contains "COPY FOO.MAC=FOO.OLD".  The
+user may now type a <RETURN> to complete the command.
+
+
+
+5.3.10  Device Type Codes - The  device  type  definitions  in   S.MAC
+(.TYxxx)  have  been changed so it is not necessary to divide the type
+by .TYEST when checking the device type obtained from a LDB AC,PDVTYP.
+The  definitions  in  all  prototype  DDBs  have  been  changed  to be
+.TYxxx*.TYEST.  Please check all customer-specific code for references
+to .TYxxx and change them as stated above.
+
+
+
+5.3.11  DTEs - The monitor has  the  ability  to  sense  the  type  of
+communications  front end on each DTE.  Consequently, there is no need
+to specify in MONGEN, the type of protocol  each  DTE  will  use.   In
+addition,  the  DTEs  may reloaded with a different type of front end.
+For example, if you have a DTE which normally  runs  an  ANF-10  front
+end,  but  need to use a DN60 for some amount of time, the ANF DTE may
+be reloaded with DN60 code without reloading the monitor.   Some  work
+was  required  in  the .P11 code to accomplish sensing front end types
+and changing protocols without a monitor reload.  Therefore, you  must
+reassemble your ANF-10 DTE-based front ends with the software supplied
+on the distribution tapes.  In addition, DN60 front ends must also  be
+rebuilt.   Changes  to  the  DN60/DTE  driver,  XDTE10.P11,  has  been
+distributed on an Autopatch tape.  DECnet MCBs do not need reassembly.
+
+All .P11 changes are compatible with older monitors.  There is no need
+to  run  older  front end software when dropping back to older monitor
+versions.  However, this release  of  the  monitor  does  require  the
+latest changes to the .P11 code.
+
+
+
+5.3.12  Disk Initialization - The xxxHWP and xxxUPA routines in ONCMOD
+and  SYSINI  respectively  have  been  moved into the appropriate disk
+drivers under the $INIT PSECT.  ONCMOD no  longer  contains  any  code
+that  has intimate knowledge of a how to talk to a disks on the driver
+level.  See MCO 13275 for more information.
+
+
+
+5.3.13  DX10 - The  DX10  is  an  I/O  bus  to  IBM  magtape   channel
+interface.  It is, once again, a supported device due to the number of
+customers who still use DX10s.
+Beware file for TOPS-10 Version 7.04                           Page 14
+
+
+5.3.14  GETTAB Table Changes - The GETTAB UUO has had a long  standing
+bug  where  it would return a zero if the specified table was only one
+word long.  In order to fix that problem, the NUMTAB was  modified  so
+that  it  would always contain an entry for those tables which did not
+exist.  Therefore, any GETTAB tables defined  by  the  customer  which
+conditionally  exist  based  on MONGEN parameters should be equated to
+the symbol "NULGTB" if the table is not included to ensure the  GETTAB
+UUO  can function properly with tables which have only a single entry.
+See MCO 13840 for more details.
+
+
+
+5.3.15  PMOVE/PMOVEM - To  eliminate   excessive   overhead   in   the
+manipulation  of  CI  and  NI  packets,  the calls to the PMOVE/PMOVEM
+instruction simulations have been removed in favor of using the  PMOVE
+or   PMOVEM   instructions   themselves.    See  MCO  13864  for  more
+information.
+
+
+
+5.3.16  Prototype KDBs, UDBs, And DDBs - Disk and  tape  KDB  and  UDB
+offsets  have  been removed from COMDEV and COMMOD and are now defined
+in  DEVPRM.MAC.   The  actual  prototype  data  structures   for   any
+autoconfigured  devices  reside  in  the  drivers  or  service routine
+modules.  See MCO 13275 for more information.
+
+
+
+5.3.17  System Reconfiguration - Traditionally,     the     documented
+instructions  detailing  how  to add and remove CPUs was rather vague.
+We have now clarified the procedure.   The  following  steps  must  be
+performed in the specified order:
+
+     1.  Run the KLI task to configure the KL10 CPU
+
+     2.  When the KLI task completes, type to get to the PARSER
+
+     3.  Type "J 400<CR>" to start the CPU
+
+     4.  From an OPR terminal, type "CONFIG ADD CPUn", where n is  the
+         number of the CPU being added
+
+
+
+
+5.4  Operational Differences
+
+The following section describes those changes which  typically  affect
+operators or the general day-to-day operation of the system.
+Beware file for TOPS-10 Version 7.04                           Page 15
+
+
+5.4.1  Online Disk Interrupts - The  behavior   of   new   disk   unit
+processing has changed with respect to ATTACH and DETACH.  Any time an
+attention interrupt is processed for an  unknown  drive,  FILSER  will
+cause  that drive to be configured and [SYSTEM]MDA will be notified of
+its  existence.   No  operator  intervention  will  be  required.   No
+explicit  ATTACH  will  be necessary as has been the case in the past.
+The previous behavior put  the  drive  in  a  detached  state  on  the
+assumption  that it may be faulty.  Since that is rarely the case, the
+new CONFIG facility to set a drive to be ignored should be  used  when
+you  want  to  prevent a drive from becoming usable.  This may be done
+even for drives which have yet to be configured.  Clearing IGNORE  and
+doing  an  ATTACH  will do the expected thing.  DETACH has not changed
+from previous monitors.  See MCO 13529 for more information.
+
+
+
+5.4.2  MAKVFU - The MAKVFU program has been replaced by a new  program
+called LP20.  LP20 fully supersedes all MAKVFU functions, provides the
+ability to generate printer translation RAMs, and provides  a  way  to
+dump  RAMs  and VFUs in a format suitable for typing or printing.  The
+structured HELP facility and the  availability  of  the  TOPS-20-style
+command parsing functions (ESC and ?) make LP20 self-documenting.
+
+
+
+5.4.3  NEBULA - The NEBULA component, previously  unsupported  in  the
+Autopatch   distributions,  is  now  a  supported  product.   It  will
+successfully communicate with any VMS system using the  supported  DQS
+or the old-style DQS protocols.
+
+
+
+5.4.4  TWICE - The TWICE program is now obsolete.  Its functions  have
+always been available in the monitor in the form of the ONCE dialogue.
+Now, if the monitor is run in user mode, it  will  perform  the  TWICE
+functions.   For  example, if the name of the monitor on SYS is called
+SYSTEM, the operator may type .R SYSTEM, causing the TWICE dialogue to
+start.  See MCO 13515 for more information.
+
+
+
+5.5  User Interface And Programming Differences
+
+This section describes monitor changes that may have an impact on  the
+user or program interface.
+
+
+
+5.5.1  RUNTIM UUO - The RUNTIM UUO is now the only valid way  to  find
+out a jobs current CPU time usage.  On an SMP system, doing GETTABs to
+find out run times of jobs can produce results that are  much  smaller
+than  the  actual  usage.  This is also true on a single CPU system if
+the job in question is the  current  job.   See  MCO  13029  for  more
+information.
+Beware file for TOPS-10 Version 7.04                           Page 16
+
+
+5.5.2  Monitor Command Uniquess - The uniqueness of  certain  commands
+has  been  changed.   The  E  and D commands are now named EXAMINE and
+DEPOSIT, but are forced unique to  one  character  for  compatability.
+The  EXECUTE command has been set unique at two characters, also for a
+measure  of  backward  compatability.   See   MCO   13169   for   more
+information.
+Beware file for TOPS-10 Version 7.04                           Page 17
+
+
+6.0  UNBUNDLED SOFTWARE
+
+The following software are unbundled options to the TOPS-10  operating
+system:
+
+     DECnet - DN20/MCB and NML support for DECnet Phase IV
+
+     MPE (CPNSER) - Multi-CPU interface
+
+
+[End of 704.BWR]

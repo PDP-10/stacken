@@ -1,0 +1,18 @@
+Jacob Palme               DRIVE.HLP   1983-02-06
+
+DRIVE - spelprogram f|r bilk|rning
+
+DRIVE {r ett spelprogram f|r bilk|rning. Du skall k|ra en bil genom
+en besv{rlig v{g som sv{nger, blir smalare och bredare. Du kan anv{nda
+piltangenterna p} din terminal.
+
+PIL V[NSTER sv{nger }t v{nster
+PIL H\GER sv{nger }t h|ger
+PIL UPP minskar bilens hastighet
+PIL NER |kar bilens hastighet
+
+Det g{ller att komma s} fort fram som m|jligt utan att krocka.
+
+DRIVE kan bara k|ras p} s}dana sk{rmar som supportas av VISTA.
+G|r "DIR/F TED:*.VIN" f|r att f} reda p} vilka sk{rmar som har
+s}dant support.

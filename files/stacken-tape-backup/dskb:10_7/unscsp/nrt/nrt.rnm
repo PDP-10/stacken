@@ -1,0 +1,829 @@
+.rm 75
+.autop
+.fig 20
+.center 80;NRT - TOPS-10 Network Virtual Terminal Program
+.page
+.lit
+COPYRIGHT (C) DIGITAL EQUIPMENT CORPORATION 1984.
+
+Digital Equipment Corporation, Maynard, Massachusetts, U.S.A.
+
+This software is furnished under a license and may be used and copied only
+in accordance with the terms of such license and with the inclusion of the
+above copyright notice.  This software or any other copies thereof may not
+be provided or otherwise made available to any other person.   No title to
+and ownership of the software is hereby transferred.
+
+The information in this software is subject to change  without  notice and
+should not be construed as a commitment by Digital Equipment Corporation.
+
+Digital  assumes  no  responsibility  for  the  use  or reliability of its
+software on equipment which is not supplied by Digital.
+.el.page
+.title NRT
+.chapter Introduction
+.subtitle Introduction
+.lm 5
+.hl 1
+	NRT is a user program which allows a TOPS-10 system to access
+the remote terminal handler on another system connected via DECnet.
+NRT is expressly supported only for homogeneous connections (i.e.,
+connections where the remote operating system is either TOPS-10 or
+TOPS-20), however, it knows a limited amount about talking to VMS,
+RSX, or RSTS operating systems as well.
+	NRT runs as user mode program and is normally run automatically by the
+monitor command:
+.bl 1
+.indent 20
+SET HOST remote
+.bl 1
+where "remote" is the node to which the virtual terminal connection is
+to be initiated.  Under these conditions, NRT will be run automatically by the monitor if the
+specified node name ("remote") is undefined in the ANF network (if any)
+on which the user job currently resides and is "known" to DECnet.
+	Note that the beginning sections of this document describes NRT
+as assembled with the default feature tests enabled/disabled.  The behaviour
+of and messages output by NRT can appear different if other feature tests
+are implemented.  The function of each feature test and the change it
+makes upon messages output is described in Chapter 3.
+	Throughout this document, the node on which NRT is originally
+run (i.e. the node where the user types "SET HOST") will be referred to
+as the "local host" and the target node (specified as "remote" in the
+above "SET HOST" command) will be designated as the "remote host."
+	In the examples in this document, user input is usually
+underscored; output from the monitor or NRT is not.
+	NRT may also be run via the "R" or "RUN" monitor commands, or the
+RUN UUO from within a program.  NRT has no CCL entry.
+	In the case in which NRT is run by the SET HOST monitor command, then
+it will certain command defaults (see user interface below).  If NRT is
+started via "R", "RUN", or a RUN UUO it will enter a dialogue which will ask
+the user the values which he wishes for the above mentioned defaults.
+.chapter User Interface
+.subtitle User Interface:  Exit Dialogue
+.lm 5
+.hl 1 Exit Dialogue
+	Unlike ANF, DECnet supports network virtual terminals as a user
+program.  Because of this, setting host to a DECnet node ^&does not\& detach
+the current job from the user's terminal, but ^&does\& destroy the user's
+core image.
+	Also, in order to return to the original host node, one ^&does not\&
+issue another "SET HOST" command on the remote node, but merely types a
+pre-defined "escape character."  Typing this "escape character" at any time
+in the dialogue with the remote system enters the user into a dialogue
+whereby his characters are interpreted by the NRT program as commands rather
+than being sent to the remote host.  This fact is flagged by the output of the message (1):
+.fn 4
+.bl 1
+(1) The type of dialogue described here is known as the ^&NOVICE\&
+exit dialogue.  Please see the section on SWITCH.INI for a
+description of other exit dialogue formats.
+.end foot
+.bl 1
+.indent 5
+[Connection broken, back to node xxxxxx::]
+.br
+.indent 5
+NRT__EXIT>
+.bl 1
+where "xxxxxx" is the name of the local host.
+This message, however, can be altered.  Please see the section on SWITCH.INI
+support for further details on this.
+	Upon entering the dialogue via typing the "escape character", the
+user has the following options:
+.bl 1
+.lm 40
+.ts 10,20,40
+.indent -30
+^&\Command	Mnemonic	Meaning\&
+.bl 1
+.indent -30
+E	E[xit]	Abort the terminal session on the remote node.  The
+effect on the job (if any) at the remote node
+is determined by the remote operating system.
+.indent-30
+.bl 1
+M	M[onitor]	Return to monitor, but leave the connection
+to the remote system open.  If the user does not destroy
+his core image before typeing "CONTINue" or "REENTEr", then
+the connection to the remote system will be re-established.
+If his core image is destroyed, the link to the remote
+system will be aborted as if the user had used the "E[xit]" command.
+Using "CONTINue" is equivalent to the "R[econnect]" command to NRT;
+using "REENTEr" is equivalent to using the "C[hange]" command to NRT.
+.bl 1
+.indent -30
+R	R[econnect]	Reconnect to the remote system (as if the
+"escape character" had not been typed).
+.bl 1.indent-30
+P	P[ass]	Reconnect to the remote system, but pass the "escape
+character" through to the remote system.
+.bl 1.indent-30
+C	C[hange]	Change the break character and then reconnect
+to the remote system.  The same effect can be obtained
+by using the "M[onitor]" to NRT command followed by a "REENTEr" monitor
+command.  If the NRT is assembled with the performance analysis feature
+enabled, then this is also the method to enter performance analysis
+mode.
+.bl 1
+.indent -30
+H	H[elp]	Print a short text describing each of the command options.
+This is the command which is executed if an unrecognizable command is typed.
+.indent -30
+O	O[bscure]	Flush all network messages until one second
+(real time) elapses with no messages, or until a character is typed.
+This command works for TOPS-10/TOPS-20 remote hosts only and is used in
+conjunction with _^O or _^C which cancels the source of messages at the remote
+hosts.  the O[bscure] command is used to flush those messages in the
+pipe or any more which may come if _^O or _^C was not typed.  _^O or
+_^C should be typed ^&BEFORE\& the O[bscure] command.
+.ts
+.lm 5
+.bl 1
+	The default mode in which NRT runs requires that the above
+commands be typed in followed by a carriage return in order for
+the command to take effect.  Commands may be abbreviated to uniqueness;
+this is currently deliberately set to one character.  This may not
+always be the case in future versions, however.  The
+carriage-return requirement may also be changed
+by an appropriate option in SWITCH.INI.
+.bl 1
+.subtitle User Interface:  Initialization Dialogue
+.hl 1 Initialization Dialogue
+	If run via a "RUN" or "R" command or a RUN UUO, NRT enters the
+^&long initialization dialogue\&.  If STARTed or REENTEred after any form
+of exit (other than following the "M[onitor]" command to the exit dialogue)
+or CONTINued from a non-continuable state (any exit other than the "M[onitor]"
+command to the exit dialogue),
+NRT enters the ^&short initialization dialogue\&.
+	The first question of the long dialogue is:
+.bl 1
+.indent 5
+DECnet Intersystem Remote Terminal Service
+.br
+.indent 5
+Escape character (c):
+.bl 1
+where "c" is the default "escape character."  This is normally _^P (control-P)
+but may be changed with an option in SWITCH.INI (it may also
+be changed when NRT is assembled).  At this point the
+user should enter the desired character he wishes to use as the "escape
+character", that is, the character which will initiate the NRT exit dialogue.
+The character should ^&NOT\& be followed by a carriage return.  If the default
+character is satisfactory, only a carriage return need be entered.
+.note ***NOTE***
+It is not recommended that any printing character be used for the escape
+character, nor the character <ESC>.  NRT will parse some types of ANSI
+or DEC terminal escape sequences should the need arise (this is primarily
+of interest to VMS users), but if the escape character appears in the
+escape sequence, the function of the escape character causing the user
+to enter the exit dialogue will take precedence over the parsing of the
+ANSI or DEC terminal escape sequence, with resultant confusion to both
+NRT and the user.
+.end note
+	The second question of the long dialogue, and the only question
+in the short dialogue is:
+.bl 1
+.indent 5
+Node Name:
+.bl 1
+At this point the user should enter the name of the desired remote host.
+	Note that if this is the short dialogue, the "escape character"
+may not be the default character if it was changed through a previous
+long dialogue question.
+	Upon successfully connecting to the remote system, NRT will
+inform the user of the type of operating system to which he is connected
+(TOPS-10, TOPS-20, VMS, RSTS, or RSX), its name, and the escape character.
+.lm 10
+.bl 1
+Example:
+.bl 1
+.nofil
+_.^&R NRT\&
+.bl 1
+DECnet Intersystem Remote Terminal service
+Escape character (_^P): ^&_^_\\&
+Node Name: ^&MARKET\&
+.bl 1
+[Connected to TOPS20 system MARKET::] 
+[Type Control-_\ to return]
+.bl 1
+ Market - LCG's Timesharing System , TOPS-20 Monitor 5.3(1600)
+@^&_^_\\&
+.bl 1
+[Connection broken, Back at node KL1026::]
+NRT__EXIT> &E
+.bl 2
+_.
+.fill.just
+.lm 5
+.subtitle User Interface:  SWITCH.INI support
+.hl 1 SWITCH.INI support
+	NRT supports a limited number of switches which modify its
+behaviour.  Switches may be abbreviated to uniqueness.  Switches are
+^&not\& read from the command line.
+	Whenever NRT is run it will look up SWITCH.INI on the UFD
+specified by the user's current PPN.  If it is not found, NRT will
+assume defaults for all switches (see table below).  SWITCH.INI is
+searched for a line beginning with "NRT".  Switches on that line
+are used to set the switch values if present.  If the line is not
+found, default values are used for all switches; if a switch is not
+found in a line then the default value is used for the switch.
+	The form of the NRT line in SWITCH.INI is:
+.bl 1
+.indent 5
+NRT	/SWITCH:argument/SWITCH/SWITCH ...
+.bl 1
+.lm 40
+.ts 10,20,30,40
+.indent -30
+.bl 1
+^&Switch	Arguments	Default	Meaning\&
+.bl 1
+.indent -30
+/ESCAPE	c	_^P	The default "escape character".
+This is the character "c".  The character is expected to be
+in SWITCH.INI exactly as it is to be used.  This can be overriden
+in the long dialogue.
+.bl 1
+.indent -30
+/MODE	EXPERT	NOVICE	The##type##of##exit##dialogue which
+.indent -20.br
+NOVICE		will be initiated (see below).
+.indent -20.br
+NOTIFY
+.bl 1
+.lm 5
+	The /MODE switch modifies the exit dialogue format.  In the
+case of /MODE:NOVICE, the exit dialogue proceeds as described in the
+preceding section.  If the setting is /MODE:NOTIFY, then the commands
+are read in character mode (no carriage-return is required;
+one merely types the escape character followed by the command) and,
+instead of the large prompt, the bell is rung on the terminal.
+The setting of /MODE:EXPERT is the same as /MODE:NOTIFY except that
+the bell is not rung.  In both of these cases, commands ^&MUST\& use the
+single character bbreviations for the command.  The latter two settings are
+for the benefit of those who use screen editors which may
+have the escape character as a command so that the screen will not
+be destroyed immediately if the escape character is typed.
+	An additional feature of "NOTIFY" and "EXPERT" modes is that
+instead of typing "P" to pass the break character, the user may
+simply type the escape character twice sequentially for the same effect.
+	Note that in the case of the "R[econnect]" command, after
+typing the new escape character to the "C[hange]" command (or REENTEring
+after the "M[onitor]" command), CONTINuing after the "M[onitor]"
+command, or after the "O[bscure]" command the message
+.bl 1
+.indent 5
+[Reconnected to xxxxx system yyyyyy::]
+.bl 1
+is output, where "xxxxx" is the operating system type (TOPS-10,
+TOPS-20, VMS, RSX, or RSTS) and "yyyyyy" is the node name of
+the remote host.  In the case of the "O[bscure]" command, the string
+.bl 1
+.indent 15
+[_^O]
+.bl 1
+will be output to signify the cancelling of output.
+The "Reconnected..."  message is not output if the /MODE switch
+is set for /MODE:EXPERT or /MODE:NOTIFY.
+	The dialogue for the "C[hange]" command (or REENTEring after
+the "M[onitor]" command) is (2):
+.fn 4
+.bl 1
+(2) This can change slightly if NRT is assembled with the performance
+analysis feature enabled.  See the section on the performance
+analysis feature for details.
+.end foot
+.bl 1
+.indent 5
+Enter new escape character: ^&c<CR>\&
+.br
+("c" is typed by the user and is the desired new escape character)
+.bl 1
+	Note that this dialogue is output regardless of the setting
+of the the /MODE switch, so it is not possible to change the escape
+character without destroying the screen contents.
+	If any undefined command is input, then NRT will (if in NOVICE
+mode) display the message:
+.bl 1.nofill
+.indent 20
+%Illegal command, type "H"<CR> for Help
+.bl 1.fill.just
+NRT will then return to accept a new command.  The terminal's bell
+will be rung if NRT is in NOTIFY mode.
+.chapter Assembly Parameters
+.subtitle Assembly Parameters
+.lm 5
+.hl 1 Feature tests
+	There are a number of feature tests which may be assembled
+into NRT.  The purpose of this section is to describe the defaults
+and effects of each feature test.
+.list 1
+.le
+FTPMR
+	This feature enables the use of Poor Man's Routing.  If this feature
+test switch is enabled, the user may explicity specify the nodes to be
+used in routing toward the target.  Also, this enables the usage of
+searching the file DCN:DNHOST.TXT for an explicit routing path to the target node.  See the documentation
+on the PMR subroutine (located in the PMR.MAC source file)
+for an example of the entry format of the DNHOST file.
+If this feature is turned on, the subroutine and universal
+files PMR.REL and PMR.UNV are required.  The (single) source module for
+these files is PMR.MAC which can be foundon the Tools Tape.
+If this feature is turned off (the default) all nodes must be
+visible on the DECnet network in order to be connected to; the user
+may not specify a routing path.
+	Enabling this feature also allows one to use NRT to connect to
+an ANF node which is running a NRTSRV process (distributed on previous
+Customer Supported Tapes) if the local host is also running a PSTHRU
+task (also distributed on the DECnet Tools Tape).  The PSTHRU acts as
+a DECnet to/from ANF protocol translator in this case.  This is accomplished
+by specifying the local host as the first node in the connect string, followed
+by the desired remote ANF host.  Example:
+.indent 5
+.bl 1
+(local host: KL1026; remote host: TWINKY)
+.bl 1
+.indent 5
+_.^&SET HOST KL1026::TWINKY::\&
+.bl 1
+	If this feature is not enabled, NRT will output the following
+message (3) to the above command line:
+.fn 4
+.bl 1
+(3) The example assumes verbosity bits are set for prefix and first line.  NRT
+observes these bits, except there is no long (continuation) message.
+.end foot
+.bl 1
+.indent 5
+?NRTNPM Version not compiled with Poor Man's Routing
+.bl 1
+	The default setting is ^&OFF\&.
+	Note that if NRT uses a Poor Man's routing entry from the
+DNHOST.TXT file, the entry used will be displayed.  The format of
+messages output (which will occur after the user gives the
+desired node name and before the connect confirmation message)
+are documented in the documentation on the PMR subroutine
+package in the PSTHRU area of the DECnet Tools Tape.
+.le
+FTPERF
+	This feature test enables the assembling of the performance
+analysis section of NRT.  This feature only works to TOPS-10 or TOPS-20
+nodes.  It is intended to give statistics on network line traffic and
+utilization.  If enabled, the prompt line output upon entering the
+"C[hange]" command to the exit dialogue becomes:
+.bl 1
+.indent 5
+Enter new escape character or [P] to enter performance test mode:
+	At this point, entering "P" will ^&NOT\& change the escape
+character to "P" but will enter the performance analysis dialogue.
+The following questions will be asked:
+.bl 1
+.indent 5
+Comment string for this record (<CR> when done):
+.bl 1
+This string is an identifying string which is inserted into the data file
+for identification purposes.  Any [typable] ASCII string of length less
+than 250 (decimal) characters is acceptable.
+	After inputting the comment string, NRT will ask:
+.bl 1
+.indent 5
+Number of times to send string:
+.bl 1
+	NRT has a 30-character test string which is sent character
+by character to the host.  This number specifies the number of times
+to send the entire string.  Each time a character is sent, the daytime
+it was sent is recorded.  When a response comes back from the remote
+host, the time differential from the time the character was sent to the
+time the response was received is recorded in the data file.
+	Performance analysis always appends to the file DSK:NETRSP.DAT.
+	After inputting the number of times to send the string, NRT will
+type:
+.bl 1
+.indent 5
+[Performance testing for yyyyyy node xxxxxx::]
+.bl 1
+at which point the user will see the string being sent character
+by character.  In the above, "xxxxxx" is the name of the remote host and
+"yyyyyy" is the operating system type.
+	After sending the performance string the specified number of
+times, NRT will type:
+.bl 1
+.indent 5
+End of NRT network performance test
+.bl 1
+	NRT will then close the file and return to the exit dialogue at
+which point the user has all the normal exit dialogue options open to him.
+	The data file may be analyzed with the NETDAT program (3).
+	The default setting is ^&OFF\&.
+.fn 4
+.bl 1
+(4) Note:  The performance analysis feature and the NETDAT program are
+unsupported.
+.end foot
+.le
+FTFUNCTION
+	This feature test is for debugging purposes only.  It forces the
+error message processor to output, as part of the message, the NSP.
+function which encountered the error it is output a message for.
+The default and recommended setting is ^&OFF\&.
+.le
+FTDBUG
+	This feature test is also for debugging purposes.  It changes
+all PJRSTs (or CALLRETs) to PUSHJ/POPJ functions.  This makes it easier
+to trace problems on the stack.  The default and recommended setting
+is ^&OFF\&.
+.le
+FTPARANOID
+	This feature test is provided to enable certain consistency
+checks, particularly in the core manager.  It should be turned on
+only for debugging purposes.  It is automatically turned on if
+FTDBUG is enabled.  The default and recommended setting is ^&OFF\&.
+.le
+FTCROCK
+	This feature test is defaulted ^&ON\&.  Its purpose is to
+enable code to work around certain deficiencies in other operating
+system's remote terminal handlers which have not yet been corrected.
+.le
+FTPSECT
+	This feature should remain as defaulted; ^&OFF\&.  It causes
+NRT to assemble with PSECTs instead of being TWOSEGed.
+.end list
+.hl 2 Assembly parameters
+	The following constitutes a list of assembly time parameters
+which may be changed.
+.list 1
+.le
+DEFESC
+	This defines the "default default escape character".  In other
+words, this is the escape character which is used if the user does
+not change it himself either through the long dialogue or through
+his SWITCH.INI file.  The "normal" value is Control-P.
+.le
+MAXPMR
+	This parameter is applicable only if FTPMR is turned on.  It specifies
+the maximum number of nodes which may be specified in a PMR string as
+manually typed in by the user.  This has no effect on the size of a PMR
+string which may be obtained via the DNHOST.TXT file; the maximum for that
+is defined by the assembly parameter PMRSIZ to the PMR subroutine (see the
+documentation file for the PMR subroutine on the PSTHRU area of the DECnet
+Tools Tape).  The default value is 7.
+.le
+OUTQUE
+	This parameter defines the number of output buffers which
+are allowed to be queued for output without being output before
+NRT blocks waiting for a buffer to become available.  Note that
+the buffers need not be full; they must merely be allocated
+for output to the TTY:.  Note that NRT waits with PSISER turned
+off, so that _^O in particular or the "O[bscure]" command may not
+be input to flush output.  Also, due to the mechanics of SCNSER
+there is a delay before any interrupt can be granted to NRT siginifying
+that input is complete.  Note also that if output is being suspended due to
+(for example) a read request on the VAX being "active" the suspension
+will be lifted if the output buffer quota is exceeded.
+.end list
+.chapter General Hints
+.hl 1
+	This chapter consists of a number of general hints toward
+using NRT.  It also contains information on what should be sent
+with any SPRs which are submitted for NRT.
+	NRT does I/O to device TT:, ^&NOT\& device TTY: during the
+main part of the program.  This is a feature to enable using DDT
+on NRT without having interference between commands typed to DDT and
+commands typed to the program.  This is activated by assigning device
+TT: to a terminal other than the user's controlling TTY:.  Note, however,
+that commands to the initialization and exit dialogues are typed on
+the controlling TTY: only.
+.hl 2 Errors
+	Upon encountering any kind of error, NRT will save its ACs
+in location CRSACS.  It will then output an error message and
+usually exit.  The exceptions to the "exit" rule are documented in Appendix A
+under the documentation for the specific message which is output.
+The user should SAVE the core image if he wishes any action taken for
+the problem.  This dump should be included with any SPR which is
+sent in for NRT.
+	In lieu of sending an SPR, the user may wish to look at the
+dump himself.  This is most easily accomplished with FILDDT on
+the crash dump file.  NRT by default is assembled with the symbols in
+the high segment.  The user may load the ACs used at the time of the
+crash which are saved at location CRSACS.
+	In debugging many kinds of NRT problems it is many times also
+useful to have a trace of the messages being passed between NRT and the
+remote host.  This is easily accomplished by using the DNSNUP program
+from the Tools Tape, assuming the problem is reproducible.
+If this is the case, then a trace covering a time period containing
+the error with specifics as to which node is being talked to and
+a terminal log of the session should also be submitted along with any
+SPR sent on NRT.  This is particularly useful for UED and Link Aborted
+type problems (see Appendix A).
+.chapter NRT Internals
+	This chapter is meant to provide a brief internal look at the basic
+algorithms involved in NRT.  It should be read if the user desires to add
+additional operating system support or debug NRT crashes.
+	Upon being run, NRT initially sets basic defaults; then fills
+in values from the user's SWITCH.INI, if applicable.  NRT then enters
+the appropriate initialization dialogue.  When all questions have been
+answered satisfactorily, NRT OPENs the TTY: in ASCII line mode and initiates
+a connection to the desired remote host's network remote terminal server.
+Assuming the connection is successful, NRT and the remote host's terminal
+server exchange configuration messages as to the features supported by
+each and the type of operating system to which NRT is talking.  This
+operating system type is displayed in the connect confirmation message.
+	NRT then enters an operating specific initialization routine.
+This routine decides on default break masks, sends any "bootstrapping"
+messages required to the remote system, and sets various flags for the
+type of operating system to which it is speaking.
+	NRT then enters its main loop (after enabling the software
+interrupt system).  NRT is essentially interrupt driven and HIBERs waiting
+for either a NSP. interrupt (enabled for input available or state changes),
+a TTY: asynchronous I/O complete (input) interrupt, or a timer interrupt
+(which is granted only for certain operating systems and under certain
+conditions).
+	The exception to the interrupt driven nature of NRT occurs for
+the terminal service.  Because changing a terminal break mask does not
+grant a PSI interrupt if the new break mask is satisfied by type-ahead,
+NRT has the facility to poll the TTY: input service routine while not
+at PSI interrupt level.  This is enabled by setting a flag and waking
+the job and is done anytime the mask changes if an input would not
+be done anyway on the TTY:.
+	The interrupt level of NRT includes five routines:  the NSP
+service, the TTY: service, timer service, the ATTACH/DETACH
+service, and the WAKE service.  Note that, as mentioned
+above, the WAKE service is really a form of TTY: service.  Each interrupt
+consists of an operating system independent routine and a routine
+whose content depends upon the type of operating system to which NRT
+is speaking.  The vectors to the operating system dependent portions of the
+interrupt service routines are filled in when NRT determines the type
+of operating system from the configuration message.
+	Upon any condition which causes the interrupt, PSISER will
+dispatch NRT to the appropriate operating system independent interrupt
+routine.  This routine will perform various universal functions and,
+if there is a reason, will call the associated operating system dependent
+routine.
+	The operating system dependent interrupt routine should perform
+the appropriate functions and return to the operating system independent
+routine, which will dismiss the interrupt.
+	NRT then returns to main loop level and sleeps.
+	This continues ad infinitum until the user types the escape character
+or the link is aborted by the remote host.  In the former case, the user
+will be placed in the exit dialogue and he has the option of continuing
+the program (with various options) or exitting.  If he exits, the link is
+closed and the user is returned to monitor level.  If he continues, the program
+continues until he types the escape character again, or the link is
+aborted by the remote host.
+	If a non-recoverable error occurs or the remote host aborts the
+link, then the user is returned to monitor level.  If continued, NRT restarts
+from the beginning.
+	The priority level of interrupts is:
+.list 1
+.le
+ATTACH/DETACH service (highest)
+.le
+TTY: I/O complete service
+.le
+NSP. I/O complete, WAKE service, and TIMER service.  Note that WAKE
+service being on this level means that TTY: I/O service actually
+can occur on either of two levels.
+.end list
+	Although TTY: I/O service can occur at a higher level
+than NSP., WAKE, and TIMER service, TTY: service will delay actual
+processing of the interrupt if one of the other interrupt
+service routines are active.  The interlock is done via AOSE
+variable INTLVL.  The requested interrupt bits are IORed into
+variable TTYSTS and a routine (FRCTTY) is called to queue a
+WAKE interrupt (which is TTY: I/O service).  The original high
+level TTY: service interrupt is then dismissed.
+	ATTACH/DETACH service occurs at the highest level and never defers
+but does not interfere with any of the other data structures.  Its
+primary purpose is to change all the terminal UDXs when the job
+running NRT changes terminals.
+
+.chapter Adding Additional Operating System Support to NRT
+	In order to add additional operating system support to NRT, three
+things must be ^&THOROUGHLY\& understood:
+.list 1
+.le
+You should understand NRT's internal structure.  This can be obtained by
+studying this document, the PLM for NRT, and the source.
+.le
+You should understand the internals of the operating system whose support
+you are trying to add.  The relevant information is usually contained
+in the I/O user's guide or equivalent to the remote operating system.
+.le
+You should understand the type of protocol which is used to communicate
+with the appropriate system.  The types of protocols which NRT knows
+can be used as examples for how to handle other protocols.
+.end list
+	Once these things are understood, it is usally easiest to implement the
+"basic" read-from-terminal/write-to-terminal functions first, and then the
+more esoteric functions, if those exist.  This depends on the type and
+complexity of the protocol.  See the PLM for descriptions of general types
+of protocols which exist.
+	Again, the DNSNUP/DNTATL programs from the Tools Tape are
+invaluable in tracking problems.
+.appendix Messages
+	NRT has a number of error messages which may be output.
+Most of these are the standard DECnet architecture error messages
+for which the user is referred to the TOPS-10 DECnet Users' Guide.
+Messages which are specific to NRT are documented below.
+	NRT observes the user's verbosity bits.  However, there is no
+long or continuation message.  Note that this is also true for the DECnet standard error messages.
+	The following list is arranged alphabetically by prefix.  Note
+that all messages start with "?NRT".
+	The normal action for NRT to take on any of the below listed
+conditions is to exit, however, there are exceptions.  These are noted
+under the specific condition in the list below.
+.bl 1
+.center 80;^&NRT Specific Error Messages\&
+.list 1
+.le
+?NRTCAT Can't add TIMER traps to PSISER
+	This message is output during initialization if NRT is unable to
+add PITMR. traps to the software interrupt system.  The error code for
+the PISYS. UUO is in AC CX in the dump.
+.le
+?NRTCDP Can't add DECnet NSP. traps to PSISER
+	This message is output if NRT is unable to add NSP. traps to the
+software interrupt system.  The error code for PISYS. UUO is in
+AC CX in the dump.
+.le
+?NRTCSC Couldn't find specified character
+	This error occurs if NRT is scanning its internal input stream
+for the last break character in the input stream before a specified point.
+The routine SCNLBK is called with the "final" byte pointer to the input
+stream.  SCNLBK scans characters until the "final" byte pointer is
+encountered, remembering the last break chraracter.  This error occurs
+if the "final" byte pointer is not encountered before the end of the
+input stream.
+.le
+?NRTCTP Can't add TTY: to PSI system
+	NRT does asynchronous input to the terminal and thus requires
+getting software interrupts on input complete.  This error occurs when
+NRT is unable to add the TTY: to the software interrupt system at initialization
+time.  There error code for the PISYS. UUO is in AC T1 in the dump.
+.le
+?NRTCUF CORE UUO failed
+	This error occurs if NRT is unable to increase its size to buffer
+messages.
+.le
+?NRTCWT Can't add WAKE Traps
+	NRT could not enable PSI traps for WAKE UUOs.  The error code
+from the PISYS. UUO is in AC T1 in the dump.
+.le
+?NRTDNI DEBRK. not implemented
+	The DEBRK. UUO to dismiss a software interrupt failed with the
+non-skip return.
+.le
+?NRTDSF DEVSIZ for device TTY: failed
+	The DEVSIZ UUO to find the buffer size for the TTY: failed.
+The error code for the failure is in AC T1 in the dump.  Submit an
+SPR and a dump.
+.le
+?NRTEDC Expecting Double colon in PMR string
+	Also applicable only if FTPMR is on, this message is output if the
+user specifies a PMR string with a single colon in it.
+.le
+?NRTFUF FILOP. UUO failed to open performance file
+	NRT could not do the FILOP. UUO to append to the performance
+file.  Use the monitor command "SET WATCH FILES" to find the error code,
+or examine AC T1 in the dump.  This error can only occur if FTPERF is turned
+on.
+.le
+?NRTIBP Illegal byte pointer
+	Routine BPLENG is called to compute the number of bytes to output
+to the network in a message from the beginning and final destination pointers.
+This routine is coded to work only if the beginning byte pointer specifies
+eight-bit bytes and is word aligned.  This error occurs if the initial
+byte pointer does not one of those conditions.  The specified byte pointer
+is in AC P1 in the dump.
+.le
+?NRTIBS Illegal byte size
+	This error is also part of the BPLENG routine described in the
+NRTIBP error immediately above.  It occurs if the byte size specified
+in the final byte pointer does not specify eight-bit bytes.
+.le
+?NRTICA Illegal core allocation
+	This error occurs only if FTPARANOID is turned on.  It occurs
+if the memory manager is requested to allocate a negative or zero sized
+block of core.  AC T1 in the dump contains the requested size; examine the
+stack to find the offending calling routine.
+.le
+?NRTICD Illegal core deallocation
+	This occurs only if FTPARANOID is turned on.  It occurs if
+the memory manager is requested to return a core block which
+is zero length or whose starting address is out of bounds for the
+free core pool.  AC T1 in the dump is the starting address; AC T2 is
+the size to deallocate.  Examine the stack to find the offending
+routine.  Note that it is only the absolute value of the size which is
+important (i.e., T2 can be negative).
+.le
+?NRTILD Illegal digit in number - re-input number
+	This error occurs when parsing the number of times to send
+the performance analysis string.  The program will not be aborted
+and the correct number should be input (this message means the
+user typed a non-numeric character in the number).
+.le
+?NRTINA Interlock not available
+	The interrupt level data base interlock was not available to
+the lowest level interrupt routine.  This implies that some routine
+dismissed without returning the interlock.  Submit an SPR with a dump.
+.le
+?NRTIOR Illegal operating system type returned in configuration message
+	The byte in the configuration message returned by the remote system
+upon initiating the connection was of a value larger than the maximum
+value known by NRT.  The problem is at the fault of remote system unless
+NRT is supposed to understand a new operating system type in which case
+symbol MAXOS must be re-defined to include this type and all values
+between the default value of MAXOS and the new value must have dispatches
+in the OS dispatch tables.  This problem can also occur if the message
+which NRT expected to be the configuration message was not.  Currently,
+this can happen if a VMS system which is being used as a Poor Man's Routing
+node has PSTHRU "logging" "enabled", in which case the PSTHRU task on the
+VMS system returns a non-standard PSTHRU ACK message which is followed
+by extra text messages which NRT does not know how to interpret.  If this
+is the case, turn off PSTHRU "logging" on the VMS system.
+.le
+?NRTIRS Illegal RSTS function
+	This error occurs if a RSTS remote hosts requests a function
+which NRT does not know how to handle.  This class of problem should be
+traced with DNSNUP.
+.le
+?NRTITF IN UUO for TTY: failed
+	The IN UUO for the TTY: channel failed with a GETSTS bit
+on other than IO.EOF.  The GETSTS bits are in AC T1 in the dump.
+.le
+?NRTIVQ Illegal VMS QIO function
+	This error occurs if a VMS remote host requests a QIO function
+which we do not know how to perform.  Trace this problem with DNSNUP.
+.le
+?NRTIXF Illegal RSX function
+	This error occurs if a remote RSX host requests an unimplemented
+or illegal function.  This should be traced with DNSNUP.
+.le
+?NRTN10 Not connected to TOPS-10 or TOPS-20, command ignored
+	This occurs when the usuer attempts to use the "O[bscure]"
+command for the exit dialogue while connected to a remote host
+which does not speak TOPS-10/20 protocol.  This error does
+not cause NRT to abort; the command is simply ignored.
+.le
+?NRTNPI NSP. UUO to set PSI mask failed
+	NRT was unable to set the PSI mask for the channel to the remote
+host in order for it to get a PSI interrupt when status on the channel
+changed.  The error code for the NSP. UUO is in AC T1
+in the dump.
+.le
+?NRTNPM Version not compiled with Poor Man's Routing
+	This message is output when the user attempts to specify a multi-node
+path to a destination node (e.g. KL1026::TWINKY::), but the version of NRT
+was not compiled to accept Poor Man's Routing.
+.le
+?NRTODT OPEN of device TTY failed
+	NRT was unable to open device TT: for asynchronous I/O.
+.le
+?NRTOTF OUT to TTY: failed
+	NRT uses non-blocking buffered I/O to the terminal.  This
+error occurs if the OUT UUO fails with some error bit (other than
+IO.EOF) turned on.  Submit an SPR, a dump, and a test case if this
+is repeatable.  The GETSTS bits for the TTY: channel are in AC T1
+in the dump.
+.le
+?NRTPIF PIINI. UUO failed
+	This message is output if NRT fails to initialize the software
+interrupt system.  Submit a dump and an SPR if this is repeatable.
+.le
+?NRTPMR Can't send PMR string
+	The NSP. UUO to send the Poor Man's Routing string to the remote
+PSTHRU task failed.  The error code is in T1.
+.le
+?NRTPOF Performance file output failure
+	An OUT UUO to the performance file failed.  AC T1 in the dump will
+contain the GETSTS bits for the channel.
+.le
+?NRTTMN Too many nodes in PMR string
+	This message is output if the user attempts to specify too many nodes
+in PMR string (applicable only if FTPMR is on).  This can be changed by
+recompiling NRT with a different value for the assembly constant MAXPMR.
+.le
+?NRTUED Unexpected end to network data
+	This message is caused by NRT expecting more 
+data in an incoming network message than
+it received.  It should occur only for system such as RSX or VMS whose
+protocol involves well-defined message headers which specify expected
+lengths to various fields.  If sent as SPRs, UED problems should be sent
+with a dump ^&AND\& with a trace file generated by the DNSNUP program
+(supplied on the DECnet Tools Tape) run over the interval in which the
+UED error occurs.  The program and the files necessary to run it on the remote
+system are also very useful.
+.le
+?NRTUSP Unsupported Protocol found
+	This error occurs if the user attempts to connect to a remote host
+whose protocol NRT does not understand.
+.le
+?NRTUTF PISYS. UUO Unable to turn off interrupts
+	NRT was unable to temporarily turn the software interrupt system
+off.  The error code for the PISYS. UUO is in AC T1 in the dump.
+.le
+?NRTUTN PISYS. UUO Unable to turn on interrupts
+	NRT was unable to re-enable the software interrupt system after
+turning it off.  The error code for the PISYS. UUO is in Ac T1 in the dump.
+.end list

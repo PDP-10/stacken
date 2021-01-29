@@ -1,0 +1,1026 @@
+	TITLE	PLROPR - Operator Interface Module
+	SUBTTL	Author: Dave Cornelius 3-Aug-83
+
+;
+;
+;COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1975,1976,1977,1978,1979,
+;1980,1981,1982,1983,1984,1985,1986,1987.  ALL RIGHTS RESERVED.
+;
+;     THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY  BE  USED
+;     AND COPIED ONLY IN ACCORDANCE WITH THE TERMS OF SUCH LICENSE
+;     AND WITH THE INCLUSION OF THE ABOVE COPYRIGHT NOTICE.   THIS
+;     SOFTWARE  OR ANY OTHER COPIES THEREOF MAY NOT BE PROVIDED OR
+;     OTHERWISE MADE AVAILABLE TO ANY OTHER PERSON.  NO  TITLE  TO
+;     AND OWNERSHIP OF THE SOFTWARE IS HEREBY TRANSFERRED.
+;
+;     THE INFORMATION  IN  THIS  SOFTWARE  IS  SUBJECT  TO  CHANGE
+;     WITHOUT  NOTICE  AND SHOULD NOT BE CONSTRUED AS A COMMITMENT
+;     BY DIGITAL EQUIPMENT CORPORATION.
+;
+;     DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY
+;     OF  ITS  SOFTWARE  ON  EQUIPMENT  WHICH  IS  NOT SUPPLIED BY
+;     DIGITAL.
+
+	SEARCH	GLXMAC			;Get GALAXY library conventions
+	SEARCH	ORNMAC			;For keyword descriptions
+	SEARCH	PLRMAC
+	SEARCH	QSRMAC
+	PROLOG	(PLROPR)
+
+	GLOB	NUMBER
+
+NUMBER:	ITEXT	(<^7/[.CHLAB]/number^7/[.CHRAB]/>)
+	SUBTTL	COMERR - Error handler for messages
+
+;This routine will complain to the operator if anything in the
+; dialogs between PULSAR and any other component is screwed up.
+; In all probablity, something is going to be messed up
+; and perhaps beyond repair, but we should try to keep going.
+; Call -
+;	JSP	S1,COMERR
+;Returns -
+;	$RETT, always
+
+O$CERR::
+COMERR::
+	MOVEM	S1,G$COMR##		;Save the PC of the last mistake
+	LOAD	S1,.MSTYP(M),MS.TYP	;Get the type of message code
+	LOAD	S2,.MSFLG(M),MF.SUF	;And SIXBIT suffix
+	CAIN	S1,.OMTXT		;Is it just text?
+	CAIE	S2,'ODE'		;And sent to gone operator
+	$WTO	(PULSAR Internal Error,<Message type ^O/.MSTYP(M),MS.TYP/ is unknown or unrecognizable>,,$WTFLG(WT.SJI))
+	$RETT				;Try to continue
+SUBTTL	UNLOAD command processing
+O$CUNL::
+	$SAVE	<P1>			;Save a reg
+	MOVX	S1,.RECDV		;Look for a tape recognize block
+	PUSHJ	P,FNDBLK		;Find that in the message
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;Noper, complain
+	MOVE	S1,.RECDN(S1)		;Get the device name
+	MOVE	P1,S1			;Save the real dev name
+	PUSHJ	P,G$FTCB##		;Find the TCB for that drive
+	JUMPF	[MOVE	T1,P1		;Get device name
+		SETZB	T2,T3		;Clear job number and owner
+		PUSHJ	P,G$MTCB##	;Make up a new TCB
+		JUMPT	OACU.0		;Get one?, start the recognizer
+		STOPCD	(CMV,HALT,,<Can't make TCB>)]
+OACU.0:	LOAD	S1,TCB.WS(B)		;Get the wait state
+	CAXN	S1,TW.MNT		;Waiting for mount?
+	JRST	OACU.M			;Yes, do a special unload
+	CAXN	S1,TW.LBL		;No, Waiting for RESPONSE?
+	JRST	OACM.R			;Yes, indicate that to OPR
+	JUMPN	S1,[MOVX S2,TS.KIL	;Get the rundown in progress bit
+		    TDNN S2,TCB.ST(B)	;Are we killing this TCB
+		    JRST OACM.U		;Anything but idle, don't touch
+		    $RETF ]		;Killing TCB, let it die down
+	MOVEI	S1,1			;Wait for the Monitor to catch up
+	SLEEP	S1,			;ZZZZ
+	LOAD	S1,TCB.DV(B)		;Get dev name requested
+	PUSHJ	P,T$CKAV##		;Can we use it?
+	JUMPF	OACM.U			;No, complain to OPR again
+	MOVX	S1,TI.OAV		;Get open for AVR only bit
+	IORM	S1,TCB.IO(B)		;Set so we clean up later
+	SETZM	TCB.LT(B)		;Clear the label type
+	SETZM	TCB.OW(B)		;Clear the owner ppn
+	SETZM	TCB.JB(B)		;And the owner's job number
+	SETZM	TCB.ST(B)		;Clear all status bits
+	MOVEI	S1,D$UNLC##		;Assume a disk
+	LOAD	S2,TCB.CH(B),TC.TYP	;Get the device type
+	CAIN	S2,%TAPE		;Magtape?
+	MOVEI	S1,O$UNLC		;Yes
+	CAIN	S2,%DTAP		;DECtape?
+	MOVEI	S1,D$UDTA##		;Yes
+	PJRST	G$NPRC##		;Go to it!
+
+OACU.M:	MOVEI	S1,O$UNLC		;Get addr of routine to do on-the-side
+	PJRST	CALSUB			;And do that on the side
+
+;HERE FOR PART TWO OF THE COMMAND ON A SCHEDULE CYCLE
+O$UNLC:	$TRACE	(O$UNLC,6)		;TRACE IT
+	PUSHJ	P,L$CLEF##		;Clear out any errors
+	PUSHJ	P,T$OPEN##		;OPEN THE TAPE
+	JUMPF	.RETT			;ERROR, Oh well
+	MOVEI	S1,'UNL'		;GET THE UNLOAD COMMAND
+	PUSHJ	P,T$POS##		;DO IT
+	JUMPF	.RETT			;ERROR, Oh well
+	ZERO	TCB.VL(B)		;And first part of volid
+	ZERO	TCB.VL+1(B)		;And second part, too
+	MOVEI	S1,BNKWD##		;Aim at 8 blanks
+	PJRST	I$RLID##		;SET THE REELID AND RRETURN
+SUBTTL	OACREW - Rewind a volume
+
+;This directive is given by MDA when a volume
+; switch request can't be satisfied on this volume.
+; The idea is to overlap the rewinding with the operator's
+; searching for the next tape.
+
+O$CREW::
+	$SAVE	<P1>			;Save a reg
+	MOVX	S1,.RECDV		;Look for a tape recognize block
+	PUSHJ	P,FNDBLK		;Find that in the message
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, complain
+	MOVE	S1,.RECDN(S1)		;Get the device name
+	MOVE	P1,S1			;Save the real dev name
+	PUSHJ	P,G$FTCB##		;Find the TCB for that drive
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, complain
+	LOAD	S1,TCB.WS(B)		;Get this guy's wait state
+	CAIE	S1,TW.MNT		;Waiting for a volume switch?
+	$RETT				;Nope, race conditions with abort stuff
+	MOVEI	S1,O$REWC		;Addr of routine to run
+	PJRST	CALSUB			;Run the TCB, and come back
+
+;Here in the TCB's context (In case we fall into offline device trap!)
+O$REWC:
+	$TRACE	(O$REWC,6)
+	MOVEI	S1,'REW'		;Get the command
+	PUSHJ	P,T$POS##		;Do it
+	$RETT				;Ignore the error
+
+	SUBTTL	MOUNT tape recognize command
+O$CREC::
+	$SAVE	<P1>			;Save a reg
+	MOVX	S1,.RECDV		;Look for a tape recognize block
+	PUSHJ	P,FNDBLK		;Go find it...
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, complain
+	MOVE	S1,.RECDN(S1)		;Get the device name
+	MOVE	P1,S1			;Save the real dev name
+	PUSHJ	P,G$FTCB##		;Find the TCB for that drive
+	JUMPF	OACM.2			;No TCB, go make one
+	ZERO	TCB.ST(B),TS.NTP	;Clear the 'no-tape' bit
+	LOAD	S1,TCB.WS(B)		;Get wait state for the TCB
+	CAIN	S1,TW.MNT		;Is the TCB waiting for this?
+	JRST	OACM.4			;Yes, get the recognizer running
+	CAIN	S1,TW.OFL		;Or is it offline?
+	PJRST	G$STRN##		;Off line, pick up where we left off
+	CAIN	S1,TW.LBL		;Is it waiting for RESPONSE?
+	JRST	OACM.R			;Yes, say that
+	CAIN	S1,TW.INM		;Waiting for initialization mount?
+	JRST	OACM.5			;Yes, go can the ack, and use the tape
+	CAIE	S1,TW.IGN		;Is it idle
+	JRST	OACM.U			;No, don't touch the tape
+	LOAD	S1,TCB.DV(B)		;Get dev name requested
+	PUSHJ	P,T$CKAV##		;Can we use it?
+	JUMPF	OACM.U			;No, tell OPR someone has it
+
+	;CONTINUED ON THE NEXT PAGE
+	;CONTINUED FROM THE PREVIOUS PAGE
+
+	;Here to fire up a volume recognition for the drive
+
+OACM.1:	SETZM	TCB.ST(B)		;Clear all status bits
+	PUSHJ	P,L$CLEF##		;Clear out the error status
+	MOVEI	S1,L$MDC##		;Assume a magtape
+	LOAD	S2,TCB.CH(B),TC.TYP	;Get device type code
+	CAIN	S2,%DISK		;A disk?
+	MOVEI	S1,D$HOM##		;Yes
+	CAIN	S2,%DTAP		;DECtape?
+	MOVEI	S1,D$RDTA##		;Yes
+	PJRST	G$NPRC##		;Create a new context in TCB (B)
+
+OACM.2:	MOVE	S1,P1			;Get device name
+	PUSHJ	P,T$CKAV##		;Make sure we don't
+					;rewind some user's tape!
+	JUMPF	OACM.Z			;In use, tell OPR
+	MOVE	T1,P1			;Get device name
+	SETZB	T2,T3			;Clear job number and owner
+	PUSHJ	P,G$MTCB##		;Make up a new TCB
+	SKIPT				;Get one?, start the recognizer
+	STOPCD	(CMU,HALT,,<Can't make TCB>)
+	MOVX	S1,TI.OAV		;Get 'Open for VR' bit
+	IORM	S1,TCB.IO(B)		;Lite that so we'll delete label DDB
+	JRST	OACM.1			;And start the recognizer
+
+OACM.4:	MOVEI	S1,L$MDC##		;Addr of routine to run on-the-side
+	PJRST	CALSUB			;Do it, and get out
+
+	;Here if the drive is intializing, and was waiting for a new tape
+
+OACM.5:	PUSHJ	P,CANWTO		;Cancel outstanding WTOR's
+	PJRST	G$STRN##		;Return true to process
+
+OACM.Z:	STKVAR	<<OBJ,OBJ.SZ>>		;It sure is hard being pretty
+	MOVEI	S2,OBJ			;Get the object block address
+	MOVX	S1,.OTMNT		;Get the tape object type
+	MOVEM	S1,OBJ.TY(S2)		;Save it
+	MOVEM	P1,OBJ.UN(S2)		;Save the device name
+	SETZM	OBJ.ND(S2)		;There is no node name
+	SKIPA				;Skip over general entry point
+
+OACM.U:	MOVEI	S2,TCB.OB(B)		;Get the object block address
+	MOVE	S1,OBJ.UN(S2)		;Get the device name
+	DEVTYP	S1,			;Get the owners job number
+	 SETZM	S1			;Failed,,zero
+	LOAD	S1,S1,TY.JOB		;Get the job number in S1
+	$WTO	(<Invalid request - drive is assigned by job ^D/S1/>,,0(S2),$WTFLG(WT.SJI))
+	$RETT
+
+	;Here if there is a message outstanding
+
+OACM.R:	$WTO	(<Please RESPOND to outstanding MESSAGE>,,TCB.OB(B),$WTFLG(WT.SJI))
+	$RETT
+SUBTTL	CALSUB - Call a subroutine for a TCB
+
+;This routine will take an existing TCB and call an other
+;	routine in that TCB's context
+
+;Call -
+;	S1/ Addr of the routine to be called
+;	B/  TCB to be run
+
+CALSUB:	EXCH	P,TCB.AC+P(B)		;Get Process PDL
+	LOAD	S2,TCB.WS(B)		;Save the wait state
+	PUSH	P,S2			;Save the current wait state
+	PUSH	P,[EXP CALDON]		;Where to go when done
+	PUSH	P,S1			;Routine to call
+	EXCH	P,TCB.AC+P(B)		;Restore both stacks
+	PJRST	G$STTR##		;Start the TCB
+
+CALDON:	POP	P,S1			;Get back the wait state
+	STORE	S1,TCB.WS(B)		;Put the TCB in that state
+	PJRST	G$NJOB##		;And continue scheduling
+SUBTTL	Mount message from MDA
+
+;Enter with M pointing to the message.
+;This routine will build the required data base to 
+; service this user's labelled tape processing
+
+O$CVMN::
+	$SAVE	<P1>
+	MOVX	S1,.RECDV		;Block type for device name block
+	PUSHJ	P,FNDBLK		;Get that block from the message
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, complain
+	MOVE	S1,.RECDN(S1)		;Get the drive name
+	MOVE	P1,S1			;Save across FTCB call
+	PUSHJ	P,G$FTCB##		;Find that guy's data block
+	JUMPF	MOUN.1			;Not found, go make a block
+
+	;Here if a TCB already exists
+
+	PUSHJ	P,CANWTO		;Cancel outstanding WTOR's
+	MOVX	S1,TI.OPN		;Get the open bit
+	TDNN	S1,TCB.IO(B)		;Channel opened?
+	JRST	MOUN.2			;No
+	MOVX	S1,TS.SLR		;Get skip label release bit
+	IORM	S1,TCB.ST(B)		;Memorize it
+	PUSHJ	P,T$RELE##		;Zap open channel and clean up
+	JRST	MOUN.2			;Keep going
+
+	;Here to make up a new TCB
+
+MOUN.1:	MOVE	T1,P1			;Get device name
+	SETZ	T2,			;No known job number
+	SETZ	T3,			;Don't know ppn of owner yet
+	PUSHJ	P,G$MTCB##		;Get the block made up
+
+MOUN.2:	PUSHJ	P,MVOLIN		;PROCESS THE VOLUME INFO
+	MOVEI	S1,L$MOUN##		;ASSUME MAGTAPE
+	LOAD	S2,TCB.CH(B),TC.TYP	;GET THE DEVICE TYPE
+	CAIN	S2,%DTAP		;DECTAPE?
+	MOVEI	S1,D$MDTA##		;YES
+	PUSHJ	P,G$NPRC##		;CREATE CONTEXT, SET PARAMETERS
+	$RETT
+	SUBTTL	O$CVDM - Volume Dismount message from MDA
+
+;This routine handles the volume dismounted message from the allocator.
+; It is responsible for cleaning up and perhaps deleting the TCB
+
+O$CVDM::
+	MOVX	S1,.RECDV		;Argument block type
+	PUSHJ	P,FNDBLK		;Find drive spec block in message
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, that's a problem
+	MOVE	S1,.RECDN(S1)		;Get the sixbit drive name
+	PUSHJ	P,G$FTCB##		;Go find this guy's database
+	JUMPF	.RETT			;Not there??? We must have restarted
+	PUSHJ	P,CANWTO		;Cancel outstanding WTOR's
+	MOVX	S1,TI.OAV		;Get open for AVR bit
+	IORM	S1,TCB.IO(B)		;Lite so release will throw out lbl DDB
+	MOVX	S1,TS.KIL		;Get the rundown bit
+	IORM	S1,TCB.ST(B)		;Lite so we throw out the TCB
+	MOVEI	S1,O$UNW		;Get TCB level code to unwind
+	PJRST	G$NPRC##		;Come back at TCB level
+
+;Here when the TCB has been scheduled
+O$UNW:
+	PUSHJ	P,T$OPEN##		;Get the label DDB set up
+	$RETT				;Return, and flush the TCB, and Lbl DDB
+SUBTTL	MVOLIN - Process volume info for newly mounted volume
+
+;This routine takes whatever MDA tells us about a volume and
+;	stores that info in our TCB
+;Call -
+;	M /Message addrs
+;	B /TCB adrs
+
+MVOLIN:	$SAVE	<P1,P2>
+	MOVX	S1,.VOLMN		;Block type for the volume info block
+	PUSHJ	P,FNDBLK		;Find that one
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, complain
+	MOVE	P1,S1			;Save addr of block
+	LOAD	LT,.VMNIN(P1),VI.LTY	;Get the label type
+	STORE	LT,TCB.LT(B)		;Save in TCB for future reference
+	MOVE	S1,.VMNIV(P1)		;Get the initial volume name
+	MOVEI	S2,TCB.VL(B)		;Offset of where to store volid
+	PUSHJ	P,CN6VL8		;Convert SIXBIT volid to 8-bit
+	MOVE	S1,.VMNFV(P1)		;Get first volume in set
+	MOVEI	S2,TCB.FV(B)		;Offset of where to store it
+	PUSHJ	P,CN6VL8		;Convert that one, too
+	LOAD	S1,.VMNIN(P1),VI.WLK	;Get the write-locked bit
+	STORE	S1,TCB.PT(B),TP.RWL	;Save in TCB for software write-lock
+	LOAD	P2,.VMNIN(P1),VI.JOB	;Get this guy's job number
+	STORE	P2,TCB.JB(B)		;Save in TCB for future
+	MOVE	S1,P2			;Move job # into place
+	MOVX	S2,JI.USR		;Code to get user id
+	$CALL	I%JINF			;Get this guy's [p,pn]
+	STORE	S2,TCB.OW(B)		;Save in TCB
+	PUSHJ	P,I$USRN##		;Get the user's name (job # in S1)
+	$RETT
+SUBTTL	OACVSD - Action routine for volume switch directives
+
+;This routine fields directions from MDA for TCBs which are
+;	waiting for volume switch requests
+;	It will swap the units, and get the unit scheduled again
+;Returns TRUE if the message could be processed now,
+;	FALSE	if the message should be queued up and run later
+
+O$CVSD::
+	$SAVE	<P1,P2,P3>		;Save some space
+	MOVX	S1,.VSDBL		;Look for this type of block
+	PUSHJ	P,FNDBLK		;Find a Volume switch directive block
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, complain
+	MOVE	P1,S1			;Save the addrs of the VSD block
+	LOAD	S1,.VSDID(P1)		;Get the old drive name
+	PUSHJ	P,G$FTCB##		;Find that one
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, complain
+	LOAD	S1,TCB.WS(B)		;Get the wait state
+	CAIE	S1,TW.MNT		;Is it expecting this?
+	$RETF				;TCB busy, try again later
+
+	PUSHJ	P,CANWTO		;Cancel outstanding WTOR's
+	SETZM	S1			;Default to no errors
+	MOVE	S2,.MSFLG(M)		;Get the flags
+	TXNE	S2,%VABT		;Have we been gonged?
+	MOVX	S1,PLR%CN		;Yes,,get 'cancelled' status
+	TXNE	S2,%VEOF		;No, how about EOF?
+	MOVX	S1,PLR%ES		;Yes,,get 'EOF' status
+	TXNE	S2,%VTMV		;How about volume limit exceeded ?
+	MOVX	S1,PLR%TM		;Yes,,get 'Too Many Volumes' status
+	JUMPN	S1,[STORE S1,TCB.AC+S1(B)  ;Error,,save status in TCB
+		    PJRST G$STFL##  ]	;And return false
+
+	PUSHJ	P,MVOLIN		;Move the volume info
+	LOAD	S1,.VSDCD(P1)		;Get the new device
+	CAMN	S1,TCB.DV(B)		;Same drive as before?
+	JRST	VDIR.2			;Yup, charge on!
+	MOVE	P2,S1			;Save the new drive name
+	MOVE	P3,B			;Save the old drive TCB
+	PUSHJ	P,G$FTCB##		;Find the new one's data base
+	JUMPT	VDIR.1			;Got it
+	MOVE	T1,P2			;Get the drive name back
+	SETZB	T2,T3			;No job, no PPN
+	PUSHJ	P,G$MTCB##		;Make some space
+VDIR.1:	LOAD	S1,TCB.WS(B)		;Get the prospecitve new TCB wait state
+	CAIE	S1,TW.IGN		;Idle?
+	JSP	S1,COMERR		;No!, error
+	PUSHJ	P,CANWTO		;Cancel outstanding WTOR's
+	EXCH	B,P3			;Get to the old TCB
+	MOVE	S1,P2			;Get the new drive name
+	PUSHJ	P,T$NUNI##		;Swap the guy over to this unit
+	JRST	VDIR.3			;ONWARD
+VDIR.2:	PUSHJ	P,T$SUNI##		;SWAP SAME UNIT
+VDIR.3:	PJRST	G$STTR##		;just return true to process
+
+SUBTTL	CN6VL8 - Convert SIXBIT volume id to 8-bit
+
+;Call -
+;	S1/	SIXBIT volume id
+;	S2/	Addr where string whould be stored
+;Return
+;	TRUE (always)
+
+O$CN68::
+CN6VL8:	$SAVE	<P1>
+	MOVE	P1,S1			;Save the volume id
+	HRLI	S2,(POINT 8,)		;Make an 8-bit pointer
+	MOVE	S1,[POINT 6,P1]		;Aim at the volid
+CN6V.1:	ILDB	TF,S1			;Get a byte
+	ADDI	TF,40			;Convert to ASCII
+	IDPB	TF,S2			;Store it
+	TLNE	S1,770000		;Done six yet?
+	JRST	CN6V.1			;No, keep moving
+	$RETT
+
+; Convert 8-bit reelid to something useful in S2
+O$CN86::$SAVE	<P1,P2>			;SAVE P1 AND P2
+	HRLI	S1,(POINT 8,)		;MAKE A BYTE POINTER
+	MOVE	P1,[POINT 6,S2]		;BYTE POINTER TO STORAGE
+	MOVEI	P2,6			;BYTE COUNT
+CN86.1:	ILDB	TF,S1			;GET A BYTE
+	SUBI	TF,40			;CONVERT TO SIXBIT
+	IDPB	TF,P1			;PUT A BYTE
+	SOJG	P2,CN86.1		;LOOP FOR ALL CHARACTERS
+	POPJ	P,			;RETURN
+SUBTTL	FNDBLK - Find a given block in the incoming message
+
+;Call with S1/ desired block type
+;	M/Message addrs
+;Returns: Addrs of data in block if found (TRUE return)
+;	or false, block not found in message
+
+O$FNDBLK::
+FNDBLK:
+	$SAVE	<P1>
+	LOAD	P1,.OARGC(M)		;Get the number of blocks in the message
+	MOVEI	S2,.OHDRS(M)		;Aim at the first block
+FNDB.1:	SOJL	P1,.RETF		;Return if none found
+	LOAD	TF,ARG.HD(S2),AR.TYP	;Get the type of this block
+	CAMN	TF,S1			;Match what we're looking for?
+	JRST	[MOVEI	S1,ARG.DA(S2)	;Yes, aim at its data
+		$RETT]			;And return true
+	LOAD	TF,ARG.HD(S2),AR.LEN	;Get length of this block
+	ADD	S2,TF			;And step over it
+	JRST	FNDB.1			;And try next
+SUBTTL	Error Typeout Utility Routines
+
+;ROUTINE TO TYPE DRIVE NAME FOLLOWED BY A MESSAGE
+;CALLED WITH S1 POINTING TO AN $ITEXT MESSAGE TO BE TYPED AFTER THE DEVICE NAME
+;On call, B must point to the TCB in question.
+;The ITEXT passed must not use the S regs, or the T regs.
+;This routine will send a WTOR and wait for
+;an OPR response.  If the response is NOT PROCEED or ABORT,
+;the operator will be asked again, until the answer is right.
+;Call -
+;	S1/	Addr of 'text' line ITEXT (can't reference S1-T4)
+;For O$LERT and O$SERT only
+;	S2/ Addr of 'Type RESPOND <number> ABORT' to xxx ITEXT
+;Returns -
+;	TRUE or FALSE, depending on OPRs answer
+
+O$LERR::MOVEI	S2,0			;Clear RESPOND text
+O$LERT::MOVE	T4,S2			;Save RESPOND text (if any)
+	MOVEI	S2,[ITEXT(<Label error>)]
+	PJRST	OPRWAT			;Type the messages, wait for ack
+
+;Here on a structure error. Str TCB addr in B, ITEXT in S1
+O$SERR::MOVEI	S2,0			;Clear RESPOND text
+O$SERT::MOVE	T4,S2			;Save RESPOND text (if any)
+	MOVEI	S2,[ITEXT(<Problem removing structure>)]
+;	PJRST	OPRWAT			;Type the mesages, wait for ack
+
+;Enter here to type the error and wait for OPR
+; to get it right.
+;	S1/	Addr of 'text' field ITEXT
+;	S2/	Addr of 'type' field ITEXT
+;	T4/	Addr of RESPOND ITEXT block (0=standard ABORT, PROCEED)
+OPRWAT:	DMOVE	T1,S1			;Copy the two fields
+	JUMPN	T4,OPRW.1		;Got something good?
+	 MOVEI	T4,[ITEXT(<Type 'RESPOND ^I/number/ ABORT' to terminate this operation
+Type 'RESPOND ^I/number/ PROCEED' to continue processing>)]
+OPRW.1:	AOS	T3,G$ACK##		;Get next ack code
+	STORE	T3,TCB.AK(B)		;Save so we can recognize RESPOND
+	$WTOR	(<^I/(T2)/>,<^I/(T1)/^M^J^I/(T4)/>,TCB.OB(B),T3,$WTFLG(WT.SJI))
+	MOVX	S1,TW.LBL		;Get Label wait code
+	STORE	S1,TCB.WS(B)		;Mark in the TCB
+	PUSHJ	P,G$NJOB##		;Set the code, and wait
+	ZERO	TCB.AK(B)		;Clear the ack code
+	PUSH	P,S1			;SAVE OPR RESPONSE CODE
+	LOAD	S1,TCB.CH(B),TC.TYP	;Get the device type
+	CAIN	S1,%DISK		;Is it a disk?
+	JRST	OPRW.2			;YES
+	MOVEI	S1,TCB.OB(B)		;Get the object block address
+	MOVE	S1,OBJ.UN(S1)		;Get the device name
+	DEVTYP	S1,			;Get the owners job number
+	 SETZ	S1,			;Can't
+	TXNE	S1,TY.MDA		;DEVICE OWNED BY MDA?
+	SKIPA	TF,[TRUE]		;YES--SET TRUE
+	MOVX	TF,FALSE		;ELSE SET FALSE
+OPRW.2:	POP	P,S1			;RESTORE OPR RESPONSE CODE
+	POPJ	P,			;RETURN EITHER TRUE OR FALSE
+	SUBTTL	O$NTAP - Get a new tape mounted for initialization
+
+;This routine will arrange with the operator to get a new tape mounted
+; during intialization.  The operator has a number of choices.
+; S/he can simply mount the next tape on the initializing
+; drive and continue either via AVR or Manual Volume Recognition.
+; Or, S/he can RESPOND to the WTOR with ABORT or CANCEL
+; to get out of the initialization state.
+
+;Call -
+;	S1/	Adrs of ASCIZ type field for WTOR
+;	S2/	Adrs of ITEXT for text field for WTOR
+;		This ITEXT must not use the T's for pointers/data
+;	B/	TCB adrs
+
+O$NTAP::
+	$CALL	.SAVET			;Save the Ts
+	DMOVE	T1,S1			;Save the type, text pointers
+NTAP.1:	MOVX	S1,TW.INM		;Get Initialization Mount wait state
+	STORE	S1,TCB.WS(B)		;Let the world know
+	AOS	T3,G$ACK##		;Get a new ack ID
+	STORE	T3,TCB.AK(B)		;Save so we can find it later
+	$WTOR	(<^T/0(T1)/>,<^I/0(T2)/
+Type 'RESPOND ^I/number/ ABORT' to terminate this operation
+Type 'RESPOND ^I/number/ PROCEED' after completing requested operation>,TCB.OB(B),T3,$WTFLG(WT.SJI))
+	PUSHJ	P,G$NJOB##		;Run someone else
+	JUMPT	.POPJ			;Wins, try this tape
+	CAXN	S1,PLR%TY		;Want to retype?
+	JRST	NTAP.1			;Yes, do it
+	$RETF				;Otherwise, give the gong
+SUBTTL	RESPONSE command for label errors
+;Enter with M pointing to incoming message
+;Returns true always, but may start up a waiting process
+
+O$CRSP::
+	PUSHJ	P,.SAVE1		;Save a reg
+	LOAD	S1,.MSCOD(M)		;Get the ack number
+	PUSHJ	P,G$FACK##		;Find TCB with that ack number
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, complain
+	ZERO	TCB.AK(B)		;Clear out this ack code, it's been answered
+	MOVEI	P1,.OHDRS(M)		;Get pointer to data area
+	LOAD	S2,ARG.HD(P1),AR.TYP	;Find out the type of argument
+	LOAD	S1,.OARGC(M)		;Get number of arguments on the message
+	CAIN	S1,2			;We demand exactly two args
+	 CAIE	S2,.CMTXT		;And it must be a text arg
+	  JSP	S1,COMERR		;Not the case, OPR is out of sync
+	MOVEI	S1,RSPTAB		;Aim at legal OPR responses
+	HRROI	S2,ARG.DA(P1)		;Get a pointer to the OPR text
+	$CALL	S%TBLK			;Find a match
+	TXNN	S2,TL%EXM!TL%ABR	;A match??
+	SKIPA	S1,[EXP OACR.R]		;Set dispatch routine for retyping
+	HRRZ	S1,(S1)			;Get particular service routine
+	PUSHJ	P,(S1)			;Call the service routine
+	PJRST	G$STTF##		;Save the TF indicator for the process,
+					;And continue the process
+
+;These routines set the TCB to retype or just ABORT on OPR errors
+;Handle the PROCEED response
+OACR.P:	PUSHJ	P,CHKMNT		;Waiting for MOUNT?
+	JUMPT	OACR.R			;PROCEED IS ILLEGAL IF MOUNT WAIT
+	MOVEI	S1,PLR%PR		;GET PROCEED CODE
+	MOVEM	S1,TCB.AC+S1(B)		;SET IT
+	$RETT				;AND RETURN
+
+;Here if we want to retype the request
+OACR.R:	LOAD	S1,ARG.HD(P1),AR.LEN	;Get length of text
+	ADDI	P1,(S1)			;Advance ptr to next block
+	LOAD	S1,ARG.HD(P1),AR.TYP	;Get type of block
+	CAIE	S1,.ACKID		;Is this block a ACK code?
+	 JSP	S1,COMERR		;No, die, we're out of sync w ORION
+	$ACK	(<Invalid Response>,,,ARG.DA(P1))
+	MOVX	S1,PLR%TY		;Set code to retype error
+	JRST	OACR.S			;Go store, and retype
+
+; Handle the RETRY response
+OACR.T:	MOVX	S1,TS.FSE		;GET A BIT
+	TDNN	S1,TCB.S2(B)		;FILE SEQUENCE ERROR PROCESSING?
+	JRST	OACR.R			;NO--BAD RESPONSE
+	MOVEI	S1,PLR%RT		;OPR SAID RETRY
+	MOVEM	S1,TCB.AC+S1(B)		;SET IN TCB
+	$RETT				;RETURN
+
+;Handle the ABORT response
+OACR.A:	MOVX	S1,PLR%AB		;Don't retype, OPR ABORTed 
+OACR.S:	STORE	S1,TCB.AC+S1(B)		;Set retype code in TCB
+	$RETF				;Return false (to set in TCB)
+
+;Little routine to return true if TCB is waiting for MOUNT
+CHKMNT:	LOAD	S1,TCB.WS(B)		;Get wait state code
+	CAIE	S1,TW.MNT		;MOUNT wait?
+	$RETF				;No, return false
+	$RETT				;Yes, return true
+
+;Some storage for the RESPONSE command
+RSPTAB:	$STAB
+ 	 KEYTAB	(OACR.A,ABORT)		;ABORT ,, set bad
+	 KEYTAB	(OACR.P,PROCEED)	;PROCEED ,, return true
+	 KEYTAB	(OACR.T,RETRY)		;RETRY ,, return true
+	$ETAB
+;Routine to  cancel a WTOR.  This happens if the OPR hangs a tape (AVR)
+;  for which PULSAR has sent a WTOR
+;
+;Call:	B/ TCB address
+;
+;Ret:	+1 always
+
+CANWTO::
+	SKIPE	TCB.AK(B)		;Waiting for OPR response ???
+	$KWTOR	(TCB.AK(B))		;Yes,,kill the WTOR
+	SETZM	TCB.AK(B)		;Zap the ACK code
+	$RET				;Return
+
+
+; Special routine to cancel a WTOR when labeler abort is processed.
+; Call:	MOVEI	S1, text address
+;	PUSHJ	P,O$KWTO
+
+O$KWTO::SKIPE	TCB.AK(B)		;PENDING WTOR?
+	$WTOR	(<>,<^T/(S1)/>,TCB.OB(B),TCB.AK(B),<$WTFLG(WT.KIL!WT.SJI)>)
+	SETZM	TCB.AK(B)		;CLEAR ACK CODE
+	$RETT				;RETURN
+	SUBTTL	Debugging type-out routine
+
+IFN FTTRACE,<
+STSD.L::
+	$SAVE	<P1,P2,P3>
+	$TEXT	(,<Label Status:^A>)
+	MOVSI	P2,-NUMBTS		;Get number of bits to check
+	MOVE	P1,TCB.ST(B)		;GET THE STATUS BITS
+STSD.1:	HRRZ	P3,BITTAB(P2)		;Get addr of word with bit to check
+	TDNE	P1,(P3)			;Is the bit on?
+	$TEXT	(,<^W3/BITTAB(P2)/!^A>)	;Yes, note it
+	AOBJN	P2,STSD.1		;Check all of them
+	LOAD	P1,TCB.EC(B),TE.TRM	;GET THE ERROR CODE
+	SKIPE	P1			;
+	$TEXT	(,<Err=^O/P1/^A>)
+	POPJ	P,			;Return as if nothing happened
+
+DEFINE BITS(X),<IRP X,<
+	XWD	''X'',[EXP TS.'X']
+>
+>;END DEFINE BITS
+BITTAB:	BITS(<VLV,PSN,INP,OUT,NTP,NOW,WLK,EXP,D1A,FFF,ERR,NFI,NFO,PSF,IHL,ATM,IUD>)
+	NUMBTS==.-BITTAB
+
+>;END IFN FTTRACE
+SUBTTL	O$STAT Send updated status message to MDA
+;This routine takes a TCB addr in B and sends a status message to
+; MDA.  This message is sent in response to a request
+; from MDA to recognize the labels on a tape
+; If the TCB is for a disk, and the caller is trying to send updated
+; status to MDA because HOM blocks were just read, then:
+;	T1/	HOMe block id (volume id)
+;	T2/	Volid of next volume in structure
+;	T3/	Logical unit number in structure
+;	T4/	Structure name in SIXBIT
+
+O$STAT::MOVE	S1,TCB.DV(B)		;Get MTxnnn device name
+	MOVEM	S1,UNIBLK+.STUNT	;Save as drive name in status block
+	SETZM	UNIBLK+.STFLG		;Clear status word
+	LOAD	S1,TCB.ST(B),TS.NTP	;Get offline bit from status word
+	STORE	S1,UNIBLK+.STFLG,ST.OFL	;Save in message to MDA
+	JUMPN	S1,STAT.1		;Offline, don't send volume id
+	LOAD	S1,TCB.PT(B),TP.RWL	;Get write lock bit as read from drive
+	STORE	S1,UNIBLK+.STFLG,ST.LOK	;Set in message to MDA
+	LOAD	S1,TCB.CH(B),TC.TYP	;Get the device type
+	CAIN	S1,%TAPE		;Magtape?
+	JRST	MTASTS			;Yes
+	CAIN	S1,%DISK		;Structure?
+	JRST	DSKSTS			;Yes
+	CAIN	S1,%DTAP		;DECtape?
+	JRST	DTASTS			;Yes
+	$RETF				;Else just give up
+
+MTASTS:	MOVX	S1,.TLSTA		;Get block type - tape status
+	STORE	S1,STSVOL+ARG.HD,AR.TYP	;Set this block for us
+	SETZM	VOLBLK+.TLVOL		;Clear volume id
+	MOVE	S1,TCB.LT(B)		;Get label type code
+	STORE	S1,UNIBLK+.STFLG,TS.LAB	;Save label type code
+	LOAD	S1,TCB.PS(B),TP.DEN	;Get density code as read from drive
+	STORE	S1,UNIBLK+.STFLG,TS.DEN	;And put in message
+	MOVE	S1,[POINT 6,VOLBLK+.TLVOL] ;SIXBIT ptr to volume id in message
+	MOVEM	S1,STSPTR		;Save in ptr for $TEXT coroutine
+	HRRI	S1,TCB.VL(B)		;Addr of volume id
+	HRLI	S1,(POINT 8,)		;8-bit bytes
+	$TEXT	(STSDBP,<^Q6/S1/^A>)	;Convert the VOLID to SIXBIT
+STAT.1:	DMOVE	S1,[EXP SSBLEN,STSSAB]	;Len, adr of send arg block
+	$CALL	C%SEND			;Off to MDA
+	$RETT
+
+;A little routine to convert 8-bit ASCII to SIXBIT as $TEXT output
+STSDBP:	SKIPE	S1			;Null byte?
+	SUBI	S1,40			;No, convert ASCII to SIXBIT
+	IDPB	S1,STSPTR		;And dump in volume block
+	$RETT				;And back to $TEXT
+
+
+;Here to return the DECtape reelid contained in T1
+DTASTS:	MOVEI	S1,.DLSTA		;GET BLOCK TYPE
+	STORE	S1,STSVOL+ARG.HD,AR.TYP	;SET IN MESSAGE
+	MOVEM	T1,VOLBLK+.DLRID	;SAVE REELID
+	PJRST	STAT.1			;GO SEND MESSAGE
+
+
+;Here if sending valid volume status for a disk unit
+;The T ACs contain valuable info!
+DSKSTS:	MOVEI	S1,.DSSTA		;Get block type - disk status
+	STORE	S1,STSVOL+ARG.HD,AR.TYP	;Set this block for us
+	MOVEM	T1,VOLBLK+.DSHID	;Put in volume ID
+	MOVEM	T2,VOLBLK+.DSNXV	;Next volume in str
+	MOVEM	T3,VOLBLK+.DSLUN	;Logical volume (unit) in str
+	MOVEM	T4,VOLBLK+.DSSNM	;And structure name
+	MOVE	S1,TCB.OW(B)		;Get owner PPN
+	MOVEM	S1,VOLBLK+.DSPPN	;Save it
+	JRST	STAT.1			;Go send the message
+
+	;CONTINUED ON NEXT PAGE
+	;CONTINUED FROM PREVIOUS PAGE
+
+STSPTR:	BLOCK	1			;Space for the pointer
+
+;Data space for the update status message to MDA
+STSSAB:	$BUILD	SAB.SZ
+	$SET	(SAB.LN,,STSSIZ)	;Size of the message
+	$SET	(SAB.MS,,STSMSG)	;Addr of the message
+	$SET	(SAB.SI,SI.FLG,1)	;Send by system PID
+	$SET	(SAB.SI,SI.IDX,SP.MDA)	;Send to MDA
+	$EOB
+	SSBLEN==.-STSSAB		;Length of the SAB
+
+;The message is a header, and one block
+STSMSG:	$BUILD	.OHDRS
+	$SET	(.MSTYP,MS.CNT,STSSIZ)	;Size of the message
+	$SET	(.MSTYP,MS.TYP,.QOTST)	;Message type - tape status
+	$SET	(.OARGC,,2)		;Two argument blocks
+	$EOB
+
+	$BUILD	ARG.DA			;Device descriptor block
+	$SET	(ARG.HD,AR.LEN,ARG.DA+.STLEN) ;Length of block
+	$SET	(ARG.HD,AR.TYP,.STSTS)	;Device status block type
+	$EOB
+
+UNIBLK:	$BUILD	.STLEN			;Status for device
+					;Contents filled in @ runtime
+	$EOB
+
+STSVOL:	$BUILD	ARG.DA
+	$SET	(ARG.HD,AR.LEN,VOLSIZ)	;Length of the arg block
+;	$SET	(ARG.HD,AR.TYP,.TLVOL)	;Volume type - set at runtime (disk or tape)
+	$EOB
+
+;Note  -  We always send the same size blocks, regardless of
+;	whether it is a disk or a tape.
+;	Hopefully, MDA will ignore the discrepancy
+
+VOLBLK:	$BUILD	.DSSIZ
+					;Contents of this block filled in
+					; on a call to O$STAT
+	$EOB
+
+	VOLSIZ==.-STSVOL		;Length of the volume block
+
+	STSSIZ==.-STSMSG		;Length of the message
+SUBTTL	O$CASL - Add or remove str to user's search list
+
+;This is the action routine for the .QOASL message from MDA
+;Call -
+;	M/	.QOASL message addrs
+
+O$CASL::PUSHJ	P,D$SLCH##		;PROCESS SEARCH LIST CHANGE MESSAGE
+	$RETT				;RETURN
+	SUBTTL	OACBLD - Build a structure
+
+;This is the action routine for the .QOBLD message from MDA
+; This routine will build at TCB for the strucutre, fill
+; in the neccessary items, and set the TCB runnable.
+; The structure TCB will run, requesting HOM block reading and
+; all the other good stuff, and eventually, the strucutre will
+; be built.
+;Call -
+;	M/	.QOBLD message adrs
+;Returns -
+;	Marks structure TCB as runnable to build structure
+
+O$CBLD::
+	PUSHJ	P,ESTRBL		;Extract the block info, setup TCB
+	JUMPF	.POPJ			;Can't, so quit
+	MOVEI	S1,D$SDEF##		;Where to start - Str definer
+	PUSHJ	P,G$NPRC##		;Fire it up!
+	$RETT
+	SUBTTL	OACDSM - Dismount a structure
+
+;This is the action routine for a .QODSM directive from MDA.
+;This routine will setup a process which will run the structure
+; dismount code.
+;Call -
+;	M/	.QODSM message adrs
+;Returns -
+;	Structure TCB runnable at the structure dismounter
+
+O$CDSM::
+	PUSHJ	P,ESTRBL		;Get the structure info into a TCB
+	JUMPF	.POPJ			;Can't, so quit
+	MOVEI	S1,D$SREM##		;Routine to run - structure remover
+	PUSHJ	P,G$NPRC##		;Start the TCB there
+	$RETT
+	SUBTTL	ESTRBL - Extract structure info from a MDA message
+
+;This routine breaks down a message from MDA and moves pertinent info into
+; the TCB.  The message is either a .QOBLD (Define a structure)
+; or .QODSM (Dismount str). This is a common preprocessor routine since
+; those messages are similar in format.
+;Call -
+;	M/	.QOBLD or .QODSM message adrs
+;Returns - TRUE:
+;	(FALSE if the message looks bad!)
+;	B/	Structure TCB adrs
+
+ESTRBL:	$SAVE	<P1>
+	MOVX	S1,.BLDSN		;Block type - structure name
+	PUSHJ	P,FNDBLK		;Get there
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, complain
+	MOVE	P1,S1			;Preserve that guy for a minute
+	LOAD	S1,0(P1)		;Get the structure name to be built
+	PUSHJ	P,G$FTCB##		;Get that TCB
+	JUMPT	BLD.1			;Got it, so run it
+	LOAD	T1,0(P1)		;Get the str name again
+	SETZB	T2,T3			;Clear the extraneous stuff
+	PUSHJ	P,G$MTCB##		;Make up some space
+BLD.1:	LOAD	S1,1(P1)		;Get the owner's ppn
+	STORE	S1,TCB.OW(B)		;And stuff that in the TCB
+	SETZM	TCB.SF(B)		;Init structure flag word
+	LOAD	S1,.OFLAG(M),.DMNCK	;Get /NOCHECK bit
+	STORE	S1,TCB.SF(B),TS.NCK	;Set/clear it
+	LOAD	S1,.OFLAG(M),.MTWLK	;Get /WRITE-LOCKED bit
+	STORE	S1,TCB.SF(B),TS.HWP	;Set/clear it
+	LOAD	S1,.OFLAG(M),.DMNRQ	;Get number of requests that need str
+	STORE	S1,TCB.SF(B),TS.NRQ	;Save for REMCHK
+	LOAD	S1,.OFLAG(M),.DMOSN	;Get /OVERRIDE-SET-NUMBER bit
+	STORE	S1,TCB.SF(B),TS.OSN	;Set/clear it
+	MOVX	S1,.BLDUN		;Block type - units
+	PUSHJ	P,FNDBLK		;Get that block
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, complain
+	LOAD	S2,-ARG.DA(S1),AR.LEN	;Get the length of the block
+	SUBI	S2,ARG.DA		;Discount the block header length
+	LSH	S2,-1			;Get real number of units
+	SKIPLE	S2			;Reasonable number?
+	CAILE	S2,MAXVOL		;Do we have space for this structure?
+	JRST	[$WTO	(<PULSAR Internal error>,<Volume list for ^W/0(P1)/: Length of ^D/S2/ is wrong>,,$WTFLG(WT.SJI))
+		$RETF]			;Lose
+	STORE	S2,TCB.NV(B)		;Save the # of volids
+	HRRI	P1,TCB.DU(B)		;Point at the Disk Unit name area
+BLD.2:	MOVE	TF,0(S1)		;Get the next unit name
+	MOVEM	TF,0(P1)		;Save in unit list
+	MOVE	TF,1(S1)		;Get the next volume name (pack id)
+	MOVEM	TF,TCB.VL-TCB.DU(P1)	;Save in volume name list
+	ADDI	S1,2			;Account for the words just moved
+	AOS	P1			;And step to next Vol/Unit entry
+	SOJG	S2,BLD.2		;Do each of the Vol/Unit pairs
+	$RETT				;Return with TCB in B
+	SUBTTL - Ack/Nak senders
+
+;These routines will send positive and negative acknowledgments to
+; MDA after various flavors of requests.
+; Typically, these routines are called after some function has been
+; completed, and the function must tell MDA success or failure.
+;Call -
+;	S1/	Flags,,Ack code type (%CAT, %MOUNT,%DSMNT)
+;	S2/	SIXBIT volume set name (structure name)
+;		Someday, we should take a pointer to a long VSN....
+;	G$COD/	Ack code to identify this request from others in QUASAR
+
+O$ACK::	TDZA	TF,TF			;Get winning indicator
+O$NAK::	SETOM	TF			;Get losing indicator
+	PUSHJ	P,BLDACK		;Build the ack,
+ACK.1:	DMOVE	S1,[EXP SAB.SZ,G$MSAB##] ;Aim at the arg block
+	$CALL	C%SEND			;Fire it off
+	$RETT
+
+;Here to just build the ack
+;
+;	TF/	1 for NAK, 0 for ACK
+;	S1/	Flags,,ack type
+;	S2/	SIXBIT volid
+
+BLDACK:	$SAVE	<P1,P2,P3>		;Preserve some regs
+	DMOVE	P1,S1			;Save the input args
+	MOVE	P3,TF			;Save good/bad indicator
+	$CALL	M%GPAG			;Get a message page
+	MOVEM	S1,G$MSAB##+SAB.MS	;Save in send block
+	MOVX	S2,PAGSIZ		;Size of message
+	MOVEM	S2,G$MSAB##+SAB.LN	;Save in arg block
+	MOVX	S2,.QOACK		;Message type - ACK
+	STORE	S2,.MSTYP(S1),MS.TYP	;Save in message
+	LOAD	S2,P1,.MTWLK		;Get write-locked bit
+	STORE	S2,.OFLAG(S1),.MTWLK	;Tell QUASAR
+	MOVX	S2,.OHDRS+ARG.DA	;Initial size of message
+	STORE	S2,.MSTYP(S1),MS.CNT	;Count the message
+	HRRZS	P1			;Strip off flags
+	STORE	P1,.MSFLG(S1),AK.TYP	;Save ack type
+	STORE	P3,.MSFLG(S1),AK.NAK	;Set ack/nak indicator
+	MOVE	S2,G$COD##		;Get old ack code
+	MOVEM	S2,.MSCOD(S1)		;Identify this ack from the rest
+	MOVEI	S2,1			;Only one..
+	MOVEM	S2,.OARGC(S1)		; ...argument block
+	MOVX	S2,<ARG.DA,,.RCTVS>	;Block type - volume set name
+	MOVEM	S2,.OHDRS+ARG.HD(S1)	;Label the block
+	HRRI	P1,.OHDRS+ARG.DA(S1)	;Place to put volume set name
+	HRLI	P1,(POINT 7,)		;Make a pointer to it
+	MOVEM	P1,ACKPTR		;Save that one
+	$TEXT	(ACKDPB,<^W/P2/^0>)	;Move in the volume set name
+	HRRZ	S1,ACKPTR		;Get terminating word
+	SUBI	S1,-1(P1)		;Figure # words used
+	HRLZS	S1			;To LH (count field)
+	MOVE	S2,G$MSAB##+SAB.MS	;Get message adrs again
+	ADDM	S1,.MSTYP(S2)		;Update total message length
+	ADDM	S1,.OHDRS+ARG.HD(S2)	;And update block length
+	$RETT
+
+ACKDPB:	IDPB	S1,ACKPTR		;Stuff the next byte
+	$RETT				;And get out
+
+ACKPTR:	BLOCK	1			;Space for the byTE pointer
+	SUBTTL	O$ACKU - User Mount/Dismount ACK processor
+;		O$NCKU - User Mount/Dismount NAK processor
+
+;These routines build the ACK/NAK back to MDA when a user does a
+; structure Mount/Dismount.
+;
+;
+;	CALL:	S1/ Type code (%ADSTR or %DMSTR)
+;		S2/ Sixbit structure name
+;		G$COD/	Ack code to identify this request from others in QUASAR
+;
+;	RET:	True Always
+
+O$ACKU::TDZA	TF,TF			;This is an ACK !!!
+O$NCKU::SETOM	TF			;This is a NAK !!!
+	PUSHJ	P,BLDACK		;Build the message
+	SKIPN	G$TXTB##		;Any additional info ???
+	JRST	NCKU.1			;No,,send the ACK/NAK off
+	$SAVE	<P1,P2>			;Save some work ACs
+	MOVE	P1,G$MSAB##+SAB.MS	;Get the message adrs
+	LOAD	P2,.MSTYP(P1),MS.CNT	;Get length
+	AOS	.OARGC(P1)		;One more arg block
+	ADDI	P2,0(P1)		;Aim at first free
+	MOVE	S1,[TXTSIZ,,.OMTXT]	;Get the text block length,,type
+	MOVEM	S1,ARG.HD(P2)		;Store block header
+	HLLZS	S1			;Get just additional length
+	ADDM	S1,.MSTYP(P1)		;Update total message length
+	MOVEI	S1,ARG.DA(P2)		;Get destination address
+	HRLI	S1,G$TXTB##		;Get source,,destination address
+	BLT	S1,ARG.DA+TXTSIZ-1(P2)	;Copy the text to the ACK/NAK message
+
+NCKU.1:	DMOVE	S1,[EXP SAB.SZ,G$MSAB##] ;Aim at the arg block
+	$CALL	C%SEND			;Fire it off
+	$RETT				;Return
+	SUBTTL	O$CLST - MANIPULATE SYSTEM LISTS
+
+;This routine is the one that finally handles the
+; operators request to add or remove and file structure or
+; disk unit from the system-search-list or
+; the crash-dump-list, or the active-swap-list
+
+O$CLST::
+	$SAVE	<P1,P2>
+	MOVEI	S1,.STRDV		;Block type
+	PUSHJ	P,FNDBLK		;Go get it
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;Nope, give up
+	HRROI	S1,0(S1)		;Aim at the block
+	$CALL	S%SIXB			;Convert to  SIXBIT
+	MOVE	P2,S2			;Protect the device name
+	MOVEI	S1,.SLSTY		;Block type -List descriptor
+	PUSHJ	P,FNDBLK		;Find it
+	SKIPT				;Got it?
+	JSP	S1,COMERR		;No, Oh well
+	LOAD	P1,0(S1),SL.TCD		;Get the list ID
+	HRRZ	S2,ADDTAB-SL.TMN(P1)	;Assume we want to add
+	MOVE	S1,P2			;Put back the device name
+	LOAD	TF,.OFLAG(M),AD.REM	;Get the removal bit
+	SKIPE	TF			;Is it really remove?
+	HLRZ	S2,ADDTAB-SL.TMN(P1)	;Yes, get the removal adrs
+	PUSHJ	P,0(S2)			;Add it, or remove it
+	PUSHJ	P,@POSTAB(P1)		;Do whatever is customary at completion
+	$RETT
+
+;Table of removal routines,,add routines
+ADDTAB:	XWD	D$RSSL##,D$ASSL##	;System Search List
+	XWD	D$RCDL##,D$ACDL##	;Crash Dump List
+	XWD	D$RSUN##,D$ASUN##	;Active swap list
+
+;Table of post-removal/addition routines
+POSTAB:	EXP	CPOPJ
+	EXP	CPOPJ
+	EXP	CPOPJ
+
+CPOPJ:	$RETT
+	SUBTTL	O$SLST - SHOW SYSTEM LISTS
+
+;This routine pre-processes the message from OPR
+; requesting information about various system lists
+; Then it calls P$SLST to do the display
+
+O$SLST::
+	MOVEI	S1,.SLSTY		;Block type - list descriptor
+	PUSHJ	P,FNDBLK		;See if there is one
+	JUMPF	SLST.1			;Is there a list block?
+	MOVE	S1,0(S1)		;Yes, get the list type
+	SKIPA	S1,LSTBLK-SL.TMN(S1)	;Load the right bit
+SLST.1:	MOVE	S1,[EXP DS.ALL]		;No list block, show all lists
+	PJRST	P$SLST##		;Go do the work
+
+LSTBLK:	EXP	DS.SSL			;Display the system search list
+	EXP	DS.CDL			;Display the crash dump list
+	EXP	DS.ASL			;Display the active swapping list
+	END

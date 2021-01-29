@@ -1,0 +1,47 @@
+title finger -- simple finger server
+search jobdat, uuosym, macten
+
+finger:	jfcl
+	reset
+	open	f,[
+		exp .iobyt
+		sixbit 'tcp'
+		xwd obh, ibh]
+	 bug. (Can't open tcp device)
+
+	;* set up interupt handler.
+
+	;* set up a listen on port 79.
+
+loop:	movei	t1,^D60		;One minute
+	sleep	t1,		;zzz
+	 jfcl
+	jrst	loop		;Loop on.
+
+text:	asciz	"
+                          ****
+                         *    *
+                         *    *
+                         *    *
+                         *    *
+                         *    *
+                         *    *
+                   ****  *    *  ****
+                  *    * *    * *    *  ****
+                  *    * *    * *    * *    *
+                  *    * *    * *    * *    *
+           **     *    **      **    * *    *
+          *  *    *    *        *    * *    *
+          *   *  *                    **    *
+          *   *  *                           *
+          *   *  *                           *
+         *     * *                           *
+         *      **                          *
+         *                                  *
+          *                                *
+           *                              *
+             *                          *
+"
+
+
+end finger

@@ -1,0 +1,574 @@
+	TITLE	DECLARE		;Define user defined commands
+	SUBTTL	Tarl Neustaedter/RCB	17 Jun 88
+
+;COPYRIGHT (c) 1984,1988 BY
+;DIGITAL EQUIPMENT CORPORATION, MAYNARD, MASS.
+;ALL RIGHTS RESERVED.
+;
+;
+;THIS SOFTWARE IS FURNISHED UNDER A LICENSE AND MAY BE USED AND COPIED
+;ONLY  IN  ACCORDANCE  WITH  THE  TERMS  OF  SUCH LICENSE AND WITH THE
+;INCLUSION OF THE ABOVE COPYRIGHT NOTICE.  THIS SOFTWARE OR ANY  OTHER
+;COPIES THEREOF MAY NOT BE PROVIDED OR OTHERWISE MADE AVAILABLE TO ANY
+;OTHER PERSON.  NO TITLE TO AND OWNERSHIP OF THE  SOFTWARE  IS  HEREBY
+;TRANSFERRED.
+;
+;THE INFORMATION IN THIS SOFTWARE IS SUBJECT TO CHANGE WITHOUT  NOTICE
+;AND  SHOULD  NOT  BE  CONSTRUED  AS A COMMITMENT BY DIGITAL EQUIPMENT
+;CORPORATION.
+;
+;DIGITAL ASSUMES NO RESPONSIBILITY FOR THE USE OR RELIABILITY  OF  ITS
+;SOFTWARE ON EQUIPMENT WHICH IS NOT SUPPLIED BY DIGITAL.
+
+	SEARCH	JOBDAT,MACTEN,SCNMAC,UUOSYM ;Universals
+	TWOSEG			;Put code in sharable hiseg
+	RELOC	400000		;Starting now
+
+ASCIZ |
+COPYRIGHT (c) DIGITAL EQUIPMENT CORPORATION 1984,1988.
+ALL RIGHTS RESERVED.
+|
+
+	.REQUE	REL:SCAN,REL:HELPER
+	.TEXT	"/SYMSEG:HIGH/LOCALS"
+
+	DCLWHO==0
+	DCLVER==2
+	DCLMIN==0
+	DCLEDT==16
+
+.ORG	.JBVER
+	BYTE (3)DCLWHO(9)DCLVER(6)DCLMIN(18)DCLEDT
+.ORG
+
+;Edit history
+;1)	Program creation
+;2)	Make the command .DECLAR<CR> give an error
+;3) 	Add version numbers
+;4)	Change a Z to a BLOCK 1 so that LINK knows this is a null loseg.
+;5)	Require a filename. COMCON requires it, make sure the error
+;	gets caught before we pass it to the monitor.
+;6)	Update handling of /UNIQUE switch to conform to new monitor handling
+;	introduced by MCO 11206.
+;7)	Add new /AUTOPUSH switch to allow access to new ability to define
+;	commands that preserve a core-image.
+;10)	Change some symbols whose names were changed in UUOSYM
+;	by MCO 11689. /NT
+;11)	Remove edit 5.  COMCON doesn't require a name if the device
+;	is pathological and will default the name from the device definition.
+;12)	Fix bug with path defaulting.
+;
+;Released as V1(12)
+;
+;13)	Don't do so many CORE UUOs.  Maybe this will speed up declaring multiple
+;	commands at LOGIN time.  /RCB
+;
+;Autopatched as V1A(13)
+;
+;14)	Fix bug with defining commands of device only (null name).
+;	UUOCON requires the name word to be present, but we were
+;	using the wrong AC anyway, thus re-using the bits and length from
+;	the previous definition (or random garbage).	/RCB
+;
+;15)	Pretty up the listing format.  /RCB
+;
+;16)	Add the /SORT switch, since the results of unsorted command lists
+;	may not be what the user expects.  This is a whole lot cheaper than
+;	another major hack at COMCON's table searching.  /RCB
+;
+;Released as V2(16)
+
+T4==1+<T3==1+<T2==1+<T1==1+0>>>	;Temporary ACs
+P4==1+<P3==1+<P2==1+<P1==1+T4>>>;Permanent ACs
+CM==P4+1			;Pointer to command's scan block
+FI==CM+1			;Pointer to filespec scan block
+LI==FI+1			;Offset pointer into list block
+C1==LI+1			;First of two used in unsigned CAML
+C2==C1+1			;Second of pair for CAML36
+P==17				;Stack pointer
+
+OPDEF	CALL	[PUSHJ	P,]	;So that I don't have to type so much
+OPDEF	RET	[POPJ	P,]	;Bad return
+OPDEF	RETSKP	[JRST	.POPJ1##] ;good return from most routines
+	.NODDT	RETSKP		;sorry, tarl, but i hate seeing this
+OPDEF	SKP	[TRNA]		;skip over an instruction
+OPDEF	NOOP	[TRN]		;do nothing. Ignore skip returns
+
+
+DEFINE	$WARN(PREFIX,TEXT),<
+	JSP T3,[MOVE T2,["%",,[ASCIZ \TEXT\]]
+		MOVE T1,[SIXBIT \DCL'PREFIX\]
+		JRST ERRORH]	;;And call the error handler
+>
+
+	ND LSTSIZ,100		;Maximum number of commands to get a list of
+	ND PDLSIZ,50
+RELOC				;loseg, for data storage
+STACK:	BLOCK	PDLSIZ		;Stack
+
+;Scan switch locations
+SW0:!				;Start of switch area
+CLEARS:	BLOCK	1
+KILLSW:	BLOCK	1
+LISTSW:	BLOCK	1
+AUTOSW:	BLOCK	1
+SORTSW:	BLOCK	1
+
+;Not really switches, but we want to setom them every time
+CMDNAM:	BLOCK	1
+CMDFIL:	BLOCK	1
+ERRORF:	BLOCK	1
+SW9:!				;End of switch area
+
+UNIQUE:	BLOCK	1		;Switch to setzm (not setom)
+
+
+OFFSET:	BLOCK	1		;For SCAN
+CMDBLK:	BLOCK	.CMMAX		;Block to do CMAND.s in
+	BLOCK	1		;Buffer word
+LSTBLK:	BLOCK	LSTSIZ+1	;Block to get a list of commands
+
+;The following were added for COMSRT
+CMDLST:	BLOCK	1			;POINTER TO NAME LIST
+SRTLST:	BLOCK	1			;OFFSET COPY OF ABOVE FOR HEAPSORT
+CMDDMP:	BLOCK	1			;POINTER TO INPUT DEFINITIONS
+CMDINT:	BLOCK	1			;POINTER FOR SORTED DEFINITIONS
+CMDCNT:	BLOCK	1			;-VE COUNT OF COMMAND NAMES
+RELOC				;Hiseg, for switch tables
+
+KEYS UNQ,<4,3,2,1>		;Possible uniqueness values
+				; (must be in this order)
+PD.UNQ==1_<UNQ4-1>		;Default for bare switch is /UNIQUE:4
+
+DEFINE SWTCHS,<
+SN *AUTOPUSH,AUTOSW,
+SS *CLEAR,CLEARS,1,
+SS *KILL,KILLSW,1,
+SS *LIST,LISTSW,1,
+SS *SORT,SORTSW,1,
+SL *UNIQUE,UNIQUE,UNQ,PD.UNQ,FS.OBV
+>
+
+DOSCAN(CM.)			;Generate the switch tables
+
+ISBLK:				;ISCAN block
+	IOWD 2,[SIXBIT \DECLAR\
+		SIXBIT \COMMAN\]
+	XWD OFFSET,'DCL'	;Offset,,sixbit CCL name
+	XWD	0,0		;Input,,output routines
+	XWD	0,0		;Length,,block for preset indirect file
+	XWD	0,0		;Prompt,,exit routines
+	EXP	FS.INC		;Flags,,future (no CORE UUOs)
+ISBLKP:	XWD .-ISBLK,ISBLK
+
+TSBLK:				;TSCAN block
+	IOWD	CM.L,CM.N
+	XWD	CM.D,CM.M
+	XWD	0,CM.P		;Switch table pointers for TSCAN
+	EXP	-1		;Use system helper
+	XWD	CLRSWT,0	;Clear all answers,,files (no files)
+	XWD	ALLIN,ALLOUT	;Allocate input and output filespecs
+TSBLKP:	XWD .-TSBLK,TSBLK	;TSCAN block pointer
+
+PDL:	IOWD	PDLSIZ,STACK	;Pointer to stack
+
+;Start of the program itself.
+COMMAN:	PORTAL	.+2		;Allow protected execution
+	PORTAL	.+2		;Even for CCL entry
+	TDZA	T1,T1		;Non CCL entry
+	MOVEI	T1,1		;CCL entry
+	MOVEM	T1,OFFSET	;SAVE AS OFFSET FOR SCAN TO LOOK AT
+	RESET			;oops.
+	MOVE	P,PDL		;Set up stack pointer
+	MOVE	T1,ISBLKP	;GET THE ISCAN BLOCK POINTER
+	PUSHJ	P,.ISCAN##	;initialize the world
+COM1:	MOVE	P,PDL		;Reset the stack pointer
+	MOVE	T1,TSBLKP	;Pointer to TSCAN block
+	PUSHJ	P,.TSCAN##	;Ask for a command
+	SKIPL	ERRORF		;Did an error flag get set?
+	 JRST	COM1		;YEs, forget this line
+	SKIPL	CM,CMDNAM	;did we get an output spec? (command name)
+	 JRST	COM2		;Yes, skip over single spec checking
+	SKIPG	CM,CMDFIL	;Did we get an input spec
+	 JRST	[PUSH P,[COM1];Set up return address
+		$WARN NCG,<No command given>]
+	MOVEM	CM,CMDNAM	;save as output filespec
+	SETOM	CMDFIL		;And clear input filespec
+COM2:	CALL	CMDCHK		;Check CMDNAM to make sure only name typed
+	JRST	COM1		;Error, try again.
+	CALL	PRCLIN		;process the line
+	JRST	COM1		;and go for another line
+
+CMDCHK:	MOVE	T1,.FXMOD(CM)	;Get the modifications word
+	TXNN	T1,FX.NDV	;Make sure he didn't type a device name
+	 $WARN	CMD,<Command may not contain device field>
+	TXNN	T1,FX.NUL	;Make sure he didn't give an extension
+	 $WARN	CMD,<Command may not contain extension field>
+	TXNE	T1,FX.DIR	;Make sure he didn't give a directory
+	 $WARN	CMD,<Command may not contain any path specification>
+	RETSKP
+
+PRCLIN:	SKIPL	CLEARS		;Should we clear all commands?
+	 JRST	COMCLR		;Yes, go do it.
+	SKIPL	KILLSW		;Should we kill a command
+	 JRST	COMKIL		;Yes, kill this particular command
+	SKIPL	LISTSW		;Should we list all the command names?
+	 JRST	COMLST		;Yes, go do it.
+	SKIPL	SORTSW		;Should we sort the commands?
+	 JRST	COMSRT		;Yes, go do it.
+	SKIPL	FI,CMDFIL	;Did we get an input filespec?
+	 JRST	COMADD		;Yes, we must be adding commands
+	SKIPN	.FXNAM(CM)	;Did a command name come in on this?
+	 RET			;Pretend this didn't happen
+;	JRST	COMSHO		;show if command but no filespec
+
+COMSHO:	SKIPL	CMDFIL		;Make sure no filespec was typed
+	 $WARN	FNA,<Filespec not allowed for /SHOW switch>
+	SKIPN	T1,.FXNAM(CM)	;make sure he gave us a command
+	 $WARN	CMN,<Command name required for /SHOW switch>
+	SETCM	T2,.FXNMM(CM)	;Get inverted wildcard mask from command
+	JUMPE	T2,COMSH.	;Just show one if no wildcarding
+	ANDCM	T1,T2		;Mask name down for comparisons
+	MOVEM	T1,.FXNAM(CM)	;Update where we can find it
+	MOVEI	T1,LSTSIZ	;LSTBLK size
+	MOVEM	T1,LSTBLK+.CMCOU;Save as max number of command names to return
+	MOVE	T1,[.CMLST,,LSTBLK] ;get the list of names
+	CMAND.	T1,
+	 $WARN	CGL,<Couldn't get list of commands>
+	SETZ	LI,		;Offset of 0 into LSTBLK
+COMSH$:	CAML	LI,LSTBLK+.CMCOU ;Do we still have more commands to go?
+	 RET			;no, return to top level
+	MOVE	T1,LSTBLK+1(LI)	;Get a command name
+	MOVE	T2,T1		;Copy the name
+	AND	T2,.FXNMM(CM)	;Account for wildcards
+	CAMN	T2,.FXNAM(CM)	;If it matches,
+	CALL	COMSH.		;List it
+	AOJA	LI,COMSH$	;and go do another command
+
+COMSH.:	SETZM	CMDBLK		;Clear CMAND. block
+	MOVE	T2,[CMDBLK,,CMDBLK+1];BLT Pointer
+	BLT	T2,CMDBLK+.CMMAX-1 ;Clear the whole block
+	MOVEM	T1,CMDBLK+.CMCMN ;Which command to return information on
+	MOVEI	T1,.CMMAX	;Maximum size of a command block
+	MOVEM	T1,CMDBLK+.CMSIZ ;Save as amount of info to return us
+	MOVE	T1,[XWD .CMRET,CMDBLK] ;Args for UUO
+	CMAND.	T1,		;Get information on this command
+	 $WARN	NSC,<No such command>
+	MOVE	T1,CMDBLK+.CMNAM ;Get command name
+	CALL	.TSIXS##	;Type it out in sixbit
+	MOVEI	T1,[ASCIZ | = |] ;ASCII equals sign
+	CALL	.TSTRG##	;Type it out
+	SKIPN	T1,CMDBLK+.CMDVC ;Get device name
+	 JRST	COMSH1
+	CALL	.TSIXN##	;Type out device name
+	CALL	.TCOLN##	;indicate device with a colon
+COMSH1:	MOVE	T1,CMDBLK+.CMFLE ;Get filename
+	CALL	.TSIXN##	;Type it out.
+	SKIPN	T1,CMDBLK+.CMEXT ;Get extension
+	 JRST	COMSH2		;skip
+	MOVEI	T1,"."		;Dot.
+	CALL	.TCHAR##	;Precede it with a dot
+	MOVE	T1,CMDBLK+.CMEXT ;get extension back again
+	CALL	.TSIXN##
+COMSH2:	MOVE	T1,[TS.DRP,,CMDBLK+.CMPPN] ;Point to PPN + SFDs
+	SKIPE	CMDBLK+.CMPPN	;If we have a PPN,
+	PUSHJ	P,.TDIRB##	;Type the path
+	MOVE	T2,CMDBLK+.CMFLA ;Get flags
+	MOVEI	T1,[ASCIZ | /AUTOPUSH|]	;String to use
+	TXNE	T2,CM.AUT	;Is auto-push lit?
+	CALL	.TSTRG##	;Yes, type it out
+	LDB	P1,[POINTR CMDBLK+.CMFLA,CM.UNQ]
+	JUMPE	P1,COMSH0	;If no uniqueness, skip it
+	MOVEI	T1,[ASCIZ | /UNIQUE:|]	;Switch string
+	CALL	.TSTRG##	;Type it
+	MOVE	T1,UNQSTR(P1)	;Get translation string for the bits
+	CALL	.TSTRG##	;Type the value(s)
+COMSH0:	PJRST	.TCRLF##	;End typeout and return
+
+COMADD:	SETZM	CMDBLK		;Clear CMAND uuo block
+	MOVE	T1,[CMDBLK,,CMDBLK+1] ;BLT pointer
+	BLT	T1,CMDBLK+.CMMAX-1 ;clear it all out
+	MOVE	T1,.FXNAM(CM)	;Get the command name
+	MOVEM	T1,CMDBLK+.CMNAM;Save as command name in uuo block
+	MOVE	T1,.FXDEV(FI)	;Device name (DSK: default)
+	MOVEM	T1,CMDBLK+.CMDVC ;Save as device to run off of
+	MOVE	T1,.FXNAM(FI)	;Get the filename of program to be run
+	MOVEM	T1,CMDBLK+.CMFLE ;save as filename
+	MOVEI	P2,4		;Number of words we have taken already
+	HLLZ	T1,.FXEXT(FI)	;Get extension
+	JUMPE	T1,COMAD2	;If nothing, proceed
+	MOVEM	T1,CMDBLK+.CMEXT;Set as extension of program to run
+	MOVEI	P2,5		;Bump P2 to include this
+COMAD2:	MOVE	T4,.FXDIR(FI)	;Get ppn returned by SCAN
+	TLNN	T4,-1		;Project number seen?
+	HLL	T4,.MYPPN##	;No, default it
+	TRNN	T4,-1		;Programmer number seen?
+	HRR	T4,.MYPPN##	;No, default that
+	SKIPE	.FXDIM(FI)	;Was there any point to this exercise?
+	MOVEM	T4,.FXDIR(FI)	;Yes, update the ppn word
+	MOVEI	T4,.FXDIR(FI)	;Pointer to source directory
+	MOVE	T3,[XWD -6,CMDBLK+.CMPPN] ;Pointer to destination directory
+COMAD3:	SKIPN	T1,(T4)		;Anything in the source?
+	 JRST	COMAD8		;nope.
+	MOVEI	P2,-CMDBLK+1(T3);Update number of words deposited
+	MOVEM	T1,(T3)		;Save directory word
+	ADDI	T4,2		;Point to next input directory name
+	AOBJN	T3,COMAD3	;And go get another word
+COMAD8:	SKIPE	T1,UNIQUE	;Uniqueness bits specified?
+	 DPB	T1,[POINTR P2,CM.UNQ]	;Yes, add flags to count word
+	SKIPLE	AUTOSW		;/AUTO:YES?
+	 TXO	P2,CM.AUT	;Yes, add flag to count word
+	MOVEM	P2,CMDBLK+.CMFLA ;Save number of words we picked up
+	MOVE	T1,[XWD .CMADD,CMDBLK] ;Arg for UUO
+	CMAND.	T1,		;Add this command
+	 $WARN	CUA,<CMAND. UUO function .CMADD failed>
+	RET			;Command added, done.
+COMCLR:	SKIPN	.FXNAM(CM)	;Did we get a command name?
+	SKIPL	CMDFIL		;or an input filespec?
+	 $WARN	CLS,</CLEAR switch must be standalone>
+	SETZM	CMDBLK+0	;Clear command block
+	MOVE	T1,[XWD .CMINT,CMDBLK] ;Initialize (clear) command data base
+	CMAND.	T1,		;Wipe.
+	 $WARN	CUI,<CMAND. UUO function .CMINT failed>
+	RET
+COMKIL:	SKIPL	CMDFIL		;Make sure we don't have a filespec
+	 $WARN	KMN,</KILL switch cannot take a filespec>
+	MOVEI	T1,2		;Number of words in argument block
+	MOVEM	T1,LSTBLK+.CMCOU ;Put into list block
+	MOVE	T1,.FXNAM(CM)	;Get command name to wipe
+	MOVEM	T1,LSTBLK+1	;Save as command to delete
+	MOVE	T1,[.CMDEL,,LSTBLK] ;Delete a command
+	CMAND.	T1,		;Wipe!
+	 $WARN	NSC,<No such command>
+	RET
+COMSRT:	SKIPN	.FXNAM(CM)	;Did we get a command name?
+	SKIPL	CMDFIL		;or an input filespec?
+	 $WARN	SMA,</SORT switch must be standalone>
+
+;The rest of this routine was stolen from elsewhere.
+;So, if it looks like it doesn't belong here, that's why.
+
+	MOVE	T2,[.CMLST,,T1]		;POINT TO A 'BUFFER'
+	MOVEI	T1,1			;OF ONLY ONE WORD
+	CMAND.	T2,			;SEE HOW MANY COMMANDS WE HAVE
+	  TRN				;NOT-ENOUGH-ROOM ERROR
+	CAIG	T1,1			;NOTHING TO DO UNLESS MULTIPLE COMMANDS
+	RET				;THAT WAS EASY
+	MOVNM	T1,CMDCNT		;STORE -VE COUNT OF COMMANDS
+	PUSHJ	P,GETWDS		;GET CORE FOR THE LISTING BLOCK
+	HRLI	T2,LI			;SET UP FOR THE AOBJN LOOP
+	MOVEM	T2,CMDLST		;SAVE POINTER TO BLOCK
+	HRRI	T2,-1(T2)		;OFFSET FOR HEAP-SORT
+	MOVEM	T2,SRTLST		;SAVE FOR SORT ROUTINE
+	IMULI	T1,.CMMAX		;HOW MUCH CORE WE MIGHT NEED
+	AOJ	T1,			;PLUS ONE FOR THE TERMINATOR
+	PUSHJ	P,GETWDS		;GET CORE FOR THE DUMP BLOCK
+	MOVEM	T2,CMDDMP		;SAVE POINTER
+	MOVEM	T1,(T2)			;SET UP LENGTH FOR UUO
+	HRLI	T2,.CMDMP		;UUO ARG LIST
+	CMAND.	T2,			;GET THE COMMANDS
+	  $WARN CDF,<CMAND. to dump the definitions failed>
+	PUSHJ	P,SETUP			;BUILD THE LIST OF NAMES, WHICH
+	PUSHJ	P,GETWDS		;RETURNS NEEDED SIZE IN T1
+	MOVEM	T2,CMDINT		;SAVE POINTER TO INIT BLOCK
+	PUSHJ	P,SORT			;ORDER THE LIST OF NAMES
+	PUSHJ	P,SWAP			;ORDER THE DEFINITIONS IN THE INIT BLOCK
+IFN .CMINT,<MOVE T1,[.CMINT,,CMDINT]>	;GET ADDRESS OF BLOCK TO USE
+IFE .CMINT,<HRRZ T1,CMDINT>		;GET ADDRESS OF BLOCK TO USE
+	CMAND.	T1,			;DEFINE THE NAMES
+	  $WARN CRF,<Command redefinition failed>
+	RET
+	SUBTTL	GETWDS - CORE ALLOCATION
+
+;CALL:
+;	MOVEI	T1,NUMBER OF WORDS NEEDED
+;	PUSHJ	P,GETWDS
+;	ONLY RETURN
+;
+;RETURNS T1 UNCHANGED, ADDRESS OBTAINED IN T2.
+;PRESERVES ALL OTHER ACS
+;RETURNS ON BEHALF OF CALLER ON CORE UUO FAILURE
+
+GETWDS:	ADDM	T1,.JBFF		;UPDATE FIRST FREE LOCATION
+	SOS	T2,.JBFF		;GET LAST WORD IN BLOCK
+	CAMG	T2,.JBREL		;DO WE NEED TO EXPAND CORE?
+	JRST	GETWD1			;NO, SO DON'T
+	CORE	T2,			;YES, TRY IT
+	  JRST	GETWDF			;BARF AND RETURN
+GETWD1:	AOS	T2,.JBFF		;FIXUP FIRST FREE AGAIN
+	SUB	T2,T1			;POINT TO THE START OF THE BLOCK
+	POPJ	P,			;RETURN TO CALLER
+
+GETWDF:	POP	P,T2			;RETURN ON CALLER'S BEHALF
+	$WARN	CAF,<Core allocation failed>
+	SUBTTL SETUP - BUILD THE NAME LIST
+
+;COPIES THE COMMAND NAMES FROM CMDDMP TO CMDLST, COUNTING SPACE AS IT GOES.
+;RETURNS THE NUMBER OF WORDS NEEDED FOR CMDINT IN T1.
+
+SETUP:	SETZB	LI,T1			;INITIALIZE INDEX AND COUNTER
+	MOVE	T2,CMDDMP		;WHERE WE DUMPED THE COMMANDS
+SETUP1:	HRRZ	T3,(T2)			;GET LENGTH OF THIS COMMAND DEFINITION
+	JUMPE	T3,SETUP2		;DONE IF AT END
+	ADDI	T1,(T3)			;ACCOUNT FOR LENGTH
+	MOVE	T4,.CMNAM(T2)		;GET NAME
+	MOVEM	T4,@CMDLST		;SAVE IN LIST BLOCK
+	ADDI	T2,(T3)			;UPDATE POINTER TO NEXT COMMAND
+	AOJA	LI,SETUP1		;LOOP OVER ALL COMMANDS
+SETUP2:	AOJ	T1,			;NEED EXTRA WORD TO TERMINATE INIT BLOCK
+CPOPJ:	POPJ	P,			;RETURN AS ADVERTISED
+	SUBTTL	SORT - SORT THE NAME LIST
+
+;HEAP-SORTS THE COMMAND NAMES USING UNSIGNED COMPARISONS.
+;ROUTINE STOLEN WITH MINOR CHANGES FROM HELP.MAC.
+
+SORT:	MOVN	P2,CMDCNT		;LENGTH OF ARRAY
+	MOVEI	T4,(P2)			;INITIALIZE
+	LSH	T4,-1			;T4=N/2
+	AOJ	T4,
+SORT2:	CAIG	T4,1			;DECREASE T4 OR P2
+	JRST	SORT9
+	SOS	LI,T4			;T4 POINTS TO FIRST UNCHECKED NODE
+	MOVE	P1,@SRTLST		;GET THAT ENTRY
+SORT3:	MOVEI	T3,(T4)			;PREPARE FOR SIFT-UP
+SORT4:	MOVEI	T2,(T3)			;ADVANCE DOWNWARD
+	LSH	T3,1			;T3 POINTS TO FIRST SON
+	CAMN	T3,P2
+	JRST	SORT6			;JUMP IF LAST ENTRY
+	CAML	T3,P2
+	JRST	SORT8			;T3 TOO HIGH--JUMP
+	MOVE	LI,T3			;FIND "LARGER" SON
+	MOVE	T1,@SRTLST
+	AOS	LI,T3
+	MOVE	C1,T1			;GET A COPY OF T1
+	PUSHJ	P,CAML36		;DO A 36-BIT UNSIGNED "CAML C1,@SRTLST"
+	SOJ	T3,
+SORT6:	MOVE	LI,T3			;LARGER THAN P1?
+	MOVE	C1,P1			;GET A COPY OF P1
+	PUSHJ	P,CAML36		;DO THE "CAML C1,@SRTLST"
+	JRST	SORT8
+;	MOVE	LI,T3			;MOVE IT UP
+	MOVE	T1,@SRTLST
+	MOVE	LI,T2
+	MOVEM	T1,@SRTLST
+	JRST	SORT4
+SORT8:	MOVE	LI,T2			;STORE P2
+	MOVEM	P1,@SRTLST
+	JRST	SORT2
+SORT9:	MOVEI	LI,1			;SET UP OFFSET
+	MOVE	T1,@SRTLST		;FETCH HIGH WORD
+	EXCH	P2,LI			;POINT TO END
+	MOVE	P1,@SRTLST		;FETCH NEW END
+	MOVEM	T1,@SRTLST		;SAVE HIGH WORD IN ITS SLOT
+	EXCH	LI,P2			;RESTORE OFFSETS
+	SOJ	P2,			;LIST IS SHORTER NOW
+	CAILE	P2,1			;CHECK IF DONE
+	JRST	SORT3			;NO, HEAPIFY AGAIN
+	MOVEM	P1,@SRTLST		;YES, UPDATE FIRST ENTRY
+	POPJ	P,			;RETURN WITH A SORTED LIST
+
+CAML36:	MOVE	C2,@SRTLST		;GET A COPY OF @SRTLST
+	TXC	C2,1B0			;TOGGLE SIGN-BIT ON EACH NUMBER
+	TXC	C1,1B0			; ...
+	CAMGE	C1,C2			;DO THE COMPARISON
+	AOS	(P)			;GIVE SKIP-RETURN
+	POPJ	P,			; OR NOT
+	SUBTTL	SWAP - BUILD THE .CMINT BLOCK FROM THE SORTED NAME LIST
+
+;PERHAPS NOT THE MOST EFFICIENT METHOD, BUT IT WORKS.
+;IT ASSUMES NO CORE CORRUPTION.
+
+SWAP:	HRLZ	LI,CMDCNT		;GET AOBJN INDEX TO CMDLST
+	MOVE	T2,CMDINT		;STORAGE POINTER TO NEW LIST
+SWAP1:	MOVE	T4,@CMDLST		;GET NAME TO BE INSERTED NEXT
+	MOVE	T3,CMDDMP		;AND THE ADDRESS OF THE DEFINITIONS
+SWAP2:	CAMN	T4,.CMNAM(T3)		;IS THIS A MATCH?
+	JRST	SWAP3			;YES, STUFF IT IN
+	HRRZ	T1,(T3)			;NO, GET SIZE OF THE DEFINITION
+	ADDI	T3,(T1)			;UPDATE SEARCH POINTER
+	JRST	SWAP2			;AND LOOK SOME MORE
+SWAP3:	HRLZ	T1,(T3)			;GET LENGTH OF DEFINITION IN LH
+	MOVN	T1,T1			;-VE LENGTH FOR AOBJN
+	HRRI	T1,(T3)			;AND COMPLETE THE AOBJN POINTER
+SWAP4:	MOVE	T3,(T1)			;GET A WORD FROM THE OLD DUMP
+	MOVEM	T3,(T2)			;INSERT INTO NEW BLOCK
+	AOJ	T2,			;ADVANCE INIT POINTER
+	AOBJN	T1,SWAP4		;LOOP OVER ALL WORDS IN OLD DEFINITION
+	AOBJN	LI,SWAP1		;LOOP OVER ALL NAMES IN THE NAME LIST
+	SETZM	(T2)			;MAKE SURE OF THE TERMINATING ZERO
+	POPJ	P,			;RETURN
+COMLST:	SKIPN	.FXNAM(CM)	;Did we get a command name?
+	SKIPL	CMDFIL		;or an input filespec?
+	 $WARN	CLS,</LIST switch must be standalone>
+	MOVEI	T1,LSTSIZ	;Size of the list buffer
+	MOVEM	T1,LSTBLK	;Save in the list block
+	MOVE	T1,[.CMLST,,LSTBLK] ;Args to list the command names
+	CMAND.	T1,		;Get the list
+	 $WARN	CUL,<CMAND. UUO function .CMLST failed>
+	SETZB	P1,LI		;Clear both counters
+COMLS1:	CAML	LI,LSTBLK+.CMCOU ;Have we typed out all commands?
+	 JRST	.TCRLF##	;yes, let CRLF terminate for us
+	SOJG	P1,COMLS4	;Check to see if we should crlf
+	CALL	.TCRLF##	;Yes, terminate the line
+	MOVEI	P1,^D8		;reset number of commands to type before crlf
+	SKP			;and skip
+COMLS4:	 CALL	.TTABC##	;Seperate
+COMLS3:	MOVE	T1,LSTBLK+1(LI)	;Get the command name
+	CALL	.TSIXN##	;Type it out
+	AOJA	LI,COMLS1	;And go do another command
+
+CLRSWT:
+	HLRZ	T1,.JBSA	;Get original amount of core
+	MOVEM	T1,.JBFF	;save as current amount of core
+	SETOM	SW0		;Clear first switch
+	MOVE	T1,[SW0,,SW0+1]	;BLT pointer to clear all switches
+	BLT	T1,SW9-1	;Clear them all
+	SETZM	UNIQUE		;Also clear the bit-valued switch
+	RET			;return
+
+ALLIN:	SKIPL	CMDFIL		;Make sure we don't already have a filespec
+	 CALL	[$WARN MFI,<Multiple filespecs are not legal>]
+	HRRZ	T1,.JBFF	;Get pointer to free core
+	MOVEM	T1,CMDFIL	;Save as input filespec
+
+ALLOC:	MOVEI	T2,.FXLEN
+	ADDM	T2,.JBFF	;Increase memory size
+	MOVE	T3,.JBFF	;Current core size
+	SOJ	T3,		;Only allocate what we'll use
+	CAMG	T3,.JBREL	;Do we already have this much?
+	RET			;Yes, just return info to scan
+	CORE	T3,		;Make sure we get it
+	 $WARN	CUF,<Core UUO failed in memory allocater>
+	RET			;And return to scan
+
+ALLOUT:	SKIPL	CMDNAM		;Count times we have given this away
+	 CALL	[$WARN MCN,<Multiple command names are not legal>]
+	HRRZ	T1,.JBFF	;Get pointer to free area
+	MOVEM	T1,CMDNAM	;save as output filespec
+	PJRST	ALLOC		;And allocate the core we are taking
+
+ERRORH:	CALL	.ERMSA##	;Call scan's error handler
+	CALL	.TCRLF##	;Finish the line
+	AOS	ERRORF		;Bump error count (flag)
+	RET			;and return
+
+;The translation table for uniqueness bits (right-adjusted) to display text
+
+UNQSTR:	[ASCIZ |NONE|]		;0
+	[ASCIZ |4|]		;CM.UN4
+	[ASCIZ |3|]		;CM.UN3
+	[ASCIZ |(3,4)|]		;CM.UN3!CM.UN4
+	[ASCIZ |2|]		;CM.UN2
+	[ASCIZ |(2,4)|]		;CM.UN2!CM.UN4
+	[ASCIZ |(2,3)|]		;CM.UN2!CM.UN3
+	[ASCIZ |(2,3,4)|]	;CM.UNQ^!CM.UN1
+	[ASCIZ |1|]		;CM.UN1
+	[ASCIZ |(1,4)|]		;CM.UN1!CM.UN4
+	[ASCIZ |(1,3)|]		;CM.UN1!CM.UN3
+	[ASCIZ |(1,3,4)|]	;CM.UNQ^!CM.UN2
+	[ASCIZ |(1,2)|]		;CM.UN1!CM.UN2
+	[ASCIZ |(1,2,4)|]	;CM.UNQ^!CM.UN3
+	[ASCIZ |(1,2,3)|]	;CM.UNQ^!CM.UN4
+	[ASCIZ |(1,2,3,4)|]	;CM.UNQ
+
+	END	COMMAN

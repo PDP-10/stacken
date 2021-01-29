@@ -1,0 +1,36 @@
+NIM
+===
+
+Nim {r ett av de {ldsta  k{nda tv}personsspelen. Man tror
+att det ursprungligen kommer fr}n Kina. Namnet l{r h{rr|ra
+from ett }lderdomligt engelskt verb som betyder stj{la, bortf|ra.
+
+Stenar (marker) arrangeras i rader som i f|ljande exempel.
+
+	* * * * * * *   Rad 1 - 7 stenar
+	* * * * *       Rad 2 - 5 stenar
+	* * *           Rad 3 - 3 stenar
+	*               Rad 4 - 1 sten
+
+Spelarna turas om att eliminera (ta bort) stenar tills
+samtliga {r borttagna. Den som tar den sista stenen vinner.
+Stenar f}r tas enligt f|ljande regler -
+
+1. Vid varje dragtillf{lle f}r endast sten(ar) ur en och
+   samma rad elimineras. Godtycklig, icke tom rad f}r v{ljas.
+
+2. Minst en sten m}ste dras varje g}ng (dragtv}ng).
+
+Godtyckligt antal h|gar och antal stenar i varje h|g kan anges.
+Flera fr}gor kan som regel besvaras p} en och samma rad (i f|rv{g).
+S}tillvida kan vid fr}gan - H|g: p} samma rad anges b}de h|g och
+antal stenar. Om antal stenar i h|gen {r ett beh|ver endast h|gens
+nummer anges.
+
+F|r att k|ra NIM, skriv
+
+.R GAM:NIM
+
+Lycka till!
+
+	<Slut p} GAM:NIM.HLP - 781115>

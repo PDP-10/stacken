@@ -1,0 +1,3 @@
+.compile/compile common.rel=syscnf.mac+common.mac
+.compile/compile comdev.rel=syscnf.mac+comdev.mac
+.compile/compile commod.rel=syscnf.mac+commod.mac

@@ -1,0 +1,38 @@
+     S  N  A  R  K       Rules and Instructions
+
+     	 Written By:   Jeff Bunce   Jan 1978
+
+   This is the game og SNARK.  The object of SNARK is
+to find out where the Snark is hiding by using points
+in a grid like this:
+
+	9  . . . . . . . . . .
+	8  . . . . . . . . . .
+	7  . . . . . . . . . .
+	6  . . . . . . . . . .
+	5  . . . . . . . . . .
+	4  . . . . . . . . . .
+	3  . . . . . . . . . .
+	2  . . . . . . . . . .
+	1  . . . . . . . . . .
+	0  . . . . . . . . . .
+
+	   0 1 2 3 4 5 6 7 8 9
+
+   He's out there.  Here's how to catch him ...
+
+   When I ask, you type the X,Y coordinates  of the
+grid point( if you  don't  know what that is, there
+is  something wrong here!!) and press the 'RETURN'.
+   After that,I'll ask you for the 'RADIUS',and you
+type  the radius  of the circle  with the center at
+the X,Y coordinates you put in.  I will tell you if
+  1)  the Snark is 'INSIDE' your circle
+  2)  the Snark is 'OUTSIDE' your circle
+  3)  the Snark is 'ON' your circle.
+!!!! IMPORTANT !!!!  If you know where the Snark is
+hiding, then type   the X,Y coordinates and input a
+radius of zero.
+
+
+    The Snark is hiding .....   Find him!!!!
